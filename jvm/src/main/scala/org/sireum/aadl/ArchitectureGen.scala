@@ -1,6 +1,7 @@
 package org.sireum.aadl
 
 import org.sireum._
+import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
 import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory, JSON}
@@ -22,7 +23,7 @@ object ArchitectureGen {
     return id
   }
 
-  def gen(m: ast.MyTop) : ST = {
+  def gen(m: ast.AadlTop) : ST = {
     return m match {
       case x: ast.Component =>
         x.category match {
@@ -42,7 +43,11 @@ object ArchitectureGen {
     var bridges : ISZ[(String, ST)] = ISZ()
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      bridges :+= (c.identifier, genThread(c))
+      val name = c.identifier match {
+        case Some(x) => x
+        case _ => org.sireum.String("")
+      }
+      bridges :+= (name, genThread(c))
     }
     val components = bridges.map(x => x._1)
 
@@ -68,9 +73,10 @@ object ArchitectureGen {
 
   def genPort(p:ast.Feature) : ST = {
     val name = p.identifier
-    val typ =
-      if(p.classifier.name.toString == "") "Empty"
-      else p.classifier.name.toString.replace("::", ".")
+    val typ = p.classifier match {
+      case Some(name) => name.toString.replace("::", ".")
+      case _ => "Empty"
+    }
     val id = getPortId()
     val identifier = p.identifier
 
@@ -96,7 +102,11 @@ object ArchitectureGen {
     assert(m.connections.isEmpty)
     assert(m.subComponents.isEmpty)
 
-    val name = m.identifier
+    val name = m.identifier match {
+      case Some(x) => x
+      case _ => org.sireum.String("")
+    }
+
     val id = getComponentId(m)
     val dispatchProtocol = st""" ???? """
 

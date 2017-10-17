@@ -12,7 +12,7 @@ object Runner {
     val fileName = System.getProperty("user.home") + "/aadl.json"
     val json = Source.fromFile(fileName).getLines.mkString
 
-    val m = JSON.toMyTop(SireumString(json))
+    val m = JSON.toAadlTop(SireumString(json))
     val a: ST = ArchitectureGen.gen(m)
 
     println(a.render)
