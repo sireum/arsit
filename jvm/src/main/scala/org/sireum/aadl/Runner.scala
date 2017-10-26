@@ -1,6 +1,7 @@
 package org.sireum.aadl
 
 import org.sireum.ST
+import java.io.File
 
 object Runner {
 
@@ -12,9 +13,13 @@ object Runner {
     val fileName = System.getProperty("user.home") + "/aadl.json"
     val json = Source.fromFile(fileName).getLines.mkString
 
-    val m = JSON.toAadlTop(SireumString(json))
-    val a: ST = ArchitectureGen.gen(m)
+    val m = JSON.toAadlXml(SireumString(json))
 
-    println(a.render)
+    val outDir = new File("/Users/belt/devel/sireum/slang-embedded/pca-pump-gen/src/main/scala/pca_pump_gen")
+
+    ArtArchitectureGen.generator(outDir, m)
+
+    ArtStubGenerator.generator(outDir, m)
+
   }
 }

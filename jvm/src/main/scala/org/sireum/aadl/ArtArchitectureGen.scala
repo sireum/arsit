@@ -1,15 +1,40 @@
 package org.sireum.aadl
 
+import java.io.{BufferedWriter, File, FileWriter}
+
 import org.sireum._
 import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
 import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory, JSON}
+import scala.collection.immutable.{Set => mSet}
+import scala.language.implicitConversions
 
-object ArchitectureGen {
+object ArtArchitectureGen {
 
   var componentId = 0
   var portId = 0
+  var outDir : File = null
+  var rootPackage : String = ""
+  var imports : mSet[aString] = mSet()
+
+  type sString = scala.Predef.String
+  type aString = org.sireum.String
+
+  implicit def sireumString2ST(s:org.sireum.String) : ST = st"""$s"""
+  implicit def string2ST(s:scala.Predef.String) : ST = st"""$s"""
+  implicit def string2SireumString(s:scala.Predef.String) : org.sireum.String = org.sireum.String(s)
+
+  def generator(dir: File, m: ast.AadlXml) : Unit = {
+    outDir = dir
+    if(!outDir.exists && !outDir.mkdirs()){
+      println(s"Error occured while trying to mkdirs on ${dir.getAbsolutePath}")
+      return
+    }
+    rootPackage = outDir.getName
+
+    gen(m)
+  }
 
   def getComponentId(component: ast.Component): Z = {
     val id = componentId
@@ -23,23 +48,20 @@ object ArchitectureGen {
     return id
   }
 
-  def gen(m: ast.AadlTop) : ST = {
-    return m match {
-      case x: ast.Component =>
-        x.category match {
-          case ComponentCategory.ThreadGroup =>
-            genThreadGroup(m.asInstanceOf[ast.Component])
-          case cat =>
-            throw new RuntimeException(s"Not handling: $cat")
-        }
-      case _ => throw new RuntimeException(s"Not handling: $m")
-    }
+  def gen(m: ast.AadlXml) : Unit = {
+    var arch: ST = st""" """"
 
+    for(c <- m.components) {
+      c.category match {
+        case ComponentCategory.ThreadGroup =>
+          arch = genThreadGroup(c)
+        case cat =>
+          throw new RuntimeException(s"Not handling: $cat")
+      }
+    }
   }
 
   def genThreadGroup(m: ast.Component) : ST = {
-    var imports :ISZ[String] = ISZ()
-
     var bridges : ISZ[(String, ST)] = ISZ()
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
@@ -59,26 +81,82 @@ object ArchitectureGen {
     }
 
     val x = Template.architectureDescription(
-      "packageName",
-      imports,
-      "arch",
+      rootPackage,
+      ISZ(imports.toSeq:_*),
+      "Arch",
       "ad",
       bridges,
       components,
       connections
     )
 
+    Util.writeFile(new File(outDir, "Arch.scala"), x.render.toString)
+
     return x
   }
 
-  def genPort(p:ast.Feature) : ST = {
+  def genThread(m:ast.Component) : ST = {
+    assert(m.category == ComponentCategory.Thread)
+    assert(m.connections.isEmpty)
+    assert(m.subComponents.isEmpty)
+
+    if(m.classifier.nonEmpty)
+      imports += s"import " +
+        m.classifier.get.name.toString.split("::").toSeq.dropRight(1).mkString(".") + "._"
+
+    val name: org.sireum.String = m.identifier match {
+      case Some(x) => Util.getBridgeName(x)
+      case _ => ""
+    }
+
+    val id = getComponentId(m)
+
+    val period: ST = {
+      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.Period) match {
+        case Some(x) => x.value
+        case _ => "???"
+      }
+    }
+
+    val dispatchProtocol: ST = {
+      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.DispatchProtocol) match {
+        case Some(x) =>
+          x.value.toString match {
+            case "Aperiodic" | "Sporadic" => Template.sporadic(period)
+            case "Periodic" | "Hybrid" => Template.periodic(period)
+          }
+        case _ => "???"
+      }
+    }
+
+    var ports: ISZ[ST] = ISZ()
+    import FeatureCategory._
+    for (f <- m.features) {
+      f.category match{
+        case DataPort | EventDataPort | EventPort =>
+          ports :+= genPort(f, name)
+        case _ =>
+      }
+    }
+
+    return Template.bridge(
+      name,
+      id,
+      dispatchProtocol,
+      ports
+    )
+  }
+
+  def genPort(p:ast.Feature, componentId: String) : ST = {
     val name = p.identifier
     val typ = p.classifier match {
-      case Some(name) => name.toString.replace("::", ".")
+      case Some(c) =>
+        //imports += s"import ${Util.getPackageName(rootPackage, c.name)}"
+        Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
       case _ => "Empty"
     }
     val id = getPortId()
-    val identifier = p.identifier
+    val identifier = s"$componentId.${p.identifier}"
 
     import ast.FeatureCategory._
     val prefix = p.category match {
@@ -97,38 +175,10 @@ object ArchitectureGen {
     return Template.port(name, typ, id, identifier, mode)
   }
 
-  def genThread(m:ast.Component) : ST = {
-    assert(m.category == ComponentCategory.Thread)
-    assert(m.connections.isEmpty)
-    assert(m.subComponents.isEmpty)
-
-    val name = m.identifier match {
-      case Some(x) => x
-      case _ => org.sireum.String("")
-    }
-
-    val id = getComponentId(m)
-    val dispatchProtocol = st""" ???? """
-
-    var ports: ISZ[ST] = ISZ()
-    import FeatureCategory._
-    for (f <- m.features) {
-      f.category match{
-        case DataPort | EventDataPort | EventPort =>
-          ports :+= genPort(f)
-        case _ =>
-      }
-    }
-
-    return Template.bridge(
-      name,
-      id,
-      dispatchProtocol,
-      ports
-    )
-  }
-
   object Template {
+
+    @pure def sporadic (period: ST) = st"""Sporadic(min = $period)"""
+    @pure def periodic (period: ST) = st"""Periodic(period = $period)"""
 
     @pure def port(name: String,
                    typ: String,
@@ -142,7 +192,7 @@ object ArchitectureGen {
                      id: Z,
                      dispatchProtocol: ST,
                      ports: ISZ[ST]) : ST = {
-      return st"""${name}Bridge(
+      return st"""${name}(
                   |  id = $id,
                   |  name = "$name",
                   |  dispatchProtocol = $dispatchProtocol,
