@@ -12,7 +12,7 @@ object Util {
   val DataRepresentation : org.sireum.String = "Data_Model::Data_Representation"
 
   @pure def getDiscreetPropertyValue[T](properties: ISZ[ast.Property], propertyName: String) : Option[T] = {
-    for(p <- properties if p.name == str)
+    for(p <- properties if p.name == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
   }
