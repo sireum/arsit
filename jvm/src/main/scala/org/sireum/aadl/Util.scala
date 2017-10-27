@@ -11,6 +11,8 @@ object Util {
   val Period : org.sireum.String = "Timing_Properties::Period"
   val DataRepresentation : org.sireum.String = "Data_Model::Data_Representation"
 
+  val EmptyType = "Slang_Types.Empty"
+
   @pure def getDiscreetPropertyValue[T](properties: ISZ[ast.Property], propertyName: String) : Option[T] = {
     for(p <- properties if p.name == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
@@ -30,11 +32,16 @@ object Util {
 
   @pure def getTypeName(s : String) : String = cleanName(s)
 
-  @pure def getPackageName(rootPackage: String, value: String) : String =
-    rootPackage + "." + value.toString.split("::").dropRight(1).mkString(".")
+  @pure def getPackageName(value: String) : String =
+    value.toString.split("::").dropRight(1).mkString(".")
 
   @pure def writeFile(fname: File, st : ST) : Unit = {
     try {
+      // try building any missing subdirs
+      fname.getParentFile.mkdirs
+
+      assert(fname.getParentFile.exists)
+
       val bw = new BufferedWriter(new FileWriter(fname))
       bw.write(st.render.toString)
       bw.close()

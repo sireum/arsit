@@ -1,6 +1,6 @@
 package org.sireum.aadl
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io.File
 
 import org.sireum._
 import org.sireum.Some
@@ -15,7 +15,6 @@ object ArtArchitectureGen {
   var componentId = 0
   var portId = 0
   var outDir : File = null
-  var rootPackage : String = ""
   var imports : mSet[aString] = mSet()
 
   type sString = scala.Predef.String
@@ -26,12 +25,9 @@ object ArtArchitectureGen {
   implicit def string2SireumString(s:scala.Predef.String) : org.sireum.String = org.sireum.String(s)
 
   def generator(dir: File, m: ast.AadlXml) : Unit = {
+    assert(dir.exists)
+
     outDir = dir
-    if(!outDir.exists && !outDir.mkdirs()){
-      println(s"Error occured while trying to mkdirs on ${dir.getAbsolutePath}")
-      return
-    }
-    rootPackage = outDir.getName
 
     gen(m)
   }
@@ -80,19 +76,24 @@ object ArtArchitectureGen {
         s"${c.dst.component}.${c.dst.feature}")
     }
 
-    val x = Template.architectureDescription(
-      rootPackage,
+    val architectureName = "Arch"
+    val architectureDescriptionName = "ad"
+
+    val arch = Template.architectureDescription(
       ISZ(imports.toSeq:_*),
-      "Arch",
-      "ad",
+      architectureName,
+      architectureDescriptionName,
       bridges,
       components,
       connections
     )
 
-    Util.writeFile(new File(outDir, "Arch.scala"), x.render.toString)
+    Util.writeFile(new File(outDir, "Arch.scala"), arch.render.toString)
 
-    return x
+    val demo = Template.demo(architectureName, architectureDescriptionName)
+    Util.writeFile(new File(outDir, "Demo.scala"), demo.render.toString)
+
+    return st""" """
   }
 
   def genThread(m:ast.Component) : ST = {
@@ -151,9 +152,8 @@ object ArtArchitectureGen {
     val name = p.identifier
     val typ = p.classifier match {
       case Some(c) =>
-        //imports += s"import ${Util.getPackageName(rootPackage, c.name)}"
         Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
-      case _ => "Empty"
+      case _ => Util.EmptyType
     }
     val id = getPortId()
     val identifier = s"$componentId.${p.identifier}"
@@ -205,8 +205,14 @@ object ArtArchitectureGen {
       return st"""Connection(from = $from, to = $to)"""
     }
 
-    @pure def architectureDescription(packageName:String,
-                                      imports : ISZ[String],
+    @pure def demo(architectureName: String,
+                   architectureDescriptionName: String) : ST = {
+      return st"""object Demo extends App {
+                 |  art.Art.run(${architectureName}.${architectureDescriptionName})
+                 |}"""
+    }
+
+    @pure def architectureDescription(imports : ISZ[String],
                                       architectureName: String,
                                       architectureDescriptionName: String,
                                       bridges : ISZ[(String, ST)],
@@ -214,8 +220,6 @@ object ArtArchitectureGen {
                                       connections: ISZ[ST]
                                      ) : ST = {
       return st"""// #Sireum
-                 |
-                 |package $packageName
                  |
                  |import org.sireum._
                  |import art._

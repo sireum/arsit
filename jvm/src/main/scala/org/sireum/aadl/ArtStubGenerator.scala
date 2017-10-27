@@ -1,6 +1,6 @@
 package org.sireum.aadl
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io.File
 
 import org.sireum._
 import org.sireum.Some
@@ -13,8 +13,8 @@ import scala.collection.immutable.{Set => mSet}
 object ArtStubGenerator {
 
   var outDir : File = null
-  var rootPackage : String = ""
   var toImpl : ISZ[(ST, ST)] = ISZ()
+  var replaceUserImpl: Boolean = false
 
   type sString = scala.Predef.String
   type aString = org.sireum.String
@@ -23,22 +23,14 @@ object ArtStubGenerator {
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
 
-  def generator(dir: File, m: ast.AadlXml) : Unit = {
+  def generator(dir: File, m: ast.AadlXml, replaceUserImpl : Boolean) : Unit = {
+    assert(dir.exists)
+
     outDir = dir
-    if(!outDir.exists && !outDir.mkdirs){
-      println(s"Error occured while trying to mkdirs on ${dir.getAbsolutePath}")
-      return
-    }
-    rootPackage = outDir.getName
+    this.replaceUserImpl = replaceUserImpl
 
     for(c <- m.components)
       gen(c)
-
-    val x = Template.componentTypeImplContainer(rootPackage,
-      toImpl.map(v => v._1), toImpl.map(v => v._2) :+ Template.demo())
-
-    println("Implement the following classes:")
-    println(x.render)
   }
 
   def gen(m: ast.Component) : ST = {
@@ -74,24 +66,14 @@ object ArtStubGenerator {
     val componentType = Util.getTypeName(m.identifier.get)
     val componentImplType = componentType + "_impl"
 
-    var imports : mSet[aString] = mSet()
-
-    // import root package for component implementations
-    imports += s"import ${rootPackage}._"
-
-    // import Empty type for Event ports
-    imports += s"import ${rootPackage}.Empty"
-    imports += s"import ${rootPackage}.Empty_Payload"
-
     var ports: ISZ[(String, String, String)] = ISZ()
     import FeatureCategory._
     for(f <- m.features) {
       val id: aString = Util.cleanName(f.identifier)
       val ptype: aString = f.classifier match {
         case Some(c) =>
-          imports += s"import ${Util.getPackageName(rootPackage, c.name)}"
           Util.cleanName(c.name) + (if (Util.isEnum(f.properties)) ".Type" else "")
-        case _ => "Empty"
+        case _ => Util.EmptyType
       }
 
       val dir = f.direction match {
@@ -108,22 +90,27 @@ object ArtStubGenerator {
       }
     }
 
-    val pname = (rootPackage +: packages).mkString(".")
+    val packageName = packages.mkString(".")
 
-    val s = Template.bridge(
-      pname,
-      ISZ(imports.toSeq:_*),
+    val b = Template.bridge(
+      packageName,
       bridgeName,
       componentName,
       componentType,
       componentImplType,
       ports,
     )
+    Util.writeFile(new File(outDir, "bridge/" + packages.mkString("/") + "/" + bridgeName + ".scala"), b.render.toString)
 
-    toImpl :+= (s"import ${pname}._" , Template.componentTypeImpl(bridgeName, componentType, componentImplType))
+    val c = Template.componentTrait(packageName, componentType, bridgeName, ports)
+    Util.writeFile(new File(outDir, "component/" + packages.mkString("/") + "/" + componentType + ".scala"), c.render.toString)
 
-    Util.writeFile(new File(outDir, packages.mkString(".") + "/" + componentType + ".scala"), s.render.toString)
-    return s
+    if(replaceUserImpl) {
+      val ci = Template.componentImpl(packageName, componentType, bridgeName, componentImplType)
+      Util.writeFile(new File(outDir, "component/" + packages.mkString("/") + "/" + componentImplType + ".scala"), ci.render.toString)
+    }
+
+    return """ """
   }
 
   object Template {
@@ -169,34 +156,7 @@ object ArtStubGenerator {
       }
     }
 
-    @pure def componentTypeImplContainer(packageName : String,
-                                         imports: ISZ[ST],
-                                         classDefs: ISZ[ST]) : ST = {
-      return st"""// #Sireum
-                  |
-                  |package $packageName
-                  |
-                  |import org.sireum._
-                  |import art._
-                  |${(imports, "\n")}
-                  |
-                  |${(classDefs, "\n\n")}
-                  """
-    }
-
-    @pure def componentTypeImpl(bridgeName : String,
-                                componentType : String,
-                                componentImplType : String) : ST = {
-      return st"""@record class $componentImplType (api : ${bridgeName}.Api) extends $componentType {} """
-    }
-
-    @pure def demo() : ST =
-      return st"""object Demo extends App {
-                  |  art.Art.run(Arch.ad)
-                  |}"""
-
     @pure def bridge(packageName : String,
-                     imports: ISZ[String],
                      bridgeName : String,
                      componentName : String,
                      componentType : String,
@@ -208,7 +168,6 @@ object ArtStubGenerator {
                   |
                   |import org.sireum._
                   |import art._
-                  |${(imports, "\n")}
                   |
                   |@record class $bridgeName(
                   |  id : Art.BridgeId,
@@ -247,8 +206,7 @@ object ArtStubGenerator {
                   |    ${bridgeName}.EntryPoints(
                   |      id,
                   |
-                  |      ${(ISZOps(ports).foldLeft[sString]((r, v) => s"$r ${v._1}.id,\n", ""))}
-                  |
+                  |      ${(ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1}.id,\n", ""))}
                   |      ${componentImplType}(api)
                   |    )
                   |}
@@ -321,21 +279,50 @@ object ArtStubGenerator {
                   |      ${componentName}.finalise()
                   |    }
                   |  }
-                  |}
-                  |
-                  |@sig trait ${componentType} {
-                  |
-                  |  def api : ${bridgeName}.Api
-                  |
-                  |  def initialise(): Unit = {}
-                  |  def finalise(): Unit = {}
-                  |
-                  |  ${var s = ""
-                       for (p <- ports if p._3.toString.endsWith("In"))
-                         s += "\n" + Template.portCaseMethod(p).render
-                       s
-                     }
                   |}"""
+    }
+
+    @pure def demo() : ST =
+      return st"""object Demo extends App {
+                 |  art.Art.run(Arch.ad)
+                 |}"""
+
+    @pure def componentTrait(packageName : String,
+                             componentType : String,
+                             bridgeName : String,
+                             ports : ISZ[(String, String, String)]) : ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |
+                 |@sig trait ${componentType} {
+                 |
+                 |  def api : ${bridgeName}.Api
+                 |
+                 |  def initialise(): Unit = {}
+                 |  def finalise(): Unit = {}
+                 |
+                 |  ${var s = ""
+                      for (p <- ports if p._3.toString.endsWith("In"))
+                        s += "\n" + Template.portCaseMethod(p).render
+                      s
+                    }
+                 |}"""
+    }
+
+    @pure def componentImpl(packageName : String,
+                            componentType : String,
+                            bridgeName : String,
+                            componentImplType : String) : ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |
+                 |@record class $componentImplType (api : ${bridgeName}.Api) extends $componentType {}"""
     }
   }
 }
