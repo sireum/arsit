@@ -1,7 +1,11 @@
 package org.sireum.aadl
 
 import java.io.File
+
+import org.sireum
 import org.sireum.aadl.ast.JSON
+import org.sireum.ops.ISZOps
+
 import scala.io.Source
 
 object Runner {
@@ -10,12 +14,12 @@ object Runner {
 
     val fileName = System.getProperty("user.home") + "/aadl.json"
     val json = Source.fromFile(fileName).getLines.mkString
-    val destDir = new File("/Users/belt/devel/sireum/slang-embedded/pca-pump-gen-v2/src/main")
+    val destDir = new File("/Users/belt/devel/sireum/slang-embedded-MASTER/pca-pump-gen/src/main")
 
-    Runner.run(json, destDir, false)
+    Runner.run(json, destDir)
   }
 
-  def run(json: String, destDir : File, replaceUserImplementations: Boolean): Unit = {
+  def run(json: String, destDir : File): Unit = {
     destDir.mkdirs // try creating the dir structure if it doesn't exist yet
 
     if(!destDir.exists){
@@ -33,6 +37,6 @@ object Runner {
 
     ArtArchitectureGen.generator(new File(destDir, "architecture"), m)
 
-    ArtStubGenerator.generator(destDir, m, replaceUserImplementations)
+    ArtStubGenerator.generator(destDir, m)
   }
 }

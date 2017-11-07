@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
-import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory, JSON}
+import org.sireum.aadl.ast.ComponentCategory
 import scala.collection.immutable.{Set => mSet}
 import scala.language.implicitConversions
 
@@ -16,6 +16,10 @@ object ArtArchitectureGen {
   var portId = 0
   var outDir : File = null
   var imports : mSet[aString] = mSet()
+
+  var bridges : ISZ[(String, ST)] = ISZ()
+  var components : ISZ[String] = ISZ[String]()
+  var connections : ISZ[ST] = ISZ()
 
   type sString = scala.Predef.String
   type aString = org.sireum.String
@@ -29,52 +33,9 @@ object ArtArchitectureGen {
 
     outDir = dir
 
-    gen(m)
-  }
+    for(c <- m.components)
+      gen(c)
 
-  def getComponentId(component: ast.Component): Z = {
-    val id = componentId
-    componentId += 1
-    return id
-  }
-
-  def getPortId(): Z = {
-    val id = portId
-    portId += 1
-    return id
-  }
-
-  def gen(m: ast.AadlXml) : Unit = {
-    var arch: ST = st""" """"
-
-    for(c <- m.components) {
-      c.category match {
-        case ComponentCategory.ThreadGroup =>
-          arch = genThreadGroup(c)
-        case cat =>
-          throw new RuntimeException(s"Not handling: $cat")
-      }
-    }
-  }
-
-  def genThreadGroup(m: ast.Component) : ST = {
-    var bridges : ISZ[(String, ST)] = ISZ()
-    for(c <- m.subComponents){
-      assert(c.category == ComponentCategory.Thread)
-      val name = c.identifier match {
-        case Some(x) => x
-        case _ => org.sireum.String("")
-      }
-      bridges :+= (name, genThread(c))
-    }
-    val components = bridges.map(x => x._1)
-
-    var connections : ISZ[ST] = ISZ()
-    for(c <- m.connections) {
-      connections :+= Template.connection(
-        s"${c.src.component}.${c.src.feature}",
-        s"${c.dst.component}.${c.dst.feature}")
-    }
 
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
@@ -92,6 +53,75 @@ object ArtArchitectureGen {
 
     val demo = Template.demo(architectureName, architectureDescriptionName)
     Util.writeFile(new File(outDir, "Demo.scala"), demo.render.toString)
+  }
+
+  def getComponentId(component: ast.Component): Z = {
+    val id = componentId
+    componentId += 1
+    return id
+  }
+
+  def getPortId(): Z = {
+    val id = portId
+    portId += 1
+    return id
+  }
+
+  def gen(c: ast.Component) : Unit = {
+    c.category match {
+      case ComponentCategory.Process => genProcess(c)
+      case ComponentCategory.ThreadGroup => genThreadGroup(c)
+      case _ =>
+        for(_c <- c.subComponents)
+          gen(_c)
+    }
+  }
+
+  def genProcess(m: ast.Component) : ST = {
+    assert (m.category == ComponentCategory.Process)
+
+    for(c <- m.subComponents){
+      c.category match {
+        case ComponentCategory.ThreadGroup =>
+          genThreadGroup(c)
+        case ComponentCategory.Thread =>
+          val name = c.identifier match {
+            case Some(x) => x
+            case _ => org.sireum.String("")
+          }
+          bridges :+= (name, genThread(c))
+          components :+= name
+        case _ => throw new RuntimeException("Unexpected " + c)
+      }
+    }
+
+    for(c <- m.connections) {
+      connections :+= Template.connection(
+        s"${c.src.component}.${c.src.feature}",
+        s"${c.dst.component}.${c.dst.feature}")
+    }
+
+    return st""" """
+  }
+
+  def genThreadGroup(m: ast.Component) : ST = {
+    assert(m.category == ComponentCategory.ThreadGroup)
+
+    for(c <- m.subComponents){
+      assert(c.category == ComponentCategory.Thread)
+      val name = c.identifier match {
+        case Some(x) => x
+        case _ => org.sireum.String("")
+      }
+      bridges :+= (name, genThread(c))
+      components :+= name
+    }
+
+    for(c <- m.connections) {
+      connections :+= Template.connection(
+        s"${c.src.component}.${c.src.feature}",
+        s"${c.dst.component}.${c.dst.feature}")
+    }
 
     return st""" """
   }
@@ -131,28 +161,16 @@ object ArtArchitectureGen {
     }
 
     var ports: ISZ[ST] = ISZ()
-    import FeatureCategory._
-    for (f <- m.features) {
-      f.category match{
-        case DataPort | EventDataPort | EventPort =>
-          ports :+= genPort(f, name)
-        case _ =>
-      }
-    }
+    for (f <- m.features if Util.isPort(f))
+      ports :+= genPort(f, name)
 
-    return Template.bridge(
-      name,
-      id,
-      dispatchProtocol,
-      ports
-    )
+    return Template.bridge(name, id, dispatchProtocol, ports)
   }
 
   def genPort(p:ast.Feature, componentId: String) : ST = {
     val name = p.identifier
     val typ = p.classifier match {
-      case Some(c) =>
-        Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
+      case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
       case _ => Util.EmptyType
     }
     val id = getPortId()
@@ -160,8 +178,8 @@ object ArtArchitectureGen {
 
     import ast.FeatureCategory._
     val prefix = p.category match {
-      case EventPort => "Event"
-      case DataPort | EventDataPort => "Data"
+      case EventPort | EventDataPort => "Event"
+      case DataPort => "Data"
       case _ => throw new RuntimeException("Not handling " + p.category)
     }
 
@@ -169,7 +187,7 @@ object ArtArchitectureGen {
     val mode = prefix + (p.direction match {
       case In => "In"
       case Out => "Out"
-      case _ => throw new RuntimeException("Not handling " + p.direction)
+      case _ => "???" //throw new RuntimeException(s"Not handling ${p.direction} for $name")
     })
 
     return Template.port(name, typ, id, identifier, mode)
@@ -201,9 +219,7 @@ object ArtArchitectureGen {
                   |)"""
     }
 
-    @pure def connection(from: String, to: String) : ST = {
-      return st"""Connection(from = $from, to = $to)"""
-    }
+    @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""
 
     @pure def demo(architectureName: String,
                    architectureDescriptionName: String) : ST = {

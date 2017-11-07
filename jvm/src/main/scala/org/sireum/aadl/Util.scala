@@ -35,18 +35,20 @@ object Util {
   @pure def getPackageName(value: String) : String =
     value.toString.split("::").dropRight(1).mkString(".")
 
-  @pure def writeFile(fname: File, st : ST) : Unit = {
+  @pure def writeFile(fname: File, st : ST, overwrite : Boolean = true) : Unit = {
     try {
       // try building any missing subdirs
       fname.getParentFile.mkdirs
 
       assert(fname.getParentFile.exists)
 
-      val bw = new BufferedWriter(new FileWriter(fname))
-      bw.write(st.render.toString)
-      bw.close()
+      if(overwrite || !fname.exists) {
+        val bw = new BufferedWriter(new FileWriter(fname))
+        bw.write(st.render.toString)
+        bw.close()
 
-      println("Wrote: " + fname)
+        println("Wrote: " + fname)
+      }
     } catch {
       case e : Throwable =>
         println("Error encounted while trying to create file: " + fname)
@@ -54,4 +56,16 @@ object Util {
     }
   }
 
+
+  @pure def isPort(f : ast.Feature) = isEventPort(f) || isDataPort(f)
+
+  @pure def isEventPort(f : ast.Feature) =
+    f.category == ast.FeatureCategory.EventDataPort || f.category == ast.FeatureCategory.EventPort
+
+  @pure def isDataPort(f : ast.Feature) = f.category == ast.FeatureCategory.DataPort
+
+
+  @pure def isIn(f : ast.Feature) = f.direction == ast.Direction.In
+
+  @pure def isOut(f : ast.Feature) = f.direction == ast.Direction.Out
 }

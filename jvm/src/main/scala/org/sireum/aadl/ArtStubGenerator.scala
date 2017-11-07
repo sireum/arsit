@@ -6,15 +6,13 @@ import org.sireum._
 import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
-import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory, JSON}
+import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory}
 import scala.language.implicitConversions
-import scala.collection.immutable.{Set => mSet}
 
 object ArtStubGenerator {
 
   var outDir : File = null
   var toImpl : ISZ[(ST, ST)] = ISZ()
-  var replaceUserImpl: Boolean = false
 
   type sString = scala.Predef.String
   type aString = org.sireum.String
@@ -23,32 +21,48 @@ object ArtStubGenerator {
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
 
-  def generator(dir: File, m: ast.AadlXml, replaceUserImpl : Boolean) : Unit = {
+  def generator(dir: File, m: ast.AadlXml) : Unit = {
     assert(dir.exists)
 
     outDir = dir
-    this.replaceUserImpl = replaceUserImpl
 
     for(c <- m.components)
       gen(c)
   }
 
-  def gen(m: ast.Component) : ST = {
+  def gen(m: ast.Component) : Unit = {
     m.category match {
+      case ComponentCategory.Process =>
+        genProcess(m)
       case ComponentCategory.ThreadGroup =>
-        return genThreadGroup(m)
-      case ComponentCategory.Thread =>
-        return genThread(m)
+        genThreadGroup(m)
       case _ =>
-        throw new RuntimeException(s"Not handling: " + m)
+        for(_c <- m.subComponents)
+          gen(_c)
     }
+  }
+
+  def genProcess(m: ast.Component) : ST = {
+    assert(m.category == ComponentCategory.Process)
+
+    for(c <- m.subComponents) {
+      c.category match {
+        case ComponentCategory.ThreadGroup => genThreadGroup(c)
+        case ComponentCategory.Thread => genThread(c)
+        case _ => throw new RuntimeException(s"Not handling ${m}")
+      }
+    }
+
+    return st""" """
   }
 
   def genThreadGroup(m: ast.Component) : ST = {
     assert(m.category == ComponentCategory.ThreadGroup)
 
-    for(c <- m.subComponents)
-      gen(c)
+    for(c <- m.subComponents) {
+      assert (c.category == ComponentCategory.Thread)
+      genThread(c)
+    }
 
     return st""" """
   }
@@ -66,9 +80,9 @@ object ArtStubGenerator {
     val componentType = Util.getTypeName(m.identifier.get)
     val componentImplType = componentType + "_impl"
 
-    var ports: ISZ[(String, String, String)] = ISZ()
-    import FeatureCategory._
-    for(f <- m.features) {
+    var ports: ISZ[(String, String, ast.Feature)] = ISZ()
+
+    for(f <- m.features if Util.isPort(f)) {
       val id: aString = Util.cleanName(f.identifier)
       val ptype: aString = f.classifier match {
         case Some(c) =>
@@ -76,92 +90,38 @@ object ArtStubGenerator {
         case _ => Util.EmptyType
       }
 
-      val dir = f.direction match {
-        case ast.Direction.In => "In"
-        case ast.Direction.Out => "Out"
-        case ast.Direction.InOut | ast.Direction.None => "???"
-      }
+      ports :+= (id, ptype, f)
+    }
 
-      f.category match {
-        case DataPort | EventDataPort | EventPort =>
-          val kind = if(f.category == EventPort) "Event" else "Data"
-          ports :+= (id, ptype, kind + dir)
-        case _ =>
+    val dispatchProtocol = {
+      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.DispatchProtocol) match {
+        case Some(x) => x.value
+        case _ => throw new RuntimeException("Dispatch Protocol missing")
       }
     }
 
     val packageName = packages.mkString(".")
 
-    val b = Template.bridge(
-      packageName,
-      bridgeName,
-      componentName,
-      componentType,
-      componentImplType,
-      ports,
-    )
+    val b = Template.bridge(packageName, bridgeName, dispatchProtocol, componentName, componentType, componentImplType, ports)
     Util.writeFile(new File(outDir, "bridge/" + packages.mkString("/") + "/" + bridgeName + ".scala"), b.render.toString)
 
-    val c = Template.componentTrait(packageName, componentType, bridgeName, ports)
+    val c = Template.componentTrait(packageName, dispatchProtocol, componentType, bridgeName, ports)
     Util.writeFile(new File(outDir, "component/" + packages.mkString("/") + "/" + componentType + ".scala"), c.render.toString)
 
-    if(replaceUserImpl) {
-      val ci = Template.componentImpl(packageName, componentType, bridgeName, componentImplType)
-      Util.writeFile(new File(outDir, "component/" + packages.mkString("/") + "/" + componentImplType + ".scala"), ci.render.toString)
-    }
+    val ci = Template.componentImpl(packageName, componentType, bridgeName, componentImplType)
+    Util.writeFile(new File(outDir, "component/" + packages.mkString("/") + "/" + componentImplType + ".scala"), ci.render.toString, false)
 
     return """ """
   }
 
   object Template {
-  @pure def apiCall(componentName : String, portName: String): aString =
-      return s"${componentName}.${portName}Api(${portName}.id)"
-
-    @pure def api(portName:String, portType:String) : ST = {
-      return st"""@record class ${portName}Api( ${portName}Id : Art.PortId) {
-                 |  def send(${portName}: ${portType}): Unit = {
-                 |    Art.putValue(${portName}Id, ${portType.toString.replace(".Type", "")}_Payload(${portName}))
-                 |  }
-                 |}"""
-    }
-
-    @pure def apiSig(portName:String, portType:String) : ST = {
-      return st"""${portName} : ${portName}Api"""
-    }
-
-    @pure def portCase(cname:String, v: (String, String, String)) : ST = {
-      if(v._3.toString.contains("Data")) {
-        return st"""if(portId == ${v._1}){
-                   |  val ${v._2.toString.replace(".Type", "")}_Payload(value) = Art.getValue(${v._1})
-                   |  ${cname}.handle${v._1}(value)
-                   |}"""
-      } else {
-        return st"""if(portId == ${v._1}) {
-                   |  ${cname}.handle${v._1}()
-                   |}"""
-      }
-    }
-
-    @pure def portCaseMethod(v: (String, String, String)) : ST = {
-      if(v._3.toString.contains("Data")) {
-        return st"""def handle${v._1}(value : ${v._2}): Unit = {
-                   |  api.logInfo("received ${v._1} " + value.toString)
-                   |  api.logInfo("default ${v._1} implementation")
-                   |}"""
-      } else {
-        return st"""def handle${v._1}(): Unit = {
-                   |  api.logInfo("received ${v._1}")
-                   |  api.logInfo("default ${v._1} implementation")
-                   |}"""
-      }
-    }
-
     @pure def bridge(packageName : String,
                      bridgeName : String,
+                     dispatchProtocol : String,
                      componentName : String,
                      componentType : String,
                      componentImplType : String,
-                     ports : ISZ[(String, String, String)]) : ST = {
+                     ports : ISZ[(String, String, ast.Feature)]) : ST = {
       return st"""// #Sireum
                   |
                   |package $packageName
@@ -184,20 +144,27 @@ object ArtStubGenerator {
                   |  val ports : Bridge.Ports = Bridge.Ports(
                   |    all = ISZ(${(ISZOps(ports).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
                   |
-                  |    dataIns = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "DataIn")).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2)}),
+                  |    dataIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
+                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2)}),
                   |
-                  |    dataOuts = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "DataOut")).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
+                  |    dataOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
                   |
-                  |    eventIns = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "EventIn")).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
+                  |    eventIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isIn(v._3))
+                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
                   |
-                  |    eventOuts = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "EventOut")).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) })
+                  |    eventOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) })
                   |  )
                   |
                   |  val api : ${bridgeName}.Api =
                   |    ${bridgeName}.Api(
                   |      ${var s = "id"
-                           for(p <- ports if p._3.toString.endsWith("Out"))
+                           for(p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3))
                              s += s",\n${Template.apiCall(bridgeName, p._1)}"
+
+                           for(p <- ports if Util.isDataPort(p._3))
+                             s += s",\n${p._1}.id"
                            s
                          }
                   |    )
@@ -213,18 +180,27 @@ object ArtStubGenerator {
                   |
                   |object $bridgeName {
                   |  ${var s = ""
-                       for(p <- ports if p._3.toString.endsWith("Out"))
-                         s += Template.api(p._1, p._2).render + "\n\n"
+                       for(p <- ports if p._3.direction == ast.Direction.Out)
+                         s += Template.api(p).render + "\n\n"
                        s
                      }
                   |  @record class Api(
                   |    ${var s = "id : Art.BridgeId"
-                         for(p <- ports if p._3.toString.endsWith("Out"))
+                         for(p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3))
                            s += ",\n" + Template.apiSig(p._1, p._2).render
+
+                         for(p <- ports if Util.isDataPort(p._3))
+                           s += s",\n${addId(p._1)} : Art.PortId"
+
                          s
                        }
                   |    ) {
                   |
+                  |    ${var s = ""
+                         for (p <- ports if Util.isDataPort(p._3))
+                           s += Template.dataPortApi(p).render + "\n\n"
+                         s
+                       }
                   |    def logInfo(msg: String): Unit = {
                   |      Art.logInfo(id, msg)
                   |    }
@@ -240,33 +216,28 @@ object ArtStubGenerator {
                   |
                   |  @record class EntryPoints(
                   |    $bridgeName : Art.BridgeId,
-                  |    ${ISZOps(ports).foldLeft[sString]((r, v) => s"$r\n${v._1} : Art.PortId,", "") }
+                  |    ${ISZOps(ports).foldLeft[sString]((r, v) => s"$r\n${addId(v._1)} : Art.PortId,", "") }
                   |
                   |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
                   |
-                  |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "DataIn")).foldLeft[sString]((r, v) => r + v._1 + ",\n", "")).dropRight(2)})
+                  |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${
+                         (ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2)})
                   |
-                  |    val dataOutPortIds: ISZ[Art.PortId] = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "DataOut")).foldLeft[sString]((r, v) => r + v._1 + ",\n", "")).dropRight(2) })
+                  |    val dataOutPortIds: ISZ[Art.PortId] = ISZ(${
+                         (ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2) })
                   |
-                  |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${(ISZOps(ports.withFilter(v => v._3.toString == "EventOut")).foldLeft[sString]((r, v) => r + v._1 + ",\n", "")).dropRight(2) })
+                  |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
+                         (ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2) })
                   |
                   |    def initialise(): Unit = {
                   |      ${componentName}.initialise()
                   |    }
                   |
                   |    def compute(): Unit = {
-                  |      val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
-                  |      Art.receiveInput(portIds, dataInPortIds)
-                  |
-                  |      for(portId <- portIds) {
-                  |        ${var s = ""
-                             for (p <- ports if p._3.toString.endsWith("In"))
-                               s += "\n" + Template.portCase(componentName, p).render
-                             s
-                           }
-                  |      }
-                  |
-                  |      Art.sendOutput(eventOutPortIds, dataOutPortIds)
+                  |      ${computeBody(bridgeName, componentName, ports, dispatchProtocol)}
                   |    }
                   |
                   |    def activate(): Unit = {}
@@ -282,15 +253,40 @@ object ArtStubGenerator {
                   |}"""
     }
 
+    @pure def computeBody(bridgeName: String, componentName: String,
+                          ports: ISZ[(String, String, ast.Feature)], dispatchProtocol:String) : ST = {
+      dispatchProtocol.toString match {
+        case "Sporadic" =>
+          return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
+                     |Art.receiveInput(portIds, dataInPortIds)
+                     |
+                     |for(portId <- portIds) {
+                     |  ${var s = ""
+                          for (p <- ports if Util.isEventPort(p._3) && Util.isIn(p._3))
+                            s += "\n" + Template.portCase(componentName, p).render
+                          s
+                        }
+                     |}
+                     |
+                     |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        case "Periodic" =>
+          return st"""val TimeTriggered() = Art.dispatchStatus(${bridgeName})
+                     |Art.receiveInput(ISZ[Art.PortId](), dataInPortIds)
+                     |${componentName}.timeTriggered()
+                     |Art.sendOutput(eventOutPortIds, dataInPortIds)"""
+      }
+    }
+
     @pure def demo() : ST =
       return st"""object Demo extends App {
                  |  art.Art.run(Arch.ad)
                  |}"""
 
     @pure def componentTrait(packageName : String,
+                             dispatchProtocol : String,
                              componentType : String,
                              bridgeName : String,
-                             ports : ISZ[(String, String, String)]) : ST = {
+                             ports : ISZ[(String, String, ast.Feature)]) : ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -304,12 +300,84 @@ object ArtStubGenerator {
                  |  def initialise(): Unit = {}
                  |  def finalise(): Unit = {}
                  |
-                 |  ${var s = ""
-                      for (p <- ports if p._3.toString.endsWith("In"))
-                        s += "\n" + Template.portCaseMethod(p).render
-                      s
+                 |  ${dispatchProtocol.toString match {
+                        case "Sporadic" =>
+                          var s = ""
+                          for (p <- ports if Util.isEventPort(p._3) && Util.isIn(p._3))
+                            s += "\n" + Template.portCaseMethod(p).render
+                          s
+                        case "Periodic" => "def timeTriggered() : Unit"
+                      }
                     }
                  |}"""
+    }
+
+    @pure def addId(s: String) = s + "_Id"
+
+    @pure def getValue(p:(String, String, ast.Feature)) : ST =
+      return st"""val ${p._2.toString.replace(".Type", "")}_Payload(value) = Art.getValue(${addId(p._1)})"""
+
+    @pure def putValue(p:(String, String, ast.Feature)) : ST =
+      return st"""Art.putValue(${addId(p._1)}, ${p._2.toString.replace(".Type", "")}_Payload(value))"""
+
+    @pure def apiCall(componentName : String, portName: String): aString =
+      return s"${componentName}.${portName}Api(${portName}.id)"
+
+    @pure def api(p:(String, String, ast.Feature)) : ST = {
+      return st"""@record class ${p._1}Api(${addId(p._1)} : Art.PortId) {
+                 |  def send(value : ${p._2}): Unit = {
+                 |    ${putValue(p)}
+                 |  }
+                 |}"""
+    }
+
+    @pure def apiSig(portName:String, portType:String) : ST = {
+      return st"""${portName} : ${portName}Api"""
+    }
+
+    @pure def dataPortApi(p: (String, String, ast.Feature)) : ST = {
+      if(Util.isIn(p._3)) {
+        return st"""def get${p._1}() : ${p._2} = {
+                   |  ${getValue(p)}
+                   |  return value;
+                   |}"""
+      } else {
+        return st"""def set${p._1}(value : ${p._2}) : Unit = {
+                   |  ${putValue(p)}
+                   |}"""
+      }
+      return st""" """
+    }
+
+    @pure def portCase(cname:String, v: (String, String, ast.Feature)) : ST = {
+      v._3.category match {
+        case FeatureCategory.EventDataPort =>
+          return st"""if(portId == ${addId(v._1)}){
+                     |  ${getValue(v)}
+                     |  ${cname}.handle${v._1}(value)
+                     |}"""
+        case FeatureCategory.EventPort =>
+          return st"""if(portId == ${addId(v._1)}) {
+                     |  ${cname}.handle${v._1}()
+                     |}"""
+        case _ => throw new RuntimeException("Unexpected " + v._3.category)
+      }
+    }
+
+    @pure def portCaseMethod(v: (String, String, ast.Feature)) : ST = {
+      v._3.category match {
+        case FeatureCategory.EventDataPort =>
+          return st"""def handle${v._1}(value : ${v._2}): Unit = {
+                     |  api.logInfo("received ${v._1} " + value.toString)
+                     |  api.logInfo("default ${v._1} implementation")
+                     |}"""
+        case FeatureCategory.EventPort =>
+          return st"""def handle${v._1}(): Unit = {
+                     |  api.logInfo("received ${v._1}")
+                     |  api.logInfo("default ${v._1} implementation")
+                     |}"""
+        case _ => throw new RuntimeException("Unexpected " + v._3.category)
+      }
     }
 
     @pure def componentImpl(packageName : String,
