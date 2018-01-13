@@ -11,10 +11,12 @@ import scala.io.Source
 object Runner {
 
   def main (args: Array[String]): Unit = {
+    var pname = "building-control-gen"
+    //var pname = "pca-pump-gen"
 
     val fileName = System.getProperty("user.home") + "/aadl.json"
     val json = Source.fromFile(fileName).getLines.mkString
-    val destDir = new File("/Users/belt/devel/sireum/slang-embedded-MASTER/pca-pump-gen/src/main")
+    val destDir = new File(s"/Users/belt/devel/sireum2/slang-embedded/${pname}/src/main")
 
     Runner.run(json, destDir)
   }

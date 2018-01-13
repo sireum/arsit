@@ -3,6 +3,7 @@ package org.sireum.aadl
 import java.io.File
 
 import org.sireum._
+import org.sireum.util.MMap
 import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
@@ -21,6 +22,8 @@ object ArtArchitectureGen {
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
+  var componentMap : MMap[String, ast.Component] = org.sireum.util.mmapEmpty
+
   type sString = scala.Predef.String
   type aString = org.sireum.String
 
@@ -33,9 +36,17 @@ object ArtArchitectureGen {
 
     outDir = dir
 
+    {
+      def r(c: ast.Component): Unit = {
+        assert(!componentMap.contains(c.identifier.get))
+        componentMap += (c.identifier.get -> c)
+        for (s <- c.subComponents) r(s)
+      }
+      for (c <- m.components) r(c)
+    }
+
     for(c <- m.components)
       gen(c)
-
 
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
@@ -69,7 +80,7 @@ object ArtArchitectureGen {
 
   def gen(c: ast.Component) : Unit = {
     c.category match {
-      case ComponentCategory.Process => genProcess(c)
+      case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
       case ComponentCategory.ThreadGroup => genThreadGroup(c)
       case _ =>
         for(_c <- c.subComponents)
@@ -77,25 +88,27 @@ object ArtArchitectureGen {
     }
   }
 
-  def genProcess(m: ast.Component) : ST = {
-    assert (m.category == ComponentCategory.Process)
+  def genContainer(m: ast.Component) : ST = {
+    assert (m.category == ComponentCategory.System || m.category == ComponentCategory.Process)
 
     for(c <- m.subComponents){
       c.category match {
-        case ComponentCategory.ThreadGroup =>
-          genThreadGroup(c)
-        case ComponentCategory.Thread =>
+        case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
+        case ComponentCategory.ThreadGroup => genThreadGroup(c)
+        case ComponentCategory.Thread | ComponentCategory.Device =>
           val name = c.identifier match {
             case Some(x) => x
             case _ => org.sireum.String("")
           }
           bridges :+= (name, genThread(c))
           components :+= name
+        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
+          println(s"Skipping: ${c.category} component ${m.identifier.get}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
 
-    for(c <- m.connections) {
+    for(c <- m.connections if allowConnection(c, m)) {
       connections :+= Template.connection(
         s"${c.src.component}.${c.src.feature}",
         s"${c.dst.component}.${c.dst.feature}")
@@ -117,7 +130,7 @@ object ArtArchitectureGen {
       components :+= name
     }
 
-    for(c <- m.connections) {
+    for(c <- m.connections if allowConnection(c, m)) {
       connections :+= Template.connection(
         s"${c.src.component}.${c.src.feature}",
         s"${c.dst.component}.${c.dst.feature}")
@@ -127,7 +140,7 @@ object ArtArchitectureGen {
   }
 
   def genThread(m:ast.Component) : ST = {
-    assert(m.category == ComponentCategory.Thread)
+    assert(m.category == ComponentCategory.Thread || m.category == ComponentCategory.Device)
     assert(m.connections.isEmpty)
     assert(m.subComponents.isEmpty)
 
@@ -156,7 +169,9 @@ object ArtArchitectureGen {
             case "Aperiodic" | "Sporadic" => Template.sporadic(period)
             case "Periodic" | "Hybrid" => Template.periodic(period)
           }
-        case _ => "???"
+        case _ =>
+          if (m.category == ComponentCategory.Device) Template.periodic("1")
+          else "???"
       }
     }
 
@@ -191,6 +206,30 @@ object ArtArchitectureGen {
     })
 
     return Template.port(name, typ, id, identifier, mode)
+  }
+
+  def allowConnection(c : ast.Connection, m : ast.Component) : B = {
+    //val str = s"${c.src.component}.${c.src.feature} --> ${c.dst.component}.${c.dst.feature}  from  ${m.identifier.get}"
+    val str = s"${c.name.get}  from  ${m.identifier.get}"
+
+    if(c.src.component == c.dst.component){
+      println(s"Skipping: Port connected to itself. $str")
+      return false
+    }
+    if(c.kind != ast.ConnectionKind.Port){
+      println(s"Skipping: ${c.kind} connection.  $str")
+      return false
+    }
+
+    val allowedComponents = Seq(ast.ComponentCategory.Device, ast.ComponentCategory.Thread)
+    val catSrc = componentMap(c.src.component).category
+    val catDest = componentMap(c.dst.component).category
+    if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
+      println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
+      return false
+    }
+
+    return true
   }
 
   object Template {

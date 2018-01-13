@@ -32,8 +32,8 @@ object ArtStubGenerator {
 
   def gen(m: ast.Component) : Unit = {
     m.category match {
-      case ComponentCategory.Process =>
-        genProcess(m)
+      case ComponentCategory.Process | ComponentCategory.System =>
+        genContainer(m)
       case ComponentCategory.ThreadGroup =>
         genThreadGroup(m)
       case _ =>
@@ -42,14 +42,17 @@ object ArtStubGenerator {
     }
   }
 
-  def genProcess(m: ast.Component) : ST = {
-    assert(m.category == ComponentCategory.Process)
+  def genContainer(m: ast.Component) : ST = {
+    assert(m.category == ComponentCategory.Process || m.category == ComponentCategory.System)
 
     for(c <- m.subComponents) {
       c.category match {
+        case ComponentCategory.Process | ComponentCategory.System => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
-        case ComponentCategory.Thread => genThread(c)
-        case _ => throw new RuntimeException(s"Not handling ${m}")
+        case ComponentCategory.Thread | ComponentCategory.Device => genThread(c)
+        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
+          println(s"Skipping: ${c.category} component: ${c.identifier.get}")
+        case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }
     }
 
@@ -68,7 +71,7 @@ object ArtStubGenerator {
   }
 
   def genThread(m: ast.Component) : ST = {
-    assert(m.category == ComponentCategory.Thread)
+    assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
     val packages: Seq[sString] = m.classifier match {
       case Some(x) => x.name.toString.split("::").toSeq.dropRight(1)
@@ -93,10 +96,12 @@ object ArtStubGenerator {
       ports :+= (id, ptype, f)
     }
 
-    val dispatchProtocol = {
+    val dispatchProtocol: String = {
       Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.DispatchProtocol) match {
         case Some(x) => x.value
-        case _ => throw new RuntimeException("Dispatch Protocol missing")
+        case _ =>
+          if(m.category == ComponentCategory.Device) "Periodic"
+          else ???
       }
     }
 
@@ -142,29 +147,41 @@ object ArtStubGenerator {
                   |  ) extends Bridge {
                   |
                   |  val ports : Bridge.Ports = Bridge.Ports(
-                  |    all = ISZ(${(ISZOps(ports).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
+                  |    all = ISZ(${(ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
                   |
                   |    dataIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
-                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2)}),
+                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2)}),
                   |
                   |    dataOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
+                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
                   |
                   |    eventIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isIn(v._3))
-                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) }),
+                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
                   |
                   |    eventOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => s"$r ${v._1},\n", "")).dropRight(2) })
+                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) })
                   |  )
+                  |
+                  |  val syncObject : Object = ISZ()
                   |
                   |  val api : ${bridgeName}.Api =
                   |    ${bridgeName}.Api(
-                  |      ${var s = "id"
-                           for(p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3))
-                             s += s",\n${Template.apiCall(bridgeName, p._1)}"
+                  |      ${var s = "id,\n"
+                           var outEventPorts = ""
+                           var outDataPorts = ""
+                           for(p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3)) {
+                             s += s"${p._1}.id,\n"
+                             outEventPorts += s"${p._1}.id, "
+                           }
 
-                           for(p <- ports if Util.isDataPort(p._3))
-                             s += s",\n${p._1}.id"
+                           for(p <- ports if Util.isDataPort(p._3)) {
+                             s += s"${p._1}.id,\n"
+                             outDataPorts += s"${p._1}.id, "
+                           }
+
+                           s += s"${bridgeName}.Timer(syncObject, \n" +
+                                s"  ISZ(${outDataPorts.dropRight(2)}), \n" +
+                                s"  ISZ(${outEventPorts.dropRight(2)}))"
                            s
                          }
                   |    )
@@ -179,24 +196,32 @@ object ArtStubGenerator {
                   |}
                   |
                   |object $bridgeName {
-                  |  ${var s = ""
-                       for(p <- ports if p._3.direction == ast.Direction.Out)
-                         s += Template.api(p).render + "\n\n"
-                       s
-                     }
+                  |
+                  |  @record class Timer(syncObject : Object,
+                  |                      dataOutPortIds: ISZ[Art.PortId],
+                  |                      eventOutPortIds: ISZ[Art.PortId]) extends art.TimerApi {
+                  |    def init(e : String) : art.TimerApi.EventId = {
+                  |      return e + this.hashCode.toString
+                  |    }
+                  |  }
+                  |
                   |  @record class Api(
-                  |    ${var s = "id : Art.BridgeId"
+                  |    ${var s = "id : Art.BridgeId,"
                          for(p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3))
-                           s += ",\n" + Template.apiSig(p._1, p._2).render
+                           s += s"${addId(p._1)} : Art.PortId,\n"
+                           //s += ",\n" + Template.apiSig(p._1, p._2).render
 
                          for(p <- ports if Util.isDataPort(p._3))
-                           s += s",\n${addId(p._1)} : Art.PortId"
+                           s += s"${addId(p._1)} : Art.PortId,\n"
 
+                         s += s"timer : Timer) {"
                          s
                        }
-                  |    ) {
                   |
                   |    ${var s = ""
+                         for (p <- ports if Util.isEventPort(p._3) && Util.isOut(p._3))
+                           s += Template.eventPortApi(p).render + "\n\n"
+
                          for (p <- ports if Util.isDataPort(p._3))
                            s += Template.dataPortApi(p).render + "\n\n"
                          s
@@ -247,6 +272,7 @@ object ArtStubGenerator {
                   |    def recover(): Unit = {}
                   |
                   |    def finalise(): Unit = {
+                  |      ${componentName}.api.timer.finalise()
                   |      ${componentName}.finalise()
                   |    }
                   |  }
@@ -263,7 +289,7 @@ object ArtStubGenerator {
                      |for(portId <- portIds) {
                      |  ${var s = ""
                           for (p <- ports if Util.isEventPort(p._3) && Util.isIn(p._3))
-                            s += "\n" + Template.portCase(componentName, p).render
+                            s += "\n" + Template.portCase(componentName, p, s == "").render
                           s
                         }
                      |}
@@ -273,7 +299,7 @@ object ArtStubGenerator {
           return st"""val TimeTriggered() = Art.dispatchStatus(${bridgeName})
                      |Art.receiveInput(ISZ[Art.PortId](), dataInPortIds)
                      |${componentName}.timeTriggered()
-                     |Art.sendOutput(eventOutPortIds, dataInPortIds)"""
+                     |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
     }
 
@@ -298,15 +324,15 @@ object ArtStubGenerator {
                  |  def api : ${bridgeName}.Api
                  |
                  |  def initialise(): Unit = {}
-                 |  def finalise(): Unit = {}
                  |
+                 |  def finalise(): Unit = {}
                  |  ${dispatchProtocol.toString match {
                         case "Sporadic" =>
                           var s = ""
                           for (p <- ports if Util.isEventPort(p._3) && Util.isIn(p._3))
-                            s += "\n" + Template.portCaseMethod(p).render
+                            s += "\n" + Template.portCaseMethod(p).render + "\n"
                           s
-                        case "Periodic" => "def timeTriggered() : Unit"
+                        case "Periodic" => "\ndef timeTriggered() : Unit = {}"
                       }
                     }
                  |}"""
@@ -314,8 +340,12 @@ object ArtStubGenerator {
 
     @pure def addId(s: String) = s + "_Id"
 
+    // Option[${p._2.toString.replace(".Type", "")}_Payload] =
     @pure def getValue(p:(String, String, ast.Feature)) : ST =
-      return st"""val ${p._2.toString.replace(".Type", "")}_Payload(value) = Art.getValue(${addId(p._1)})"""
+      return st"""val value : Option[${p._2}] = Art.getValue(${addId(p._1)}) match {
+                 |  case Some(${p._2.toString.replace(".Type", "")}_Payload(v)) => Some(v)
+                 |  case _ => None[${p._2}]
+                 |}"""
 
     @pure def putValue(p:(String, String, ast.Feature)) : ST =
       return st"""Art.putValue(${addId(p._1)}, ${p._2.toString.replace(".Type", "")}_Payload(value))"""
@@ -335,29 +365,35 @@ object ArtStubGenerator {
       return st"""${portName} : ${portName}Api"""
     }
 
+    @pure def eventPortApi(p: (String, String, ast.Feature)) : ST = {
+      return st"""def send${p._1}(value : ${p._2}) : Unit = {
+                 |  ${putValue(p)}
+                 |}"""
+    }
+
     @pure def dataPortApi(p: (String, String, ast.Feature)) : ST = {
       if(Util.isIn(p._3)) {
-        return st"""def get${p._1}() : ${p._2} = {
+        return st"""def get${p._1}() : Option[${p._2}] = {
                    |  ${getValue(p)}
-                   |  return value;
+                   |  return value
                    |}"""
       } else {
         return st"""def set${p._1}(value : ${p._2}) : Unit = {
                    |  ${putValue(p)}
                    |}"""
       }
-      return st""" """
     }
 
-    @pure def portCase(cname:String, v: (String, String, ast.Feature)) : ST = {
+    @pure def portCase(cname:String, v: (String, String, ast.Feature), first : B) : ST = {
       v._3.category match {
         case FeatureCategory.EventDataPort =>
-          return st"""if(portId == ${addId(v._1)}){
+          return st"""${if(!first) "else " else ""}if(portId == ${addId(v._1)}){
                      |  ${getValue(v)}
-                     |  ${cname}.handle${v._1}(value)
+                     |  assert(value.nonEmpty)
+                     |  ${cname}.handle${v._1}(value.get)
                      |}"""
         case FeatureCategory.EventPort =>
-          return st"""if(portId == ${addId(v._1)}) {
+          return st"""${if(!first) "else " else ""}if(portId == ${addId(v._1)}) {
                      |  ${cname}.handle${v._1}()
                      |}"""
         case _ => throw new RuntimeException("Unexpected " + v._3.category)
