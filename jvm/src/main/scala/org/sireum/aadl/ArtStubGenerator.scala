@@ -135,13 +135,13 @@ object ArtStubGenerator {
                   |import art._
                   |
                   |@record class $bridgeName(
-                  |  id : Art.BridgeId,
-                  |  name : String,
-                  |  dispatchProtocol : DispatchPropertyProtocol,
+                  |  val id: Art.BridgeId,
+                  |  val name: String,
+                  |  val dispatchProtocol: DispatchPropertyProtocol,
                   |
                   |  ${var s = ""
                        for(p <- ports)
-                         s += s"${p._1} : Port[${p._2}],\n"
+                         s += s"${p._1}: Port[${p._2}],\n"
                        s.dropRight(2)
                      }
                   |  ) extends Bridge {
@@ -162,8 +162,6 @@ object ArtStubGenerator {
                          ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) })
                   |  )
                   |
-                  |  val syncObject : Object = ISZ()
-                  |
                   |  val api : ${bridgeName}.Api =
                   |    ${bridgeName}.Api(
                   |      ${var s = "id,\n"
@@ -179,7 +177,7 @@ object ArtStubGenerator {
                              outDataPorts += s"${p._1}.id, "
                            }
 
-                           s += s"${bridgeName}.Timer(syncObject, \n" +
+                           s += s"${bridgeName}.Timer(id,\n" +
                                 s"  ISZ(${outDataPorts.dropRight(2)}), \n" +
                                 s"  ISZ(${outEventPorts.dropRight(2)}))"
                            s
@@ -197,11 +195,11 @@ object ArtStubGenerator {
                   |
                   |object $bridgeName {
                   |
-                  |  @record class Timer(syncObject : Object,
-                  |                      dataOutPortIds: ISZ[Art.PortId],
-                  |                      eventOutPortIds: ISZ[Art.PortId]) extends art.TimerApi {
-                  |    def init(e : String) : art.TimerApi.EventId = {
-                  |      return e + this.hashCode.toString
+                  |  @record class Timer(val bridge: Art.BridgeId,
+                  |                      val dataOutPortIds: ISZ[Art.PortId],
+                  |                      val eventOutPortIds: ISZ[Art.PortId]) extends art.TimerApi {
+                  |    def init(e: String): art.TimerApi.EventId = {
+                  |      ${"return s\"$e$hash\""}
                   |    }
                   |  }
                   |
@@ -235,7 +233,7 @@ object ArtStubGenerator {
                   |    }
                   |
                   |    def logError(msg: String): Unit = {
-                  |       Art.logInfo(id, msg)
+                  |      Art.logInfo(id, msg)
                   |    }
                   |  }
                   |
@@ -344,7 +342,7 @@ object ArtStubGenerator {
     @pure def getValue(p:(String, String, ast.Feature)) : ST =
       return st"""val value : Option[${p._2}] = Art.getValue(${addId(p._1)}) match {
                  |  case Some(${p._2.toString.replace(".Type", "")}_Payload(v)) => Some(v)
-                 |  case _ => None[${p._2}]
+                 |  case _ => None[${p._2}]()
                  |}"""
 
     @pure def putValue(p:(String, String, ast.Feature)) : ST =
