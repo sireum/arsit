@@ -1,4 +1,4 @@
-package org.sireum.aadl
+package org.sireum.aadl.arsit
 
 import java.io.File
 
@@ -6,7 +6,8 @@ import org.sireum._
 import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
-import org.sireum.aadl.ast.{ComponentCategory, FeatureCategory}
+import org.sireum.aadl.skema.ast._
+
 import scala.language.implicitConversions
 
 object ArtStubGenerator {
@@ -21,7 +22,7 @@ object ArtStubGenerator {
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
 
-  def generator(dir: File, m: ast.AadlXml) : Unit = {
+  def generator(dir: File, m: AadlXml) : Unit = {
     assert(dir.exists)
 
     outDir = dir
@@ -30,7 +31,7 @@ object ArtStubGenerator {
       gen(c)
   }
 
-  def gen(m: ast.Component) : Unit = {
+  def gen(m: Component) : Unit = {
     m.category match {
       case ComponentCategory.Process | ComponentCategory.System =>
         genContainer(m)
@@ -42,7 +43,7 @@ object ArtStubGenerator {
     }
   }
 
-  def genContainer(m: ast.Component) : ST = {
+  def genContainer(m: Component) : ST = {
     assert(m.category == ComponentCategory.Process || m.category == ComponentCategory.System)
 
     for(c <- m.subComponents) {
@@ -59,7 +60,7 @@ object ArtStubGenerator {
     return st""" """
   }
 
-  def genThreadGroup(m: ast.Component) : ST = {
+  def genThreadGroup(m: Component) : ST = {
     assert(m.category == ComponentCategory.ThreadGroup)
 
     for(c <- m.subComponents) {
@@ -70,7 +71,7 @@ object ArtStubGenerator {
     return st""" """
   }
 
-  def genThread(m: ast.Component) : ST = {
+  def genThread(m: Component) : ST = {
     assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
     val packages: Seq[sString] = m.classifier match {
@@ -83,7 +84,7 @@ object ArtStubGenerator {
     val componentType = Util.getTypeName(m.identifier.get)
     val componentImplType = componentType + "_impl"
 
-    var ports: ISZ[(String, String, ast.Feature)] = ISZ()
+    var ports: ISZ[(String, String, Feature)] = ISZ()
 
     for(f <- m.features if Util.isPort(f)) {
       val id: aString = Util.cleanName(f.identifier)
@@ -97,7 +98,7 @@ object ArtStubGenerator {
     }
 
     val dispatchProtocol: String = {
-      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.DispatchProtocol) match {
+      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.DispatchProtocol) match {
         case Some(x) => x.value
         case _ =>
           if(m.category == ComponentCategory.Device) "Periodic"
@@ -126,7 +127,7 @@ object ArtStubGenerator {
                      componentName : String,
                      componentType : String,
                      componentImplType : String,
-                     ports : ISZ[(String, String, ast.Feature)]) : ST = {
+                     ports : ISZ[(String, String, Feature)]) : ST = {
       return st"""// #Sireum
                   |
                   |package $packageName
@@ -147,19 +148,23 @@ object ArtStubGenerator {
                   |  ) extends Bridge {
                   |
                   |  val ports : Bridge.Ports = Bridge.Ports(
-                  |    all = ISZ(${(ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
+                  |    all = ISZ(${ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "").dropRight(2) }),
                   |
-                  |    dataIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
-                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2)}),
+                  |    dataIns = ISZ(${
+                        ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
+                        ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "").dropRight(2)}),
                   |
-                  |    dataOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
+                  |    dataOuts = ISZ(${
+                       ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
+                       ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "").dropRight(2) }),
                   |
-                  |    eventIns = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isIn(v._3))
-                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) }),
+                  |    eventIns = ISZ(${
+                       ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isIn(v._3))
+                       ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "").dropRight(2) }),
                   |
-                  |    eventOuts = ISZ(${(ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "")).dropRight(2) })
+                  |    eventOuts = ISZ(${
+                       ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
+                       ).foldLeft[sString]((r, v) => s"${r}${v._1},\n", "").dropRight(2) })
                   |  )
                   |
                   |  val api : ${bridgeName}.Api =
@@ -188,7 +193,7 @@ object ArtStubGenerator {
                   |    ${bridgeName}.EntryPoints(
                   |      id,
                   |
-                  |      ${(ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1}.id,\n", ""))}
+                  |      ${ISZOps(ports).foldLeft[sString]((r, v) => s"${r}${v._1}.id,\n", "")}
                   |      ${componentImplType}(api)
                   |    )
                   |}
@@ -244,16 +249,16 @@ object ArtStubGenerator {
                   |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
                   |
                   |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
-                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2)})
+                         ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isIn(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "").dropRight(2)})
                   |
                   |    val dataOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2) })
+                         ISZOps(ports.withFilter(v => Util.isDataPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "").dropRight(2) })
                   |
                   |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
-                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "")).dropRight(2) })
+                         ISZOps(ports.withFilter(v => Util.isEventPort(v._3) && Util.isOut(v._3))
+                         ).foldLeft[sString]((r, v) => r + addId(v._1) + ",\n", "").dropRight(2) })
                   |
                   |    def initialise(): Unit = {
                   |      ${componentName}.initialise()
@@ -278,7 +283,7 @@ object ArtStubGenerator {
     }
 
     @pure def computeBody(bridgeName: String, componentName: String,
-                          ports: ISZ[(String, String, ast.Feature)], dispatchProtocol:String) : ST = {
+                          ports: ISZ[(String, String, Feature)], dispatchProtocol:String) : ST = {
       dispatchProtocol.toString match {
         case "Sporadic" =>
           return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
@@ -310,7 +315,7 @@ object ArtStubGenerator {
                              dispatchProtocol : String,
                              componentType : String,
                              bridgeName : String,
-                             ports : ISZ[(String, String, ast.Feature)]) : ST = {
+                             ports : ISZ[(String, String, Feature)]) : ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -339,19 +344,19 @@ object ArtStubGenerator {
     @pure def addId(s: String) = s + "_Id"
 
     // Option[${p._2.toString.replace(".Type", "")}_Payload] =
-    @pure def getValue(p:(String, String, ast.Feature)) : ST =
+    @pure def getValue(p:(String, String, Feature)) : ST =
       return st"""val value : Option[${p._2}] = Art.getValue(${addId(p._1)}) match {
                  |  case Some(${p._2.toString.replace(".Type", "")}_Payload(v)) => Some(v)
                  |  case _ => None[${p._2}]()
                  |}"""
 
-    @pure def putValue(p:(String, String, ast.Feature)) : ST =
+    @pure def putValue(p:(String, String, Feature)) : ST =
       return st"""Art.putValue(${addId(p._1)}, ${p._2.toString.replace(".Type", "")}_Payload(value))"""
 
     @pure def apiCall(componentName : String, portName: String): aString =
       return s"${componentName}.${portName}Api(${portName}.id)"
 
-    @pure def api(p:(String, String, ast.Feature)) : ST = {
+    @pure def api(p:(String, String, Feature)) : ST = {
       return st"""@record class ${p._1}Api(${addId(p._1)} : Art.PortId) {
                  |  def send(value : ${p._2}): Unit = {
                  |    ${putValue(p)}
@@ -363,13 +368,13 @@ object ArtStubGenerator {
       return st"""${portName} : ${portName}Api"""
     }
 
-    @pure def eventPortApi(p: (String, String, ast.Feature)) : ST = {
+    @pure def eventPortApi(p: (String, String, Feature)) : ST = {
       return st"""def send${p._1}(value : ${p._2}) : Unit = {
                  |  ${putValue(p)}
                  |}"""
     }
 
-    @pure def dataPortApi(p: (String, String, ast.Feature)) : ST = {
+    @pure def dataPortApi(p: (String, String, Feature)) : ST = {
       if(Util.isIn(p._3)) {
         return st"""def get${p._1}() : Option[${p._2}] = {
                    |  ${getValue(p)}
@@ -382,7 +387,7 @@ object ArtStubGenerator {
       }
     }
 
-    @pure def portCase(cname:String, v: (String, String, ast.Feature), first : B) : ST = {
+    @pure def portCase(cname:String, v: (String, String, Feature), first : B) : ST = {
       v._3.category match {
         case FeatureCategory.EventDataPort =>
           return st"""${if(!first) "else " else ""}if(portId == ${addId(v._1)}){
@@ -398,7 +403,7 @@ object ArtStubGenerator {
       }
     }
 
-    @pure def portCaseMethod(v: (String, String, ast.Feature)) : ST = {
+    @pure def portCaseMethod(v: (String, String, Feature)) : ST = {
       v._3.category match {
         case FeatureCategory.EventDataPort =>
           return st"""def handle${v._1}(value : ${v._2}): Unit = {

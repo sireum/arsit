@@ -1,9 +1,9 @@
-package org.sireum.aadl
+package org.sireum.aadl.arsit
 
 import java.io.File
 
 import org.sireum
-import org.sireum.aadl.ast.JSON
+import org.sireum.aadl.skema.ast.JSON
 import org.sireum.ops.ISZOps
 
 import scala.io.Source

@@ -1,8 +1,9 @@
-package org.sireum.aadl
+package org.sireum.aadl.arsit
 
 import java.io.{BufferedWriter, File, FileWriter}
 
 import org.sireum._
+import org.sireum.aadl.skema.ast._
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
 
@@ -13,15 +14,15 @@ object Util {
 
   val EmptyType = "Slang_Types.Empty"
 
-  @pure def getDiscreetPropertyValue[T](properties: ISZ[ast.Property], propertyName: String) : Option[T] = {
+  @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String) : Option[T] = {
     for(p <- properties if p.name == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
   }
 
-  @pure def isEnum(props : ISZ[ast.Property]) : B = {
+  @pure def isEnum(props : ISZ[Property]) : B = {
     for(p <- props if p.name == DataRepresentation &&
-      ISZOps(p.propertyValues).contains(ast.UnitProp("Enum", "EnumerationLiteral")))
+      ISZOps(p.propertyValues).contains(UnitProp("Enum", "EnumerationLiteral")))
         return true
     return false
   }
@@ -57,15 +58,15 @@ object Util {
   }
 
 
-  @pure def isPort(f : ast.Feature) = isEventPort(f) || isDataPort(f)
+  @pure def isPort(f : Feature) = isEventPort(f) || isDataPort(f)
 
-  @pure def isEventPort(f : ast.Feature) =
-    f.category == ast.FeatureCategory.EventDataPort || f.category == ast.FeatureCategory.EventPort
+  @pure def isEventPort(f : Feature) =
+    f.category == FeatureCategory.EventDataPort || f.category == FeatureCategory.EventPort
 
-  @pure def isDataPort(f : ast.Feature) = f.category == ast.FeatureCategory.DataPort
+  @pure def isDataPort(f : Feature) = f.category == FeatureCategory.DataPort
 
 
-  @pure def isIn(f : ast.Feature) = f.direction == ast.Direction.In
+  @pure def isIn(f : Feature) = f.direction == Direction.In
 
-  @pure def isOut(f : ast.Feature) = f.direction == ast.Direction.Out
+  @pure def isOut(f : Feature) = f.direction == Direction.Out
 }

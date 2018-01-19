@@ -1,13 +1,13 @@
-package org.sireum.aadl
+package org.sireum.aadl.arsit
 
 import java.io.File
 
 import org.sireum._
 import org.sireum.util.MMap
 import org.sireum.Some
-import org.sireum.ops._
-import org.sireum.ops.ISZOps._
-import org.sireum.aadl.ast.ComponentCategory
+
+import org.sireum.aadl.skema.ast._
+
 import scala.collection.immutable.{Set => mSet}
 import scala.language.implicitConversions
 
@@ -22,7 +22,7 @@ object ArtArchitectureGen {
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
-  var componentMap : MMap[String, ast.Component] = org.sireum.util.mmapEmpty
+  var componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
   type sString = scala.Predef.String
   type aString = org.sireum.String
@@ -31,13 +31,13 @@ object ArtArchitectureGen {
   implicit def string2ST(s:scala.Predef.String) : ST = st"""$s"""
   implicit def string2SireumString(s:scala.Predef.String) : org.sireum.String = org.sireum.String(s)
 
-  def generator(dir: File, m: ast.AadlXml) : Unit = {
+  def generator(dir: File, m: AadlXml) : Unit = {
     assert(dir.exists)
 
     outDir = dir
 
     {
-      def r(c: ast.Component): Unit = {
+      def r(c: Component): Unit = {
         assert(!componentMap.contains(c.identifier.get))
         componentMap += (c.identifier.get -> c)
         for (s <- c.subComponents) r(s)
@@ -66,7 +66,7 @@ object ArtArchitectureGen {
     Util.writeFile(new File(outDir, "Demo.scala"), demo.render.toString)
   }
 
-  def getComponentId(component: ast.Component): Z = {
+  def getComponentId(component: Component): Z = {
     val id = componentId
     componentId += 1
     return id
@@ -78,7 +78,7 @@ object ArtArchitectureGen {
     return id
   }
 
-  def gen(c: ast.Component) : Unit = {
+  def gen(c: Component) : Unit = {
     c.category match {
       case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
       case ComponentCategory.ThreadGroup => genThreadGroup(c)
@@ -88,7 +88,7 @@ object ArtArchitectureGen {
     }
   }
 
-  def genContainer(m: ast.Component) : ST = {
+  def genContainer(m: Component) : ST = {
     assert (m.category == ComponentCategory.System || m.category == ComponentCategory.Process)
 
     for(c <- m.subComponents){
@@ -117,7 +117,7 @@ object ArtArchitectureGen {
     return st""" """
   }
 
-  def genThreadGroup(m: ast.Component) : ST = {
+  def genThreadGroup(m: Component) : ST = {
     assert(m.category == ComponentCategory.ThreadGroup)
 
     for(c <- m.subComponents){
@@ -139,7 +139,7 @@ object ArtArchitectureGen {
     return st""" """
   }
 
-  def genThread(m:ast.Component) : ST = {
+  def genThread(m:Component) : ST = {
     assert(m.category == ComponentCategory.Thread || m.category == ComponentCategory.Device)
     assert(m.connections.isEmpty)
     assert(m.subComponents.isEmpty)
@@ -156,14 +156,14 @@ object ArtArchitectureGen {
     val id = getComponentId(m)
 
     val period: ST = {
-      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.Period) match {
+      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
         case Some(x) => x.value
         case _ => "???"
       }
     }
 
     val dispatchProtocol: ST = {
-      Util.getDiscreetPropertyValue[ast.UnitProp](m.properties, Util.DispatchProtocol) match {
+      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.DispatchProtocol) match {
         case Some(x) =>
           x.value.toString match {
             case "Aperiodic" | "Sporadic" => Template.sporadic(period)
@@ -182,7 +182,7 @@ object ArtArchitectureGen {
     return Template.bridge(name, id, dispatchProtocol, ports)
   }
 
-  def genPort(p:ast.Feature, componentId: String) : ST = {
+  def genPort(p:Feature, componentId: String) : ST = {
     val name = p.identifier
     val typ = p.classifier match {
       case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
@@ -191,14 +191,14 @@ object ArtArchitectureGen {
     val id = getPortId()
     val identifier = s"$componentId.${p.identifier}"
 
-    import ast.FeatureCategory._
+    import FeatureCategory._
     val prefix = p.category match {
       case EventPort | EventDataPort => "Event"
       case DataPort => "Data"
       case _ => throw new RuntimeException("Not handling " + p.category)
     }
 
-    import ast.Direction._
+    import Direction._
     val mode = prefix + (p.direction match {
       case In => "In"
       case Out => "Out"
@@ -208,7 +208,7 @@ object ArtArchitectureGen {
     return Template.port(name, typ, id, identifier, mode)
   }
 
-  def allowConnection(c : ast.Connection, m : ast.Component) : B = {
+  def allowConnection(c : Connection, m : Component) : B = {
     //val str = s"${c.src.component}.${c.src.feature} --> ${c.dst.component}.${c.dst.feature}  from  ${m.identifier.get}"
     val str = s"${c.name.get}  from  ${m.identifier.get}"
 
@@ -216,12 +216,12 @@ object ArtArchitectureGen {
       println(s"Skipping: Port connected to itself. $str")
       return false
     }
-    if(c.kind != ast.ConnectionKind.Port){
+    if(c.kind != ConnectionKind.Port){
       println(s"Skipping: ${c.kind} connection.  $str")
       return false
     }
 
-    val allowedComponents = Seq(ast.ComponentCategory.Device, ast.ComponentCategory.Thread)
+    val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
     val catSrc = componentMap(c.src.component).category
     val catDest = componentMap(c.dst.component).category
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
