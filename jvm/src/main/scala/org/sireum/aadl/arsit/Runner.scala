@@ -11,14 +11,21 @@ import scala.io.Source
 object Runner {
 
   def main (args: Array[String]): Unit = {
-    var pname = "building-control-gen"
-    //var pname = "pca-pump-gen"
+    if(args.length != 2) {
+      println("Usage: run <json> <dest-dir>")
+      return
+    }
 
-    val fileName = System.getProperty("user.home") + "/aadl.json"
-    val json = Source.fromFile(fileName).getLines.mkString
-    val destDir = new File(s"/Users/belt/devel/sireum2/slang-embedded/${pname}/src/main")
+    var json = ""
+    try {
+      json = Source.fromFile(args(0)).getLines.mkString
+    } catch {
+      case e: Throwable =>
+        Console.err.println(s"Error reading from '${args(0)}'")
+        return
+    }
 
-    Runner.run(json, destDir)
+    Runner.run(json, new File(args(1) + "/src/main"))
   }
 
   def run(json: String, destDir : File): Unit = {

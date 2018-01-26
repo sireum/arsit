@@ -322,7 +322,7 @@ object ArtStubGenerator {
                  |
                  |import org.sireum._
                  |
-                 |@sig trait ${componentType} {
+                 |@msig trait ${componentType} {
                  |
                  |  def api : ${bridgeName}.Api
                  |
@@ -429,7 +429,7 @@ object ArtStubGenerator {
                  |
                  |import org.sireum._
                  |
-                 |@record class $componentImplType (api : ${bridgeName}.Api) extends $componentType {}"""
+                 |@record class $componentImplType (val api : ${bridgeName}.Api) extends $componentType {}"""
     }
   }
 }
