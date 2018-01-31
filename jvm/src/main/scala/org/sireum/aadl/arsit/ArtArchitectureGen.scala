@@ -1,13 +1,10 @@
 package org.sireum.aadl.arsit
 
 import java.io.File
-
 import org.sireum._
 import org.sireum.util.MMap
 import org.sireum.Some
-
 import org.sireum.aadl.skema.ast._
-
 import scala.collection.immutable.{Set => mSet}
 import scala.language.implicitConversions
 
@@ -38,8 +35,8 @@ object ArtArchitectureGen {
 
     {
       def r(c: Component): Unit = {
-        assert(!componentMap.contains(c.identifier.get))
-        componentMap += (c.identifier.get -> c)
+        assert(!componentMap.contains(Util.last(c.identifier)))
+        componentMap += (Util.last(c.identifier) -> c)
         for (s <- c.subComponents) r(s)
       }
       for (c <- m.components) r(c)
@@ -96,19 +93,16 @@ object ArtArchitectureGen {
         case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
-          val name = c.identifier match {
-            case Some(x) => x
-            case _ => org.sireum.String("")
-          }
+          val name = Util.last(c.identifier)
           bridges :+= (name, genThread(c))
           components :+= name
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
-          println(s"Skipping: ${c.category} component ${m.identifier.get}")
+          println(s"Skipping: ${c.category} component ${Util.last(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
 
-    for(c <- m.connections if allowConnection(c, m)) {
+    for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
         s"${c.src.component}.${c.src.feature}",
         s"${c.dst.component}.${c.dst.feature}")
@@ -122,15 +116,12 @@ object ArtArchitectureGen {
 
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      val name = c.identifier match {
-        case Some(x) => x
-        case _ => org.sireum.String("")
-      }
+      val name = Util.last(c.identifier)
       bridges :+= (name, genThread(c))
       components :+= name
     }
 
-    for(c <- m.connections if allowConnection(c, m)) {
+    for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
         s"${c.src.component}.${c.src.feature}",
         s"${c.dst.component}.${c.dst.feature}")
@@ -148,10 +139,7 @@ object ArtArchitectureGen {
       imports += s"import " +
         m.classifier.get.name.toString.split("::").toSeq.dropRight(1).mkString(".") + "._"
 
-    val name: org.sireum.String = m.identifier match {
-      case Some(x) => Util.getBridgeName(x)
-      case _ => ""
-    }
+    val name: org.sireum.String = Util.getBridgeName(Util.last(m.identifier))
 
     val id = getComponentId(m)
 
@@ -183,13 +171,13 @@ object ArtArchitectureGen {
   }
 
   def genPort(p:Feature, componentId: String) : ST = {
-    val name = p.identifier
+    val name = Util.last(p.identifier)
     val typ = p.classifier match {
       case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
       case _ => Util.EmptyType
     }
     val id = getPortId()
-    val identifier = s"$componentId.${p.identifier}"
+    val identifier = s"$componentId.${Util.last(p.identifier)}"
 
     import FeatureCategory._
     val prefix = p.category match {
@@ -208,9 +196,9 @@ object ArtArchitectureGen {
     return Template.port(name, typ, id, identifier, mode)
   }
 
-  def allowConnection(c : Connection, m : Component) : B = {
+  def allowConnection(c : ConnectionInstance, m : Component) : B = {
     //val str = s"${c.src.component}.${c.src.feature} --> ${c.dst.component}.${c.dst.feature}  from  ${m.identifier.get}"
-    val str = s"${c.name.get}  from  ${m.identifier.get}"
+    val str = s"${Util.last(c.name)}  from  ${Util.last(m.identifier)}"
 
     if(c.src.component == c.dst.component){
       println(s"Skipping: Port connected to itself. $str")

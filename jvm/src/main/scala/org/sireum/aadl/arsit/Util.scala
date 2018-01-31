@@ -14,14 +14,16 @@ object Util {
 
   val EmptyType = "Slang_Types.Empty"
 
+  def last(s:Name) : String = ISZOps(s.name).last
+
   @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String) : Option[T] = {
-    for(p <- properties if p.name == propertyName)
+    for(p <- properties if last(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
   }
 
   @pure def isEnum(props : ISZ[Property]) : B = {
-    for(p <- props if p.name == DataRepresentation &&
+    for(p <- props if last(p.name) == DataRepresentation &&
       ISZOps(p.propertyValues).contains(UnitProp("Enum", "EnumerationLiteral")))
         return true
     return false
@@ -52,7 +54,7 @@ object Util {
       }
     } catch {
       case e : Throwable =>
-        println("Error encounted while trying to create file: " + fname)
+        println("Error encountered while trying to create file: " + fname)
         println(e.getMessage)
     }
   }

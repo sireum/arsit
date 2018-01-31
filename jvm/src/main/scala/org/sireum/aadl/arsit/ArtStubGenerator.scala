@@ -7,7 +7,6 @@ import org.sireum.Some
 import org.sireum.ops._
 import org.sireum.ops.ISZOps._
 import org.sireum.aadl.skema.ast._
-
 import scala.language.implicitConversions
 
 object ArtStubGenerator {
@@ -18,6 +17,7 @@ object ArtStubGenerator {
   type sString = scala.Predef.String
   type aString = org.sireum.String
 
+  def last(s:Name) : String = ISZOps(s.name).last
   implicit def sireumString2ST(s:aString) : ST = st"""$s"""
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
@@ -52,7 +52,7 @@ object ArtStubGenerator {
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device => genThread(c)
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
-          println(s"Skipping: ${c.category} component: ${c.identifier.get}")
+          println(s"Skipping: ${c.category} component: ${last(c.identifier)}")
         case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }
     }
@@ -79,15 +79,15 @@ object ArtStubGenerator {
       case _ => Seq()
     }
 
-    val bridgeName = Util.getBridgeName(m.identifier.get)
+    val bridgeName = Util.getBridgeName(last(m.identifier))
     val componentName = "component"
-    val componentType = Util.getTypeName(m.identifier.get)
+    val componentType = Util.getTypeName(last(m.identifier))
     val componentImplType = componentType + "_impl"
 
     var ports: ISZ[(String, String, Feature)] = ISZ()
 
     for(f <- m.features if Util.isPort(f)) {
-      val id: aString = Util.cleanName(f.identifier)
+      val id: aString = Util.cleanName(last(f.identifier))
       val ptype: aString = f.classifier match {
         case Some(c) =>
           Util.cleanName(c.name) + (if (Util.isEnum(f.properties)) ".Type" else "")
