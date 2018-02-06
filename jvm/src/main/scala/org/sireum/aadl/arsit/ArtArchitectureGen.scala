@@ -10,23 +10,23 @@ import scala.language.implicitConversions
 
 object ArtArchitectureGen {
 
+  type scalaString = scala.Predef.String
+  type sireumString = org.sireum.String
+
   var componentId = 0
   var portId = 0
   var outDir : File = null
-  var imports : mSet[aString] = mSet()
+  var imports : mSet[sireumString] = mSet()
 
-  var bridges : ISZ[(String, ST)] = ISZ()
-  var components : ISZ[String] = ISZ[String]()
+  var bridges : ISZ[(sireumString, ST)] = ISZ()
+  var components : ISZ[sireumString] = ISZ[sireumString]()
   var connections : ISZ[ST] = ISZ()
 
-  var componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
+  var componentMap : MMap[sireumString, Component] = org.sireum.util.mmapEmpty
 
-  type sString = scala.Predef.String
-  type aString = org.sireum.String
-
-  implicit def sireumString2ST(s:org.sireum.String) : ST = st"""$s"""
-  implicit def string2ST(s:scala.Predef.String) : ST = st"""$s"""
-  implicit def string2SireumString(s:scala.Predef.String) : org.sireum.String = org.sireum.String(s)
+  implicit def sireumString2ST(s:sireumString) : ST = st"""$s"""
+  implicit def string2ST(s:scalaString) : ST = st"""$s"""
+  implicit def scalaString2SireumString(s:scalaString) : sireumString = org.sireum.String(s)
 
   def generator(dir: File, m: AadlXml) : Unit = {
     assert(dir.exists)
@@ -36,7 +36,7 @@ object ArtArchitectureGen {
     {
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.last(c.identifier)))
-        componentMap += (Util.last(c.identifier) -> c)
+        componentMap += (Util.last(c.identifier) → c)
         for (s <- c.subComponents) r(s)
       }
       for (c <- m.components) r(c)

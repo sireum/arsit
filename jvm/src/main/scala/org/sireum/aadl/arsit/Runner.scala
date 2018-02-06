@@ -2,50 +2,69 @@ package org.sireum.aadl.arsit
 
 import java.io.File
 
-import org.sireum
-import org.sireum.aadl.skema.ast.JSON
+import org.sireum.{B, String}
+import org.sireum.aadl.skema.ast.{AadlXml, JSON, MsgPack}
 import org.sireum.ops.ISZOps
 
 import scala.io.Source
 
 object Runner {
 
-  def main (args: Array[String]): Unit = {
+  def main (args: Array[scala.Predef.String]): Unit = {
+
     if(args.length != 2) {
-      println("Usage: run <json> <dest-dir>")
+      println("Usage: run <dest-dir> <json>")
       return
     }
 
     var json = ""
     try {
-      json = Source.fromFile(args(0)).getLines.mkString
+      json = Source.fromFile(args(1)).getLines.mkString
     } catch {
       case e: Throwable =>
         Console.err.println(s"Error reading from '${args(0)}'")
         return
     }
 
-    Runner.run(json, new File(args(1) + "/src/main"))
+    Runner.run(new File(args(0)), true, json)
   }
 
-  def run(json: String, destDir : File): Unit = {
-    destDir.mkdirs // try creating the dir structure if it doesn't exist yet
+  def run(destDir : File, isJson: B, s: org.sireum.String): Unit = {
+    if (isJson)
+      run(destDir, JSON.toAadlXml(s))
+    else
+      try
+        run(destDir, MsgPack.toAadlXml(org.sireum.conversions.String.fromBase64(s)))
+      catch {
+        case e: Throwable =>
+          Console.println(e.getMessage)
+      }
+  }
 
-    if(!destDir.exists){
-      println(s"Directory doesn't exist: ${destDir.getAbsolutePath}")
+  def run(destDir : File, m: AadlXml) : Unit = {
+
+    if(m.components.isEmpty) {
+      Console.err.println("Model is empty")
+      return
+    }
+
+    val _destDir = new File(destDir, "src/main")
+
+    _destDir.mkdirs // try creating the dir structure if it doesn't exist yet
+
+    if(!_destDir.exists){
+      Console.err.println(s"Could not create directory: ${_destDir.getAbsolutePath}")
       return
     }
 
     // create subdirs for source directories
-    new File(destDir, "architecture").mkdir
-    new File(destDir, "bridge").mkdir
-    new File(destDir, "data").mkdir
-    new File(destDir, "component").mkdir
+    new File(_destDir, "architecture").mkdir
+    new File(_destDir, "bridge").mkdir
+    new File(_destDir, "data").mkdir
+    new File(_destDir, "component").mkdir
 
-    val m = JSON.toAadlXml(org.sireum.String(json))
+    ArtArchitectureGen.generator(new File(_destDir, "architecture"), m)
 
-    ArtArchitectureGen.generator(new File(destDir, "architecture"), m)
-
-    ArtStubGenerator.generator(destDir, m)
+    ArtStubGenerator.generator(_destDir, m)
   }
 }
