@@ -29,7 +29,7 @@ object Runner {
     Runner.run(new File(args(0)), true, json)
   }
 
-  def run(destDir : File, isJson: B, s: org.sireum.String): Unit = {
+  def run(destDir : File, isJson: B, s: org.sireum.String): Int = {
     if (isJson)
       run(destDir, JSON.toAadlXml(s))
     else
@@ -38,14 +38,15 @@ object Runner {
       catch {
         case e: Throwable =>
           Console.println(e.getMessage)
+          -1
       }
   }
 
-  def run(destDir : File, m: AadlXml) : Unit = {
+  def run(destDir : File, m: AadlXml) : Int = {
 
     if(m.components.isEmpty) {
       Console.err.println("Model is empty")
-      return
+      return -1
     }
 
     val _destDir = new File(destDir, "src/main")
@@ -54,7 +55,7 @@ object Runner {
 
     if(!_destDir.exists){
       Console.err.println(s"Could not create directory: ${_destDir.getAbsolutePath}")
-      return
+      return -1
     }
 
     // create subdirs for source directories
@@ -66,5 +67,7 @@ object Runner {
     ArtArchitectureGen.generator(new File(_destDir, "architecture"), m)
 
     ArtStubGenerator.generator(_destDir, m)
+
+    0
   }
 }
