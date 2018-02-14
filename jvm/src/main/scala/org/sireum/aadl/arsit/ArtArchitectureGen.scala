@@ -8,8 +8,7 @@ import org.sireum.aadl.skema.ast._
 import scala.collection.immutable.{Set => mSet}
 import scala.language.implicitConversions
 
-object ArtArchitectureGen {
-
+class ArtArchitectureGen {
   type scalaString = scala.Predef.String
   type sireumString = org.sireum.String
 
@@ -288,4 +287,8 @@ object ArtArchitectureGen {
                  |}"""
     }
   }
+}
+
+object ArtArchitectureGen {
+  def apply(dir: File, m: Aadl) = new ArtArchitectureGen().generator(dir, m)
 }

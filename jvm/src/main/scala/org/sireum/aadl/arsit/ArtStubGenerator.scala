@@ -9,7 +9,7 @@ import org.sireum.ops.ISZOps._
 import org.sireum.aadl.skema.ast._
 import scala.language.implicitConversions
 
-object ArtStubGenerator {
+class ArtStubGenerator {
 
   var outDir : File = null
   var toImpl : ISZ[(ST, ST)] = ISZ()
@@ -432,4 +432,8 @@ object ArtStubGenerator {
                  |@record class $componentImplType (val api : ${bridgeName}.Api) extends $componentType {}"""
     }
   }
+}
+
+object ArtStubGenerator {
+  def apply(dir: File, m: Aadl) = new ArtStubGenerator().generator(dir, m)
 }
