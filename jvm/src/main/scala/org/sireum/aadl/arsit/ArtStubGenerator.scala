@@ -22,7 +22,7 @@ object ArtStubGenerator {
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
 
-  def generator(dir: File, m: AadlXml) : Unit = {
+  def generator(dir: File, m: Aadl) : Unit = {
     assert(dir.exists)
 
     outDir = dir

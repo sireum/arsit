@@ -3,7 +3,7 @@ package org.sireum.aadl.arsit
 import java.io.File
 
 import org.sireum.{B, String}
-import org.sireum.aadl.skema.ast.{AadlXml, JSON, MsgPack}
+import org.sireum.aadl.skema.ast.{Aadl, JSON, MsgPack}
 import org.sireum.ops.ISZOps
 
 import scala.io.Source
@@ -31,10 +31,10 @@ object Runner {
 
   def run(destDir : File, isJson: B, s: org.sireum.String): Int = {
     if (isJson)
-      run(destDir, JSON.toAadlXml(s))
+      run(destDir, JSON.toAadl(s))
     else
       try
-        run(destDir, MsgPack.toAadlXml(org.sireum.conversions.String.fromBase64(s)))
+        run(destDir, MsgPack.toAadl(org.sireum.conversions.String.fromBase64(s)))
       catch {
         case e: Throwable =>
           Console.println(e.getMessage)
@@ -42,7 +42,7 @@ object Runner {
       }
   }
 
-  def run(destDir : File, m: AadlXml) : Int = {
+  def run(destDir : File, m: Aadl) : Int = {
 
     if(m.components.isEmpty) {
       Console.err.println("Model is empty")

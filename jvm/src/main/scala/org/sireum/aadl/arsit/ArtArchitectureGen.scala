@@ -28,7 +28,7 @@ object ArtArchitectureGen {
   implicit def string2ST(s:scalaString) : ST = st"""$s"""
   implicit def scalaString2SireumString(s:scalaString) : sireumString = org.sireum.String(s)
 
-  def generator(dir: File, m: AadlXml) : Unit = {
+  def generator(dir: File, m: Aadl) : Unit = {
     assert(dir.exists)
 
     outDir = dir
@@ -104,8 +104,8 @@ object ArtArchitectureGen {
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${c.src.component}.${c.src.feature}",
-        s"${c.dst.component}.${c.dst.feature}")
+        s"${Util.last(c.src.component)}.${Util.last(c.src.feature)}",
+        s"${Util.last(c.dst.component)}.${Util.last(c.dst.feature)}")
     }
 
     return st""" """
@@ -123,8 +123,8 @@ object ArtArchitectureGen {
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${c.src.component}.${c.src.feature}",
-        s"${c.dst.component}.${c.dst.feature}")
+        s"${Util.last(c.src.component)}.${Util.last(c.src.feature)}",
+        s"${Util.last(c.dst.component)}.${Util.last(c.dst.feature)}")
     }
 
     return st""" """
@@ -210,8 +210,8 @@ object ArtArchitectureGen {
     }
 
     val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
-    val catSrc = componentMap(c.src.component).category
-    val catDest = componentMap(c.dst.component).category
+    val catSrc = componentMap(Util.last(c.src.component)).category
+    val catDest = componentMap(Util.last(c.dst.component)).category
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
       println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
       return false
