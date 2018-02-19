@@ -34,8 +34,8 @@ class ArtArchitectureGen {
 
     {
       def r(c: Component): Unit = {
-        assert(!componentMap.contains(Util.last(c.identifier)))
-        componentMap += (Util.last(c.identifier) → c)
+        assert(!componentMap.contains(Util.getName(c.identifier)))
+        componentMap += (Util.getName(c.identifier) → c)
         for (s <- c.subComponents) r(s)
       }
       for (c <- m.components) r(c)
@@ -92,19 +92,19 @@ class ArtArchitectureGen {
         case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
-          val name = Util.last(c.identifier)
+          val name = Util.getName(c.identifier)
           bridges :+= (name, genThread(c))
           components :+= name
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
-          println(s"Skipping: ${c.category} component ${Util.last(m.identifier)}")
+          println(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.last(c.src.component)}.${Util.last(c.src.feature)}",
-        s"${Util.last(c.dst.component)}.${Util.last(c.dst.feature)}")
+        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
+        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
     }
 
     return st""" """
@@ -115,15 +115,15 @@ class ArtArchitectureGen {
 
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      val name = Util.last(c.identifier)
+      val name = Util.getName(c.identifier)
       bridges :+= (name, genThread(c))
       components :+= name
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.last(c.src.component)}.${Util.last(c.src.feature)}",
-        s"${Util.last(c.dst.component)}.${Util.last(c.dst.feature)}")
+        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
+        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
     }
 
     return st""" """
@@ -138,7 +138,8 @@ class ArtArchitectureGen {
       imports += s"import " +
         m.classifier.get.name.toString.split("::").toSeq.dropRight(1).mkString(".") + "._"
 
-    val name: org.sireum.String = Util.getBridgeName(Util.last(m.identifier))
+    val name: Names = Util.getNames(m.classifier.get.name)
+    val pathName = Util.getName(m.identifier)
 
     val id = getComponentId(m)
 
@@ -164,19 +165,19 @@ class ArtArchitectureGen {
 
     var ports: ISZ[ST] = ISZ()
     for (f <- m.features if Util.isPort(f))
-      ports :+= genPort(f, name)
+      ports :+= genPort(f)
 
-    return Template.bridge(name, id, dispatchProtocol, ports)
+    return Template.bridge(s"${name.pack}.${name.bridge}", pathName, id, dispatchProtocol, ports)
   }
 
-  def genPort(p:Feature, componentId: String) : ST = {
-    val name = Util.last(p.identifier)
+  def genPort(p:Feature) : ST = {
+    val name = Util.getLastName(p.identifier)
     val typ = p.classifier match {
       case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
       case _ => Util.EmptyType
     }
     val id = getPortId()
-    val identifier = s"$componentId.${Util.last(p.identifier)}"
+    val identifier = s"${Util.getName(p.identifier)}"
 
     import FeatureCategory._
     val prefix = p.category match {
@@ -196,8 +197,7 @@ class ArtArchitectureGen {
   }
 
   def allowConnection(c : ConnectionInstance, m : Component) : B = {
-    //val str = s"${c.src.component}.${c.src.feature} --> ${c.dst.component}.${c.dst.feature}  from  ${m.identifier.get}"
-    val str = s"${Util.last(c.name)}  from  ${Util.last(m.identifier)}"
+    val str = s"${Util.getName(c.name)}  from  ${Util.getName(m.identifier)}"
 
     if(c.src.component == c.dst.component){
       println(s"Skipping: Port connected to itself. $str")
@@ -209,8 +209,9 @@ class ArtArchitectureGen {
     }
 
     val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
-    val catSrc = componentMap(Util.last(c.src.component)).category
-    val catDest = componentMap(Util.last(c.dst.component)).category
+    val catSrc = componentMap(Util.getName(c.src.component)).category
+    val catDest = componentMap(Util.getName(c.dst.component)).category
+
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
       println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
       return false
@@ -233,12 +234,13 @@ class ArtArchitectureGen {
     }
 
     @pure def bridge(name: String,
+                     pathName: String,
                      id: Z,
                      dispatchProtocol: ST,
                      ports: ISZ[ST]) : ST = {
       return st"""${name}(
                   |  id = $id,
-                  |  name = "$name",
+                  |  name = "$pathName",
                   |  dispatchProtocol = $dispatchProtocol,
                   |
                   |  ${(ports, ",\n")}
@@ -249,7 +251,9 @@ class ArtArchitectureGen {
 
     @pure def demo(architectureName: String,
                    architectureDescriptionName: String) : ST = {
-      return st"""object Demo extends App {
+      return st"""${Util.doNotEditComment()}
+                 |
+                 |object Demo extends App {
                  |  art.Art.run(${architectureName}.${architectureDescriptionName})
                  |}"""
     }
@@ -268,6 +272,8 @@ class ArtArchitectureGen {
                  |import art.PortMode._
                  |import art.DispatchPropertyProtocol._
                  |${(imports, "\n")}
+                 |
+                 |${Util.doNotEditComment()}
                  |
                  |object $architectureName {
                  |  val $architectureDescriptionName : ArchitectureDescription = {

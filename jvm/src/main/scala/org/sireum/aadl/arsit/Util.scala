@@ -14,16 +14,17 @@ object Util {
 
   val EmptyType = "Slang_Types.Empty"
 
-  def last(s:Name) : String = ISZOps(s.name).last
+  def getName(s:Name) : String = s.name.elements.mkString("_")
+  def getLastName(s: Name) : String = ISZOps(s.name).last
 
   @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String) : Option[T] = {
-    for(p <- properties if last(p.name) == propertyName)
+    for(p <- properties if getLastName(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
   }
 
   @pure def isEnum(props : ISZ[Property]) : B = {
-    for(p <- props if last(p.name) == DataRepresentation &&
+    for(p <- props if getLastName(p.name) == DataRepresentation &&
       ISZOps(p.propertyValues).contains(UnitProp("Enum", "EnumerationLiteral")))
         return true
     return false
@@ -31,7 +32,12 @@ object Util {
 
   @pure def cleanName(s:String) : String = s.toString.replaceAll("::", ".")
 
-  @pure def getBridgeName(s : String) : String = cleanName(s) + "Bridge"
+  @pure def getNames(s: String): Names = {
+    val a : Array[scala.Predef.String] = s.toString.split("::")
+    assert(a.length == 2)
+    val compName = a(1).replaceAll("\\.", "_")
+    Names(a(0), compName + "_Bridge", compName, compName + "_Impl")
+  }
 
   @pure def getTypeName(s : String) : String = cleanName(s)
 
@@ -59,6 +65,10 @@ object Util {
     }
   }
 
+  @pure def doNotEditComment(from: Option[String] = None[String]()) = {
+    val _from = if(from.nonEmpty) " from " + from.get else ""
+    s"// This file was auto-generated${_from}.  Do not edit"
+  }
 
   @pure def isPort(f : Feature) = isEventPort(f) || isDataPort(f)
 
@@ -72,3 +82,8 @@ object Util {
 
   @pure def isOut(f : Feature) = f.direction == Direction.Out
 }
+
+case class Names(pack : String,
+                 bridge: String,
+                 component: String,
+                 componentImpl: String)

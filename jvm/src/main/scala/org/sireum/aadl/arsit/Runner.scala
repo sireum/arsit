@@ -2,7 +2,7 @@ package org.sireum.aadl.arsit
 
 import java.io.File
 
-import org.sireum.{B, String}
+import org.sireum.{B, Either, String}
 import org.sireum.aadl.skema.ast.{Aadl, JSON, MsgPack}
 import org.sireum.ops.ISZOps
 
@@ -22,7 +22,7 @@ object Runner {
       json = Source.fromFile(args(1)).getLines.mkString
     } catch {
       case e: Throwable =>
-        Console.err.println(s"Error reading from '${args(0)}'")
+        Console.err.println(s"Error reading from '${args(1)}'")
         return
     }
 
@@ -32,14 +32,14 @@ object Runner {
   def run(destDir : File, isJson: B, s: org.sireum.String): Int = {
     if (isJson)
       run(destDir, JSON.toAadl(s))
-    else
-      try
-        run(destDir, MsgPack.toAadl(org.sireum.conversions.String.fromBase64(s)))
-      catch {
-        case e: Throwable =>
-          Console.println(e.getMessage)
+    else {
+      org.sireum.conversions.String.fromBase64(s) match {
+        case Either.Left(u) => run(destDir, MsgPack.toAadl(u))
+        case Either.Right(m) =>
+          Console.println(m)
           -1
       }
+    }
   }
 
   def run(destDir : File, m: Aadl) : Int = {
