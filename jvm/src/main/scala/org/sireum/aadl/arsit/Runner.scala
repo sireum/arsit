@@ -30,11 +30,23 @@ object Runner {
   }
 
   def run(destDir : File, isJson: B, s: org.sireum.String): Int = {
-    if (isJson)
-      run(destDir, JSON.toAadl(s))
+    if (isJson) {
+      JSON.toAadl(s) match {
+        case Either.Left(m) => run(destDir, m)
+        case Either.Right(m) =>
+          Console.println(s"Json deserialization error at (${m.line}, ${m.column}): ${m.message}")
+          -1
+      }
+    }
     else {
       org.sireum.conversions.String.fromBase64(s) match {
-        case Either.Left(u) => run(destDir, MsgPack.toAadl(u))
+        case Either.Left(u) =>
+          MsgPack.toAadl(u) match {
+            case Either.Left(m) => run(destDir, m)
+            case Either.Right(m) =>
+              Console.println(s"MsgPack deserialization error at offset ${m.offset}: ${m.message}")
+              -1
+          }
         case Either.Right(m) =>
           Console.println(m)
           -1
