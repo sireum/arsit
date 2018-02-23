@@ -15,7 +15,6 @@ class ArtArchitectureGen {
   var componentId = 0
   var portId = 0
   var outDir : File = null
-  var imports : mSet[sireumString] = mSet()
 
   var bridges : ISZ[(sireumString, ST)] = ISZ()
   var components : ISZ[sireumString] = ISZ[sireumString]()
@@ -23,12 +22,15 @@ class ArtArchitectureGen {
 
   var componentMap : MMap[sireumString, Component] = org.sireum.util.mmapEmpty
 
+  var topLevelPackageName: String = _
+
   implicit def sireumString2ST(s:sireumString) : ST = st"""$s"""
   implicit def string2ST(s:scalaString) : ST = st"""$s"""
   implicit def scalaString2SireumString(s:scalaString) : sireumString = org.sireum.String(s)
 
-  def generator(dir: File, m: Aadl) : Unit = {
+  def generator(dir: File, m: Aadl, topPackageName: String) : Unit = {
     assert(dir.exists)
+    topLevelPackageName = Util.sanitizeName(topPackageName)
 
     outDir = dir
 
@@ -48,7 +50,7 @@ class ArtArchitectureGen {
     val architectureDescriptionName = "ad"
 
     val arch = Template.architectureDescription(
-      ISZ(imports.toSeq:_*),
+      topLevelPackageName,
       architectureName,
       architectureDescriptionName,
       bridges,
@@ -56,10 +58,10 @@ class ArtArchitectureGen {
       connections
     )
 
-    Util.writeFile(new File(outDir, "Arch.scala"), arch.render.toString)
+    Util.writeFile(new File(outDir, topLevelPackageName + "/Arch.scala"), arch.render.toString)
 
-    val demo = Template.demo(architectureName, architectureDescriptionName)
-    Util.writeFile(new File(outDir, "Demo.scala"), demo.render.toString)
+    val demo = Template.demo(topLevelPackageName, architectureName, architectureDescriptionName)
+    Util.writeFile(new File(outDir, topLevelPackageName + "/Demo.scala"), demo.render.toString)
   }
 
   def getComponentId(component: Component): Z = {
@@ -134,11 +136,7 @@ class ArtArchitectureGen {
     assert(m.connections.isEmpty)
     assert(m.subComponents.isEmpty)
 
-    if(m.classifier.nonEmpty)
-      imports += s"import " +
-        m.classifier.get.name.toString.split("::").toSeq.dropRight(1).mkString(".") + "._"
-
-    val name: Names = Util.getNames(m.classifier.get.name)
+    val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
     val pathName = Util.getName(m.identifier)
 
     val id = getComponentId(m)
@@ -167,7 +165,7 @@ class ArtArchitectureGen {
     for (f <- m.features if Util.isPort(f))
       ports :+= genPort(f)
 
-    return Template.bridge(s"${name.pack}.${name.bridge}", pathName, id, dispatchProtocol, ports)
+    return Template.bridge(s"${name.packageName}.${name.bridge}", pathName, id, dispatchProtocol, ports)
   }
 
   def genPort(p:Feature) : ST = {
@@ -249,16 +247,18 @@ class ArtArchitectureGen {
 
     @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""
 
-    @pure def demo(architectureName: String,
+    @pure def demo(packageName: String,
+                   architectureName: String,
                    architectureDescriptionName: String) : ST = {
       return st"""${Util.doNotEditComment()}
+                 |package $topLevelPackageName
                  |
                  |object Demo extends App {
                  |  art.Art.run(${architectureName}.${architectureDescriptionName})
                  |}"""
     }
 
-    @pure def architectureDescription(imports : ISZ[String],
+    @pure def architectureDescription(packageName: String,
                                       architectureName: String,
                                       architectureDescriptionName: String,
                                       bridges : ISZ[(String, ST)],
@@ -267,11 +267,12 @@ class ArtArchitectureGen {
                                      ) : ST = {
       return st"""// #Sireum
                  |
+                 |package $packageName
+                 |
                  |import org.sireum._
                  |import art._
                  |import art.PortMode._
                  |import art.DispatchPropertyProtocol._
-                 |${(imports, "\n")}
                  |
                  |${Util.doNotEditComment()}
                  |
@@ -296,5 +297,5 @@ class ArtArchitectureGen {
 }
 
 object ArtArchitectureGen {
-  def apply(dir: File, m: Aadl) = new ArtArchitectureGen().generator(dir, m)
+  def apply(dir: File, m: Aadl, topPackage: String) = new ArtArchitectureGen().generator(dir, m, topPackage)
 }

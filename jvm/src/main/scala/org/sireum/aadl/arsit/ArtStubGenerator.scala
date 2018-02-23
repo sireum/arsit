@@ -13,6 +13,7 @@ class ArtStubGenerator {
 
   var outDir : File = null
   var toImpl : ISZ[(ST, ST)] = ISZ()
+  var topLevelPackage: String = _
 
   type sString = scala.Predef.String
   type aString = org.sireum.String
@@ -21,10 +22,11 @@ class ArtStubGenerator {
   implicit def string2ST(s:sString) : ST = st"""$s"""
   implicit def string2SireumString(s:sString) : aString = org.sireum.String(s)
 
-  def generator(dir: File, m: Aadl) : Unit = {
+  def generator(dir: File, m: Aadl, packageName: String) : Unit = {
     assert(dir.exists)
 
     outDir = dir
+    topLevelPackage = Util.sanitizeName(packageName)
 
     for(c <- m.components)
       gen(c)
@@ -73,7 +75,7 @@ class ArtStubGenerator {
   def genThread(m: Component) : ST = {
     assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
-    val names = Util.getNames(m.classifier.get.name)
+    val names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackage)
     val componentName = "component"
     var ports: ISZ[(String, String, Feature)] = ISZ()
 
@@ -97,20 +99,21 @@ class ArtStubGenerator {
       }
     }
 
-    val b = Template.bridge(names.pack, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
-    Util.writeFile(new File(outDir, s"bridge/${names.pack}/${names.bridge}.scala"), b.render.toString)
+    val b = Template.bridge(topLevelPackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
+    Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b.render.toString)
 
-    val c = Template.componentTrait(names.pack, dispatchProtocol, names.component, names.bridge, ports)
-    Util.writeFile(new File(outDir, s"component/${names.pack}/${names.component}.scala"), c.render.toString)
+    val c = Template.componentTrait(topLevelPackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
+    Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c.render.toString)
 
-    val ci = Template.componentImpl(names.pack, names.component, names.bridge, names.componentImpl)
-    Util.writeFile(new File(outDir, s"component/${names.pack}/${names.componentImpl}.scala"), ci.render.toString, false)
+    val ci = Template.componentImpl(topLevelPackage, names.packageName, names.component, names.bridge, names.componentImpl)
+    Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.componentImpl}.scala"), ci.render.toString, false)
 
     return """ """
   }
 
   object Template {
-    @pure def bridge(packageName : String,
+    @pure def bridge(topLevelPackageName: String,
+                     packageName : String,
                      bridgeName : String,
                      dispatchProtocol : String,
                      componentName : String,
@@ -123,6 +126,7 @@ class ArtStubGenerator {
                   |
                   |import org.sireum._
                   |import art._
+                  |import ${topLevelPackageName}._
                   |
                   |${Util.doNotEditComment()}
                   |
@@ -284,7 +288,8 @@ class ArtStubGenerator {
                  |  art.Art.run(Arch.ad)
                  |}"""
 
-    @pure def componentTrait(packageName : String,
+    @pure def componentTrait(topLevelPackageName: String,
+                             packageName : String,
                              dispatchProtocol : String,
                              componentType : String,
                              bridgeName : String,
@@ -294,6 +299,7 @@ class ArtStubGenerator {
                  |package $packageName
                  |
                  |import org.sireum._
+                 |import ${topLevelPackageName}._
                  |
                  |${Util.doNotEditComment()}
                  |
@@ -393,7 +399,8 @@ class ArtStubGenerator {
       }
     }
 
-    @pure def componentImpl(packageName : String,
+    @pure def componentImpl(topLevelPackageName: String,
+                            packageName : String,
                             componentType : String,
                             bridgeName : String,
                             componentImplType : String) : ST = {
@@ -402,6 +409,7 @@ class ArtStubGenerator {
                  |package $packageName
                  |
                  |import org.sireum._
+                 |import ${topLevelPackageName}._
                  |
                  |@record class $componentImplType (val api : ${bridgeName}.Api) extends $componentType {}"""
     }
@@ -409,5 +417,5 @@ class ArtStubGenerator {
 }
 
 object ArtStubGenerator {
-  def apply(dir: File, m: Aadl) = new ArtStubGenerator().generator(dir, m)
+  def apply(dir: File, m: Aadl, packageName: String) = new ArtStubGenerator().generator(dir, m, packageName)
 }

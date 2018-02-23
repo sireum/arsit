@@ -32,11 +32,13 @@ object Util {
 
   @pure def cleanName(s:String) : String = s.toString.replaceAll("::", ".")
 
-  @pure def getNames(s: String): Names = {
-    val a : Array[scala.Predef.String] = s.toString.split("::")
+  @pure def sanitizeName(s: String) : String = s.toString.replaceAll("\\-", "_")
+
+  @pure def getNamesFromClassifier(c: Classifier, topPackage: String): Names = {
+    val a : Array[scala.Predef.String] = c.name.toString.split("::")
     assert(a.length == 2)
     val compName = a(1).replaceAll("\\.", "_")
-    Names(a(0), compName + "_Bridge", compName, compName + "_Impl")
+    Names(s"${topPackage}.${a(0)}", s"${topPackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
   }
 
   @pure def getTypeName(s : String) : String = cleanName(s)
@@ -83,7 +85,8 @@ object Util {
   @pure def isOut(f : Feature) = f.direction == Direction.Out
 }
 
-case class Names(pack : String,
+case class Names(packageName : String,
+                 packagePath : String,
                  bridge: String,
                  component: String,
                  componentImpl: String)

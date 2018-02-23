@@ -76,9 +76,9 @@ object Runner {
     new File(_destDir, "data").mkdir
     new File(_destDir, "component").mkdir
 
-    ArtArchitectureGen(new File(_destDir, "architecture"), m)
+    ArtArchitectureGen(new File(_destDir, "architecture"), m, destDir.getName())
 
-    ArtStubGenerator(_destDir, m)
+    ArtStubGenerator(_destDir, m, destDir.getName())
 
     0
   }
