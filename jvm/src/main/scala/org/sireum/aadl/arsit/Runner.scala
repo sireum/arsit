@@ -2,9 +2,8 @@ package org.sireum.aadl.arsit
 
 import java.io.File
 
-import org.sireum.{B, Either, String}
 import org.sireum.aadl.skema.ast.{Aadl, JSON, MsgPack}
-import org.sireum.ops.ISZOps
+import org.sireum.{B, Either, String}
 
 import scala.io.Source
 
@@ -54,7 +53,9 @@ object Runner {
     }
   }
 
-  def run(destDir : File, m: Aadl) : Int = {
+  def run(destDir : File, m: Aadl) : Int = run(destDir, m, destDir.getName)
+
+  def run(destDir : File, m: Aadl, basePackageName: String) : Int = {
 
     if(m.components.isEmpty) {
       Console.err.println("Model is empty")
@@ -76,9 +77,9 @@ object Runner {
     new File(_destDir, "data").mkdir
     new File(_destDir, "component").mkdir
 
-    ArtArchitectureGen(new File(_destDir, "architecture"), m, destDir.getName())
+    ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
 
-    ArtStubGenerator(_destDir, m, destDir.getName())
+    ArtStubGenerator(_destDir, m, basePackageName)
 
     0
   }

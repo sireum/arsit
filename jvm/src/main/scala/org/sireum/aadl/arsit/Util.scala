@@ -5,14 +5,13 @@ import java.io.{BufferedWriter, File, FileWriter}
 import org.sireum._
 import org.sireum.aadl.skema.ast._
 import org.sireum.ops._
-import org.sireum.ops.ISZOps._
 
 object Util {
-  val DispatchProtocol : org.sireum.String = "Thread_Properties::Dispatch_Protocol"
-  val Period : org.sireum.String = "Timing_Properties::Period"
-  val DataRepresentation : org.sireum.String = "Data_Model::Data_Representation"
+  val DispatchProtocol : String = "Thread_Properties::Dispatch_Protocol"
+  val Period : String = "Timing_Properties::Period"
+  val DataRepresentation : String = "Data_Model::Data_Representation"
 
-  val EmptyType = "Slang_Types.Empty"
+  val EmptyType : String  = "Slang_Types.Empty"
 
   def getName(s:Name) : String = s.name.elements.mkString("_")
   def getLastName(s: Name) : String = ISZOps(s.name).last

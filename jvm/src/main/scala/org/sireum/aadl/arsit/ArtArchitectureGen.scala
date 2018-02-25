@@ -1,32 +1,25 @@
 package org.sireum.aadl.arsit
 
 import java.io.File
+
 import org.sireum._
-import org.sireum.util.MMap
-import org.sireum.Some
 import org.sireum.aadl.skema.ast._
-import scala.collection.immutable.{Set => mSet}
+import org.sireum.util.MMap
+
 import scala.language.implicitConversions
 
 class ArtArchitectureGen {
-  type scalaString = scala.Predef.String
-  type sireumString = org.sireum.String
-
   var componentId = 0
   var portId = 0
   var outDir : File = null
 
-  var bridges : ISZ[(sireumString, ST)] = ISZ()
-  var components : ISZ[sireumString] = ISZ[sireumString]()
+  var bridges : ISZ[(String, ST)] = ISZ()
+  var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
-  var componentMap : MMap[sireumString, Component] = org.sireum.util.mmapEmpty
+  var componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
   var topLevelPackageName: String = _
-
-  implicit def sireumString2ST(s:sireumString) : ST = st"""$s"""
-  implicit def string2ST(s:scalaString) : ST = st"""$s"""
-  implicit def scalaString2SireumString(s:scalaString) : sireumString = org.sireum.String(s)
 
   def generator(dir: File, m: Aadl, topPackageName: String) : Unit = {
     assert(dir.exists)
@@ -58,10 +51,10 @@ class ArtArchitectureGen {
       connections
     )
 
-    Util.writeFile(new File(outDir, topLevelPackageName + "/Arch.scala"), arch.render.toString)
+    Util.writeFile(new File(outDir, topLevelPackageName + "/Arch.scala"), arch)
 
     val demo = Template.demo(topLevelPackageName, architectureName, architectureDescriptionName)
-    Util.writeFile(new File(outDir, topLevelPackageName + "/Demo.scala"), demo.render.toString)
+    Util.writeFile(new File(outDir, topLevelPackageName + "/Demo.scala"), demo)
   }
 
   def getComponentId(component: Component): Z = {
@@ -86,7 +79,7 @@ class ArtArchitectureGen {
     }
   }
 
-  def genContainer(m: Component) : ST = {
+  def genContainer(m: Component) : Unit = {
     assert (m.category == ComponentCategory.System || m.category == ComponentCategory.Process)
 
     for(c <- m.subComponents){
@@ -108,11 +101,9 @@ class ArtArchitectureGen {
         s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
         s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
     }
-
-    return st""" """
   }
 
-  def genThreadGroup(m: Component) : ST = {
+  def genThreadGroup(m: Component) : Unit = {
     assert(m.category == ComponentCategory.ThreadGroup)
 
     for(c <- m.subComponents){
@@ -127,8 +118,6 @@ class ArtArchitectureGen {
         s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
         s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
     }
-
-    return st""" """
   }
 
   def genThread(m:Component) : ST = {
@@ -143,8 +132,8 @@ class ArtArchitectureGen {
 
     val period: ST = {
       Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
-        case Some(x) => x.value
-        case _ => "???"
+        case Some(x) => st"""${x.value}"""
+        case _ => ???
       }
     }
 
@@ -156,8 +145,8 @@ class ArtArchitectureGen {
             case "Periodic" | "Hybrid" => Template.periodic(period)
           }
         case _ =>
-          if (m.category == ComponentCategory.Device) Template.periodic("1")
-          else "???"
+          if (m.category == ComponentCategory.Device) Template.periodic(st"""1""")
+          else ???
       }
     }
 
@@ -170,7 +159,7 @@ class ArtArchitectureGen {
 
   def genPort(p:Feature) : ST = {
     val name = Util.getLastName(p.identifier)
-    val typ = p.classifier match {
+    val typ: String = p.classifier match {
       case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
       case _ => Util.EmptyType
     }
@@ -199,11 +188,11 @@ class ArtArchitectureGen {
 
     if(c.src.component == c.dst.component){
       println(s"Skipping: Port connected to itself. $str")
-      return false
+      return F
     }
     if(c.kind != ConnectionKind.Port){
       println(s"Skipping: ${c.kind} connection.  $str")
-      return false
+      return F
     }
 
     val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
@@ -212,10 +201,10 @@ class ArtArchitectureGen {
 
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
       println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
-      return false
+      return F
     }
 
-    return true
+    return T
   }
 
   object Template {
