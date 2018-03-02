@@ -4,6 +4,7 @@ import java.io.File
 
 import org.sireum._
 import org.sireum.aadl.skema.ast._
+import org.sireum.util.MList
 import org.sireum.util.MMap
 
 import scala.language.implicitConversions
@@ -17,7 +18,9 @@ class ArtArchitectureGen {
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
-  var componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
+  val seenConnections: MMap[Name, MList[Name]] = org.sireum.util.mmapEmpty
+
+  val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
   var topLevelPackageName: String = _
 
@@ -133,7 +136,7 @@ class ArtArchitectureGen {
     val period: ST = {
       Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
         case Some(x) => st"""${x.value}"""
-        case _ => ???
+        case _ => st"""1"""
       }
     }
 
@@ -145,7 +148,7 @@ class ArtArchitectureGen {
             case "Periodic" | "Hybrid" => Template.periodic(period)
           }
         case _ =>
-          if (m.category == ComponentCategory.Device) Template.periodic(st"""1""")
+          if (m.category == ComponentCategory.Device) Template.periodic(period)
           else ???
       }
     }
@@ -203,6 +206,12 @@ class ArtArchitectureGen {
       println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
       return F
     }
+
+    if(seenConnections.contains(c.src.feature) && seenConnections(c.src.feature).contains(c.dst.feature)) {
+      println(s"Skipping: already handled connection: ${c.src.feature} to ${c.dst.feature}")
+      return F
+    }
+    seenConnections.getOrElseUpdate(c.src.feature, org.sireum.util.mlistEmpty[Name]) += c.dst.feature
 
     return T
   }
