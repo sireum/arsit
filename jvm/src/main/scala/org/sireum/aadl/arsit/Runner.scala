@@ -2,7 +2,7 @@ package org.sireum.aadl.arsit
 
 import java.io.File
 
-import org.sireum.aadl.skema.ast.{Aadl, JSON, MsgPack}
+import org.sireum.aadl.ir.{Aadl, JSON, MsgPack}
 import org.sireum.{B, Either, String}
 
 import scala.io.Source

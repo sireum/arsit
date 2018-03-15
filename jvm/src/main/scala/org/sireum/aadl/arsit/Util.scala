@@ -3,7 +3,7 @@ package org.sireum.aadl.arsit
 import java.io.{BufferedWriter, File, FileWriter}
 
 import org.sireum._
-import org.sireum.aadl.skema.ast._
+import org.sireum.aadl.ir._
 import org.sireum.ops._
 
 object Util {
