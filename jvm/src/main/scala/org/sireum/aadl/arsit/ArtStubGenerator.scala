@@ -373,7 +373,7 @@ class ArtStubGenerator {
       v._3.category match {
         case FeatureCategory.EventDataPort =>
           return st"""def handle${v._1}(value : ${v._2}): Unit = {
-                     |  api.logInfo("received ${"$value"}")
+                     |  api.logInfo("received ${"${value}"}")
                      |  api.logInfo("default ${v._1} implementation")
                      |}"""
         case FeatureCategory.EventPort =>
