@@ -24,7 +24,7 @@ object Util {
 
   @pure def isEnum(props : ISZ[Property]) : B = {
     for(p <- props if getLastName(p.name) == DataRepresentation &&
-      ISZOps(p.propertyValues).contains(UnitProp("Enum", "EnumerationLiteral")))
+      ISZOps(p.propertyValues).contains(ValueProp("Enum")))
         return true
     return false
   }

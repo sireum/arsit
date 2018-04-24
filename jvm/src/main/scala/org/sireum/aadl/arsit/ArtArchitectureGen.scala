@@ -135,13 +135,18 @@ class ArtArchitectureGen {
 
     val period: ST = {
       Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
-        case Some(x) => st"""${x.value}"""
+        case Some(x) =>
+          assert(x.unit.get == org.sireum.String("ps"))
+          // convert picoseconds to milliseconds.  x.value was a double in osate
+          // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
+          val v = x.value.toString.toDouble / 1e9
+          st"""${v.toLong}"""
         case _ => st"""1"""
       }
     }
 
     val dispatchProtocol: ST = {
-      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.DispatchProtocol) match {
+      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.DispatchProtocol) match {
         case Some(x) =>
           x.value.toString match {
             case "Aperiodic" | "Sporadic" => Template.sporadic(period)

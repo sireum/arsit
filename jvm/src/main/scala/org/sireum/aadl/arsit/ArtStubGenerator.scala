@@ -79,7 +79,7 @@ class ArtStubGenerator {
     }
 
     val dispatchProtocol: String = {
-      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.DispatchProtocol) match {
+      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.DispatchProtocol) match {
         case Some(x) => x.value
         case _ =>
           if(m.category == ComponentCategory.Device) "Periodic"
