@@ -202,7 +202,7 @@ class ArtStubGenerator {
                   |    }
                   |
                   |    def logError(msg: String): Unit = {
-                  |      Art.logInfo(id, msg)
+                  |      Art.logError(id, msg)
                   |    }
                   |  }
                   |
