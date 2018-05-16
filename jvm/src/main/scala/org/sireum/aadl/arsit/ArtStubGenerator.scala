@@ -308,42 +308,31 @@ class ArtStubGenerator {
                  |}"""
     }
 
-    @pure def addId(s: String) = s + "_Id"
-
-    @pure def getValue(p:(String, String, Feature)) : ST =
-      return st"""val value : Option[${p._2}] = Art.getValue(${addId(p._1)}) match {
-                 |  case Some(${p._2.toString.replace(".Type", "")}_Payload(v)) => Some(v)
-                 |  case _ => None[${p._2}]()
-                 |}"""
+    @pure def addId(s: String) : String = s + "_Id"
 
     @pure def putValue(p:(String, String, Feature)) : ST =
-      return st"""Art.putValue(${addId(p._1)}, ${p._2.toString.replace(".Type", "")}_Payload(value))"""
+      return st"""Art.putValue(${addId(p._1)}, ${p._2.toString.replace(".Type", "")}${if(p._2 == Util.EmptyType) "()" else "_Payload(value)"})"""
 
     @pure def apiCall(componentName : String, portName: String): String =
       return s"${componentName}.${portName}Api(${portName}.id)"
-
-    @pure def api(p:(String, String, Feature)) : ST = {
-      return st"""@record class ${p._1}Api(${addId(p._1)} : Art.PortId) {
-                 |  def send(value : ${p._2}): Unit = {
-                 |    ${putValue(p)}
-                 |  }
-                 |}"""
-    }
 
     @pure def apiSig(portName:String, portType:String) : ST = {
       return st"""${portName} : ${portName}Api"""
     }
 
     @pure def eventPortApi(p: (String, String, Feature)) : ST = {
-      return st"""def send${p._1}(value : ${p._2}) : Unit = {
-                 |  ${putValue(p)}
-                 |}"""
+      return st"""def send${p._1}(${if(p._2 == Util.EmptyType) "" else s"value : ${p._2}"}) : Unit = {
+                  |  ${putValue(p)}
+                  |}"""
     }
 
     @pure def dataPortApi(p: (String, String, Feature)) : ST = {
       if(Util.isIn(p._3)) {
         return st"""def get${p._1}() : Option[${p._2}] = {
-                   |  ${getValue(p)}
+                   |  val value : Option[${p._2}] = Art.getValue(${addId(p._1)}) match {
+                   |    case Some(${p._2.toString.replace(".Type", "")}_Payload(v)) => Some(v)
+                   |    case _ => None[${p._2}]()
+                   |  }
                    |  return value
                    |}"""
       } else {
@@ -357,9 +346,8 @@ class ArtStubGenerator {
       v._3.category match {
         case FeatureCategory.EventDataPort =>
           return st"""${if(!first) "else " else ""}if(portId == ${addId(v._1)}){
-                     |  ${getValue(v)}
-                     |  assert(value.nonEmpty)
-                     |  ${cname}.handle${v._1}(value.get)
+                     |  val Some(${v._2.toString.replace(".Type", "")}_Payload(value)) = Art.getValue(${addId(v._1)})
+                     |  ${cname}.handle${v._1}(value)
                      |}"""
         case FeatureCategory.EventPort =>
           return st"""${if(!first) "else " else ""}if(portId == ${addId(v._1)}) {

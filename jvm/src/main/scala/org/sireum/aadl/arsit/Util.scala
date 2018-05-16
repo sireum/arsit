@@ -11,7 +11,7 @@ object Util {
   val Period : String = "Timing_Properties::Period"
   val DataRepresentation : String = "Data_Model::Data_Representation"
 
-  val EmptyType : String  = "Slang_Types.Empty"
+  val EmptyType : String  = "art.Empty"
 
   def getName(s:Name) : String = s.name.elements.mkString("_")
   def getLastName(s: Name) : String = ISZOps(s.name).last
