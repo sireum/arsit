@@ -14,7 +14,7 @@ class ArtArchitectureGen {
   var portId = 0
   var outDir : File = null
 
-  var bridges : ISZ[(String, ST)] = ISZ()
+  var bridges : ISZ[ST] = ISZ()
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
@@ -91,7 +91,7 @@ class ArtArchitectureGen {
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
           val name = Util.getName(c.identifier)
-          bridges :+= (name, genThread(c))
+          bridges :+= genThread(c, name)
           components :+= name
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
           println(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
@@ -112,7 +112,7 @@ class ArtArchitectureGen {
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
       val name = Util.getName(c.identifier)
-      bridges :+= (name, genThread(c))
+      bridges :+= genThread(c, name)
       components :+= name
     }
 
@@ -123,7 +123,7 @@ class ArtArchitectureGen {
     }
   }
 
-  def genThread(m:Component) : ST = {
+  def genThread(m:Component, varName: String) : ST = {
     assert(m.category == ComponentCategory.Thread || m.category == ComponentCategory.Device)
     assert(m.connections.isEmpty)
     assert(m.subComponents.isEmpty)
@@ -162,7 +162,7 @@ class ArtArchitectureGen {
     for (f <- m.features if Util.isPort(f))
       ports :+= genPort(f)
 
-    return Template.bridge(s"${name.packageName}.${name.bridge}", pathName, id, dispatchProtocol, ports)
+    return Template.bridge(varName, s"${name.packageName}.${name.bridge}", pathName, id, dispatchProtocol, ports)
   }
 
   def genPort(p:Feature) : ST = {
@@ -234,12 +234,13 @@ class ArtArchitectureGen {
       return st"""$name = Port[$typ] (id = $id, name = "$identifier", mode = $mode)"""
     }
 
-    @pure def bridge(name: String,
+    @pure def bridge(varName: String,
+                     typeName: String,
                      pathName: String,
                      id: Z,
                      dispatchProtocol: ST,
                      ports: ISZ[ST]) : ST = {
-      return st"""${name}(
+      return st"""val ${varName} : ${typeName} = ${typeName}(
                   |  id = $id,
                   |  name = "$pathName",
                   |  dispatchProtocol = $dispatchProtocol,
@@ -264,7 +265,7 @@ class ArtArchitectureGen {
     @pure def architectureDescription(packageName: String,
                                       architectureName: String,
                                       architectureDescriptionName: String,
-                                      bridges : ISZ[(String, ST)],
+                                      bridges : ISZ[ST],
                                       components : ISZ[String],
                                       connections: ISZ[ST]
                                      ) : ST = {
@@ -280,13 +281,9 @@ class ArtArchitectureGen {
                  |${Util.doNotEditComment()}
                  |
                  |object $architectureName {
-                 |  val $architectureDescriptionName : ArchitectureDescription = {
+                 |  ${(bridges, "\n")}
                  |
-                 |    ${ var s = ""
-                         for(b <- bridges)
-                           s += "val " + b._1 + " = " + b._2.render + "\n"
-                         s
-                      }
+                 |  val $architectureDescriptionName : ArchitectureDescription = {
                  |
                  |    ArchitectureDescription(
                  |      components = MSZ (${(components, ", ")}),
