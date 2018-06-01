@@ -74,8 +74,9 @@ object Runner {
     // create subdirs for source directories
     new File(_destDir, "architecture").mkdir
     new File(_destDir, "bridge").mkdir
-    new File(_destDir, "data").mkdir
     new File(_destDir, "component").mkdir
+    new File(_destDir, "data").mkdir
+    new File(_destDir, "minix").mkdir
 
     ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
 
