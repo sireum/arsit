@@ -22,6 +22,17 @@ object Util {
     return None[T]
   }
 
+  @pure def getPeriod(m: Component): ST = {
+    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
+        case Some(x) =>
+          assert(x.unit.get == org.sireum.String("ps"))
+          // convert picoseconds to milliseconds.  x.value was a double in osate
+          // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
+          val v = x.value.toString.toDouble / 1e9
+          st"""${v.toLong}"""
+        case _ => st"""1"""
+      }
+  }
   @pure def isEnum(props : ISZ[Property]) : B = {
     for(p <- props if getLastName(p.name) == DataRepresentation &&
       ISZOps(p.propertyValues).contains(ValueProp("Enum")))
@@ -41,6 +52,20 @@ object Util {
   }
 
   @pure def getTypeName(s : String) : String = cleanName(s)
+
+  @pure def getPortType(p: Feature): String = {
+    return p.classifier match {
+      case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
+      case _ => Util.EmptyType
+    }
+  }
+
+  @pure def getPortPayloadTypeName(p: Feature): String = {
+    return p.classifier match {
+      case Some(c) => Util.cleanName(c.name) + "_Payload"
+      case _ => Util.EmptyType
+    }
+  }
 
   @pure def getPackageName(value: String) : String =
     value.toString.split("::").dropRight(1).mkString(".")
@@ -79,9 +104,11 @@ object Util {
   @pure def isDataPort(f : Feature) = f.category == FeatureCategory.DataPort
 
 
-  @pure def isIn(f : Feature) = f.direction == Direction.In
+  @pure def isInPort(f : Feature) = f.direction == Direction.In
 
-  @pure def isOut(f : Feature) = f.direction == Direction.Out
+  @pure def isOutPort(f : Feature) = f.direction == Direction.Out
+
+  @pure def isThreadOrDevice(c: Component) = c.category == ComponentCategory.Thread || c.category == ComponentCategory.Device
 }
 
 case class Names(packageName : String,

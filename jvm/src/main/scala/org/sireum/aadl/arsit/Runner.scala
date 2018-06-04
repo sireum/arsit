@@ -3,7 +3,7 @@ package org.sireum.aadl.arsit
 import java.io.File
 
 import org.sireum.aadl.ir.{Aadl, JSON, MsgPack}
-import org.sireum.{B, Either, String}
+import org.sireum.{B, Either, String, Z}
 
 import scala.io.Source
 
@@ -76,11 +76,13 @@ object Runner {
     new File(_destDir, "bridge").mkdir
     new File(_destDir, "component").mkdir
     new File(_destDir, "data").mkdir
-    new File(_destDir, "minix").mkdir
+    new File(_destDir, "nix").mkdir
 
-    ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
+    val nextPortId: Z = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
 
     ArtStubGenerator(_destDir, m, basePackageName)
+
+    ArtNixGen(new File(_destDir, "nix"), m, basePackageName, nextPortId)
 
     0
   }

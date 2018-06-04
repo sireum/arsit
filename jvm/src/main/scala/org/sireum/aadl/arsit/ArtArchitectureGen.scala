@@ -12,7 +12,7 @@ import scala.language.implicitConversions
 class ArtArchitectureGen {
   var componentId = 0
   var portId = 0
-  var outDir : File = null
+  var outDir : File = _
 
   var bridges : ISZ[ST] = ISZ()
   var components : ISZ[String] = ISZ[String]()
@@ -24,7 +24,7 @@ class ArtArchitectureGen {
 
   var topLevelPackageName: String = _
 
-  def generator(dir: File, m: Aadl, topPackageName: String) : Unit = {
+  def generator(dir: File, m: Aadl, topPackageName: String) : Z = {
     assert(dir.exists)
     topLevelPackageName = Util.sanitizeName(topPackageName)
 
@@ -58,6 +58,8 @@ class ArtArchitectureGen {
 
     val demo = Template.demo(topLevelPackageName, architectureName, architectureDescriptionName)
     Util.writeFile(new File(outDir, topLevelPackageName + "/Demo.scala"), demo)
+
+    portId
   }
 
   def getComponentId(component: Component): Z = {
@@ -111,9 +113,9 @@ class ArtArchitectureGen {
 
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      val name = Util.getName(c.identifier)
-      bridges :+= genThread(c, name)
-      components :+= name
+      val varName = Util.getName(c.identifier)
+      bridges :+= genThread(c, varName)
+      components :+= varName
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
@@ -129,21 +131,11 @@ class ArtArchitectureGen {
     assert(m.subComponents.isEmpty)
 
     val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
-    val pathName = Util.getName(m.identifier)
+    //val pathName = Util.getName(m.identifier)
 
     val id = getComponentId(m)
 
-    val period: ST = {
-      Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
-        case Some(x) =>
-          assert(x.unit.get == org.sireum.String("ps"))
-          // convert picoseconds to milliseconds.  x.value was a double in osate
-          // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
-          val v = x.value.toString.toDouble / 1e9
-          st"""${v.toLong}"""
-        case _ => st"""1"""
-      }
-    }
+    val period: ST = Util.getPeriod(m)
 
     val dispatchProtocol: ST = {
       Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.DispatchProtocol) match {
@@ -162,15 +154,15 @@ class ArtArchitectureGen {
     for (f <- m.features if Util.isPort(f))
       ports :+= genPort(f)
 
-    return Template.bridge(varName, s"${name.packageName}.${name.bridge}", pathName, id, dispatchProtocol, ports)
+    val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
+
+    return Template.bridge(varName, bridgeTypeName, id, dispatchProtocol, ports)
   }
 
   def genPort(p:Feature) : ST = {
     val name = Util.getLastName(p.identifier)
-    val typ: String = p.classifier match {
-      case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
-      case _ => Util.EmptyType
-    }
+    val typ: String = Util.getPortType(p)
+
     val id = getPortId()
     val identifier = s"${Util.getName(p.identifier)}"
 
@@ -236,13 +228,12 @@ class ArtArchitectureGen {
 
     @pure def bridge(varName: String,
                      typeName: String,
-                     pathName: String,
                      id: Z,
                      dispatchProtocol: ST,
                      ports: ISZ[ST]) : ST = {
       return st"""val ${varName} : ${typeName} = ${typeName}(
                   |  id = $id,
-                  |  name = "$pathName",
+                  |  name = "$varName",
                   |  dispatchProtocol = $dispatchProtocol,
                   |
                   |  ${(ports, ",\n")}
