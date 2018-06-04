@@ -245,6 +245,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |${(imports, "\n")}
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |object ${objectName} extends App {
                  |
                  |  var state: AEPState.Type = AEPState.Start
@@ -332,6 +334,8 @@ class ArtNixGen {
                  |import art._
                  |${(imports, "\n")}
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |object ${objectName} extends App {
                  |
                  |  def main(args: ISZ[String]): Z = {
@@ -395,6 +399,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |import art._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |@enum object AEPState {
                  |  'Start
                  |  'EventArrived
@@ -416,6 +422,8 @@ class ArtNixGen {
                  |
                  |import org.sireum._
                  |import art._
+                 |
+                 |${Util.doNotEditComment()}
                  |
                  |object ArtNix {
                  |
@@ -530,6 +538,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |import art._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |object Main extends App {
                  |  def main(args: ISZ[String]): Z = {
                  |
@@ -559,6 +569,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |import art._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |@ext object Platform {
                  |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
                  |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
@@ -576,6 +588,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |import art._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |@ext object MessageQueue {
                  |  def create(msgid: Z): Z = ${"$"}
                  |  def get(msgid: Z): Z = ${"$"}
@@ -591,6 +605,8 @@ class ArtNixGen {
                  |
                  |import org.sireum._
                  |import art._
+                 |
+                 |${Util.doNotEditComment()}
                  |
                  |object MessageQueue_Ext {
                  |  def create(msgid: Z): Z = halt("stub")
@@ -608,6 +624,8 @@ class ArtNixGen {
                  |import org.sireum._
                  |import art._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |object Platform_Ext {
                  |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = halt("stub")
                  |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = halt("stub")
@@ -623,6 +641,8 @@ class ArtNixGen {
                  |
                  |import org.sireum._
                  |import art._
+                 |
+                 |${Util.doNotEditComment()}
                  |
                  |object PlatformNix {
                  |
@@ -668,6 +688,8 @@ class ArtNixGen {
                  |
                  |import org.sireum._
                  |
+                 |${Util.doNotEditComment()}
+                 |
                  |@ext object Process {
                  |  def sleep(n: Z): Unit = ${"$"}
                  |}
@@ -678,6 +700,8 @@ class ArtNixGen {
       return st"""package $packageName
                  |
                  |import org.sireum._
+                 |
+                 |${Util.doNotEditComment()}
                  |
                  |object Process_Ext {
                  |  def sleep(millis: Z): Unit = halt("stub")
