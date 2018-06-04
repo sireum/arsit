@@ -141,8 +141,8 @@ class ArtNixGen {
 
     platformPorts = platformPorts :+ Template.platformPortDecl("Main", getPortId())
 
-    val stPlatform = Template.platform(topLevelPackageName, platformPorts, platformPayloads)
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Platform.scala"), stPlatform)
+    val stAep = Template.aep(topLevelPackageName, platformPorts, platformPayloads)
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/AEP.scala"), stAep)
 
     val stArtNix = Template.artNix(topLevelPackageName, artNixCases)
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
@@ -152,6 +152,7 @@ class ArtNixGen {
 
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/MessageQueue.scala"), Template.MessageQueue(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(topLevelPackageName))
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Platform.scala"), Template.platform(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/Platform_Ext.scala"), Template.PlatformExt(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
@@ -369,22 +370,15 @@ class ArtNixGen {
                  |}"""
     }
 
-    @pure def platform(packageName: String,
-                       ports: ISZ[ST],
-                       payloads: ISZ[ST]): ST = {
+    @pure def aep(packageName: String,
+                  ports: ISZ[ST],
+                  payloads: ISZ[ST]): ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
                  |
                  |import org.sireum._
                  |import art._
-                 |
-                 |@ext object Platform {
-                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
-                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
-                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = ${"$"}
-                 |  def finalise(): Unit = ${"$"}
-                 |}
                  |
                  |@enum object AEPState {
                  |  'Start
@@ -399,7 +393,6 @@ class ArtNixGen {
                  |${(payloads, "\n\n")}
                  |"""
     }
-
     @pure def artNix(packageName: String,
                      cases: ISZ[ST]): ST = {
       return st"""// #Sireum
@@ -541,6 +534,23 @@ class ArtNixGen {
                  |  }
                  |}
                  | """
+    }
+
+    @pure def platform(packageName: String): ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |import art._
+                 |
+                 |@ext object Platform {
+                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
+                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
+                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = ${"$"}
+                 |  def finalise(): Unit = ${"$"}
+                 |}
+                 |"""
     }
 
     @pure def MessageQueue(packageName: String): ST = {
