@@ -7,9 +7,9 @@ import org.sireum.aadl.ir._
 import org.sireum.ops._
 
 object Util {
-  val DispatchProtocol : String = "Thread_Properties::Dispatch_Protocol"
-  val Period : String = "Timing_Properties::Period"
-  val DataRepresentation : String = "Data_Model::Data_Representation"
+  val Prop_DispatchProtocol : String = "Thread_Properties::Dispatch_Protocol"
+  val Prop_Period : String = "Timing_Properties::Period"
+  val Prop_DataRepresentation : String = "Data_Model::Data_Representation"
 
   val EmptyType : String  = "art.Empty"
 
@@ -23,7 +23,7 @@ object Util {
   }
 
   @pure def getPeriod(m: Component): ST = {
-    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Period) match {
+    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Period) match {
         case Some(x) =>
           assert(x.unit.get == org.sireum.String("ps"))
           // convert picoseconds to milliseconds.  x.value was a double in osate
@@ -34,7 +34,7 @@ object Util {
       }
   }
   @pure def isEnum(props : ISZ[Property]) : B = {
-    for(p <- props if getLastName(p.name) == DataRepresentation &&
+    for(p <- props if getLastName(p.name) == Prop_DataRepresentation &&
       ISZOps(p.propertyValues).contains(ValueProp("Enum")))
         return true
     return false
@@ -95,6 +95,7 @@ object Util {
     val _from = if(from.nonEmpty) " from " + from.get else ""
     s"// This file was auto-generated${_from}.  Do not edit"
   }
+
 
   @pure def isPort(f : Feature) = isEventPort(f) || isDataPort(f)
 

@@ -114,8 +114,21 @@ class ArtNixGen {
         Util.writeFile(new File(outDir, s"${topLevelPackageName}/${AEP_objectName}.scala"), stAep)
       }
 
+      val isPeriodic: B = {
+        Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
+          case Some(x) =>
+            x.value.toString match {
+              case "Sporadic" => F
+              case "Periodic" => T
+            }
+          case _ =>
+            if (m.category == ComponentCategory.Device) T
+            else ???
+        }
+      }
+
       val stApp = Template.app(topLevelPackageName, imports, App_Object_Name, IPCPort_Id,
-        AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases)
+        AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, isPeriodic)
       Util.writeFile(new File(outDir, s"${topLevelPackageName}/${App_Object_Name}.scala"), stApp)
     }
 
@@ -308,7 +321,8 @@ class ArtNixGen {
                   bridge: String,
                   AEP_Payload: ST,
                   portIds: ISZ[ST],
-                  cases: ISZ[ST]
+                  cases: ISZ[ST],
+                  isPeriodic: B
                  ) : ST = {
       return st"""// #Sireum
 
@@ -348,13 +362,14 @@ class ArtNixGen {
                  |    println("${objectName} starting ...")
                  |
                  |    while (true) {
-                 |      Process.sleep(${period})
-                 |      ArtNix.timeDispatch()
+                 |      ${if(isPeriodic) {
+                            st"""Process.sleep(${period})
+                                |ArtNix.timeDispatch()""".render
+                        } else ""}
                  |      ${if(portIds.nonEmpty) {
-                            st"""
-                                |Platform.send(IPCPorts.${AEP_Id}, IPCPorts.${IPCPort_Id}, empty)
+                            st"""Platform.send(IPCPorts.${AEP_Id}, IPCPorts.${IPCPort_Id}, empty)
                                 |val (_, d) = Platform.receive(aepPortOpt)
-                                |
+                                |${if(!isPeriodic) "ArtNix.eventDispatch()" else ""}
                                 |val ${AEP_Payload} = d
                                 |${(cases, "\n")}""".render
                          } else ""}

@@ -138,11 +138,11 @@ class ArtArchitectureGen {
     val period: ST = Util.getPeriod(m)
 
     val dispatchProtocol: ST = {
-      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.DispatchProtocol) match {
+      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
         case Some(x) =>
           x.value.toString match {
-            case "Aperiodic" | "Sporadic" => Template.sporadic(period)
-            case "Periodic" | "Hybrid" => Template.periodic(period)
+            case "Sporadic" => Template.sporadic(period)
+            case "Periodic" => Template.periodic(period)
           }
         case _ =>
           if (m.category == ComponentCategory.Device) Template.periodic(period)
