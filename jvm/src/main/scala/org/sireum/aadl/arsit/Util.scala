@@ -55,15 +55,15 @@ object Util {
 
   @pure def getPortType(p: Feature): String = {
     return p.classifier match {
-      case Some(c) => Util.cleanName(c.name) + (if(Util.isEnum(p.properties)) ".Type" else "")
-      case _ => Util.EmptyType
+      case Some(c) => cleanName(c.name) + (if(isEnum(p.properties)) ".Type" else "")
+      case _ => EmptyType
     }
   }
 
   @pure def getPortPayloadTypeName(p: Feature): String = {
     return p.classifier match {
-      case Some(c) => Util.cleanName(c.name) + "_Payload"
-      case _ => Util.EmptyType
+      case Some(c) => cleanName(c.name) + "_Payload"
+      case _ => EmptyType
     }
   }
 

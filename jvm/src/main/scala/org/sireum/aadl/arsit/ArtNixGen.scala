@@ -48,6 +48,8 @@ class ArtNixGen {
     var platformPayloads: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
     var inPorts: ISZ[String] = ISZ()
+    var aepNames: ISZ[String] = ISZ()
+    var appNames: ISZ[String] = ISZ()
 
     val components = componentMap.filter(p =>
       p._2.category == ComponentCategory.Thread || p._2.category == ComponentCategory.Device)
@@ -102,6 +104,10 @@ class ArtNixGen {
         platformPayloads = platformPayloads :+
           Template.platformPayload(AEPPayloadTypeName, portDefs)
       }
+
+      if(portOpts.nonEmpty)
+        aepNames = aepNames :+ AEP_objectName
+      appNames = appNames :+ IPCPort_Id
 
       mainSends = mainSends :+
         Template.mainSend(AEP_objectName) :+
@@ -170,6 +176,17 @@ class ArtNixGen {
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/Process_Ext.scala"), Template.ProcessExt(topLevelPackageName))
+
+
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-cygwin.sh"), Template.compile("win"))
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-linux.sh"), Template.compile("linux"))
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-mac.sh"), Template.compile("mac"))
+
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-cygwin.sh"), Template.run(aepNames, appNames, "win"))
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-linux.sh"), Template.run(aepNames, appNames, "linux"))
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-mac.sh"), Template.run(aepNames, appNames, "mac"))
+
+    Util.writeFile(new File(outDir, s"${topLevelPackageName}/stop.sh"), Template.stop(aepNames, appNames))
   }
 
   object Template {
@@ -706,6 +723,66 @@ class ArtNixGen {
                  |object Process_Ext {
                  |  def sleep(millis: Z): Unit = halt("stub")
                  |}"""
+    }
+
+    @pure def compile(arch: String): ST = {
+      val mv = if(arch.toString == "win")
+        "mv *.exe $SCRIPT_HOME/win/"
+      else {
+        s"""mv *_App ${"$"}SCRIPT_HOME/$arch/
+           |mv *_AEP ${"$"}SCRIPT_HOME/$arch/
+           |mv Main ${"$"}SCRIPT_HOME/$arch/""".stripMargin
+      }
+      st"""#!/usr/bin/env bash
+          |set -e
+          |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
+          |cd ${"$"}SCRIPT_HOME
+          |mkdir -p $arch
+          |mkdir -p ${"$"}SCRIPT_HOME/../src/c/$arch
+          |cd ${"$"}SCRIPT_HOME/../src/c/$arch
+          |cmake -DCMAKE_BUILD_TYPE=Release ..
+          |make ${"$"}MAKE_ARGS
+          |$mv"""
+    }
+
+    @pure def run(aeps: ISZ[String],
+                  apps: ISZ[String],
+                  arch: String): ST = {
+      val ext = if(arch.toString == "win") ".exe" else ""
+      val staep = aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" )
+      val stapp = apps.map(st => {
+        val prefix = arch.toString match {
+          case "win" => "cygstart mintty /bin/bash"
+          case "linux" => "x-terminal-emulator -e sh -c"
+          case "mac" => "open -a Terminal"
+        }
+        st"""$prefix $arch/${st}_App$ext &""" })
+      st"""#!/usr/bin/env bash
+          |set -e
+          |export SCRIPT_HOME= ${"$"}( cd " ${"$"}( dirname " ${"$"}0" )" &> /dev/null && pwd )
+          |cd ${"$"}SCRIPT_HOME
+          |${(staep, "\n")}
+          |${(stapp, "\n")}
+          |read -p "Press enter to start ..."
+          |$arch/Main$ext"""
+    }
+
+    @pure def stop(aeps: ISZ[String],
+                   apps: ISZ[String]) : ST = {
+      val procs = aeps ++ apps.map(s => s + "_App")
+      st"""#!/usr/bin/env bash
+          |APPS="${(procs, " ")}"
+          |for APP in ${"$"}{APPS}; do
+          |  pkill ${"$"}APP
+          |  pkill -9 ${"$"}APP
+          |done
+          |ME=`whoami`
+          |IPCS_Q=`ipcs -q | egrep "[0-9a-f]+[0-9]+" | grep ${"$"}ME | cut -f2 -d" "`
+          |for id in ${"$"}IPCS_Q; do
+          |  ipcrm -q ${"$"}id;
+          |done
+          |ipcs
+          |"""
     }
   }
 }
