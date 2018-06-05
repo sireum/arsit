@@ -71,18 +71,25 @@ object Runner {
       return -1
     }
 
+    val nixdir = "nix"
+
     // create subdirs for source directories
     new File(_destDir, "architecture").mkdir
     new File(_destDir, "bridge").mkdir
     new File(_destDir, "component").mkdir
     new File(_destDir, "data").mkdir
-    new File(_destDir, "nix").mkdir
 
     val nextPortId: Z = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
 
     ArtStubGenerator(_destDir, m, basePackageName)
 
-    ArtNixGen(new File(_destDir, "nix"), m, basePackageName, nextPortId)
+    val bin_dir = new File(destDir, "bin")
+    val c_dir = new File(destDir, "src/c")
+    val nix_dir = new File(_destDir, "nix")
+    bin_dir.mkdir()
+    //c_dir.mkdir()
+    nix_dir.mkdir()
+    ArtNixGen(nix_dir, c_dir, bin_dir, m, basePackageName, nextPortId)
 
     0
   }

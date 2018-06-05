@@ -7,7 +7,9 @@ import org.sireum.aadl.ir._
 import org.sireum.util.MMap
 
 class ArtNixGen {
-  var outDir : File = _
+  var nixOutputDir : File = _
+  var cOutputDir : File = _
+  var binOutputDir: File = _
 
   var topLevelPackageName: String = _
 
@@ -20,10 +22,11 @@ class ArtNixGen {
     return r
   }
 
-  def generator(dir: File, m: Aadl, topPackageName: String, nextPortId: Z): Unit = {
-    assert(dir.exists)
+  def generator(nixOutputDir: File, cOutputDir: File, binOutputDir:File, m: Aadl, topPackageName: String, nextPortId: Z): Unit = {
     topLevelPackageName = Util.sanitizeName(topPackageName)
-    outDir = dir
+    this.nixOutputDir = nixOutputDir
+    this.cOutputDir = cOutputDir
+    this.binOutputDir = binOutputDir
 
     id = nextPortId
 
@@ -115,7 +118,7 @@ class ArtNixGen {
       if(portOpts.nonEmpty) {
         val stAep = Template.aep(topLevelPackageName, imports, AEP_Id, portOpts,
           portIds, portOptResets, portCases, AEP_Id, App_Id, AEP_Payload)
-        Util.writeFile(new File(outDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
+        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
       }
 
       val isPeriodic: B = {
@@ -133,7 +136,7 @@ class ArtNixGen {
 
       val stApp = Template.app(topLevelPackageName, imports, App_Id, App_Id,
         AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, isPeriodic)
-      Util.writeFile(new File(outDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
+      Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
     }
 
     var artNixCases: ISZ[ST] = ISZ()
@@ -159,38 +162,42 @@ class ArtNixGen {
     platformPorts = platformPorts :+ Template.platformPortDecl("Main", getPortId())
 
     val stAep = Template.aep(topLevelPackageName, platformPorts, platformPayloads)
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/AEP.scala"), stAep)
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/AEP.scala"), stAep)
 
     val stArtNix = Template.artNix(topLevelPackageName, artNixCases)
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
 
     val stMain = Template.main(topLevelPackageName, mainSends)
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Main.scala"), stMain)
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Main.scala"), stMain)
 
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/MessageQueue.scala"), Template.MessageQueue(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Platform.scala"), Template.platform(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Platform_Ext.scala"), Template.PlatformExt(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/Process_Ext.scala"), Template.ProcessExt(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue.scala"), Template.MessageQueue(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform.scala"), Template.platform(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform_Ext.scala"), Template.PlatformExt(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process_Ext.scala"), Template.ProcessExt(topLevelPackageName))
 
 
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-cygwin.sh"), Template.compile("win"))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-linux.sh"), Template.compile("linux"))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/compile-mac.sh"), Template.compile("mac"))
+    Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile("win"))
+    Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile("linux"))
+    Util.writeFile(new File(binOutputDir, "compile-mac.sh"), Template.compile("mac"))
 
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-cygwin.sh"), Template.run(aepNames, appNames, "win"))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-linux.sh"), Template.run(aepNames, appNames, "linux"))
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-mac.sh"), Template.run(aepNames, appNames, "mac"))
+    Util.writeFile(new File(binOutputDir, "run-cygwin.sh"), Template.run(aepNames, appNames, "win"))
+    Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, "linux"))
+    Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, "mac"))
 
-    Util.writeFile(new File(outDir, s"${topLevelPackageName}/stop.sh"), Template.stop(aepNames, appNames))
+    Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(aepNames, appNames))
+
+    val extFile = new File(binOutputDir, "ext.c")
+    Util.writeFile(extFile, st"""// add c extension code here""", false)
 
     val x = Template.transpiler(
-      ISZ(new File(outDir, "../../../../art/src/main").getAbsolutePath, new File(outDir, "../").getAbsolutePath),
+      ISZ(new File(nixOutputDir, "../../../../art/src/main").getAbsolutePath, new File(nixOutputDir, "../").getAbsolutePath),
       ((aepNames ++ appNames) :+ "Main").map(s => s"${topLevelPackageName}.${s}"),
       ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"),
-      new File(outDir, "../../../c").getAbsolutePath
+      cOutputDir.getAbsolutePath,
+      extFile.getAbsolutePath
     )
     println(s"Use the following to transpile the project:\n${x.render}")
   }
@@ -762,10 +769,10 @@ class ArtNixGen {
           case "linux" => "x-terminal-emulator -e sh -c"
           case "mac" => "open -a Terminal"
         }
-        st"""$prefix $arch/${st}_App$ext &""" })
+        st"""$prefix $arch/${st}$ext &""" })
       st"""#!/usr/bin/env bash
           |set -e
-          |export SCRIPT_HOME= ${"$"}( cd " ${"$"}( dirname " ${"$"}0" )" &> /dev/null && pwd )
+          |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
           |cd ${"$"}SCRIPT_HOME
           |${(staep, "\n")}
           |${(stapp, "\n")}
@@ -794,14 +801,15 @@ class ArtNixGen {
     @pure def transpiler(sourcepaths: ISZ[String],
                          apps: ISZ[String],
                          forwards: ISZ[String],
-                         outDir: String): ST = {
-      st"""java -jar ${"$"}transpiler_jar transpiler c --sourcepath ${(sourcepaths, ":")} --apps "${(apps, ",")}" --forward "${(forwards, ",")}" --verbose --bits 32 --string-size 256 --sequence-size 16 --sequence ISZ[org.sireumString]=2 --output-dir $outDir"""
+                         outDir: String,
+                         extFile: String): ST = {
+      st"""java -jar ${"$"}transpiler_jar transpiler c --sourcepath ${(sourcepaths, ":")} --apps "${(apps, ",")}" --forward "${(forwards, ",")}" --verbose --bits 32 --string-size 256 --sequence-size 16 --sequence ISZ[org.sireumString]=2 --output-dir $outDir --exts $extFile"""
     }
   }
 }
 
 object ArtNixGen{
-  def apply(dir: File, m: Aadl, topPackage: String, nextPortId: Z):Unit =
-    new ArtNixGen().generator(dir, m, topPackage, nextPortId)
+  def apply(nixOutputDir: File, cOutputDir: File, binOutputDir:File, m: Aadl, topPackage: String, nextPortId: Z):Unit =
+    new ArtNixGen().generator(nixOutputDir, cOutputDir, binOutputDir, m, topPackage, nextPortId)
 }
 
