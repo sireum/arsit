@@ -59,12 +59,10 @@ class ArtNixGen {
       val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
-      val AEP_objectName: String = s"${name.component}_AEP"
-      val AEP_Id: String = AEP_objectName
-      val IPCPort_Id: String = s"${name.component}"
-      val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
+      val AEP_Id: String = s"${name.component}_AEP"
+      val App_Id: String = s"${name.component}_App"
 
-      val App_Object_Name: String = s"${name.component}_App"
+      val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
 
       var imports: ISZ[ST] = ISZ()
       var portDefs: ISZ[ST] = ISZ()
@@ -97,8 +95,8 @@ class ArtNixGen {
       }
 
       platformPorts = platformPorts :+
-        Template.platformPortDecl(AEP_objectName, getPortId()) :+
-        Template.platformPortDecl(IPCPort_Id, getPortId())
+        Template.platformPortDecl(AEP_Id, getPortId()) :+
+        Template.platformPortDecl(App_Id, getPortId())
 
       if(portOpts.nonEmpty) {
         platformPayloads = platformPayloads :+
@@ -106,18 +104,18 @@ class ArtNixGen {
       }
 
       if(portOpts.nonEmpty)
-        aepNames = aepNames :+ AEP_objectName
-      appNames = appNames :+ IPCPort_Id
+        aepNames = aepNames :+ AEP_Id
+      appNames = appNames :+ App_Id
 
       mainSends = mainSends :+
-        Template.mainSend(AEP_objectName) :+
-        Template.mainSend(IPCPort_Id)
+        Template.mainSend(AEP_Id) :+
+        Template.mainSend(App_Id)
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
       if(portOpts.nonEmpty) {
-        val stAep = Template.aep(topLevelPackageName, imports, AEP_objectName, portOpts,
-          portIds, portOptResets, portCases, AEP_Id, IPCPort_Id, AEP_Payload)
-        Util.writeFile(new File(outDir, s"${topLevelPackageName}/${AEP_objectName}.scala"), stAep)
+        val stAep = Template.aep(topLevelPackageName, imports, AEP_Id, portOpts,
+          portIds, portOptResets, portCases, AEP_Id, App_Id, AEP_Payload)
+        Util.writeFile(new File(outDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
       }
 
       val isPeriodic: B = {
@@ -133,9 +131,9 @@ class ArtNixGen {
         }
       }
 
-      val stApp = Template.app(topLevelPackageName, imports, App_Object_Name, IPCPort_Id,
+      val stApp = Template.app(topLevelPackageName, imports, App_Id, App_Id,
         AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, isPeriodic)
-      Util.writeFile(new File(outDir, s"${topLevelPackageName}/${App_Object_Name}.scala"), stApp)
+      Util.writeFile(new File(outDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
     }
 
     var artNixCases: ISZ[ST] = ISZ()
@@ -187,6 +185,14 @@ class ArtNixGen {
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/run-mac.sh"), Template.run(aepNames, appNames, "mac"))
 
     Util.writeFile(new File(outDir, s"${topLevelPackageName}/stop.sh"), Template.stop(aepNames, appNames))
+
+    val x = Template.transpiler(
+      ISZ(new File(outDir, "../../../../art/src/main").getAbsolutePath, new File(outDir, "../").getAbsolutePath),
+      ((aepNames ++ appNames) :+ "Main").map(s => s"${topLevelPackageName}.${s}"),
+      ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"),
+      new File(outDir, "../../../c").getAbsolutePath
+    )
+    println(s"Use the following to transpile the project:\n${x.render}")
   }
 
   object Template {
@@ -783,6 +789,13 @@ class ArtNixGen {
           |done
           |ipcs
           |"""
+    }
+
+    @pure def transpiler(sourcepaths: ISZ[String],
+                         apps: ISZ[String],
+                         forwards: ISZ[String],
+                         outDir: String): ST = {
+      st"""java -jar ${"$"}transpiler_jar transpiler c --sourcepath ${(sourcepaths, ":")} --apps "${(apps, ",")}" --forward "${(forwards, ",")}" --verbose --bits 32 --string-size 256 --sequence-size 16 --sequence ISZ[org.sireumString]=2 --output-dir $outDir"""
     }
   }
 }
