@@ -71,8 +71,6 @@ object Runner {
       return -1
     }
 
-    val nixdir = "nix"
-
     // create subdirs for source directories
     new File(_destDir, "architecture").mkdir
     new File(_destDir, "bridge").mkdir
@@ -87,7 +85,6 @@ object Runner {
     val c_dir = new File(destDir, "src/c")
     val nix_dir = new File(_destDir, "nix")
     bin_dir.mkdir()
-    //c_dir.mkdir()
     nix_dir.mkdir()
     ArtNixGen(nix_dir, c_dir, bin_dir, m, basePackageName, nextPortId)
 
