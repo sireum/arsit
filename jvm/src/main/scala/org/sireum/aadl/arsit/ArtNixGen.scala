@@ -83,7 +83,6 @@ class ArtNixGen {
 
       val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
 
-      var imports: ISZ[ST] = ISZ()
       var portDefs: ISZ[ST] = ISZ()
       var portOpts: ISZ[ST] = ISZ()
       var portIds: ISZ[ST] = ISZ()
@@ -132,12 +131,12 @@ class ArtNixGen {
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
       if(portOpts.nonEmpty) {
-        val stAep = Template.aep(topLevelPackageName, imports, AEP_Id, portOpts,
+        val stAep = Template.aep(topLevelPackageName, AEP_Id, portOpts,
           portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
         Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
       }
 
-      val stApp = Template.app(topLevelPackageName, imports, App_Id, App_Id,
+      val stApp = Template.app(topLevelPackageName, App_Id, App_Id,
         AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, isPeriodic)
       Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
     }
@@ -206,7 +205,7 @@ class ArtNixGen {
       cOutputDir.getAbsolutePath,
       extFile.getAbsolutePath
     )
-    Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)//, false)
+    Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler, false)
   }
 
   object Template {
@@ -267,7 +266,6 @@ class ArtNixGen {
       return st"""Platform.send(IPCPorts.${portId}, IPCPorts.Main, empty)"""
 
     @pure def aep(packageName: String,
-                  imports: ISZ[ST],
                   objectName: String,
                   portOpts: ISZ[ST],
                   portIds: ISZ[ST],
@@ -282,7 +280,6 @@ class ArtNixGen {
                  |package $packageName
                  |
                  |import org.sireum._
-                 |${(imports, "\n")}
                  |
                  |${Util.doNotEditComment()}
                  |
@@ -354,7 +351,6 @@ class ArtNixGen {
     }
 
     @pure def app(packageName: String,
-                  imports: ISZ[ST],
                   objectName: String,
                   IPCPort_Id: String,
                   AEP_Id: String,
@@ -371,7 +367,6 @@ class ArtNixGen {
                  |
                  |import org.sireum._
                  |import art._
-                 |${(imports, "\n")}
                  |
                  |${Util.doNotEditComment()}
                  |
