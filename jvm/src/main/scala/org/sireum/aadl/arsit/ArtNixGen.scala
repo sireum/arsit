@@ -59,6 +59,19 @@ class ArtNixGen {
 
     for ((archVarName, m) <- components) {
 
+      val isPeriodic: B = {
+        Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
+          case Some(x) =>
+            x.value.toString match {
+              case "Sporadic" => F
+              case "Periodic" => T
+            }
+          case _ =>
+            if (m.category == ComponentCategory.Device) T
+            else ???
+        }
+      }
+
       val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
@@ -72,7 +85,7 @@ class ArtNixGen {
       var portOpts: ISZ[ST] = ISZ()
       var portIds: ISZ[ST] = ISZ()
       var portOptResets: ISZ[ST] = ISZ()
-      var portCases: ISZ[ST] = ISZ()
+      var aepPortCases: ISZ[ST] = ISZ()
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
@@ -87,7 +100,7 @@ class ArtNixGen {
         portDefs = portDefs :+ Template.portDef(portOptName, portType)
         portOpts = portOpts :+ Template.portOpt(portOptName, portType)
         portIds = portIds :+ Template.portId(portIdName, archPortInstanceName)
-        portCases = portCases :+ Template.portCase(portIdName, portOptName, portPayloadTypeName)
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, isPeriodic)
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
@@ -117,21 +130,8 @@ class ArtNixGen {
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
       if(portOpts.nonEmpty) {
         val stAep = Template.aep(topLevelPackageName, imports, AEP_Id, portOpts,
-          portIds, portOptResets, portCases, AEP_Id, App_Id, AEP_Payload)
+          portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
         Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
-      }
-
-      val isPeriodic: B = {
-        Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
-          case Some(x) =>
-            x.value.toString match {
-              case "Sporadic" => F
-              case "Periodic" => T
-            }
-          case _ =>
-            if (m.category == ComponentCategory.Device) T
-            else ???
-        }
       }
 
       val stApp = Template.app(topLevelPackageName, imports, App_Id, App_Id,
@@ -219,12 +219,13 @@ class ArtNixGen {
                           portType: String): ST =
       return st"""$portOptName = None[$portType]()"""
 
-    @pure def portCase(portIdName: String,
-                       portOptName: String,
-                       payloadTypeName: String): ST =
+    @pure def aepPortCase(portIdName: String,
+                          portOptName: String,
+                          payloadTypeName: String,
+                          isPeriodic: B): ST =
       return st"""case `$portIdName` =>
                  |  $portOptName = Some(d.asInstanceOf[$payloadTypeName].value)
-                 |  eventArrived()"""
+                 |  ${if(!isPeriodic) "eventArrived()" else ""}"""
 
     @pure def AEPPayload(AEPPayloadTypeName: String,
                          portOptNames: ISZ[String]): ST =
@@ -267,7 +268,8 @@ class ArtNixGen {
                   portCases: ISZ[ST],
                   AEP_Id: String,
                   IPCPort_Id: String,
-                  AEP_payload: ST): ST = {
+                  AEP_payload: ST,
+                  isPeriodic: B): ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -279,17 +281,17 @@ class ArtNixGen {
                  |
                  |object ${objectName} extends App {
                  |
-                 |  var state: AEPState.Type = AEPState.Start
+                 |  ${if(!isPeriodic) "var state: AEPState.Type = AEPState.Start" else ""}
                  |  ${(portOpts, "\n")}
                  |
                  |  def main(args: ISZ[String]): Z = {
                  |
-                 |    val seed: Z = 1 /* if (args.size == z"1") {
+                 |    val seed: Z = if (args.size == z"1") {
                  |      val n = Z(args(0)).get
                  |      if (n == z"0") 1 else n
                  |    } else {
                  |      1
-                 |    }*/
+                 |    }
                  |
                  |    Platform.initialise(seed, Some(IPCPorts.${AEP_Id}))
                  |
@@ -303,39 +305,39 @@ class ArtNixGen {
                  |      port match {
                  |        ${(portCases, "\n")}
                  |        case IPCPorts.${IPCPort_Id} =>
-                 |          requested()
+                 |          ${if(isPeriodic) "sendEvent()" else "requested()"}
                  |        case _ => halt(s"Infeasible: ${"$port"}")
                  |      }
                  |    }
                  |
                  |    return 0
                  |  }
-                 |
-                 |  def eventArrived(): Unit = {
-                 |    if (state == AEPState.EventRequested) {
-                 |      sendEvent()
-                 |    } else {
-                 |      state = AEPState.EventArrived
-                 |    }
-                 |  }
-                 |
-                 |  def requested(): Unit = {
-                 |    if (state == AEPState.EventArrived) {
-                 |      sendEvent()
-                 |    } else {
-                 |      state = AEPState.EventRequested
-                 |    }
-                 |  }
-                 |
+                 |  ${if(!isPeriodic)
+                        st"""
+                            |def eventArrived(): Unit = {
+                            |  if (state == AEPState.EventRequested) {
+                            |    sendEvent()
+                            |  } else {
+                            |    state = AEPState.EventArrived
+                            |  }
+                            |}
+                            |
+                            |def requested(): Unit = {
+                            |  if (state == AEPState.EventArrived) {
+                            |    sendEvent()
+                            |  } else {
+                            |    state = AEPState.EventRequested
+                            |  }
+                            |}
+                            |""".render.toString
+                       else ""}
                  |  def sendEvent(): Unit = {
                  |    Platform.send(IPCPorts.${IPCPort_Id}, IPCPorts.${AEP_Id},
                  |                  ${AEP_payload})
                  |
                  |    ${(portOptResets, "\n")}
-                 |
-                 |    state = AEPState.Start
+                 |    ${if(!isPeriodic) "state = AEPState.Start" else ""}
                  |  }
-                 |
                  |
                  |  override def atExit(): Unit = {
                  |    Platform.finalise()
@@ -370,12 +372,12 @@ class ArtNixGen {
                  |
                  |  def main(args: ISZ[String]): Z = {
                  |
-                 |    val seed: Z = 1 /* if (args.size == z"1") {
+                 |    val seed: Z = if (args.size == z"1") {
                  |      val n = Z(args(0)).get
                  |      if (n == z"0") 1 else n
                  |    } else {
                  |      1
-                 |    }*/
+                 |    }
                  |
                  |    Platform.initialise(seed, Some(IPCPorts.${IPCPort_Id}))
                  |    ${if(portIds.nonEmpty) {
@@ -498,7 +500,7 @@ class ArtNixGen {
                  |
                  |  def receiveInput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
                  |    frozen = data
-                 |    for (i <- data.indices if data(i).nonEmpty) {
+                 |    for (i <- eventPortIds) {
                  |      data(i) = noData
                  |    }
                  |  }
@@ -573,10 +575,12 @@ class ArtNixGen {
                  |object Main extends App {
                  |  def main(args: ISZ[String]): Z = {
                  |
-                 |    val seed: Z = 1 /* if (args.size != z"1") {
-                 |      println("Usage: <number>")
-                 |      return -1
-                 |    }*/
+                 |    val seed: Z = if (args.size == z"1") {
+                 |      val n = Z(args(0)).get
+                 |      if (n == z"0") 1 else n
+                 |    } else {
+                 |      1
+                 |    }
                  |
                  |    Platform.initialise(seed, None())
                  |
@@ -589,25 +593,6 @@ class ArtNixGen {
                  |  }
                  |}
                  | """
-    }
-
-    @pure def platform(packageName: String): ST = {
-      return st"""// #Sireum
-                 |
-                 |package $packageName
-                 |
-                 |import org.sireum._
-                 |import art._
-                 |
-                 |${Util.doNotEditComment()}
-                 |
-                 |@ext object Platform {
-                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
-                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
-                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = ${"$"}
-                 |  def finalise(): Unit = ${"$"}
-                 |}
-                 |"""
     }
 
     @pure def MessageQueue(packageName: String): ST = {
@@ -625,6 +610,8 @@ class ArtNixGen {
                  |  def get(msgid: Z): Z = ${"$"}
                  |  def send(msgid: Z, port: Art.PortId, d: DataContent): Unit = ${"$"}
                  |  def receive(): (Art.PortId, DataContent) = ${"$"}
+                 |  def sendAsync(msgid: Z, port: Art.PortId, d: DataContent): B = ${"$"}
+                 |  def receiveAsync(): Option[(Art.PortId, DataContent)] = ${"$"}
                  |  def remove(msgid: Z): Unit = ${"$"}
                  |}
                  |"""
@@ -643,7 +630,30 @@ class ArtNixGen {
                  |  def get(msgid: Z): Z = halt("stub")
                  |  def send(msgid: Z, port: Art.PortId, d: DataContent): Unit = halt("stub")
                  |  def receive(): (Art.PortId, DataContent) = halt("stub")
+                 |  def sendAsync(msgid: Z, port: Art.PortId, d: DataContent): B = halt("stub")
+                 |  def receiveAsync(): Option[(Art.PortId, DataContent)] = halt("stub")
                  |  def remove(msgid: Z): Unit = halt("stub")
+                 |}
+                 |"""
+    }
+
+    @pure def platform(packageName: String): ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |import art._
+                 |
+                 |${Util.doNotEditComment()}
+                 |
+                 |@ext object Platform {
+                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
+                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
+                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = ${"$"}
+                 |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = ${"$"}
+                 |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = ${"$"}
+                 |  def finalise(): Unit = ${"$"}
                  |}
                  |"""
     }
@@ -660,6 +670,8 @@ class ArtNixGen {
                  |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = halt("stub")
                  |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = halt("stub")
                  |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = halt("stub")
+                 |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = halt("stub")
+                 |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = halt("stub")
                  |  def finalise(): Unit = halt("stub")
                  |}
                  |"""
@@ -700,6 +712,19 @@ class ArtNixGen {
                  |
                  |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = {
                  |    MessageQueue.send(seed + app, port, data)
+                 |  }
+                 |
+                 |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = {
+                 |    val r = MessageQueue.sendAsync(seed + app, port, data)
+                 |    return r
+                 |  }
+                 |
+                 |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = {
+                 |    val pOpt = MessageQueue.receiveAsync()
+                 |    (portOpt, pOpt) match {
+                 |      case (Some(port), Some((p, _))) => assert(p == port); return pOpt
+                 |      case _ => return None()
+                 |    }
                  |  }
                  |
                  |  def finalise(): Unit = {
