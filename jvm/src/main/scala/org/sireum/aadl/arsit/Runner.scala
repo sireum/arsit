@@ -86,7 +86,7 @@ object Runner {
     val nix_dir = new File(_destDir, "nix")
     bin_dir.mkdir()
     nix_dir.mkdir()
-    ArtNixGen(nix_dir, c_dir, bin_dir, m, basePackageName, nextPortId)
+    ArtNixGen(_destDir, nix_dir, c_dir, bin_dir, m, basePackageName, nextPortId)
 
     0
   }
