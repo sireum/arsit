@@ -193,8 +193,8 @@ class ArtArchitectureGen {
     val tname = Util.getDataTypeNames(feature, topLevelPackageName)
     if((Util.isDataPort(feature) || Util.isEventDataPort(feature)) && seenTypes.withFilter(_ == tname.getFullyQualifiedTypeName()).isEmpty) {
       seenTypes :+= tname.getFullyQualifiedTypeName()
-      val ts = Template.typeSkeleton(tname.getFullyQualifiedPackageName(), tname.getTypeName(), tname.getPayloadName(), tname.isEnum)
-      Util.writeFile(new File(outDir, "../data/" + tname.getFilePath().toString), ts, true)
+      val ts = Template.typeSkeleton(topLevelPackageName, tname.getFullyQualifiedPackageName(), tname.getTypeName(), tname.getPayloadName(), tname.isEnum)
+      Util.writeFile(new File(outDir, "../data/" + tname.getFilePath().toString), ts, false)
     }
   }
 
@@ -300,7 +300,8 @@ class ArtArchitectureGen {
                  |}"""
     }
 
-    @pure def typeSkeleton(packageName: String,
+    @pure def typeSkeleton(topLevelPackageName: String,
+                           packageName: String,
                            typeName: String,
                            payloadTypeName: String,
                            isEnum: B): ST = {
@@ -309,7 +310,7 @@ class ArtArchitectureGen {
                  |package $packageName
                  |
                  |import org.sireum._
-                 |import $packageName._
+                 |import $topLevelPackageName._
                  |
                  |${if(isEnum)
                       st"""@enum object $typeName {

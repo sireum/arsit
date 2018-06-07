@@ -230,7 +230,7 @@ class ArtNixGen {
                           payloadTypeName: String,
                           isPeriodic: B): ST =
       return st"""case `$portIdName` =>
-                 |  $portOptName = Some(d.asInstanceOf[$payloadTypeName].value)
+                 |  $portOptName = Some(d.asInstanceOf[$payloadTypeName]${if(payloadTypeName != Util.EmptyType) ".value" else ""})
                  |  ${if(!isPeriodic) "eventArrived()" else ""}"""
 
     @pure def AEPPayload(AEPPayloadTypeName: String,
@@ -241,7 +241,7 @@ class ArtNixGen {
                        portId: String,
                        payloadName: String): ST =
       return st"""${portOptName} match {
-                 |  case Some(v) => ArtNix.updateData(${portId}, ${payloadName}(v))
+                 |  case Some(v) => ArtNix.updateData(${portId}, ${if(payloadName == Util.EmptyType) "v" else s"${payloadName}(v)"})
                  |  case _ =>
                  |}"""
 
@@ -843,6 +843,7 @@ class ArtNixGen {
           |set -e
           |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
           |export ART_HOME=${"$"}SCRIPT_HOME/../../art/src/main
+          |export PROJ_HOME=${"$"}SCRIPT_HOME/../src/main
           |export JAVA_BIN_HOME=${"$"}SIREUM_HOME/platform/java/bin/
           |
           |if [ ! -d ${"$"}ART_HOME ]; then
@@ -855,7 +856,7 @@ class ArtNixGen {
           |fi
           |
           |${"$"}JAVA_BIN_HOME/java -jar ${"$"}TRANSPILER_JAR_HOME transpiler c \
-          |  --sourcepath ${"$"}ART_HOME:${(sourcepaths, ":")} \
+          |  --sourcepath ${"$"}ART_HOME:${"$"}PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
           |  --verbose \
