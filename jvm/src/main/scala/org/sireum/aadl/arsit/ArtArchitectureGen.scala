@@ -27,10 +27,15 @@ class ArtArchitectureGen {
   def generator(dir: File, m: Aadl, topPackageName: String) : Z = {
     assert(dir.exists)
     topLevelPackageName = Util.sanitizeName(topPackageName)
-
     outDir = dir
 
-    {
+    gen(m)
+
+    portId // return the next available port id
+  }
+
+  def gen(m: Aadl): Unit = {
+    { // build the component map
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.getName(c.identifier)))
         componentMap += (Util.getName(c.identifier) → c)
@@ -54,12 +59,10 @@ class ArtArchitectureGen {
       connections
     )
 
-    Util.writeFile(new File(outDir, topLevelPackageName + "/Arch.scala"), arch)
+    Util.writeFile(new File(outDir, s"$topLevelPackageName/Arch.scala"), arch)
 
     val demo = Template.demo(topLevelPackageName, architectureName, architectureDescriptionName)
-    Util.writeFile(new File(outDir, topLevelPackageName + "/Demo.scala"), demo)
-
-    portId
+    Util.writeFile(new File(outDir, s"$topLevelPackageName/Demo.scala"), demo)
   }
 
   def getComponentId(component: Component): Z = {
@@ -177,10 +180,22 @@ class ArtArchitectureGen {
     val mode = prefix + (p.direction match {
       case In => "In"
       case Out => "Out"
-      case _ => "???" //throw new RuntimeException(s"Not handling ${p.direction} for $name")
+      case _ => "???"
     })
 
+    addTypeSkeleton(p)
+
     return Template.port(name, typ, id, identifier, mode)
+  }
+
+  var seenTypes: ISZ[String] = ISZ()
+  def addTypeSkeleton(feature: Feature): Unit = {
+    val tname = Util.getDataTypeNames(feature, topLevelPackageName)
+    if((Util.isDataPort(feature) || Util.isEventDataPort(feature)) && seenTypes.withFilter(_ == tname.getFullyQualifiedTypeName()).isEmpty) {
+      seenTypes :+= tname.getFullyQualifiedTypeName()
+      val ts = Template.typeSkeleton(tname.getFullyQualifiedPackageName(), tname.getTypeName(), tname.getPayloadName(), tname.isEnum)
+      Util.writeFile(new File(outDir, "../data/" + tname.getFilePath().toString), ts, true)
+    }
   }
 
   def allowConnection(c : ConnectionInstance, m : Component) : B = {
@@ -283,6 +298,31 @@ class ArtArchitectureGen {
                  |    )
                  |  }
                  |}"""
+    }
+
+    @pure def typeSkeleton(packageName: String,
+                           typeName: String,
+                           payloadTypeName: String,
+                           isEnum: B): ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |import $packageName._
+                 |
+                 |${if(isEnum)
+                      st"""@enum object $typeName {
+                      |  // add enum names here
+                      |}""".render.toString
+                    else
+                      st"""@datatype class $typeName(
+                      |  // add fields here
+                      |)""".render.toString
+                   }
+                 |
+                 |@datatype class $payloadTypeName(value: $typeName${if(isEnum) ".Type" else ""}) extends art.DataContent
+                 |"""
     }
   }
 }

@@ -40,8 +40,6 @@ object Util {
     return false
   }
 
-  @pure def cleanName(s:String) : String = s.toString.replaceAll("::", ".")
-
   @pure def sanitizeName(s: String) : String = s.toString.replaceAll("\\-", "_")
 
   @pure def getNamesFromClassifier(c: Classifier, topPackage: String): Names = {
@@ -50,6 +48,8 @@ object Util {
     val compName = a(1).replaceAll("\\.", "_")
     Names(s"${topPackage}.${a(0)}", s"${topPackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
   }
+
+  @pure def cleanName(s:String) : String = s.toString.replaceAll("::", ".")
 
   @pure def getTypeName(s : String) : String = cleanName(s)
 
@@ -64,6 +64,18 @@ object Util {
     return p.classifier match {
       case Some(c) => cleanName(c.name) + "_Payload"
       case _ => EmptyType
+    }
+  }
+
+  val EmptyTypeNames = DataTypeNames ("", "art", "EmptyType", false)
+  @pure def getDataTypeNames(f: Feature, topPackage: String): DataTypeNames = {
+    return f.classifier match {
+      case Some(c) =>
+        val a = c.name.toString.split ("::")
+        assert (a.size == 2)
+        DataTypeNames(topPackage, a(0), a(1), isEnum(f.properties))
+      case _ =>
+        EmptyTypeNames
     }
   }
 
@@ -102,6 +114,8 @@ object Util {
   @pure def isEventPort(f : Feature) =
     f.category == FeatureCategory.EventDataPort || f.category == FeatureCategory.EventPort
 
+  @pure def isEventDataPort(f: Feature) = f.category == FeatureCategory.EventDataPort
+
   @pure def isDataPort(f : Feature) = f.category == FeatureCategory.DataPort
 
 
@@ -117,3 +131,22 @@ case class Names(packageName : String,
                  bridge: String,
                  component: String,
                  componentImpl: String)
+
+case class DataTypeNames(topPackage: String,
+                         packageName: String,
+                         typeName: String,
+                         isEnum: B) {
+
+  def getFilePath(): String = s"$topPackage/$packageName/$typeName.scala"
+
+  def getFullyQualifiedPackageName(): String = s"$topPackage.$packageName"
+
+  def getTypeName(): String = typeName
+  def getFullyQualifiedTypeName(): String = s"$packageName.$typeName"
+
+  def getReferencedTypeName(): String = getTypeName() + (if(isEnum) ".Type" else "")
+  def getFullyQualifiedReferencedTypeName(): String = s"${packageName}.${getReferencedTypeName()}"
+
+  def getPayloadName(): String = s"${typeName}_Payload"
+  def getFullyQualifiedPayloadName(): String = s"$packageName.${typeName}_Payload"
+}

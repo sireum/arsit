@@ -60,10 +60,6 @@ class ArtStubGenerator {
     }
   }
 
-  def addTypeSkeleton(feature: Feature): Unit = {
-    // TODO
-  }
-
   def genThread(m: Component) : Unit = {
     assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
@@ -74,7 +70,6 @@ class ArtStubGenerator {
     for(f <- m.features if Util.isPort(f)) {
       val id = Util.getLastName(f.identifier)
       val ptype: String = Util.getPortType(f)
-      addTypeSkeleton(f)
       ports :+= (id, ptype, f)
     }
 
@@ -386,37 +381,6 @@ class ArtStubGenerator {
                  |import ${topLevelPackageName}._
                  |
                  |@record class $componentImplType (val api : ${bridgeName}.Api) extends $componentType {}"""
-    }
-
-    @pure def typeSkeleton(packageName: String,
-                           typeName: String,
-                           payloadTypeName: String): ST = {
-      return st"""// #Sireum
-                 |
-                 |package $packageName
-                 |
-                 |import org.sireum._
-                 |
-                 |@datatype class $typeName()
-                 |
-                 |@datatype class $payloadTypeName(value: $typeName) extends art.DataContent
-                 |"""
-    }
-
-    @pure def enumTypeSkeleton(packageName: String,
-                               typeName: String,
-                               payloadTypeName: String): ST = {
-      return st"""// #Sireum
-                 |
-                 |package $packageName
-                 |
-                 |import org.sireum._
-                 |
-                 |@enum object $typeName{
-                 |}
-                 |
-                 |@datatype class $payloadTypeName(value: $typeName.Type) extends art.DataContent
-                 |"""
     }
   }
 }
