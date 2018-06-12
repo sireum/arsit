@@ -10,6 +10,7 @@ object Util {
   val Prop_DispatchProtocol : String = "Thread_Properties::Dispatch_Protocol"
   val Prop_Period : String = "Timing_Properties::Period"
   val Prop_DataRepresentation : String = "Data_Model::Data_Representation"
+  val Prop_Urgency: String = "Thread_Properties::Urgency"
 
   val EmptyType : String  = "art.Empty"
 
@@ -150,3 +151,8 @@ case class DataTypeNames(topPackage: String,
   def getPayloadName(): String = s"${typeName}_Payload"
   def getFullyQualifiedPayloadName(): String = s"$packageName.${typeName}_Payload"
 }
+
+case class Port(name: String,
+                typeName: String,
+                feature: Feature,
+                urgency: Z)
