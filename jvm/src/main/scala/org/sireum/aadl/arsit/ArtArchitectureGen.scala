@@ -24,14 +24,14 @@ class ArtArchitectureGen {
 
   var topLevelPackageName: String = _
 
-  def generator(dir: File, m: Aadl, topPackageName: String) : Z = {
+  def generator(dir: File, m: Aadl, topPackageName: String) : (Z, Z) = {
     assert(dir.exists)
     topLevelPackageName = Util.sanitizeName(topPackageName)
     outDir = dir
 
     gen(m)
 
-    portId // return the next available port id
+    (portId, componentId) // return the next available ids
   }
 
   def gen(m: Aadl): Unit = {

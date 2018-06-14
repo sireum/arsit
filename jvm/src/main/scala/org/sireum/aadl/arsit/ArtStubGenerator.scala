@@ -68,13 +68,7 @@ class ArtStubGenerator {
     var ports: ISZ[Port] = ISZ()
 
     for(f <- m.features if Util.isPort(f)) {
-      val id = Util.getLastName(f.identifier)
-      val ptype: String = Util.getPortType(f)
-      val urgency: Z = Util.getDiscreetPropertyValue[UnitProp](f.properties, Util.Prop_Urgency) match {
-        case Some(v) => v.value.toString.toDouble.toInt
-        case _ => 0
-      }
-      ports :+= Port(id, ptype, f, urgency)
+      ports :+= Port(f, m)
     }
 
     val dispatchProtocol: String = {
@@ -175,10 +169,7 @@ class ArtStubGenerator {
                   |
                   |  @record class Api(
                   |    ${var s = "id : Art.BridgeId,\n"
-                         for(p <- ports if Util.isEventPort(p.feature)) // && Util.isOutPort(p._3))
-                           s += s"${addId(p.name)} : Art.PortId,\n"
-
-                         for(p <- ports if Util.isDataPort(p.feature))
+                         for(p <- ports)
                            s += s"${addId(p.name)} : Art.PortId,\n"
 
                          s.dropRight(2) + ") {"
@@ -339,7 +330,7 @@ class ArtStubGenerator {
     @pure def getterApi(p: Port): ST = {
       return st"""def get${p.name}() : Option[${p.typeName}] = {
                  |  val value : Option[${p.typeName}] = Art.getValue(${addId(p.name)}) match {
-                 |    case Some(${p.typeName.toString.replace(".Type", "")}_Payload(v)) => Some(v)
+                 |    case Some(${p.typeName.toString.replace(".Type", "")}${if (p.typeName == Util.EmptyType) "()) => Some(art.Empty())" else "_Payload(v)) => Some(v)"}
                  |    case _ => None[${p.typeName}]()
                  |  }
                  |  return value

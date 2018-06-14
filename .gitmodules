@@ -1,0 +1,3 @@
+[submodule "art"]
+	path = jvm/src/main/resources/org/sireum/aadl/arsit/art
+	url = git@github.com:santoslab/slang-embedded-art.git

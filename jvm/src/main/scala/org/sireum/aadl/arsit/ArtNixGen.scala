@@ -16,24 +16,26 @@ class ArtNixGen {
 
   val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
-  var id: Z = _
+  var portId: Z = _
   def getPortId(): Z = {
-    val r = id
-    id = id + 1
+    val r = portId
+    portId = portId + 1
     return r
   }
 
-  def generator(projOutputDir: File, nixOutputDir: File, cOutputDir: File, binOutputDir:File,
-                m: Aadl, topPackageName: String, nextPortId: Z): Unit = {
+  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z): Z = {
     topLevelPackageName = Util.sanitizeName(topPackageName)
-    this.projOutputDir = projOutputDir // where the slang-embedded code was generated
-    this.nixOutputDir = nixOutputDir   // where the nix code will be generated
-    this.cOutputDir = cOutputDir       // where user wants c code to be generated
-    this.binOutputDir = binOutputDir   // where user wants shell scripts to be generated
+    this.projOutputDir = outputDir // where the slang-embedded code was generated
 
-    id = nextPortId
+    binOutputDir = new File(projOutputDir, "../../bin")
+    cOutputDir = new File(projOutputDir, "../c")
+    nixOutputDir = new File(projOutputDir, "nix")
+
+    portId = nextPortId
 
     gen(m)
+
+    portId
   }
 
   def gen(model: Aadl): Unit = {
@@ -53,7 +55,8 @@ class ArtNixGen {
     var platformPorts: ISZ[ST] = ISZ()
     var platformPayloads: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
-    var inPorts: ISZ[String] = ISZ()
+   // var inPorts: ISZ[String] = ISZ()
+    var inPorts: ISZ[Port] = ISZ()
     var aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
 
@@ -102,14 +105,14 @@ class ArtNixGen {
         portDefs = portDefs :+ Template.portDef(portOptName, portType)
         portOpts = portOpts :+ Template.portOpt(portOptName, portType)
         portIds = portIds :+ Template.portId(portIdName, archPortInstanceName)
-        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, isPeriodic)
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(port))
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
 
         appCases = appCases :+ Template.appCases(portOptName, portIdName, portPayloadTypeName)
 
-        inPorts = inPorts :+ Util.getName(port.identifier)
+        inPorts :+= Port(port, m)
       }
 
       platformPorts = platformPorts :+
@@ -143,7 +146,7 @@ class ArtNixGen {
 
     var artNixCases: ISZ[ST] = ISZ()
     for(c <- connections) {
-      val dstFullyQualifiedPortName = Util.getName(c.dst.feature)
+      val dstPath = Util.getName(c.dst.feature)
       val dstComp = componentMap(Util.getName(c.dst.component))
       val dstArchPortInstanceName =
         s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
@@ -153,7 +156,7 @@ class ArtNixGen {
       val srcArchPortInstanceName =
           s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature)}"
 
-      if(inPorts.elements.contains(dstFullyQualifiedPortName) &&
+      if(inPorts.map(_.path).elements.contains(dstPath) &&
         Util.isThreadOrDevice(srcComp) && Util.isThreadOrDevice((dstComp))) {
         val dstCompAep = s"${name.component}_AEP"
         artNixCases = artNixCases :+
@@ -166,7 +169,8 @@ class ArtNixGen {
     val stAep = Template.aep(topLevelPackageName, platformPorts, platformPayloads)
     Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/AEP.scala"), stAep)
 
-    val stArtNix = Template.artNix(topLevelPackageName, artNixCases)
+    val stArtNix = Template.artNix(topLevelPackageName, artNixCases,
+      inPorts.withFilter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
     Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
 
     val stMain = Template.main(topLevelPackageName, mainSends)
@@ -191,8 +195,7 @@ class ArtNixGen {
 
     Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(aepNames, appNames))
 
-    val extFile = new File(cOutputDir, s"ext/ext.c")
-    Util.writeFile(extFile, st"""// add c extension code here""", false)
+    Util.writeFile(new File(cOutputDir, s"ext/ext.c"), st"""// add c extension code here""", false)
 
     var outputPaths: ISZ[String] = ISZ(projOutputDir.getAbsolutePath)
     if(!nixOutputDir.getAbsolutePath.contains(projOutputDir.getAbsolutePath))
@@ -201,10 +204,7 @@ class ArtNixGen {
     val tranpiler = Template.transpiler(
       outputPaths,
       ((aepNames ++ appNames) :+ "Main").map(s => s"${topLevelPackageName}.${s}"),
-      ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"),
-      cOutputDir.getAbsolutePath,
-      extFile.getAbsolutePath
-    )
+      ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"))
     Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler, false)
   }
 
@@ -228,10 +228,10 @@ class ArtNixGen {
     @pure def aepPortCase(portIdName: String,
                           portOptName: String,
                           payloadTypeName: String,
-                          isPeriodic: B): ST =
+                          isData: B): ST =
       return st"""case `$portIdName` =>
                  |  $portOptName = Some(d.asInstanceOf[$payloadTypeName]${if(payloadTypeName != Util.EmptyType) ".value" else ""})
-                 |  ${if(!isPeriodic) "eventArrived()" else ""}"""
+                 |  ${if(!isData) "eventArrived()" else ""}"""
 
     @pure def AEPPayload(AEPPayloadTypeName: String,
                          portOptNames: ISZ[String]): ST =
@@ -449,7 +449,8 @@ class ArtNixGen {
                  |"""
     }
     @pure def artNix(packageName: String,
-                     cases: ISZ[ST]): ST = {
+                     cases: ISZ[ST],
+                     eventInPorts: ISZ[String]): ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -472,6 +473,9 @@ class ArtNixGen {
                  |
                  |    r
                  |  }
+                 |  val eventInPorts: MS[Z, Art.PortId] = MSZ(
+                 |    ${(eventInPorts, ",\n")}
+                 |  )
                  |  var frozen: MS[Art.PortId, Option[DataContent]] = MS()
                  |  var outgoing: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, None())
                  |  var isTimeDispatch: B = F
@@ -493,7 +497,7 @@ class ArtNixGen {
                  |      return timeTriggered
                  |    } else {
                  |      var r = ISZ[Art.PortId]()
-                 |      for (i <- data.indices if data(i).nonEmpty) {
+                 |      for (i <- eventInPorts if data(i).nonEmpty) {
                  |        r = r :+ i
                  |      }
                  |      return EventTriggered(r)
@@ -516,26 +520,24 @@ class ArtNixGen {
                  |  }
                  |
                  |  def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
-                 |    for (p <- eventPortIds) {
-                 |      outgoing(p) match {
-                 |        case Some(d) =>
-                 |          val (app, port) = connection(p)
-                 |          Platform.send(app, port, d)
-                 |        case _ =>
-                 |      }
-                 |    }
-                 |
                  |    for (p <- dataPortIds) {
                  |      outgoing(p) match {
                  |        case Some(d) =>
+                 |          outgoing(p) = noData
                  |          val (app, port) = connection(p)
                  |          Platform.send(app, port, d)
                  |        case _ =>
                  |      }
                  |    }
                  |
-                 |    for (i <- outgoing.indices if outgoing(i).nonEmpty) {
-                 |      outgoing(i) = noData
+                 |    for (p <- eventPortIds) {
+                 |      outgoing(p) match {
+                 |        case Some(d) =>
+                 |          outgoing(p) = noData
+                 |          val (app, port) = connection(p)
+                 |          Platform.send(app, port, d)
+                 |        case _ =>
+                 |      }
                  |    }
                  |  }
                  |
@@ -836,27 +838,28 @@ class ArtNixGen {
 
     @pure def transpiler(sourcepaths: ISZ[String],
                 apps: ISZ[String],
-                forwards: ISZ[String],
-                outDir: String,
-                extFileLoc: String): ST = {
+                forwards: ISZ[String]): ST = {
       st"""#!/usr/bin/env bash
+          |#
+          |# This file can be edited
+          |#
           |set -e
           |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
-          |export ART_HOME=${"$"}SCRIPT_HOME/../../art/src/main
           |export PROJ_HOME=${"$"}SCRIPT_HOME/../src/main
-          |export JAVA_BIN_HOME=${"$"}SIREUM_HOME/platform/java/bin/
+          |export OUTPUT_DIR=${"$"}SCRIPT_HOME/../src/c
+          |export EXT_FILE_HOME=${"$"}OUTPUT_DIR/ext/ext.c
           |
-          |if [ ! -d ${"$"}ART_HOME ]; then
-          |  echo "Set ART_HOME to point to the location of Slang-Embedded ART"
-          |  exit -1
-          |fi
-          |
-          |if [ -z "${"$"}TRANSPILER_JAR_HOME" ]; then
+          |if [ -n "${"$"}1" ]; then
           |  TRANSPILER_JAR_HOME=${"$"}1
           |fi
           |
-          |${"$"}JAVA_BIN_HOME/java -jar ${"$"}TRANSPILER_JAR_HOME transpiler c \
-          |  --sourcepath ${"$"}ART_HOME:${"$"}PROJ_HOME \
+          |if [ -z "${"$"}TRANSPILER_JAR_HOME" ]; then
+          |  echo "Specify the location of the Sireum-Transpiler jar file"
+          |  exit 1
+          |fi
+          |
+          |${"$"}TRANSPILER_JAR_HOME transpiler c \
+          |  --sourcepath ${"$"}PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
           |  --verbose \
@@ -864,15 +867,15 @@ class ArtNixGen {
           |  --string-size 256 \
           |  --sequence-size 16 \
           |  --sequence ISZ[org.sireumString]=2 \
-          |  --output-dir $outDir \
-          |  --exts $extFileLoc
+          |  --output-dir ${"$"}OUTPUT_DIR \
+          |  --exts ${"$"}EXT_FILE_HOME
           |"""
     }
   }
 }
 
 object ArtNixGen{
-  def apply(projOutputDir: File, nixOutputDir: File, cOutputDir: File, binOutputDir:File, m: Aadl, topPackage: String, nextPortId: Z):Unit =
-    new ArtNixGen().generator(projOutputDir, nixOutputDir, cOutputDir, binOutputDir, m, topPackage, nextPortId)
+  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z) : Z =
+    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId)
 }
 
