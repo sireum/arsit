@@ -134,7 +134,6 @@ class ArtArchitectureGen {
     assert(m.subComponents.isEmpty)
 
     val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
-    //val pathName = Util.getName(m.identifier)
 
     val id = getComponentId(m)
 

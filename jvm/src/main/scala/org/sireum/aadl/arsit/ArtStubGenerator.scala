@@ -114,53 +114,37 @@ class ArtStubGenerator {
                   |  val name: String,
                   |  val dispatchProtocol: DispatchPropertyProtocol,
                   |
-                  |  ${var s = ""
-                       for(p <- ports)
-                         s += s"${p.name}: Port[${p.typeName}],\n"
-                       s.dropRight(2)
-                     }
+                  |  ${(ports.map(p => s"${p.name}: Port[${p.typeName}]"), ",\n")}
                   |  ) extends Bridge {
                   |
                   |  val ports : Bridge.Ports = Bridge.Ports(
-                  |    all = ISZ(${ISZOps(ports).foldLeft[scala.Predef.String]((r, v) => s"${r}${v.name},\n", "").dropRight(2) }),
+                  |    all = ISZ(${(ports.map(_.name), ",\n")}),
                   |
                   |    dataIns = ISZ(${
-                        ISZOps(ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInPort(v.feature))
-                        ).foldLeft[scala.Predef.String]((r, v) => s"${r}${v.name},\n", "").dropRight(2)}),
+                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInPort(v.feature)).map(_.name), ",\n")}),
                   |
                   |    dataOuts = ISZ(${
-                       ISZOps(ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutPort(v.feature))
-                       ).foldLeft[scala.Predef.String]((r, v) => s"${r}${v.name},\n", "").dropRight(2) }),
+                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutPort(v.feature)).map(_.name), ",\n")}),
                   |
                   |    eventIns = ISZ(${
-                       ISZOps(ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInPort(v.feature))
-                       ).foldLeft[scala.Predef.String]((r, v) => s"${r}${v.name},\n", "").dropRight(2) }),
+                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInPort(v.feature)).map(_.name), ",\n")}),
                   |
                   |    eventOuts = ISZ(${
-                       ISZOps(ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutPort(v.feature))
-                       ).foldLeft[scala.Predef.String]((r, v) => s"${r}${v.name},\n", "").dropRight(2) })
+                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutPort(v.feature)).map(_.name), ",\n")})
                   |  )
                   |
                   |  val api : ${bridgeName}.Api =
                   |    ${bridgeName}.Api(
-                  |      ${var s = "id,\n"
-                           for(p <- ports){ // if Util.isEventPort(p._3) && Util.isOutPort(p._3)) {
-                             s += s"${p.name}.id,\n"
-                           }
-
-                           //for(p <- ports if Util.isDataPort(p._3)) {
-                           //  s += s"${p.name}.id,\n"
-                           //}
-
-                           s.dropRight(2)
-                         }
+                  |      id,
+                  |      ${(ports.map(p => s"${p.name}.id"), ",\n")}
                   |    )
                   |
                   |  val entryPoints : Bridge.EntryPoints =
                   |    ${bridgeName}.EntryPoints(
                   |      id,
                   |
-                  |      ${ISZOps(ports).foldLeft[String]((r, v) => s"${r}${v.name}.id,\n", "")}
+                  |      ${(ports.map(p => s"${p.name}.id"), ",\n")},
+                  |
                   |      ${componentImplType}(api)
                   |    )
                   |}
@@ -168,21 +152,13 @@ class ArtStubGenerator {
                   |object $bridgeName {
                   |
                   |  @record class Api(
-                  |    ${var s = "id : Art.BridgeId,\n"
-                         for(p <- ports)
-                           s += s"${addId(p.name)} : Art.PortId,\n"
-
-                         s.dropRight(2) + ") {"
-                       }
+                  |    id : Art.BridgeId,
+                  |    ${(ports.map(p => s"${addId(p.name)} : Art.PortId"), ",\n")}) {
                   |
-                  |    ${var s = ""
-                         for (p <- ports if Util.isEventPort(p.feature))// && Util.isOutPort(p._3))
-                           s += Template.eventPortApi(p).render + "\n\n"
-
-                         for (p <- ports if Util.isDataPort(p.feature))
-                           s += Template.dataPortApi(p).render + "\n\n"
-                         s
-                       }
+                  |    ${(ports.withFilter(p => Util.isEventPort(p.feature)).map(p => Template.eventPortApi(p).render), "\n\n")}
+                  |
+                  |    ${(ports.withFilter(p => Util.isDataPort(p.feature)).map(p => Template.dataPortApi(p).render), "\n\n")}
+                  |
                   |    def logInfo(msg: String): Unit = {
                   |      Art.logInfo(id, msg)
                   |    }
@@ -198,25 +174,22 @@ class ArtStubGenerator {
                   |
                   |  @record class EntryPoints(
                   |    ${bridgeName}Id : Art.BridgeId,
-                  |    ${ISZOps(ports).foldLeft[String]((r, v) => s"$r\n${addId(v.name)} : Art.PortId,", "") }
+                  |
+                  |    ${(ports.map(p => s"${addId(p.name)} : Art.PortId"), ",\n")},
                   |
                   |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
                   |
                   |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${
-                         ISZOps(ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInPort(v.feature))
-                         ).foldLeft[scala.Predef.String]((r, v) => r + addId(v.name) + ",\n", "").dropRight(2)})
+                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInPort(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val eventInPortIds: ISZ[Art.PortId] = ISZ(${
-                         ISZOps(ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInPort(v.feature))
-                         ).foldLeft[scala.Predef.String]((r, v) => r + addId(v.name) + ",\n", "").dropRight(2)})
+                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInPort(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val dataOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         ISZOps(ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutPort(v.feature))
-                         ).foldLeft[scala.Predef.String]((r, v) => r + addId(v.name) + ",\n", "").dropRight(2) })
+                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutPort(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         ISZOps(ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutPort(v.feature))
-                         ).foldLeft[scala.Predef.String]((r, v) => r + addId(v.name) + ",\n", "").dropRight(2) })
+                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutPort(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    def initialise(): Unit = {
                   |      ${componentName}.initialise()
@@ -254,9 +227,7 @@ class ArtStubGenerator {
                      |
                      |for(portId <- portIds) {
                      |  ${var s = ""
-                          // handle ports with higher urgency first
-                          val sorted = ISZOps(ports).sortWith((a, b) => a.urgency > b.urgency)
-                          for (p <- sorted if Util.isEventPort(p.feature) && Util.isInPort(p.feature))
+                          for (p <- ports if Util.isEventPort(p.feature) && Util.isInPort(p.feature))
                             s += "\n" + Template.portCase(componentName, p, s == "").render
                           s
                         }
@@ -264,8 +235,7 @@ class ArtStubGenerator {
                      |
                      |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
         case "Periodic" =>
-          return st"""// val TimeTriggered() = Art.dispatchStatus(${bridgeName})
-                     |Art.receiveInput(eventInPortIds, dataInPortIds)
+          return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
                      |${componentName}.timeTriggered()
                      |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
