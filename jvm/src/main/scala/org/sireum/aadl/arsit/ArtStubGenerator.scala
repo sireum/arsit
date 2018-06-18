@@ -319,7 +319,15 @@ class ArtStubGenerator {
 
     @pure def dataPortApi(p: Port) : ST = {
       if(Util.isInPort(p.feature)) {
-        return getterApi(p)
+        return st"""${getterApi(p).render}
+                   |
+                   |def fresh${p.name}() : B = {
+                   |  return Art.fresh(${addId(p.name)})
+                   |}
+                   |
+                   |def updated${p.name}() : B = {
+                   |  return Art.updated(${addId(p.name)})
+                   |}"""
       } else {
         return st"""def set${p.name}(value : ${p.typeName}) : Unit = {
                    |  ${putValue(p)}
