@@ -153,38 +153,35 @@ class ArtArchitectureGen {
     }
 
     var ports: ISZ[ST] = ISZ()
-    for (f <- m.features if Util.isPort(f))
-      ports :+= genPort(f)
+    for (f <- m.features if Util.isPort(f)) {
+      ports :+= genPort(Port(f, m))
+    }
 
     val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
 
     return Template.bridge(varName, bridgeTypeName, id, dispatchProtocol, ports)
   }
 
-  def genPort(p:Feature) : ST = {
-    val name = Util.getLastName(p.identifier)
-    val typ: String = Util.getPortType(p)
-
+  def genPort(p:Port) : ST = {
     val id = getPortId()
-    val identifier = s"${Util.getName(p.identifier)}"
 
     import FeatureCategory._
-    val prefix = p.category match {
+    val prefix = p.feature.category match {
       case EventPort | EventDataPort => "Event"
       case DataPort => "Data"
-      case _ => throw new RuntimeException("Not handling " + p.category)
+      case _ => throw new RuntimeException("Not handling " + p.feature.category)
     }
 
     import Direction._
-    val mode = prefix + (p.direction match {
+    val mode = prefix + (p.feature.direction match {
       case In => "In"
       case Out => "Out"
       case _ => "???"
     })
 
-    addTypeSkeleton(p)
+    addTypeSkeleton(p.feature)
 
-    return Template.port(name, typ, id, identifier, mode)
+    return Template.port(p.name, p.typeName, id, p.path, mode, p.urgency)
   }
 
   var seenTypes: ISZ[String] = ISZ()
@@ -236,8 +233,9 @@ class ArtArchitectureGen {
                    typ: String,
                    id: Z,
                    identifier: String,
-                   mode: String): ST = {
-      return st"""$name = Port[$typ] (id = $id, name = "$identifier", mode = $mode)"""
+                   mode: String,
+                   urgency: Z): ST = {
+      return st"""$name = Port[$typ] (id = $id, name = "$identifier", mode = $mode, urgency = $urgency)"""
     }
 
     @pure def bridge(varName: String,
