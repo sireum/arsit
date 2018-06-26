@@ -3,45 +3,51 @@ package org.sireum.aadl.arsit
 import java.io.File
 
 import org.sireum.aadl.ir.{Aadl, JSON, MsgPack}
-import org.sireum.{B, Either, String, Z}
-
-import scala.io.Source
+import org.sireum.cli.Sireum.path2fileOpt
+import org.sireum.{B, F, T, Z, ISZ, Either, String, Some}
+import org.sireum.cli.Cli
 
 object Runner {
 
+  // hint: execute something like "run --fakeopt" to print the help
   def main (args: Array[scala.Predef.String]): Unit = {
-
-    if(args.length != 2) {
-      println("Usage: run <dest-dir> <json>")
-      return
+    val cli = Cli(_root_.java.io.File.pathSeparatorChar)
+    cli.parseArsit(ISZ(args.map(s => s: String): _*), Z(0)) match {
+      case Some(o: Cli.ArsitOption) => run(o)
+      case _ => println(cli.parseArsit(ISZ(), 0).get.asInstanceOf[Cli.ArsitOption].help)
     }
-
-    var json = ""
-    try {
-      json = Source.fromFile(args(1)).getLines.mkString
-    } catch {
-      case e: Throwable =>
-        Console.err.println(s"Error reading from '${args(1)}'")
-        return
-    }
-
-    Runner.run(new File(args(0)), true, json)
   }
 
-  def run(destDir : File, isJson: B, s: org.sireum.String): Int = {
-    if (isJson) {
-      JSON.toAadl(s) match {
-        case Either.Left(m) => run(destDir, m)
+  def run(o: org.sireum.cli.Cli.ArsitOption): Int = {
+    val destDir = path2fileOpt("output directory", o.outputDir, T).get
+    if (!destDir.isDirectory) {
+      println(s"Path ${destDir.getPath} is not a directory")
+      return -1
+    }
+
+    val inputFile = path2fileOpt("input file", o.inputFile, F)
+    val input = if (inputFile.nonEmpty) {
+      scala.io.Source.fromFile(inputFile.get).getLines.mkString
+    } else {
+      println("Reading from stdin.  Enter Ctrl+d on a blank line to finish")
+      var s, l = ""
+      while ({ l = scala.io.StdIn.readLine; l != null }) s += l
+      s
+    }
+
+    if (o.json) {
+      JSON.toAadl(input) match {
+        case Either.Left(m) => run(destDir, m, o)
         case Either.Right(m) =>
           Console.println(s"Json deserialization error at (${m.line}, ${m.column}): ${m.message}")
           -1
       }
     }
     else {
-      org.sireum.conversions.String.fromBase64(s) match {
+      org.sireum.conversions.String.fromBase64(input) match {
         case Either.Left(u) =>
           MsgPack.toAadl(u) match {
-            case Either.Left(m) => run(destDir, m)
+            case Either.Left(m) => run(destDir, m, o)
             case Either.Right(m) =>
               Console.println(s"MsgPack deserialization error at offset ${m.offset}: ${m.message}")
               -1
@@ -53,14 +59,14 @@ object Runner {
     }
   }
 
-  def run(destDir : File, m: Aadl) : Int = run(destDir, m, destDir.getName)
-
-  def run(destDir : File, m: Aadl, basePackageName: String) : Int = {
+  def run(destDir : File, m: Aadl, o: Cli.ArsitOption) : Int = {
 
     if(m.components.isEmpty) {
       Console.err.println("Model is empty")
       return -1
     }
+
+    val basePackageName : String = if (o.packagename.nonEmpty) o.packagename.get else destDir.getName()
 
     val _destDir = new File(destDir, "src/main")
 
@@ -78,14 +84,17 @@ object Runner {
     new File(_destDir, "component").mkdir
     new File(_destDir, "data").mkdir
 
-    val (nextPortId, nextComponentId) = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName)
+    val (nextPortId, nextComponentId) = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName, o)
 
-    ArtStubGenerator(_destDir, m, basePackageName)
+    ArtStubGenerator(_destDir, m, basePackageName, o)
 
-    // TODO: make nix gen optional
-    val maxNixPort = ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId)
+    val maxNixPort: Z =
+      if(o.genTrans) ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o)
+      else nextPortId
 
-    Util.copyArtFiles(maxNixPort, nextComponentId, _destDir)
+    if(!o.noart) {
+      Util.copyArtFiles(maxNixPort, nextComponentId, _destDir)
+    }
 
     0
   }

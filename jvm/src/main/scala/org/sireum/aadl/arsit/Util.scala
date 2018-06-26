@@ -145,7 +145,7 @@ object Util {
     println(outputDir)
     ISZ("ArchitectureDescription", "Art", "ArtDebug", "ArtDebug_Ext", "ArtNative", "ArtNative_Ext",
       "ArtTimer", "ArtTimer_Ext", "DataContent").foreach { filename =>
-      import java.io._
+
       val is = getClass.getResourceAsStream(s"art/src/main/scala/art/$filename.scala")
       val out = new StringBuilder()
       for (l <- scala.io.Source.fromInputStream(is).getLines()) {

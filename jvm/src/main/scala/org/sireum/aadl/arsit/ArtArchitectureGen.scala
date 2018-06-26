@@ -4,6 +4,7 @@ import java.io.File
 
 import org.sireum._
 import org.sireum.aadl.ir._
+import org.sireum.cli.Cli.ArsitOption
 import org.sireum.util.MList
 import org.sireum.util.MMap
 
@@ -24,7 +25,7 @@ class ArtArchitectureGen {
 
   var topLevelPackageName: String = _
 
-  def generator(dir: File, m: Aadl, topPackageName: String) : (Z, Z) = {
+  def generator(dir: File, m: Aadl, topPackageName: String, o: ArsitOption) : (Z, Z) = {
     assert(dir.exists)
     topLevelPackageName = Util.sanitizeName(topPackageName)
     outDir = dir
@@ -328,5 +329,5 @@ class ArtArchitectureGen {
 }
 
 object ArtArchitectureGen {
-  def apply(dir: File, m: Aadl, topPackage: String) = new ArtArchitectureGen().generator(dir, m, topPackage)
+  def apply(dir: File, m: Aadl, topPackage: String, o: ArsitOption) = new ArtArchitectureGen().generator(dir, m, topPackage, o)
 }

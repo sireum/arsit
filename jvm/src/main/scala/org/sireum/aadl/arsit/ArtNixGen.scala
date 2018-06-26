@@ -4,6 +4,7 @@ import java.io.File
 
 import org.sireum._
 import org.sireum.aadl.ir._
+import org.sireum.cli.Cli.ArsitOption
 import org.sireum.util.MMap
 
 class ArtNixGen {
@@ -23,7 +24,7 @@ class ArtNixGen {
     return r
   }
 
-  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z): Z = {
+  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z, o: ArsitOption): Z = {
     topLevelPackageName = Util.sanitizeName(topPackageName)
     this.projOutputDir = outputDir // where the slang-embedded code was generated
 
@@ -875,7 +876,7 @@ class ArtNixGen {
 }
 
 object ArtNixGen{
-  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z) : Z =
-    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId)
+  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: ArsitOption) : Z =
+    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId, o)
 }
 
