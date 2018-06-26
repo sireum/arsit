@@ -19,7 +19,13 @@ object Runner {
   }
 
   def run(o: org.sireum.cli.Cli.ArsitOption): Int = {
-    val destDir = path2fileOpt("output directory", o.outputDir, T).get
+    val destDir: File = path2fileOpt("output directory", o.outputDir, F).get
+    if(!destDir.exists()) {
+      if(!destDir.mkdirs()){
+        println(s"Could not create directory ${destDir.getPath}")
+        return -1
+      }
+    }
     if (!destDir.isDirectory) {
       println(s"Path ${destDir.getPath} is not a directory")
       return -1

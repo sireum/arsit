@@ -14,12 +14,14 @@ class ArtStubGenerator {
   var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
   var topLevelPackage: String = _
+  var arsitOptions : ArsitOption = _
 
   def generator(dir: File, m: Aadl, packageName: String, o: ArsitOption) : Unit = {
     assert(dir.exists)
 
     outDir = dir
     topLevelPackage = Util.sanitizeName(packageName)
+    arsitOptions = o
 
     for(c <- m.components)
       gen(c)
@@ -84,9 +86,10 @@ class ArtStubGenerator {
     val b = Template.bridge(topLevelPackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
     Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b)
 
-    val c = Template.componentTrait(topLevelPackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
-    Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
-
+    if(!arsitOptions.bless) {
+      val c = Template.componentTrait(topLevelPackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
+      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
+    }
     val ci = Template.componentImpl(topLevelPackage, names.packageName, names.component, names.bridge, names.componentImpl)
     Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.componentImpl}.scala"), ci, false)
   }
@@ -193,7 +196,7 @@ class ArtStubGenerator {
                          (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutPort(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    def initialise(): Unit = {
-                  |      ${componentName}.initialise()
+                  |      ${componentName}.${if(arsitOptions.bless) "Initialize_Entrypoint()" else "initialise()"}
                   |    }
                   |
                   |    def compute(): Unit = {
@@ -201,19 +204,19 @@ class ArtStubGenerator {
                   |    }
                   |
                   |    def activate(): Unit = {
-                  |      ${componentName}.activate()
+                  |      ${componentName}.${if(arsitOptions.bless) "Activate_Entrypoint()" else "activate()"}
                   |    }
                   |
                   |    def deactivate(): Unit = {
-                  |      ${componentName}.deactivate()
+                  |      ${componentName}.${if(arsitOptions.bless) "Deactivate_Entrypoint()" else "deactivate()"}
                   |    }
                   |
                   |    def recover(): Unit = {
-                  |      ${componentName}.recover()
+                  |      ${componentName}.${if(arsitOptions.bless) "Recover_Entrypoint()" else "recover()"}
                   |    }
                   |
                   |    def finalise(): Unit = {
-                  |      ${componentName}.finalise()
+                  |      ${componentName}.${if(arsitOptions.bless) "Finalize_Entrypoint()" else "finalise()"}
                   |    }
                   |  }
                   |}"""
@@ -221,24 +224,30 @@ class ArtStubGenerator {
 
     @pure def computeBody(bridgeName: String, componentName: String,
                           ports: ISZ[Port], dispatchProtocol:String) : ST = {
-      dispatchProtocol.toString match {
-        case "Sporadic" =>
-          return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
-                     |Art.receiveInput(portIds, dataInPortIds)
-                     |
-                     |for(portId <- portIds) {
-                     |  ${var s = ""
-                          for (p <- ports if Util.isEventPort(p.feature) && Util.isInPort(p.feature))
-                            s += "\n" + Template.portCase(componentName, p, s == "").render
-                          s
-                        }
-                     |}
-                     |
-                     |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
-        case "Periodic" =>
-          return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
-                     |${componentName}.timeTriggered()
-                     |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+      if(!arsitOptions.bless) {
+        dispatchProtocol.toString match {
+          case "Sporadic" =>
+            return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
+                       |Art.receiveInput(portIds, dataInPortIds)
+                       |
+                       |for(portId <- portIds) {
+                       |  ${var s = ""
+                            for (p <- ports if Util.isEventPort(p.feature) && Util.isInPort(p.feature))
+                              s += "\n" + Template.portCase(componentName, p, s == "").render
+                            s
+                          }
+                       |}
+                       |
+                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+          case "Periodic" =>
+            return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
+                       |${componentName}.timeTriggered()
+                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        }
+      } else {
+        return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
+                   |${componentName}.Compute_Entrypoint()
+                   |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
     }
 
@@ -371,7 +380,49 @@ class ArtStubGenerator {
                  |import org.sireum._
                  |import ${topLevelPackageName}._
                  |
-                 |@record class $componentImplType (val api : ${bridgeName}.Api) extends $componentType {}"""
+                 |@record class $componentImplType (val api : ${bridgeName}.Api) ${if(arsitOptions.bless) "" else s"extends ${componentType}"} {
+                 |  ${if(arsitOptions.bless) {
+                      st"""def Initialize_Entrypoint(): Unit = {}
+                          |
+                          |def Compute_Entrypoint(): Unit = {}
+                          |
+                          |def Activate_Entrypoint(): Unit = {}
+                          |
+                          |def Deactivate_Entrypoint(): Unit = {}
+                          |
+                          |def Recover_Entrypoint(): Unit = {}
+                          |
+                          |def Finalize_Entrypoint(): Unit = {}""".render.toString
+                    } else { "" }}
+                 |}"""
+    }
+
+    @pure def componentImplBless(topLevelPackageName: String,
+                                 packageName : String,
+                                 componentType : String,
+                                 bridgeName : String,
+                                 componentImplType : String) : ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |import ${topLevelPackageName}._
+                 |
+                 |@record class $componentImplType (val api : ${bridgeName}.Api) {
+                 |
+                 |  def Initialize_Entrypoint(): Unit = {}
+                 |
+                 |  def Compute_Entrypoint(): Unit = {}
+                 |
+                 |  def Activate_Entrypoint(): Unit = {}
+                 |
+                 |  def Deactivate_Entrypoint(): Unit = {}
+                 |
+                 |  def Recover_Entrypoint(): Unit = {}
+                 |
+                 |  def Finalize_Entrypoint(): Unit = {}
+                 |}"""
     }
   }
 }
