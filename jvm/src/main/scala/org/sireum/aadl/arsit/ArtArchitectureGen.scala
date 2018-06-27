@@ -99,6 +99,7 @@ class ArtArchitectureGen {
           val name = Util.getName(c.identifier)
           bridges :+= genThread(c, name)
           components :+= name
+        case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
           println(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
@@ -132,7 +133,7 @@ class ArtArchitectureGen {
   def genThread(m:Component, varName: String) : ST = {
     assert(m.category == ComponentCategory.Thread || m.category == ComponentCategory.Device)
     assert(m.connections.isEmpty)
-    assert(m.subComponents.isEmpty)
+    //assert(m.subComponents.isEmpty)
 
     val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
 
@@ -164,7 +165,7 @@ class ArtArchitectureGen {
 
   def genPort(p:Feature) : ST = {
     val name = Util.getLastName(p.identifier)
-    val typ: String = Util.getPortType(p)
+    val typ: String = Util.getFeatureType(p)
 
     val id = getPortId()
     val identifier = s"${Util.getName(p.identifier)}"

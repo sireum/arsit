@@ -68,7 +68,7 @@ object Util {
   }
   */
 
-  @pure def getPortType(p: Feature): String = {
+  @pure def getFeatureType(p: Feature): String = {
     return p.classifier match {
       case Some(c) => cleanName(c.name) + (if (isEnum(p.properties)) ".Type" else "")
       case _ => EmptyType
@@ -109,11 +109,13 @@ object Util {
   @pure def isDataPort(f: Feature): B = f.category == FeatureCategory.DataPort
 
 
-  @pure def isInPort(f: Feature): B = f.direction == Direction.In
+  @pure def isInFeature(f: Feature): B = f.direction == Direction.In
 
-  @pure def isOutPort(f: Feature): B = f.direction == Direction.Out
+  @pure def isOutFeature(f: Feature): B = f.direction == Direction.Out
 
-  @pure def isThreadOrDevice(c: Component): B = c.category == ComponentCategory.Thread || c.category == ComponentCategory.Device
+  @pure def isThread(c: Component): B = c.category == ComponentCategory.Thread
+
+  @pure def isDevice(c: Component): B = c.category == ComponentCategory.Device
 
   @pure def doNotEditComment(from: Option[String] = None[String]()) = {
     val _from = if (from.nonEmpty) " from " + from.get else ""
@@ -195,7 +197,7 @@ case class Port(feature: Feature, parent: Component){
   def parentName: String = Util.getLastName(parent.identifier)
   def parentPath: String = Util.getName(parent.identifier)
 
-  def typeName: String = Util.getPortType(feature)
+  def typeName: String = Util.getFeatureType(feature)
 
   def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Urgency) match {
     case Some(v) => v.value.toString.toDouble.toInt

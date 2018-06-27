@@ -95,11 +95,11 @@ class ArtNixGen {
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      for (port <- m.features if Util.isInPort(port)) {
+      for (port <- m.features if Util.isInFeature(port)) {
         val portName: String = Util.getLastName(port.identifier)
         val portIdName: String = portName + "PortId"
         val portOptName: String = portName + "Opt"
-        val portType: String = Util.getPortType(port)
+        val portType: String = Util.getFeatureType(port)
         val portPayloadTypeName: String = Util.getPortPayloadTypeName(port)
         val archPortInstanceName: String = s"${bridgeInstanceVarName}.${portName}"
 
@@ -158,7 +158,7 @@ class ArtNixGen {
           s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature)}"
 
       if(inPorts.map(_.path).elements.contains(dstPath) &&
-        Util.isThreadOrDevice(srcComp) && Util.isThreadOrDevice((dstComp))) {
+        (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
         val dstCompAep = s"${name.component}_AEP"
         artNixCases = artNixCases :+
           Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstCompAep)
