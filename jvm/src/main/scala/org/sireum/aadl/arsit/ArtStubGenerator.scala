@@ -133,7 +133,7 @@ class ArtStubGenerator {
 
       val b = Template.slangPreamble(F, topLevelPackage, names.packageName,
         ISZ(Template.slangBody("", s"${objectName}_Ext", subprograms.map(_._2))))
-      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}_Ext.scala"), b)
+      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}_Ext.scala"), b, F)
 
       return Some(body)
     } else {
