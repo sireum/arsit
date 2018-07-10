@@ -139,7 +139,7 @@ class ArtArchitectureGen {
 
     val id = getComponentId(m)
 
-    val period: ST = Util.getPeriod(m)
+    val period: String = Util.getPeriod(m)
 
     val dispatchProtocol: ST = {
       Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
@@ -231,8 +231,8 @@ class ArtArchitectureGen {
 
   object Template {
 
-    @pure def sporadic (period: ST) = st"""Sporadic(min = $period)"""
-    @pure def periodic (period: ST) = st"""Periodic(period = $period)"""
+    @pure def sporadic (period: String) = st"""Sporadic(min = $period)"""
+    @pure def periodic (period: String) = st"""Periodic(period = $period)"""
 
     @pure def port(name: String,
                    typ: String,

@@ -5,6 +5,7 @@ import java.io.{BufferedWriter, File, FileWriter}
 import org.sireum._
 import org.sireum.aadl.ir._
 import org.sireum.ops._
+import org.sireum.cli.Cli.Ipcmech
 
 object Util {
   val Prop_DispatchProtocol: String = "Thread_Properties::Dispatch_Protocol"
@@ -24,15 +25,15 @@ object Util {
     return None[T]
   }
 
-  @pure def getPeriod(m: Component): ST = {
+  @pure def getPeriod(m: Component): String = {
     return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Period) match {
       case Some(x) =>
         assert(x.unit.get == org.sireum.String("ps"))
         // convert picoseconds to milliseconds.  x.value was a double in osate
         // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
         val v = x.value.toString.toDouble / 1e9
-        st"""${v.toLong}"""
-      case _ => st"""1"""
+        s"${v.toLong}"
+      case _ => "1"
     }
   }
 
@@ -55,18 +56,6 @@ object Util {
   @pure def cleanName(s: String): String = s.toString.replaceAll("::", ".")
 
   @pure def getTypeName(s: String): String = cleanName(s)
-
-  /*
-  @pure def getPort(f: Feature): Port = {
-    val id = Util.getLastName(f.identifier)
-    val ptype: String = Util.getPortType(f)
-    val urgency: Z = Util.getDiscreetPropertyValue[UnitProp](f.properties, Util.Prop_Urgency) match {
-      case Some(v) => v.value.toString.toDouble.toInt
-      case _ => 0
-    }
-    Port(id, ptype, f, urgency)
-  }
-  */
 
   @pure def getFeatureType(p: Feature): String = {
     return p.classifier match {
@@ -144,7 +133,6 @@ object Util {
   }
 
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: File): Unit = {
-    println(outputDir)
     ISZ("ArchitectureDescription", "Art", "ArtDebug", "ArtDebug_Ext", "ArtNative", "ArtNative_Ext",
       "ArtTimer", "ArtTimer_Ext", "DataContent").foreach { filename =>
 
@@ -162,6 +150,18 @@ object Util {
       is.close()
       Util.writeFile(new File(outputDir, s"art/$filename.scala"), st"""${out.toString()}""", true)
     }
+  }
+
+  @pure def getIpc(ipcmech: Ipcmech.Type , packageName: String): ST = {
+    val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
+    val r = ipcmech match {
+      case Ipcmech.Shared_memory => "util/ipc_shared_memory.c"
+      case Ipcmech.Message_queue => "util/ipc_message_queue.c"
+    }
+    val is = getClass.getResourceAsStream(r)
+    val ret = scala.io.Source.fromInputStream(is).getLines().mkString("\n").replaceAll(PACKAGE_PLACEHOLDER, packageName.toString)
+    is.close()
+    st"""${ret}"""
   }
 }
 
@@ -198,6 +198,7 @@ case class Port(feature: Feature, parent: Component){
   def parentPath: String = Util.getName(parent.identifier)
 
   def typeName: String = Util.getFeatureType(feature)
+  def typePayloadName: String = Util.getPortPayloadTypeName(feature)
 
   def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Urgency) match {
     case Some(v) => v.value.toString.toDouble.toInt

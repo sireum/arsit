@@ -141,6 +141,7 @@ class ArtStubGenerator {
     }
   }
 
+  // @formatter:off
   object Template {
     @pure def bridge(topLevelPackageName: String,
                      packageName : String,
@@ -438,19 +439,16 @@ class ArtStubGenerator {
     @pure def subprogram(methodName: String,
                          params: ISZ[String],
                          returnType : String): (ST, ST) = {
-      // @formatter:off
       return (st"""def ${methodName}(${(params, ",\n")}): ${returnType} = ${"$"}""",
               st"""def ${methodName}(${(params, ",\n")}): ${returnType} = {
                   |  ${if(returnType != org.sireum.String("")) s"return ${returnType}()" else ""}
                   |}""")
-      // @formatter:on
     }
 
     @pure def slangPreamble(inSlang: B,
                             packageName: String,
                             topLevelPackageName: String,
                             blocks: ISZ[ST]): ST = {
-      // @formatter:off
       return st"""${if(inSlang) { "// #Sireum\n\n"} else ""}package $packageName
                  |
                  |import org.sireum._
@@ -458,21 +456,20 @@ class ArtStubGenerator {
                  |
                  |${(blocks, "\n\n")}
                  |"""
-      // @formatter:on
     }
 
     @pure def slangBody(slangAnnotation: String,
                         objectName: String,
                         body: ISZ[ST]) : ST = {
-      // @formatter:off
       return st"""${slangAnnotation}object ${objectName} {
                  |
                  |  ${(body, "\n\n")}
                  |}"""
-      // @formatter:on
     }
   }
+  // @formatter:on
 }
+
 
 object ArtStubGenerator {
   def apply(dir: File, m: Aadl, packageName: String, o: ArsitOption) = new ArtStubGenerator().generator(dir, m, packageName, o)
