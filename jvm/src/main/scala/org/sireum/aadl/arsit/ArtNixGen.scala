@@ -15,7 +15,7 @@ class ArtNixGen {
 
   var arsitOptions: ArsitOption = _
 
-  var topLevelPackageName: String = _
+  var basePackageName: String = _
 
   val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
@@ -27,7 +27,7 @@ class ArtNixGen {
   }
 
   def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z, o: ArsitOption): Z = {
-    topLevelPackageName = Util.sanitizeName(topPackageName)
+    basePackageName = Util.sanitizeName(topPackageName)
     this.projOutputDir = outputDir // where the slang-embedded code was generated
 
     binOutputDir = new File(projOutputDir, "../../bin")
@@ -59,7 +59,6 @@ class ArtNixGen {
     var platformPorts: ISZ[ST] = ISZ()
     var platformPayloads: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
-   // var inPorts: ISZ[String] = ISZ()
     var inPorts: ISZ[Port] = ISZ()
     var aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
@@ -82,7 +81,7 @@ class ArtNixGen {
         }
       }
 
-      val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
+      val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackageName)
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
       val AEP_Id: String = s"${name.component}_AEP"
@@ -147,14 +146,14 @@ class ArtNixGen {
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
       if(portOpts.nonEmpty && arsitOptions.ipc == Ipcmech.Message_queue) {
-        val stAep = Template.aep(topLevelPackageName, AEP_Id, portOpts,
+        val stAep = Template.aep(basePackageName, AEP_Id, portOpts,
           portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
+        Util.writeFile(new File(nixOutputDir, s"${basePackageName}/${AEP_Id}.scala"), stAep)
       }
 
-      val stApp = Template.app(topLevelPackageName, App_Id, App_Id,
+      val stApp = Template.app(basePackageName, App_Id, App_Id,
         AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, m, isPeriodic)
-      Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
+      Util.writeFile(new File(nixOutputDir, s"${basePackageName}/${App_Id}.scala"), stApp)
     }
 
     var artNixCases: ISZ[ST] = ISZ()
@@ -163,7 +162,7 @@ class ArtNixGen {
       val dstComp = componentMap(Util.getName(c.dst.component))
       val dstArchPortInstanceName =
         s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
-      val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, topLevelPackageName)
+      val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackageName)
 
       val srcComp = componentMap(Util.getName(c.src.component))
       val srcArchPortInstanceName =
@@ -182,29 +181,29 @@ class ArtNixGen {
     arsitOptions.ipc match {
       case Ipcmech.Message_queue =>
 
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue.scala"), Template.MessageQueue(topLevelPackageName))
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(topLevelPackageName))
+        Util.writeFile(new File(nixOutputDir, s"${basePackageName}/MessageQueue.scala"), Template.MessageQueue(basePackageName))
+        Util.writeFile(new File(nixOutputDir, s"${basePackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackageName))
 
       case Ipcmech.Shared_memory =>
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/SharedMemory.scala"), Template.SharedMemory(topLevelPackageName))
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(topLevelPackageName))
+        Util.writeFile(new File(nixOutputDir, s"${basePackageName}/SharedMemory.scala"), Template.SharedMemory(basePackageName))
+        Util.writeFile(new File(nixOutputDir, s"${basePackageName}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackageName))
     }
 
-    val stIPC = Template.ipc(topLevelPackageName, platformPorts, platformPayloads)
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/IPC.scala"), stIPC)
+    val stIPC = Template.ipc(basePackageName, platformPorts, platformPayloads)
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/IPC.scala"), stIPC)
 
-    val stArtNix = Template.artNix(topLevelPackageName, artNixCases,
+    val stArtNix = Template.artNix(basePackageName, artNixCases,
       inPorts.withFilter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/ArtNix.scala"), stArtNix)
 
-    val stMain = Template.main(topLevelPackageName, mainSends)
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Main.scala"), stMain)
+    val stMain = Template.main(basePackageName, mainSends)
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/Main.scala"), stMain)
 
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform.scala"), Template.platform(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform_Ext.scala"), Template.PlatformExt(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process_Ext.scala"), Template.ProcessExt(topLevelPackageName))
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/Platform.scala"), Template.platform(basePackageName))
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/Platform_Ext.scala"), Template.PlatformExt(basePackageName))
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/PlatformNix.scala"), Template.PlatformNix(basePackageName))
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/Process.scala"), Template.Process(basePackageName))
+    Util.writeFile(new File(nixOutputDir, s"${basePackageName}/Process_Ext.scala"), Template.ProcessExt(basePackageName))
 
     Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile("win"))
     Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile("linux"))
@@ -217,7 +216,7 @@ class ArtNixGen {
     Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
       (if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames))
 
-    Util.writeFile(new File(cOutputDir, s"ext/ipc.c"), Util.getIpc(arsitOptions.ipc, topLevelPackageName))
+    Util.writeFile(new File(cOutputDir, s"ext/ipc.c"), Util.getIpc(arsitOptions.ipc, basePackageName))
     Util.writeFile(new File(cOutputDir, s"ext/ext.c"), st"""// add c extension code here""", false)
 
     var outputPaths: ISZ[String] = ISZ(projOutputDir.getAbsolutePath)
@@ -226,8 +225,8 @@ class ArtNixGen {
 
     val tranpiler = Template.transpiler(
       outputPaths,
-      (((if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${topLevelPackageName}.${s}"),
-      ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"))
+      (((if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackageName}.${s}"),
+      ISZ(s"art.ArtNative=${basePackageName}.ArtNix", s"${basePackageName}.Platform=${basePackageName}.PlatformNix"))
     Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)
   }
 
@@ -555,6 +554,7 @@ class ArtNixGen {
                  |${aep}
                  |"""
     }
+
     @pure def artNix(packageName: String,
                      cases: ISZ[ST],
                      eventInPorts: ISZ[String]): ST = {

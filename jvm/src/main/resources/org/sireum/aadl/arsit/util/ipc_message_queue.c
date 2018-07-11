@@ -2,6 +2,8 @@
 #include <sys/msg.h>
 #include <unistd.h>
 
+// This file is auto-generated.  Do not edit
+
 struct Message {
   long mtype;
   union art_DataContent data;

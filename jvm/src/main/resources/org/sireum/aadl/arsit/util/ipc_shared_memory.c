@@ -4,6 +4,8 @@
 #include <sys/sem.h>
 #include <unistd.h>
 
+// This file is auto-generated.  Do not edit
+
 static inline void sem_op(int sid, short val) {
     struct sembuf sem_op;
     sem_op.sem_num = 0;
