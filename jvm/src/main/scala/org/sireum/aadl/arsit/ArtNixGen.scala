@@ -158,21 +158,26 @@ class ArtNixGen {
 
     var artNixCases: ISZ[ST] = ISZ()
     for(c <- connections) {
-      val dstPath = Util.getName(c.dst.feature)
       val dstComp = componentMap(Util.getName(c.dst.component))
-      val dstArchPortInstanceName =
-        s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
-      val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackageName)
-
       val srcComp = componentMap(Util.getName(c.src.component))
-      val srcArchPortInstanceName =
+
+      if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
+        val dstPath = Util.getName(c.dst.feature)
+        val dstArchPortInstanceName =
+          s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
+        val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackageName)
+
+        val srcArchPortInstanceName =
           s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature)}"
 
-      if(inPorts.map(_.path).elements.contains(dstPath) &&
-        (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
-        val dstComp = if(arsitOptions.ipc == Ipcmech.Shared_memory) s"${name.component}_App" else s"${name.component}_AEP"
-        artNixCases = artNixCases :+
-          Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstComp)
+        if (inPorts.map(_.path).elements.contains(dstPath) &&
+          (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
+          val dstComp = if (arsitOptions.ipc == Ipcmech.Shared_memory) s"${name.component}_App" else s"${name.component}_AEP"
+          artNixCases = artNixCases :+
+            Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstComp)
+        }
+      } else {
+        println(s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
       }
     }
 
