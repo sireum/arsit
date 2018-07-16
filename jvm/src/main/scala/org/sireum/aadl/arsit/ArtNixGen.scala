@@ -233,6 +233,10 @@ class ArtNixGen {
       (((if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackageName}.${s}"),
       ISZ(s"art.ArtNative=${basePackageName}.ArtNix", s"${basePackageName}.Platform=${basePackageName}.PlatformNix"))
     Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)
+
+    import scala.language.postfixOps
+    import sys.process._
+    s"chmod -R u+x $binOutputDir" !
   }
 
   object Template {
