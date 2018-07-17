@@ -94,7 +94,7 @@ class ArtNixGen {
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      for (port <- m.features if Util.isInPort(port)) {
+      for (port <- Util.getFeatureEnds(m.features) if Util.isInPort(port)) {
         val portName: String = Util.getLastName(port.identifier)
         val portIdName: String = portName + "PortId"
         val portOptName: String = portName + "Opt"

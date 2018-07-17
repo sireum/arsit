@@ -67,7 +67,7 @@ class ArtStubGenerator {
     val componentName = "component"
     var ports: ISZ[Port] = ISZ()
 
-    for(f <- m.features if Util.isPort(f)) {
+    for(f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
       ports :+= Port(f, m)
     }
 
