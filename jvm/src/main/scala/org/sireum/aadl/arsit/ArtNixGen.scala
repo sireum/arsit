@@ -99,9 +99,8 @@ class ArtNixGen {
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      for (port <- m.features if Util.isInFeature(port)) {
+      for (port <- Util.getFeatureEnds(m.features) if Util.isInFeature(port)) {
         assert (Util.isPort(port))
-
         val portName: String = Util.getLastName(port.identifier)
         val portIdName: String = portName + "PortId"
         val portOptName: String = portName + "Opt"
@@ -406,7 +405,7 @@ class ArtNixGen {
       val isSharedMemory = arsitOptions.ipc == Ipcmech.Shared_memory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
-      val inPorts = component.features.withFilter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component))
+      val inPorts = Util.getFeatureEnds(component.features).withFilter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component))
 
       val aepinit =
         if(!isSharedMemory && portIds.nonEmpty) {

@@ -57,14 +57,14 @@ object Util {
 
   @pure def getTypeName(s: String): String = cleanName(s)
 
-  @pure def getFeatureType(p: Feature): String = {
+  @pure def getFeatureType(p: FeatureEnd): String = {
     return p.classifier match {
       case Some(c) => cleanName(c.name) + (if (isEnum(p.properties)) ".Type" else "")
       case _ => EmptyType
     }
   }
 
-  @pure def getPortPayloadTypeName(p: Feature): String = {
+  @pure def getPortPayloadTypeName(p: FeatureEnd): String = {
     return p.classifier match {
       case Some(c) => cleanName(c.name) + "_Payload"
       case _ => EmptyType
@@ -73,7 +73,7 @@ object Util {
 
   val EmptyTypeNames = DataTypeNames("", "art", "EmptyType", false)
 
-  @pure def getDataTypeNames(f: Feature, topPackage: String): DataTypeNames = {
+  @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
     return f.classifier match {
       case Some(c) =>
         val a = c.name.toString.split("::")
@@ -88,19 +88,20 @@ object Util {
     value.toString.split("::").dropRight(1).mkString(".")
 
 
-  @pure def isPort(f: Feature): B = isEventPort(f) || isDataPort(f)
+  @pure def getFeatureEnds(is: ISZ[Feature]): ISZ[FeatureEnd] = is.withFilter(_.isInstanceOf[FeatureEnd]).map(_.asInstanceOf[FeatureEnd])
 
-  @pure def isEventPort(f: Feature): B =
+  @pure def isPort(f: FeatureEnd): B = isEventPort(f) || isDataPort(f)
+
+  @pure def isEventPort(f: FeatureEnd): B =
     f.category == FeatureCategory.EventDataPort || f.category == FeatureCategory.EventPort
 
-  @pure def isEventDataPort(f: Feature): B = f.category == FeatureCategory.EventDataPort
+  @pure def isEventDataPort(f: FeatureEnd): B = f.category == FeatureCategory.EventDataPort
 
-  @pure def isDataPort(f: Feature): B = f.category == FeatureCategory.DataPort
+  @pure def isDataPort(f: FeatureEnd): B = f.category == FeatureCategory.DataPort
 
+  @pure def isInFeature(f: FeatureEnd): B = f.direction == Direction.In
 
-  @pure def isInFeature(f: Feature): B = f.direction == Direction.In
-
-  @pure def isOutFeature(f: Feature): B = f.direction == Direction.Out
+  @pure def isOutFeature(f: FeatureEnd): B = f.direction == Direction.Out
 
   @pure def isThread(c: Component): B = c.category == ComponentCategory.Thread
 
@@ -135,7 +136,6 @@ object Util {
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: File): Unit = {
     ISZ("ArchitectureDescription", "Art", "ArtDebug", "ArtDebug_Ext", "ArtNative", "ArtNative_Ext",
       "ArtTimer", "ArtTimer_Ext", "DataContent").foreach { filename =>
-
       val is = getClass.getResourceAsStream(s"art/src/main/scala/art/$filename.scala")
       val out = new StringBuilder()
       for (l <- scala.io.Source.fromInputStream(is).getLines()) {
@@ -190,7 +190,7 @@ case class DataTypeNames(topPackage: String,
   def getFullyQualifiedPayloadName(): String = s"$packageName.${typeName}_Payload"
 }
 
-case class Port(feature: Feature, parent: Component){
+case class Port(feature: FeatureEnd, parent: Component){
   def name: String = Util.getLastName(feature.identifier)
   def path: String = Util.getName(feature.identifier)
 

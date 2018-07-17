@@ -75,7 +75,7 @@ class ArtStubGenerator {
     val componentName = "component"
     var ports: ISZ[Port] = ISZ()
 
-    for(f <- m.features if Util.isPort(f)) {
+    for(f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
       ports :+= Port(f, m)
     }
 
@@ -108,12 +108,12 @@ class ArtStubGenerator {
   def genSubprograms(m: Component) : Option[ST] = {
     val subprograms: ISZ[(ST, ST)] = m.subComponents.withFilter(p => p.category == ComponentCategory.Subprogram).map(p => {
       // only expecting in or out parameters
-      p.features.elements.forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut)
+      Util.getFeatureEnds(p.features).elements.forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut)
 
       val methodName = Util.getLastName(p.identifier)
-      val params: ISZ[String] = p.features.withFilter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
+      val params: ISZ[String] = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
         .map(param => s"${Util.getLastName(param.identifier)} : ${Util.getFeatureType(param)}")
-      val rets = p.features.withFilter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
+      val rets = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
       assert(rets.size == 1)
       val returnType = Util.getFeatureType(rets(0))
 

@@ -155,7 +155,7 @@ class ArtArchitectureGen {
     }
 
     var ports: ISZ[ST] = ISZ()
-    for (f <- m.features if Util.isPort(f))
+    for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f))
       ports :+= genPort(f)
 
     val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
@@ -163,7 +163,7 @@ class ArtArchitectureGen {
     return Template.bridge(varName, bridgeTypeName, id, dispatchProtocol, ports)
   }
 
-  def genPort(p:Feature) : ST = {
+  def genPort(p:FeatureEnd) : ST = {
     val name = Util.getLastName(p.identifier)
     val typ: String = Util.getFeatureType(p)
 
@@ -190,7 +190,7 @@ class ArtArchitectureGen {
   }
 
   var seenTypes: ISZ[String] = ISZ()
-  def addTypeSkeleton(feature: Feature): Unit = {
+  def addTypeSkeleton(feature: FeatureEnd): Unit = {
     val tname = Util.getDataTypeNames(feature, topLevelPackageName)
     if((Util.isDataPort(feature) || Util.isEventDataPort(feature)) && seenTypes.withFilter(_ == tname.getFullyQualifiedTypeName()).isEmpty) {
       seenTypes :+= tname.getFullyQualifiedTypeName()
