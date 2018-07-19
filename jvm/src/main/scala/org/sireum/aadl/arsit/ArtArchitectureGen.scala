@@ -23,11 +23,11 @@ class ArtArchitectureGen {
 
   val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
-  var topLevelPackageName: String = _
+  var basePackage: String = _
 
   def generator(dir: File, m: Aadl, topPackageName: String, o: ArsitOption) : (Z, Z) = {
     assert(dir.exists)
-    topLevelPackageName = Util.sanitizeName(topPackageName)
+    basePackage = Util.sanitizeName(topPackageName)
     outDir = dir
 
     gen(m)
@@ -52,7 +52,7 @@ class ArtArchitectureGen {
     val architectureDescriptionName = "ad"
 
     val arch = Template.architectureDescription(
-      topLevelPackageName,
+      basePackage,
       architectureName,
       architectureDescriptionName,
       bridges,
@@ -60,10 +60,10 @@ class ArtArchitectureGen {
       connections
     )
 
-    Util.writeFile(new File(outDir, s"$topLevelPackageName/Arch.scala"), arch)
+    Util.writeFile(new File(outDir, s"$basePackage/Arch.scala"), arch)
 
-    val demo = Template.demo(topLevelPackageName, architectureName, architectureDescriptionName)
-    Util.writeFile(new File(outDir, s"$topLevelPackageName/Demo.scala"), demo)
+    val demo = Template.demo(basePackage, architectureName, architectureDescriptionName)
+    Util.writeFile(new File(outDir, s"$basePackage/Demo.scala"), demo)
   }
 
   def getComponentId(component: Component): Z = {
@@ -135,7 +135,7 @@ class ArtArchitectureGen {
     assert(m.connections.isEmpty)
     //assert(m.subComponents.isEmpty)
 
-    val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
+    val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
 
     val id = getComponentId(m)
 
@@ -156,46 +156,43 @@ class ArtArchitectureGen {
 
     var ports: ISZ[ST] = ISZ()
     for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f))
-      ports :+= genPort(f)
+      ports :+= genPort(Port(f, m, basePackage))
 
     val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
 
     return Template.bridge(varName, bridgeTypeName, id, dispatchProtocol, ports)
   }
 
-  def genPort(p:FeatureEnd) : ST = {
-    val name = Util.getLastName(p.identifier)
-    val typ: String = Util.getFeatureType(p)
-
+  def genPort(port: Port) : ST = {
     val id = getPortId()
-    val identifier = s"${Util.getName(p.identifier)}"
 
     import FeatureCategory._
-    val prefix = p.category match {
+    val prefix = port.feature.category match {
       case EventPort | EventDataPort => "Event"
       case DataPort => "Data"
-      case _ => throw new RuntimeException("Not handling " + p.category)
+      case _ => throw new RuntimeException("Not handling " + port.feature.category)
     }
 
     import Direction._
-    val mode = prefix + (p.direction match {
+    val mode = prefix + (port.feature.direction match {
       case In => "In"
       case Out => "Out"
       case _ => "???"
     })
 
-    addTypeSkeleton(p)
+    addTypeSkeleton(port)
 
-    return Template.port(name, typ, id, identifier, mode)
+    return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode)
   }
 
   var seenTypes: ISZ[String] = ISZ()
-  def addTypeSkeleton(feature: FeatureEnd): Unit = {
-    val tname = Util.getDataTypeNames(feature, topLevelPackageName)
-    if((Util.isDataPort(feature) || Util.isEventDataPort(feature)) && seenTypes.withFilter(_ == tname.getFullyQualifiedTypeName()).isEmpty) {
-      seenTypes :+= tname.getFullyQualifiedTypeName()
-      val ts = Template.typeSkeleton(topLevelPackageName, tname.getFullyQualifiedPackageName(), tname.getTypeName(), tname.getPayloadName(), tname.isEnum)
-      Util.writeFile(new File(outDir, "../data/" + tname.getFilePath().toString), ts, false)
+  def addTypeSkeleton(port: Port): Unit = {
+    if((Util.isDataPort(port.feature) || Util.isEventDataPort(port.feature)) &&
+      seenTypes.withFilter(_ == port.portType.qualifiedTypeName).isEmpty) {
+      seenTypes :+= port.portType.qualifiedTypeName
+      val ts = Template.typeSkeleton(basePackage, port.portType.qualifiedPackageName,
+        port.portType.typeName, port.portType.payloadName, port.portType.isEnum)
+      Util.writeFile(new File(outDir, "../data/" + port.portType.filePath.toString), ts, false)
     }
   }
 
@@ -262,7 +259,7 @@ class ArtArchitectureGen {
                    architectureName: String,
                    architectureDescriptionName: String) : ST = {
       return st"""${Util.doNotEditComment()}
-                 |package $topLevelPackageName
+                 |package $packageName
                  |
                  |object Demo extends App {
                  |  art.Art.run(${architectureName}.${architectureDescriptionName})

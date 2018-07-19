@@ -13,14 +13,14 @@ class ArtStubGenerator {
 
   var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
-  var topLevelPackage: String = _
+  var basePackage: String = _
   var arsitOptions : ArsitOption = _
 
   def generator(dir: File, m: Aadl, packageName: String, o: ArsitOption) : Unit = {
     assert(dir.exists)
 
     outDir = dir
-    topLevelPackage = Util.sanitizeName(packageName)
+    basePackage = Util.sanitizeName(packageName)
     arsitOptions = o
 
     for(c <- m.components)
@@ -71,12 +71,12 @@ class ArtStubGenerator {
   def genThread(m: Component) : Unit = {
     assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
-    val names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackage)
+    val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
     val componentName = "component"
     var ports: ISZ[Port] = ISZ()
 
     for(f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
-      ports :+= Port(f, m)
+      ports :+= Port(f, m, basePackage)
     }
 
     val dispatchProtocol: String = {
@@ -88,16 +88,16 @@ class ArtStubGenerator {
       }
     }
 
-    val b = Template.bridge(topLevelPackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
+    val b = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
     Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b)
 
     if(!arsitOptions.bless) {
-      val c = Template.componentTrait(topLevelPackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
+      val c = Template.componentTrait(basePackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
       Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
     }
 
     val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl)
-    val ci = Template.slangPreamble(T, names.packageName, topLevelPackage,
+    val ci = Template.slangPreamble(T, names.packageName, basePackage,
       genSubprograms(m) match {
         case Some(x) => ISZ(block, x)
         case _ => ISZ(block)
@@ -112,26 +112,26 @@ class ArtStubGenerator {
 
       val methodName = Util.getLastName(p.identifier)
       val params: ISZ[String] = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
-        .map(param => s"${Util.getLastName(param.identifier)} : ${Util.getFeatureType(param)}")
+        .map(param => s"${Util.getLastName(param.identifier)} : ${Util.getDataTypeNames(param, basePackage).referencedTypeName}")
       val rets = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
       assert(rets.size == 1)
-      val returnType = Util.getFeatureType(rets(0))
+      val returnType = Util.getDataTypeNames(rets(0), basePackage).referencedTypeName
 
       Template.subprogram(methodName, params, returnType)
     })
 
     if (subprograms.nonEmpty) {
-      val names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackage)
+      val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
       val objectName = s"${names.component}_subprograms"
 
       val body = Template.slangBody("@ext ", objectName, subprograms.map(_._1))
 
       if(!Util.isThread(m)) {
-        val a = Template.slangPreamble(T, topLevelPackage, names.packageName, ISZ(body))
+        val a = Template.slangPreamble(T, basePackage, names.packageName, ISZ(body))
         Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}.scala"), a)
       }
 
-      val b = Template.slangPreamble(F, topLevelPackage, names.packageName,
+      val b = Template.slangPreamble(F, basePackage, names.packageName,
         ISZ(Template.slangBody("", s"${objectName}_Ext", subprograms.map(_._2))))
       Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}_Ext.scala"), b, F)
 
@@ -166,7 +166,7 @@ class ArtStubGenerator {
                   |  val name: String,
                   |  val dispatchProtocol: DispatchPropertyProtocol,
                   |
-                  |  ${(ports.map(p => s"${p.name}: Port[${p.typeName}]"), ",\n")}
+                  |  ${(ports.map(p => s"${p.name}: Port[${p.portType.qualifiedReferencedTypeName}]"), ",\n")}
                   |  ) extends Bridge {
                   |
                   |  val ports : Bridge.Ports = Bridge.Ports(
@@ -346,7 +346,7 @@ class ArtStubGenerator {
     @pure def addId(s: String) : String = s + "_Id"
 
     @pure def putValue(p: Port) : ST =
-      return st"""Art.putValue(${addId(p.name)}, ${p.typeName.toString.replace(".Type", "")}${if(p.typeName == Util.EmptyType) "()" else "_Payload(value)"})"""
+      return st"""Art.putValue(${addId(p.name)}, ${p.portType.qualifiedPayloadName}${if(Util.isEmptyType(p.portType)) "()" else "(value)"})"""
 
     @pure def apiCall(componentName : String, portName: String): String =
       return s"${componentName}.${portName}Api(${portName}.id)"
@@ -356,10 +356,11 @@ class ArtStubGenerator {
     }
 
     @pure def getterApi(p: Port): ST = {
-      return st"""def get${p.name}() : Option[${p.typeName}] = {
-                 |  val value : Option[${p.typeName}] = Art.getValue(${addId(p.name)}) match {
-                 |    case Some(${p.typeName.toString.replace(".Type", "")}${if (p.typeName == Util.EmptyType) "()) => Some(art.Empty())" else "_Payload(v)) => Some(v)"}
-                 |    case _ => None[${p.typeName}]()
+      val typeName = p.portType.qualifiedReferencedTypeName
+      return st"""def get${p.name}() : Option[${typeName}] = {
+                 |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
+                 |    case Some(${typeName.toString.replace(".Type", "")}${if (Util.isEmptyType(p.portType)) "()) => Some(art.Empty())" else "_Payload(v)) => Some(v)"}
+                 |    case _ => None[${typeName}]()
                  |  }
                  |  return value
                  |}"""
@@ -369,7 +370,7 @@ class ArtStubGenerator {
       if(Util.isInFeature(p.feature)) {
         return getterApi(p)
       } else {
-        return st"""def send${p.name}(${if (p.typeName == Util.EmptyType) "" else s"value : ${p.typeName}"}) : Unit = {
+        return st"""def send${p.name}(${if (Util.isEmptyType(p.portType)) "" else s"value : ${p.portType.qualifiedReferencedTypeName}"}) : Unit = {
                    |  ${putValue(p)}
                    |}"""
         }
@@ -379,7 +380,7 @@ class ArtStubGenerator {
       if(Util.isInFeature(p.feature)) {
         return getterApi(p)
       } else {
-        return st"""def set${p.name}(value : ${p.typeName}) : Unit = {
+        return st"""def set${p.name}(value : ${p.portType.qualifiedReferencedTypeName}) : Unit = {
                    |  ${putValue(p)}
                    |}"""
       }
@@ -389,7 +390,7 @@ class ArtStubGenerator {
       v.feature.category match {
         case FeatureCategory.EventDataPort =>
           return st"""${if(!first) "else " else ""}if(portId == ${addId(v.name)}){
-                     |  val Some(${v.typeName.toString.replace(".Type", "")}_Payload(value)) = Art.getValue(${addId(v.name)})
+                     |  val Some(${v.portType.qualifiedPayloadName}(value)) = Art.getValue(${addId(v.name)})
                      |  ${cname}.handle${v.name}(value)
                      |}"""
         case FeatureCategory.EventPort =>
@@ -403,7 +404,7 @@ class ArtStubGenerator {
     @pure def portCaseMethod(v: Port) : ST = {
       v.feature.category match {
         case FeatureCategory.EventDataPort =>
-          return st"""def handle${v.name}(value : ${v.typeName}): Unit = {
+          return st"""def handle${v.name}(value : ${v.portType.qualifiedReferencedTypeName}): Unit = {
                      |  api.logInfo(s"received ${"${value}"}")
                      |  api.logInfo("default ${v.name} implementation")
                      |}"""
@@ -452,7 +453,7 @@ class ArtStubGenerator {
       return st"""${if(inSlang) { "// #Sireum\n\n"} else ""}package $packageName
                  |
                  |import org.sireum._
-                 |import ${topLevelPackage}._
+                 |import ${basePackage}._
                  |
                  |${(blocks, "\n\n")}
                  |"""

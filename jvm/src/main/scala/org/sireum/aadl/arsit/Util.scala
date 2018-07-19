@@ -13,7 +13,9 @@ object Util {
   val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
   val Prop_Urgency: String = "Thread_Properties::Urgency"
 
-  val EmptyType: String = "art.Empty"
+  val EmptyTypeNames = DataTypeNames("", "art", "Empty", false)
+  def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
+  def isEmptyType(t : DataTypeNames) = t == EmptyTypeNames
 
   def getName(s: Name): String = s.name.elements.mkString("_")
 
@@ -44,41 +46,22 @@ object Util {
     return false
   }
 
-  @pure def sanitizeName(s: String): String = s.toString.replaceAll("\\-", "_")
+  // replace '-' and '.' with '_'
+  @pure def sanitizeName(s: String): String = s.toString.replaceAll("[\\-|\\.]", "_")
 
-  @pure def getNamesFromClassifier(c: Classifier, topPackage: String): Names = {
+  @pure def getNamesFromClassifier(c: Classifier, basePackage: String): Names = {
     val a: Array[scala.Predef.String] = c.name.toString.split("::")
     assert(a.length == 2)
-    val compName = a(1).replaceAll("\\.", "_")
-    Names(s"${topPackage}.${a(0)}", s"${topPackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
+    val compName = sanitizeName(a(1)) //a(1).replaceAll("\\.", "_")
+    Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
   }
-
-  @pure def cleanName(s: String): String = s.toString.replaceAll("::", ".")
-
-  @pure def getTypeName(s: String): String = cleanName(s)
-
-  @pure def getFeatureType(p: FeatureEnd): String = {
-    return p.classifier match {
-      case Some(c) => cleanName(c.name) + (if (isEnum(p.properties)) ".Type" else "")
-      case _ => EmptyType
-    }
-  }
-
-  @pure def getPortPayloadTypeName(p: FeatureEnd): String = {
-    return p.classifier match {
-      case Some(c) => cleanName(c.name) + "_Payload"
-      case _ => EmptyType
-    }
-  }
-
-  val EmptyTypeNames = DataTypeNames("", "art", "EmptyType", false)
 
   @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
     return f.classifier match {
       case Some(c) =>
         val a = c.name.toString.split("::")
         assert(a.size == 2)
-        DataTypeNames(topPackage, a(0), a(1), isEnum(f.properties))
+        DataTypeNames(topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
       case _ =>
         EmptyTypeNames
     }
@@ -171,34 +154,33 @@ case class Names(packageName : String,
                  component: String,
                  componentImpl: String)
 
-case class DataTypeNames(topPackage: String,
+case class DataTypeNames(basePackage: String,
                          packageName: String,
                          typeName: String,
                          isEnum: B) {
 
-  def getFilePath(): String = s"$topPackage/$packageName/$typeName.scala"
+  def filePath: String = s"$basePackage/$packageName/$typeName.scala"
 
-  def getFullyQualifiedPackageName(): String = s"$topPackage.$packageName"
+  def qualifiedPackageName: String = s"$basePackage.$packageName"
 
-  def getTypeName(): String = typeName
-  def getFullyQualifiedTypeName(): String = s"$packageName.$typeName"
+  def qualifiedTypeName: String = s"$packageName.$typeName"
 
-  def getReferencedTypeName(): String = getTypeName() + (if(isEnum) ".Type" else "")
-  def getFullyQualifiedReferencedTypeName(): String = s"${packageName}.${getReferencedTypeName()}"
+  def referencedTypeName: String = typeName + (if(isEnum) ".Type" else "")
+  def qualifiedReferencedTypeName: String = s"${packageName}.${referencedTypeName}"
 
-  def getPayloadName(): String = s"${typeName}_Payload"
-  def getFullyQualifiedPayloadName(): String = s"$packageName.${typeName}_Payload"
+  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"
+  def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
 }
 
-case class Port(feature: FeatureEnd, parent: Component){
+case class Port(feature: FeatureEnd, parent: Component, basePackageName: String){
+
   def name: String = Util.getLastName(feature.identifier)
   def path: String = Util.getName(feature.identifier)
 
   def parentName: String = Util.getLastName(parent.identifier)
   def parentPath: String = Util.getName(parent.identifier)
 
-  def typeName: String = Util.getFeatureType(feature)
-  def typePayloadName: String = Util.getPortPayloadTypeName(feature)
+  def portType: DataTypeNames = Util.getDataTypeNames(feature, basePackageName)
 
   def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Urgency) match {
     case Some(v) => v.value.toString.toDouble.toInt
