@@ -4,6 +4,7 @@ import java.io.File
 
 import org.sireum._
 import org.sireum.aadl.ir._
+import org.sireum.cli.Cli.{ArsitOption, Ipcmech}
 import org.sireum.util.MMap
 
 class ArtNixGen {
@@ -12,7 +13,9 @@ class ArtNixGen {
   var cOutputDir : File = _
   var binOutputDir: File = _
 
-  var topLevelPackageName: String = _
+  var arsitOptions: ArsitOption = _
+
+  var basePackage: String = _
 
   val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
 
@@ -23,15 +26,16 @@ class ArtNixGen {
     return r
   }
 
-  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z): Z = {
-    topLevelPackageName = Util.sanitizeName(topPackageName)
+  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z, o: ArsitOption): Z = {
+    basePackage = Util.sanitizeName(topPackageName)
     this.projOutputDir = outputDir // where the slang-embedded code was generated
 
     binOutputDir = new File(projOutputDir, "../../bin")
     cOutputDir = new File(projOutputDir, "../c")
     nixOutputDir = new File(projOutputDir, "nix")
-
     portId = nextPortId
+
+    arsitOptions = o
 
     gen(m)
 
@@ -55,7 +59,6 @@ class ArtNixGen {
     var platformPorts: ISZ[ST] = ISZ()
     var platformPayloads: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
-   // var inPorts: ISZ[String] = ISZ()
     var inPorts: ISZ[Port] = ISZ()
     var aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
@@ -78,7 +81,7 @@ class ArtNixGen {
         }
       }
 
-      val name: Names = Util.getNamesFromClassifier(m.classifier.get, topLevelPackageName)
+      val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
       val AEP_Id: String = s"${name.component}_AEP"
@@ -89,35 +92,42 @@ class ArtNixGen {
       var portDefs: ISZ[ST] = ISZ()
       var portOpts: ISZ[ST] = ISZ()
       var portIds: ISZ[ST] = ISZ()
+      var portIdOpts: ISZ[ST] = ISZ()
+
       var portOptResets: ISZ[ST] = ISZ()
       var aepPortCases: ISZ[ST] = ISZ()
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      for (port <- Util.getFeatureEnds(m.features) if Util.isInPort(port)) {
-        val portName: String = Util.getLastName(port.identifier)
-        val portIdName: String = portName + "PortId"
-        val portOptName: String = portName + "Opt"
-        val portType: String = Util.getPortType(port)
-        val portPayloadTypeName: String = Util.getPortPayloadTypeName(port)
-        val archPortInstanceName: String = s"${bridgeInstanceVarName}.${portName}"
+      for (p <- Util.getFeatureEnds(m.features) if Util.isInFeature(p)) {
+        assert (Util.isPort(p))
+        val port = Port(p, m, basePackage)
+        val portIdName: String = port.name + "PortId"
+        val portOptName: String = port.name + "Opt"
+        val portType: String = port.portType.qualifiedReferencedTypeName
+        val portPayloadTypeName: String = port.portType.qualifiedPayloadName
+        val archPortInstanceName: String = s"${bridgeInstanceVarName}.${port.name}"
 
         portDefs = portDefs :+ Template.portDef(portOptName, portType)
-        portOpts = portOpts :+ Template.portOpt(portOptName, portType)
-        portIds = portIds :+ Template.portId(portIdName, archPortInstanceName)
-        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(port))
+        portOpts = portOpts :+ Template.portOpt("", portOptName, portType, T)
+
+        portIds :+= Template.portId(portIdName, archPortInstanceName)
+        portIdOpts :+= Template.portOpt(portIdName, portOptName, "Art.PortId", F)
+
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
 
         appCases = appCases :+ Template.appCases(portOptName, portIdName, portPayloadTypeName)
 
-        inPorts :+= Port(port, m)
+        inPorts :+= port
       }
 
-      platformPorts = platformPorts :+
-        Template.platformPortDecl(AEP_Id, getPortId()) :+
-        Template.platformPortDecl(App_Id, getPortId())
+      platformPorts = platformPorts :+ Template.platformPortDecl(App_Id, getPortId())
+      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
+        platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
+      }
 
       if(portOpts.nonEmpty) {
         platformPayloads = platformPayloads :+
@@ -128,62 +138,76 @@ class ArtNixGen {
         aepNames = aepNames :+ AEP_Id
       appNames = appNames :+ App_Id
 
-      mainSends = mainSends :+
-        Template.mainSend(AEP_Id) :+
-        Template.mainSend(App_Id)
-
-      val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
-      if(portOpts.nonEmpty) {
-        val stAep = Template.aep(topLevelPackageName, AEP_Id, portOpts,
-          portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
-        Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${AEP_Id}.scala"), stAep)
+      mainSends :+= Template.mainSend(App_Id)
+      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
+        mainSends :+= Template.mainSend(AEP_Id)
       }
 
-      val stApp = Template.app(topLevelPackageName, App_Id, App_Id,
-        AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, isPeriodic)
-      Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/${App_Id}.scala"), stApp)
+      val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
+      if(portOpts.nonEmpty && arsitOptions.ipc == Ipcmech.MessageQueue) {
+        val stAep = Template.aep(basePackage, AEP_Id, portOpts,
+          portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
+        Util.writeFile(new File(nixOutputDir, s"${basePackage}/${AEP_Id}.scala"), stAep)
+      }
+
+      val stApp = Template.app(basePackage, App_Id, App_Id,
+        AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, m, isPeriodic)
+      Util.writeFile(new File(nixOutputDir, s"${basePackage}/${App_Id}.scala"), stApp)
     }
 
     var artNixCases: ISZ[ST] = ISZ()
     for(c <- connections) {
-      val dstPath = Util.getName(c.dst.feature)
       val dstComp = componentMap(Util.getName(c.dst.component))
-      val dstArchPortInstanceName =
-        s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
-      val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, topLevelPackageName)
-
       val srcComp = componentMap(Util.getName(c.src.component))
-      val srcArchPortInstanceName =
+
+      if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
+        val dstPath = Util.getName(c.dst.feature)
+        val dstArchPortInstanceName =
+          s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
+        val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackage)
+
+        val srcArchPortInstanceName =
           s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature)}"
 
-      if(inPorts.map(_.path).elements.contains(dstPath) &&
-        Util.isThreadOrDevice(srcComp) && Util.isThreadOrDevice((dstComp))) {
-        val dstCompAep = s"${name.component}_AEP"
-        artNixCases = artNixCases :+
-          Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstCompAep)
+        if (inPorts.map(_.path).elements.contains(dstPath) &&
+          (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
+          val dstComp = if (arsitOptions.ipc == Ipcmech.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
+          artNixCases = artNixCases :+
+            Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstComp)
+        }
+      } else {
+        println(s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
       }
     }
 
     platformPorts = platformPorts :+ Template.platformPortDecl("Main", getPortId())
 
-    val stAep = Template.aep(topLevelPackageName, platformPorts, platformPayloads)
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/AEP.scala"), stAep)
+    arsitOptions.ipc match {
+      case Ipcmech.MessageQueue =>
 
-    val stArtNix = Template.artNix(topLevelPackageName, artNixCases,
+        Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue.scala"), Template.MessageQueue(basePackage))
+        Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackage))
+
+      case Ipcmech.SharedMemory =>
+        Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory.scala"), Template.SharedMemory(basePackage))
+        Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackage))
+    }
+
+    val stIPC = Template.ipc(basePackage, platformPorts, platformPayloads)
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/IPC.scala"), stIPC)
+
+    val stArtNix = Template.artNix(basePackage, artNixCases,
       inPorts.withFilter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/ArtNix.scala"), stArtNix)
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/ArtNix.scala"), stArtNix)
 
-    val stMain = Template.main(topLevelPackageName, mainSends)
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Main.scala"), stMain)
+    val stMain = Template.main(basePackage, mainSends)
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Main.scala"), stMain)
 
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue.scala"), Template.MessageQueue(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/MessageQueue_Ext.scala"), Template.MessageQueueExt(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform.scala"), Template.platform(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Platform_Ext.scala"), Template.PlatformExt(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/PlatformNix.scala"), Template.PlatformNix(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process.scala"), Template.Process(topLevelPackageName))
-    Util.writeFile(new File(nixOutputDir, s"${topLevelPackageName}/Process_Ext.scala"), Template.ProcessExt(topLevelPackageName))
-
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Platform.scala"), Template.platform(basePackage))
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Platform_Ext.scala"), Template.PlatformExt(basePackage))
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/PlatformNix.scala"), Template.PlatformNix(basePackage))
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process.scala"), Template.Process(basePackage))
+    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process_Ext.scala"), Template.ProcessExt(basePackage))
 
     Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile("win"))
     Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile("linux"))
@@ -193,8 +217,10 @@ class ArtNixGen {
     Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, "linux"))
     Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, "mac"))
 
-    Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(aepNames, appNames))
+    Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
+      (if(arsitOptions.ipc == Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
 
+    Util.writeFile(new File(cOutputDir, s"ext/ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
     Util.writeFile(new File(cOutputDir, s"ext/ext.c"), st"""// add c extension code here""", false)
 
     var outputPaths: ISZ[String] = ISZ(projOutputDir.getAbsolutePath)
@@ -203,20 +229,31 @@ class ArtNixGen {
 
     val tranpiler = Template.transpiler(
       outputPaths,
-      ((aepNames ++ appNames) :+ "Main").map(s => s"${topLevelPackageName}.${s}"),
-      ISZ(s"art.ArtNative=${topLevelPackageName}.ArtNix", s"${topLevelPackageName}.Platform=${topLevelPackageName}.PlatformNix"))
-    Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler, false)
+      (((if(arsitOptions.ipc == Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
+      ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"))
+    Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)
+
+    import scala.language.postfixOps
+    import sys.process._
+    s"chmod -R u+x $binOutputDir" !
   }
 
   object Template {
-    @pure def portDef(portOptName: String,
+    // @formatter:off
+    @pure def portDef(portName: String,
                       portType: String): ST =
-      return st"""$portOptName: Option[$portType]"""
+      return st"""$portName: Option[$portType]"""
 
-    @pure def portOpt(portOptName: String,
-                      portType: String): ST =
-      return st"""var ${portDef(portOptName, portType)} = None[$portType]()"""
-
+    @pure def portOpt(portId: String,
+                      portIdOpt: String,
+                      portType: String,
+                      mutable: B): ST = {
+      if (mutable) {
+        return st"""var ${portDef(portIdOpt, portType)} = None[$portType]()"""
+      } else {
+        return st"""val ${portDef(portIdOpt, portType)} = Some(${portId})"""
+      }
+    }
     @pure def portId(portIdName: String,
                      archPortInstanceName: String): ST =
       return st"""val $portIdName = Arch.${archPortInstanceName}.id"""
@@ -230,7 +267,7 @@ class ArtNixGen {
                           payloadTypeName: String,
                           isData: B): ST =
       return st"""case `$portIdName` =>
-                 |  $portOptName = Some(d.asInstanceOf[$payloadTypeName]${if(payloadTypeName != Util.EmptyType) ".value" else ""})
+                 |  $portOptName = Some(d.asInstanceOf[$payloadTypeName]${if(!Util.isEmptyType(payloadTypeName)) ".value" else ""})
                  |  ${if(!isData) "eventArrived()" else ""}"""
 
     @pure def AEPPayload(AEPPayloadTypeName: String,
@@ -241,7 +278,7 @@ class ArtNixGen {
                        portId: String,
                        payloadName: String): ST =
       return st"""${portOptName} match {
-                 |  case Some(v) => ArtNix.updateData(${portId}, ${if(payloadName == Util.EmptyType) "v" else s"${payloadName}(v)"})
+                 |  case Some(v) => ArtNix.updateData(${portId}, ${if(Util.isEmptyType(payloadName)) "v" else s"${payloadName}(v)"})
                  |  case _ =>
                  |}"""
 
@@ -262,8 +299,10 @@ class ArtNixGen {
       return st"""r(Arch.$srcArchPortId.id) =
                  |  (IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"""
 
-    @pure def mainSend(portId: String): ST =
-      return st"""Platform.send(IPCPorts.${portId}, IPCPorts.Main, empty)"""
+    @pure def mainSend(portId: String): ST = {
+      val isSM = arsitOptions.ipc == Ipcmech.SharedMemory
+      return st"""Platform.send${if (isSM) "Async" else ""}(IPCPorts.${portId}, IPCPorts.${if(isSM) s"$portId" else "Main"}, empty)"""
+    }
 
     @pure def aep(packageName: String,
                   objectName: String,
@@ -354,13 +393,92 @@ class ArtNixGen {
                   objectName: String,
                   IPCPort_Id: String,
                   AEP_Id: String,
-                  period: ST,
+                  period: String,
                   bridge: String,
                   AEP_Payload: ST,
                   portIds: ISZ[ST],
                   cases: ISZ[ST],
+                  component: Component,
                   isPeriodic: B
                  ) : ST = {
+      // @formatter:off
+      val isSharedMemory = arsitOptions.ipc == Ipcmech.SharedMemory
+      def portId(p: Port) = s"${p.name}PortId"
+      def portIdOpt(p: Port) = s"${portId(p)}Opt"
+      val inPorts = Util.getFeatureEnds(component.features).withFilter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
+
+      val aepinit =
+        if(!isSharedMemory && portIds.nonEmpty) {
+          st"""val empty = art.Empty()
+              |val aepPortId = IPCPorts.${AEP_Id}
+              |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)""".render
+        } else ""
+
+      val portSection =
+        if(isSharedMemory) {
+          for(p <- inPorts) yield {
+            st"""val ${portId(p)} = Arch.${bridge}.${p.name}.id
+                |val ${portIdOpt(p)} = Some(${portId(p)})
+                |Platform.initialise(seed, ${portIdOpt(p)})"""
+          }
+        } else
+          portIds
+
+      // @formatter:off
+      val body = {
+        if(isSharedMemory) {
+          /********** SHARED MEMORY BODY **********/
+
+          val loopBody = {
+            if(isPeriodic)
+              st"""entryPoints.compute()
+                  |Process.sleep($period)"""
+            else {
+              val receiveOnInPorts =
+                for(p <- inPorts) yield {
+                  st"""Platform.receiveAsync(${portIdOpt(p)}) match {
+                      |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v); dispatch = T
+                      |  case _ =>
+                      |}"""
+                }
+              st"""var dispatch = F
+                  |${(receiveOnInPorts, "\n")}
+                  |if (dispatch) {
+                  |  entryPoints.compute()
+                  |  Process.sleep($period)
+                  |} else {
+                  |  Process.sleep(10)
+                  |}"""
+            }
+          }
+
+          st"""var terminated = F
+              |while (!terminated) {
+              |  val termOpt = Platform.receiveAsync(appPortIdOpt)
+              |  if (termOpt.isEmpty) {
+              |    ${loopBody}
+              |  } else {
+              |    terminated = T
+              |  }
+              |}
+              |exit()"""
+        } else {
+          /******* MESSAGE QUEUE BODY *********/
+          st"""while (true) {
+              |  ${if(isPeriodic) {
+                   s"Process.sleep($period)"
+                 } else ""}
+              |  ${if(portIds.nonEmpty) {
+                   st"""Platform.send(aepPortId, appPortId, empty)
+                       |val (_, d) = Platform.receive(aepPortIdOpt)
+                       |val ${AEP_Payload} = d
+                       |${(cases, "\n")}""".render
+                 } else ""}
+              |  entryPoints.compute()
+              |}"""
+        }
+      }
+
       return st"""// #Sireum
 
                  |package $packageName
@@ -381,51 +499,54 @@ class ArtNixGen {
                  |      1
                  |    }
                  |
-                 |    Platform.initialise(seed, Some(IPCPorts.${IPCPort_Id}))
-                 |    ${if(portIds.nonEmpty) {
-                          st"""
-                              |val empty = art.Empty()
-                              |val aepPortOpt: Option[Art.PortId] = Some(IPCPorts.${AEP_Id})""".render
-                      } else ""}
                  |    val entryPoints = Arch.${bridge}.entryPoints
+                 |    ${aepinit}
+                 |    val appPortId: Art.PortId = IPCPorts.${IPCPort_Id}
+                 |    val appPortIdOpt: Option[Art.PortId] = Some(appPortId)
+                 |    Platform.initialise(seed, appPortIdOpt)
                  |
-                 |    ${(portIds, "\n")}
-                 |
+                 |    ${(portSection, "\n\n")}
                  |    Art.run(Arch.ad)
                  |
                  |    entryPoints.initialise()
                  |
-                 |    Platform.receive(Some(IPCPorts.Main))
+                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"})
                  |
                  |    println("${objectName} starting ...")
                  |
-                 |    while (true) {
-                 |      ${if(isPeriodic) {
-                            st"""Process.sleep(${period})
-                                |ArtNix.timeDispatch()""".render
-                        } else ""}
-                 |      ${if(portIds.nonEmpty) {
-                            st"""Platform.send(IPCPorts.${AEP_Id}, IPCPorts.${IPCPort_Id}, empty)
-                                |val (_, d) = Platform.receive(aepPortOpt)
-                                |${if(!isPeriodic) "ArtNix.eventDispatch()" else ""}
-                                |val ${AEP_Payload} = d
-                                |${(cases, "\n")}""".render
-                         } else ""}
-                 |      entryPoints.compute()
-                 |    }
+                 |    ${if(isPeriodic) "ArtNix.timeDispatch()" else "ArtNix.eventDispatch()"}
+                 |
+                 |    ${body}
+                 |
                  |    return 0
                  |  }
                  |
-                 |  override def atExit(): Unit = {
+                 |  def exit(): Unit = {
                  |    Arch.${bridge}.entryPoints.finalise()
                  |    Platform.finalise()
                  |  }
+                 |
+                 |  override def atExit(): Unit = {
+                 |    exit()
+                 |  }
                  |}"""
+      // @formatter:on
     }
 
-    @pure def aep(packageName: String,
+    @pure def ipc(packageName: String,
                   ports: ISZ[ST],
                   payloads: ISZ[ST]): ST = {
+      val aep = if(arsitOptions.ipc == Ipcmech.MessageQueue)
+        st"""
+            |@enum object AEPState {
+            |  'Start
+            |  'EventArrived
+            |  'EventRequested
+            |}
+            |
+            |${(payloads, "\n\n")}"""
+        else st""""""
+
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -435,22 +556,17 @@ class ArtNixGen {
                  |
                  |${Util.doNotEditComment()}
                  |
-                 |@enum object AEPState {
-                 |  'Start
-                 |  'EventArrived
-                 |  'EventRequested
-                 |}
-                 |
                  |object IPCPorts {
                  |  ${(ports, "\n")}
                  |}
-                 |
-                 |${(payloads, "\n\n")}
+                 |${aep}
                  |"""
     }
+
     @pure def artNix(packageName: String,
                      cases: ISZ[ST],
                      eventInPorts: ISZ[String]): ST = {
+      val isSharedMemory = arsitOptions.ipc == Ipcmech.SharedMemory
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -525,7 +641,7 @@ class ArtNixGen {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
                  |          val (app, port) = connection(p)
-                 |          Platform.send(app, port, d)
+                 |          Platform.send${if(isSharedMemory)"Async" else ""}(app, port, d)
                  |        case _ =>
                  |      }
                  |    }
@@ -535,7 +651,7 @@ class ArtNixGen {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
                  |          val (app, port) = connection(p)
-                 |          Platform.send(app, port, d)
+                 |          Platform.send${if(isSharedMemory)"Async" else ""}(app, port, d)
                  |        case _ =>
                  |      }
                  |    }
@@ -610,13 +726,13 @@ class ArtNixGen {
                  |${Util.doNotEditComment()}
                  |
                  |@ext object MessageQueue {
-                 |  def create(msgid: Z): Z = ${"$"}
-                 |  def get(msgid: Z): Z = ${"$"}
-                 |  def send(msgid: Z, port: Art.PortId, d: DataContent): Unit = ${"$"}
-                 |  def receive(): (Art.PortId, DataContent) = ${"$"}
-                 |  def sendAsync(msgid: Z, port: Art.PortId, d: DataContent): B = ${"$"}
-                 |  def receiveAsync(): Option[(Art.PortId, DataContent)] = ${"$"}
-                 |  def remove(msgid: Z): Unit = ${"$"}
+                 |  def create(msgid: Z): Z = $$
+                 |  def get(msgid: Z): Z = $$
+                 |  def send(msgid: Z, port: Art.PortId, d: DataContent): Unit = $$
+                 |  def receive(): (Art.PortId, DataContent) = $$
+                 |  def sendAsync(msgid: Z, port: Art.PortId, d: DataContent): B = $$
+                 |  def receiveAsync(): Option[(Art.PortId, DataContent)] = $$
+                 |  def remove(msgid: Z): Unit = $$
                  |}
                  |"""
     }
@@ -641,6 +757,46 @@ class ArtNixGen {
                  |"""
     }
 
+    @pure def SharedMemory(packageName: String): ST = {
+      return st"""// #Sireum
+                 |
+                 |package $packageName
+                 |
+                 |import org.sireum._
+                 |import art._
+                 |
+                 |// This file was auto-generated.  Do not edit
+                 |
+                 |@ext object SharedMemory {
+                 |  def create(id: Z): Z = $$
+                 |  def get(id: Z): Z = $$
+                 |  def send(id: Z, port: Art.PortId, d: DataContent): Unit = $$
+                 |  def receive(port: Art.PortId): DataContent = $$
+                 |  def sendAsync(id: Z, port: Art.PortId, d: DataContent): B = $$
+                 |  def receiveAsync(port: Art.PortId): Option[DataContent] = $$
+                 |  def remove(id: Z): Unit = $$
+                 |}"""
+    }
+
+    @pure def SharedMemory_Ext(packageName: String): ST = {
+      return st"""package $packageName
+                 |
+                 |import org.sireum._
+                 |import art._
+                 |
+                 |// This file was auto-generated.  Do not edit
+                 |
+                 |object SharedMemory_Ext {
+                 |  def create(id: Z): Z = halt("stub")
+                 |  def get(id: Z): Z = halt("stub")
+                 |  def send(id: Z, port: Art.PortId, d: DataContent): Unit = halt("stub")
+                 |  def receive(port: Art.PortId): DataContent = halt("stub")
+                 |  def sendAsync(id: Z, port: Art.PortId, d: DataContent): B = halt("stub")
+                 |  def receiveAsync(port: Art.PortId): Option[DataContent] = halt("stub")
+                 |  def remove(id: Z): Unit = halt("stub")
+                 |}"""
+    }
+
     @pure def platform(packageName: String): ST = {
       return st"""// #Sireum
                  |
@@ -652,12 +808,12 @@ class ArtNixGen {
                  |${Util.doNotEditComment()}
                  |
                  |@ext object Platform {
-                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = ${"$"}
-                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = ${"$"}
-                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = ${"$"}
-                 |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = ${"$"}
-                 |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = ${"$"}
-                 |  def finalise(): Unit = ${"$"}
+                 |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = $$
+                 |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = $$
+                 |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = $$
+                 |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = $$
+                 |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = $$
+                 |  def finalise(): Unit = $$
                  |}
                  |"""
     }
@@ -682,6 +838,62 @@ class ArtNixGen {
     }
 
     @pure def PlatformNix(packageName: String): ST = {
+      val isSM: B = arsitOptions.ipc == Ipcmech.SharedMemory
+
+      val init =
+        if(isSM) st"""val id = seed + port
+                    |SharedMemory.create(id)
+                    |ids = ids :+ id"""
+        else  st"""val msgid = MessageQueue.create(seed + port)
+                  |msgidOpt = Some(msgid)"""
+
+      val receive =
+        if(isSM) st"""portOpt match {
+                     |  case Some(port) =>
+                     |    val d = SharedMemory.receive(seed + port)
+                     |    return (port, d)
+                     |  case _ => halt("Unsupported receive operation without port.")
+                     |}"""
+        else st"""val p = MessageQueue.receive()
+                 |portOpt match {
+                 |  case Some(port) => assert(p._1 == port)
+                 |  case _ =>
+                 |}
+                 |return p"""
+
+      val send =
+        if(isSM) "SharedMemory.send(port, seed + port, data)"
+        else "MessageQueue.send(seed + app, port, data)"
+
+      val sendAsync =
+        if(isSM) "SharedMemory.sendAsync(port, seed + port, data)"
+        else "MessageQueue.sendAsync(seed + app, port, data)"
+
+      val finalise =
+        if(isSM) st"""for (id <- ids) {
+                     |  SharedMemory.remove(id)
+                     |}"""
+        else st"""msgidOpt match {
+                  |  case Some(msgid) => MessageQueue.remove(msgid)
+                  |  case _ =>
+                  |}"""
+
+      val receiveAsync =
+        if(isSM) st"""portOpt match {
+                     |  case Some(port) =>
+                     |    val dOpt = SharedMemory.receiveAsync(seed + port)
+                     |    dOpt match {
+                     |      case Some(d) => return Some((port, d))
+                     |      case _ => return None()
+                     |    }
+                     |  case _ => halt("Unsupported receive operation without port.")
+                     |}"""
+        else st"""val pOpt = MessageQueue.receiveAsync()
+                  |(portOpt, pOpt) match {
+                  |  case (Some(port), Some((p, _))) => assert(p == port); return pOpt
+                  |  case _ => return None()
+                  |}"""
+
       return st"""// #Sireum
                  |package $packageName
                  |
@@ -693,49 +905,37 @@ class ArtNixGen {
                  |object PlatformNix {
                  |
                  |  var seed: Z = 0
-                 |  var msgidOpt: Option[Z] = None()
+                 |  ${if(isSM) "var ids: ISZ[Z] = ISZ()"
+                      else "var msgidOpt: Option[Z] = None()"}
                  |
                  |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = {
                  |    PlatformNix.seed = seed
                  |    portOpt match {
                  |      case Some(port) =>
-                 |        val msgid = MessageQueue.create(seed + port)
-                 |        msgidOpt = Some(msgid)
+                 |        $init
                  |      case _ =>
                  |    }
                  |  }
                  |
                  |  def receive(portOpt: Option[Art.PortId]): (Art.PortId, DataContent) = {
-                 |    val p = MessageQueue.receive()
-                 |    portOpt match {
-                 |      case Some(port) => assert(p._1 == port)
-                 |      case _ =>
-                 |    }
-                 |    return p
+                 |    ${receive}
                  |  }
                  |
                  |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = {
-                 |    MessageQueue.send(seed + app, port, data)
+                 |    ${send}
                  |  }
                  |
                  |  def sendAsync(app: Art.PortId, port: Art.PortId, data: DataContent): B = {
-                 |    val r = MessageQueue.sendAsync(seed + app, port, data)
+                 |    val r = ${sendAsync}
                  |    return r
                  |  }
                  |
                  |  def receiveAsync(portOpt: Option[Art.PortId]): Option[(Art.PortId, DataContent)] = {
-                 |    val pOpt = MessageQueue.receiveAsync()
-                 |    (portOpt, pOpt) match {
-                 |      case (Some(port), Some((p, _))) => assert(p == port); return pOpt
-                 |      case _ => return None()
-                 |    }
+                 |    ${receiveAsync}
                  |  }
                  |
                  |  def finalise(): Unit = {
-                 |    msgidOpt match {
-                 |      case Some(msgid) => MessageQueue.remove(msgid)
-                 |      case _ =>
-                 |    }
+                 |    ${finalise}
                  |  }
                  |}
                  |"""
@@ -750,7 +950,7 @@ class ArtNixGen {
                  |${Util.doNotEditComment()}
                  |
                  |@ext object Process {
-                 |  def sleep(n: Z): Unit = ${"$"}
+                 |  def sleep(n: Z): Unit = $$
                  |}
                  |"""
     }
@@ -771,22 +971,22 @@ class ArtNixGen {
       val mv = if(arch.toString == "win")
         "mv *.exe $SCRIPT_HOME/win/"
       else {
-        s"""mv *_App ${"$"}SCRIPT_HOME/$arch/
-           |mv *_AEP ${"$"}SCRIPT_HOME/$arch/
-           |mv Main ${"$"}SCRIPT_HOME/$arch/""".stripMargin
+        s"""mv *_App $$SCRIPT_HOME/$arch/
+           |${if(arsitOptions.ipc == Ipcmech.MessageQueue) s"mv *_AEP $$SCRIPT_HOME/$arch/" else ""}
+           |mv Main $$SCRIPT_HOME/$arch/""".stripMargin
       }
       st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
           |#
           |set -e
-          |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
-          |cd ${"$"}SCRIPT_HOME
+          |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |cd $$SCRIPT_HOME
           |mkdir -p $arch
-          |mkdir -p ${"$"}SCRIPT_HOME/../src/c/$arch
-          |cd ${"$"}SCRIPT_HOME/../src/c/$arch
+          |mkdir -p $$SCRIPT_HOME/../src/c/$arch
+          |cd $$SCRIPT_HOME/../src/c/$arch
           |cmake -DCMAKE_BUILD_TYPE=Release ..
-          |make ${"$"}MAKE_ARGS
+          |make $$MAKE_ARGS
           |$mv"""
     }
 
@@ -794,7 +994,7 @@ class ArtNixGen {
                   apps: ISZ[String],
                   arch: String): ST = {
       val ext = if(arch.toString == "win") ".exe" else ""
-      val staep = aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" )
+      val staep = if(arsitOptions.ipc == Ipcmech.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
         val prefix = arch.toString match {
           case "win" => "cygstart mintty /bin/bash"
@@ -807,31 +1007,44 @@ class ArtNixGen {
           |# This file is autogenerated.  Do not edit
           |#
           |set -e
-          |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
-          |cd ${"$"}SCRIPT_HOME
+          |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |cd $$SCRIPT_HOME
           |${(staep, "\n")}
           |${(stapp, "\n")}
           |read -p "Press enter to start ..."
           |$arch/Main$ext"""
     }
 
-    @pure def stop(aeps: ISZ[String],
-                   apps: ISZ[String]) : ST = {
-      val procs = aeps ++ apps
+    @pure def stop(apps: ISZ[String]) : ST = {
       st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
           |#
-          |APPS="${(procs, " ")}"
-          |for APP in ${"$"}{APPS}; do
-          |  pkill ${"$"}APP
-          |  pkill -9 ${"$"}APP
+          |APPS="${(apps, " ")}"
+          |for APP in $${APPS}; do
+          |  pkill $$APP
+          |  pkill -9 $$APP
           |done
           |ME=`whoami`
-          |IPCS_Q=`ipcs -q | egrep "[0-9a-f]+[0-9]+" | grep ${"$"}ME | cut -f2 -d" "`
-          |for id in ${"$"}IPCS_Q; do
-          |  ipcrm -q ${"$"}id;
+          |
+          |# message queue
+          |IPCS_Q=`ipcs -q | egrep "[0-9a-f]+[0-9]+" | grep $$ME | awk '{print $$2}'`
+          |for id in $$IPCS_Q; do
+          |  ipcrm -q $$id;
           |done
+          |
+          |# shared memory
+          |IPCS_Q=`ipcs -m | egrep "[0-9a-f]+[0-9]+" | grep $$ME | awk '{print $$2}'`
+          |for id in $$IPCS_Q; do
+          |  ipcrm -q $$id;
+          |done
+          |
+          |# semaphores
+          |IPCS_Q=`ipcs -s | egrep "[0-9a-f]+[0-9]+" | grep $$ME | awk '{print $$2}'`
+          |for id in $$IPCS_Q; do
+          |  ipcrm -q $$id;
+          |done
+          |
           |ipcs
           |"""
     }
@@ -841,25 +1054,25 @@ class ArtNixGen {
                 forwards: ISZ[String]): ST = {
       st"""#!/usr/bin/env bash
           |#
-          |# This file can be edited
+          |# This file is autogenerated.  Do not edit
           |#
           |set -e
-          |export SCRIPT_HOME=${"$"}( cd "${"$"}( dirname "${"$"}0" )" &> /dev/null && pwd )
-          |export PROJ_HOME=${"$"}SCRIPT_HOME/../src/main
-          |export OUTPUT_DIR=${"$"}SCRIPT_HOME/../src/c
-          |export EXT_FILE_HOME=${"$"}OUTPUT_DIR/ext/ext.c
+          |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |export PROJ_HOME=$$SCRIPT_HOME/../src/main
+          |export OUTPUT_DIR=$$SCRIPT_HOME/../src/c
+          |export EXTS=$$OUTPUT_DIR/ext/ext.c:$$OUTPUT_DIR/ext/ipc.c
           |
-          |if [ -n "${"$"}1" ]; then
-          |  TRANSPILER_JAR_HOME=${"$"}1
+          |if [ -n "$$1" ]; then
+          |  TRANSPILER_JAR_HOME=$$1
           |fi
           |
-          |if [ -z "${"$"}TRANSPILER_JAR_HOME" ]; then
+          |if [ -z "$$TRANSPILER_JAR_HOME" ]; then
           |  echo "Specify the location of the Sireum-Transpiler jar file"
           |  exit 1
           |fi
           |
-          |${"$"}TRANSPILER_JAR_HOME transpiler c \
-          |  --sourcepath ${"$"}PROJ_HOME \
+          |$$TRANSPILER_JAR_HOME transpiler c \
+          |  --sourcepath $$PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
           |  --verbose \
@@ -867,15 +1080,16 @@ class ArtNixGen {
           |  --string-size 256 \
           |  --sequence-size 16 \
           |  --sequence ISZ[org.sireumString]=2 \
-          |  --output-dir ${"$"}OUTPUT_DIR \
-          |  --exts ${"$"}EXT_FILE_HOME
+          |  --output-dir $$OUTPUT_DIR \
+          |  --exts $$EXTS
           |"""
     }
   }
+  // @formatter:on
 }
 
 object ArtNixGen{
-  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z) : Z =
-    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId)
+  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: ArsitOption) : Z =
+    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId, o)
 }
 
