@@ -138,8 +138,8 @@ object Util {
   @pure def getIpc(ipcmech: Ipcmech.Type , packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r = ipcmech match {
-      case Ipcmech.Shared_memory => "util/ipc_shared_memory.c"
-      case Ipcmech.Message_queue => "util/ipc_message_queue.c"
+      case Ipcmech.SharedMemory => "util/ipc_shared_memory.c"
+      case Ipcmech.MessageQueue => "util/ipc_message_queue.c"
     }
     val is = getClass.getResourceAsStream(r)
     val ret = scala.io.Source.fromInputStream(is).getLines().mkString("\n").replaceAll(PACKAGE_PLACEHOLDER, packageName.toString)

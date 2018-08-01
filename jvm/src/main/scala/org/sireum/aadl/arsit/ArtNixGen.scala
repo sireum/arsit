@@ -125,7 +125,7 @@ class ArtNixGen {
       }
 
       platformPorts = platformPorts :+ Template.platformPortDecl(App_Id, getPortId())
-      if(arsitOptions.ipc == Ipcmech.Message_queue) {
+      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
         platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
       }
 
@@ -139,12 +139,12 @@ class ArtNixGen {
       appNames = appNames :+ App_Id
 
       mainSends :+= Template.mainSend(App_Id)
-      if(arsitOptions.ipc == Ipcmech.Message_queue) {
+      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
         mainSends :+= Template.mainSend(AEP_Id)
       }
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
-      if(portOpts.nonEmpty && arsitOptions.ipc == Ipcmech.Message_queue) {
+      if(portOpts.nonEmpty && arsitOptions.ipc == Ipcmech.MessageQueue) {
         val stAep = Template.aep(basePackage, AEP_Id, portOpts,
           portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/${AEP_Id}.scala"), stAep)
@@ -171,7 +171,7 @@ class ArtNixGen {
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
-          val dstComp = if (arsitOptions.ipc == Ipcmech.Shared_memory) s"${name.component}_App" else s"${name.component}_AEP"
+          val dstComp = if (arsitOptions.ipc == Ipcmech.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
           artNixCases = artNixCases :+
             Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstComp)
         }
@@ -183,12 +183,12 @@ class ArtNixGen {
     platformPorts = platformPorts :+ Template.platformPortDecl("Main", getPortId())
 
     arsitOptions.ipc match {
-      case Ipcmech.Message_queue =>
+      case Ipcmech.MessageQueue =>
 
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue.scala"), Template.MessageQueue(basePackage))
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackage))
 
-      case Ipcmech.Shared_memory =>
+      case Ipcmech.SharedMemory =>
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory.scala"), Template.SharedMemory(basePackage))
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackage))
     }
@@ -218,7 +218,7 @@ class ArtNixGen {
     Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, "mac"))
 
     Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
-      (if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames))
+      (if(arsitOptions.ipc == Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
 
     Util.writeFile(new File(cOutputDir, s"ext/ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
     Util.writeFile(new File(cOutputDir, s"ext/ext.c"), st"""// add c extension code here""", false)
@@ -229,7 +229,7 @@ class ArtNixGen {
 
     val tranpiler = Template.transpiler(
       outputPaths,
-      (((if(arsitOptions.ipc == Ipcmech.Message_queue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
+      (((if(arsitOptions.ipc == Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
       ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"))
     Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)
 
@@ -300,7 +300,7 @@ class ArtNixGen {
                  |  (IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"""
 
     @pure def mainSend(portId: String): ST = {
-      val isSM = arsitOptions.ipc == Ipcmech.Shared_memory
+      val isSM = arsitOptions.ipc == Ipcmech.SharedMemory
       return st"""Platform.send${if (isSM) "Async" else ""}(IPCPorts.${portId}, IPCPorts.${if(isSM) s"$portId" else "Main"}, empty)"""
     }
 
@@ -402,7 +402,7 @@ class ArtNixGen {
                   isPeriodic: B
                  ) : ST = {
       // @formatter:off
-      val isSharedMemory = arsitOptions.ipc == Ipcmech.Shared_memory
+      val isSharedMemory = arsitOptions.ipc == Ipcmech.SharedMemory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
       val inPorts = Util.getFeatureEnds(component.features).withFilter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
@@ -536,7 +536,7 @@ class ArtNixGen {
     @pure def ipc(packageName: String,
                   ports: ISZ[ST],
                   payloads: ISZ[ST]): ST = {
-      val aep = if(arsitOptions.ipc == Ipcmech.Message_queue)
+      val aep = if(arsitOptions.ipc == Ipcmech.MessageQueue)
         st"""
             |@enum object AEPState {
             |  'Start
@@ -566,7 +566,7 @@ class ArtNixGen {
     @pure def artNix(packageName: String,
                      cases: ISZ[ST],
                      eventInPorts: ISZ[String]): ST = {
-      val isSharedMemory = arsitOptions.ipc == Ipcmech.Shared_memory
+      val isSharedMemory = arsitOptions.ipc == Ipcmech.SharedMemory
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -838,7 +838,7 @@ class ArtNixGen {
     }
 
     @pure def PlatformNix(packageName: String): ST = {
-      val isSM: B = arsitOptions.ipc == Ipcmech.Shared_memory
+      val isSM: B = arsitOptions.ipc == Ipcmech.SharedMemory
 
       val init =
         if(isSM) st"""val id = seed + port
@@ -972,7 +972,7 @@ class ArtNixGen {
         "mv *.exe $SCRIPT_HOME/win/"
       else {
         s"""mv *_App $$SCRIPT_HOME/$arch/
-           |${if(arsitOptions.ipc == Ipcmech.Message_queue) s"mv *_AEP $$SCRIPT_HOME/$arch/" else ""}
+           |${if(arsitOptions.ipc == Ipcmech.MessageQueue) s"mv *_AEP $$SCRIPT_HOME/$arch/" else ""}
            |mv Main $$SCRIPT_HOME/$arch/""".stripMargin
       }
       st"""#!/usr/bin/env bash
@@ -994,7 +994,7 @@ class ArtNixGen {
                   apps: ISZ[String],
                   arch: String): ST = {
       val ext = if(arch.toString == "win") ".exe" else ""
-      val staep = if(arsitOptions.ipc == Ipcmech.Message_queue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
+      val staep = if(arsitOptions.ipc == Ipcmech.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
         val prefix = arch.toString match {
           case "win" => "cygstart mintty /bin/bash"

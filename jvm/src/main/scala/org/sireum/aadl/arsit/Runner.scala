@@ -72,7 +72,7 @@ object Runner {
       return -1
     }
 
-    val basePackageName : String = if (o.packagename.nonEmpty) o.packagename.get else destDir.getName()
+    val basePackageName : String = if (o.packageName.nonEmpty) o.packageName.get else destDir.getName()
 
     val _destDir = new File(destDir, "src/main")
 
