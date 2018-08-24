@@ -108,8 +108,8 @@ class ArtArchitectureGen {
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
-        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
+        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature.get)}",
+        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature.get)}")
     }
   }
 
@@ -125,8 +125,8 @@ class ArtArchitectureGen {
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature)}",
-        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature)}")
+        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature.get)}",
+        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature.get)}")
     }
   }
 
@@ -217,11 +217,11 @@ class ArtArchitectureGen {
       return F
     }
 
-    if(seenConnections.contains(c.src.feature) && seenConnections(c.src.feature).contains(c.dst.feature)) {
-      println(s"Skipping: already handled connection: ${c.src.feature} to ${c.dst.feature}")
+    if(seenConnections.contains(c.src.feature.get) && seenConnections(c.src.feature.get).contains(c.dst.feature.get)) {
+      println(s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}")
       return F
     }
-    seenConnections.getOrElseUpdate(c.src.feature, org.sireum.util.mlistEmpty[Name]) += c.dst.feature
+    seenConnections.getOrElseUpdate(c.src.feature.get, org.sireum.util.mlistEmpty[Name]) += c.dst.feature.get
 
     return T
   }

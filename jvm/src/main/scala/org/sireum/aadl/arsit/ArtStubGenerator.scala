@@ -332,7 +332,7 @@ class ArtStubGenerator {
                           for (p <- ports if Util.isEventPort(p.feature) && Util.isInFeature(p.feature))
                             s += "\n" + Template.portCaseMethod(p).render + "\n"
                           s
-                        case "Periodic" => "\ndef timeTriggered() : Unit = {}"
+                        case "Periodic" => "\ndef timeTriggered() : Unit = {}\n"
                       }
                     }
                  |  def activate(): Unit = {}

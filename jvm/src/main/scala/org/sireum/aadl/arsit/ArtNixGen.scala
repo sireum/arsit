@@ -161,13 +161,13 @@ class ArtNixGen {
       val srcComp = componentMap(Util.getName(c.src.component))
 
       if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
-        val dstPath = Util.getName(c.dst.feature)
+        val dstPath = Util.getName(c.dst.feature.get)
         val dstArchPortInstanceName =
-          s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature)}"
+          s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature.get)}"
         val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackage)
 
         val srcArchPortInstanceName =
-          s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature)}"
+          s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature.get)}"
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
