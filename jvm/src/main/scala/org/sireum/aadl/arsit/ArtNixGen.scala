@@ -125,22 +125,15 @@ class ArtNixGen {
       }
 
       platformPorts = platformPorts :+ Template.platformPortDecl(App_Id, getPortId())
-      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
-        platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
-      }
-
-      if(portOpts.nonEmpty) {
-        platformPayloads = platformPayloads :+
-          Template.platformPayload(AEPPayloadTypeName, portDefs)
-      }
-
-      if(portOpts.nonEmpty)
-        aepNames = aepNames :+ AEP_Id
+      mainSends :+= Template.mainSend(App_Id)
       appNames = appNames :+ App_Id
 
-      mainSends :+= Template.mainSend(App_Id)
-      if(arsitOptions.ipc == Ipcmech.MessageQueue) {
+      if(arsitOptions.ipc == Ipcmech.MessageQueue && portOpts.nonEmpty) {
+        platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
+        platformPayloads :+= Template.platformPayload(AEPPayloadTypeName, portDefs)
+
         mainSends :+= Template.mainSend(AEP_Id)
+        aepNames = aepNames :+ AEP_Id
       }
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
