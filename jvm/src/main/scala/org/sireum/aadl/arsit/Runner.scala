@@ -31,7 +31,8 @@ object Runner {
       return -1
     }
 
-    val inputFile = path2fileOpt("input file", o.inputFile, F)
+    //val inputFile = path2fileOpt("input file", o.inputFile, F)
+    val inputFile = if(o.args.size != 1) None else path2fileOpt("input file", Some(o.args(0)), F)
     val input = if (inputFile.nonEmpty) {
       scala.io.Source.fromFile(inputFile.get).getLines.mkString
     } else {

@@ -29,12 +29,17 @@ object Util {
 
   @pure def getPeriod(m: Component): String = {
     return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Period) match {
-      case Some(x) =>
+      case Some(UnitProp(value, Some(org.sireum.String("ps")))) =>
+        val v = value.toString.toDouble / 1e9
+        s"${v.toLong}"
+        /*
         assert(x.unit.get == org.sireum.String("ps"))
         // convert picoseconds to milliseconds.  x.value was a double in osate
         // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
         val v = x.value.toString.toDouble / 1e9
         s"${v.toLong}"
+        */
+      case Some(UnitProp(value, Some(org.sireum.String("ms")))) => s"${value.toString.toInt}"
       case _ => "1"
     }
   }
