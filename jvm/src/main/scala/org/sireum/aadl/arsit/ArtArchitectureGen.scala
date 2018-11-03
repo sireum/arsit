@@ -36,17 +36,21 @@ class ArtArchitectureGen {
   }
 
   def gen(m: Aadl): Unit = {
+    val systems = m.components.withFilter(c => c.category == ComponentCategory.System)
+    assert(systems.size == 1)
+
+    m.components.withFilter(c => c.category != ComponentCategory.System).foreach(c => assert(c.category == ComponentCategory.Data))
+
     { // build the component map
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.getName(c.identifier)))
         componentMap += (Util.getName(c.identifier) → c)
         for (s <- c.subComponents) r(s)
       }
-      for (c <- m.components) r(c)
+      r(systems(0))
     }
 
-    for(c <- m.components)
-      gen(c)
+    gen(systems(0))
 
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
