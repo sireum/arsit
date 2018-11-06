@@ -126,7 +126,7 @@ object Util {
       "ArtTimer", "ArtTimer_Ext", "DataContent").foreach { filename =>
       val is = getClass.getResourceAsStream(s"art/src/main/scala/art/$filename.scala")
       val out = new StringBuilder()
-      for (l <- scala.io.Source.fromInputStream(is).getLines()) {
+      for (l <- scala.io.Source.fromInputStream(is)("UTF-8").getLines()) {
         out.append(
           if (l.contains("val maxComponents:")) {
             s"  val maxComponents: BridgeId = $maxComponent"
@@ -147,7 +147,7 @@ object Util {
       case Ipcmech.MessageQueue => "util/ipc_message_queue.c"
     }
     val is = getClass.getResourceAsStream(r)
-    val ret = scala.io.Source.fromInputStream(is).getLines().mkString("\n").replaceAll(PACKAGE_PLACEHOLDER, packageName.toString)
+    val ret = scala.io.Source.fromInputStream(is)("UTF-8").getLines().mkString("\n").replaceAll(PACKAGE_PLACEHOLDER, packageName.toString)
     is.close()
     st"""${ret}"""
   }
