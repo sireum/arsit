@@ -10,8 +10,8 @@ represented in [AIR](https://github.com/sireum/air).
 
     ```bash
     git clone --recursive -b master git@github.com:sireum/v3.git sireum-v3
-    git clone git@github.com:sireum/aadl-slang-schema.git sireum-v3/aadl/air
-    git clone git@github.com:santoslab/slang-embedded-translator.git sireum-v3/aadl/arsit 
+    git clone git@github.com:sireum/air.git sireum-v3/aadl/ir
+    git clone --recursive git@github.com:santoslab/arsit.git sireum-v3/aadl/arsit 
     ```
 2. Assemble the Sireum jar ``./sireum-v3/bin/sbt-launch.sh assembly``
 
