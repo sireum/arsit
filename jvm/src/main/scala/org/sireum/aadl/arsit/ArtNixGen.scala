@@ -429,8 +429,9 @@ class ArtNixGen {
             else {
               val receiveOnInPorts =
                 for(p <- inPorts) yield {
+                  val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
                   st"""Platform.receiveAsync(${portIdOpt(p)}) match {
-                      |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v); dispatch = T
+                      |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v); dispatch = ${dispatch}
                       |  case _ =>
                       |}"""
                 }
