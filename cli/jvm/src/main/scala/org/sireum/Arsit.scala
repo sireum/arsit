@@ -31,11 +31,16 @@ object Arsit extends scala.App {
 
   Cli(File.pathSeparatorChar).parseArsit(ISZ(args.toSeq.map(s => s: String):_ *), 0) match {
     case Some(o: Cli.ArsitOption) => arsit(o)
-    case Some(_: Cli.HelpOption) => 0
+    case Some(_: Cli.HelpOption) => 1
     case _ => -1
   }
 
   def arsit(o : Cli.ArsitOption): Int = {
+    o.args.size match {
+      case z"1" =>
+      case _ => println(o.help); return 0
+    }
+
     val ipc = o.ipc match {
       case Cli.Ipcmech.MessageQueue => org.sireum.aadl.arsit.Cli.Ipcmech.MessageQueue
       case Cli.Ipcmech.SharedMemory => org.sireum.aadl.arsit.Cli.Ipcmech.SharedMemory
