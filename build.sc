@@ -78,8 +78,23 @@ def regenCli() = T.command {
 
 def tipe() = T.command {
   val out = pwd/ 'bin / "sireum"
-  val paths = s"${pwd / 'arsit}:${pwd / 'air}"
+  val paths = s"${pwd / 'jvm}:${pwd / 'cli}:${pwd / 'air}"
   log(%%(out, 'slang, 'tipe, "-s", paths)(pwd))
+}
+
+def refreshResources() = T.command {
+  val libraryFile = Path(new java.io.File(pwd.toString, "jvm/src/main/scala/org/sireum/aadl/arsit/Library_Ext.scala").getCanonicalFile)
+
+  def touche(p: Path): Unit = {
+    val text = read ! p
+    if (text.charAt(text.length - 1) == '\n') {
+      write.over(p, text.trim)
+    } else {
+      write.over(p, text + '\n')
+    }
+  }
+
+  touche(libraryFile)
 }
 
 private def log(r: CommandResult)(implicit ctx: mill.util.Ctx.Log): Unit = {
