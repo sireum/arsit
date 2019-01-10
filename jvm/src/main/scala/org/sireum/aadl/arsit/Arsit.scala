@@ -3,23 +3,14 @@ package org.sireum.aadl.arsit
 import java.io.File
 
 import org.sireum.aadl.ir.{Aadl, JSON, MsgPack}
-import org.sireum.cli.Sireum.path2fileOpt
-import org.sireum.{B, F, T, Z, ISZ, Either, String, Some}
-import org.sireum.cli.Cli
+import org.sireum.{B, F, T, Z, ISZ, Either, String, Option, Some, None}
 
-object Runner {
+object Arsit {
 
-  // hint: execute something like "run --fakeopt" to print the help
-  def main (args: Array[scala.Predef.String]): Unit = {
-    val cli = Cli(_root_.java.io.File.pathSeparatorChar)
-    cli.parseArsit(ISZ(args.map(s => s: String): _*), Z(0)) match {
-      case Some(o: Cli.ArsitOption) => run(o)
-      case _ => println(cli.parseArsit(ISZ(), 0).get.asInstanceOf[Cli.ArsitOption].help)
-    }
-  }
+  def run(o: Cli.ArsitOption): Int = {
+    val outDir: String = if(o.outputDir.nonEmpty) o.outputDir.get else "."
 
-  def run(o: org.sireum.cli.Cli.ArsitOption): Int = {
-    val destDir: File = path2fileOpt("output directory", o.outputDir, F).get
+    val destDir: File = new File(outDir.native)
     if(!destDir.exists()) {
       if(!destDir.mkdirs()){
         println(s"Could not create directory ${destDir.getPath}")
@@ -31,15 +22,12 @@ object Runner {
       return -1
     }
 
-    //val inputFile = path2fileOpt("input file", o.inputFile, F)
-    val inputFile = if(o.args.size != 1) None else path2fileOpt("input file", Some(o.args(0)), F)
-    val input = if (inputFile.nonEmpty) {
+    val inputFile:Option[File] = if(o.args.size != 1) None[File] else Some(new File(o.args(0).native))
+    val input = if (inputFile.nonEmpty && inputFile.get.exists) {
       scala.io.Source.fromFile(inputFile.get).getLines.mkString
     } else {
-      println("Reading from stdin.  Enter Ctrl+d on a blank line to finish")
-      var s, l = ""
-      while ({ l = scala.io.StdIn.readLine; l != null }) s += l
-      s
+      println("Input file not found.  Expecting exactly 1")
+      return -1
     }
 
     if (o.json) {

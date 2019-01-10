@@ -5,7 +5,6 @@ import java.io.{BufferedWriter, File, FileWriter}
 import org.sireum._
 import org.sireum.aadl.ir._
 import org.sireum.ops._
-import org.sireum.cli.Cli.Ipcmech
 
 object Util {
   val Prop_DispatchProtocol: String = "Thread_Properties::Dispatch_Protocol"
@@ -122,34 +121,36 @@ object Util {
   }
 
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: File): Unit = {
-    ISZ("ArchitectureDescription", "Art", "ArtDebug", "ArtDebug_Ext", "ArtNative", "ArtNative_Ext",
-      "ArtTimer", "ArtTimer_Ext", "DataContent").foreach { filename =>
-      val is = getClass.getResourceAsStream(s"art/src/main/scala/art/$filename.scala")
-      val out = new StringBuilder()
-      for (l <- scala.io.Source.fromInputStream(is)("UTF-8").getLines()) {
-        out.append(
-          if (l.contains("val maxComponents:")) {
-            s"  val maxComponents: BridgeId = $maxComponent"
-          } else if (l.contains("val maxPorts:")) {
-            s"  val maxPorts: PortId = $maxPort"
-          } else
-            l).append("\n")
+    for((p, c) <- Library.getFiles if p.native.contains("art")) {
+      val _c = if(p.native.contains("Art.scala")) {
+        val out = new StringBuilder()
+        c.native.split("\n").map(s =>
+          out.append(
+            if(s.contains("val maxComponents")) {
+              s"  val maxComponents: BridgeId = $maxComponent"
+            } else if (s.contains("val maxPorts:")) {
+              s"  val maxPorts: PortId = $maxPort"
+            } else {
+              s
+            }).append("\n"))
+        out.toString()
+      } else {
+        c
       }
-      is.close()
-      Util.writeFile(new File(outputDir, s"art/$filename.scala"), st"""${out.toString()}""", true)
+      Util.writeFile(new File(outputDir, s"${p}"), st"""${_c}""", true)
     }
   }
 
-  @pure def getIpc(ipcmech: Ipcmech.Type , packageName: String): ST = {
+  @pure def getIpc(ipcmech: Cli.Ipcmech.Type , packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r = ipcmech match {
-      case Ipcmech.SharedMemory => "util/ipc_shared_memory.c"
-      case Ipcmech.MessageQueue => "util/ipc_message_queue.c"
+      case Cli.Ipcmech.SharedMemory => "ipc_shared_memory.c"
+      case Cli.Ipcmech.MessageQueue => "ipc_message_queue.c"
     }
-    val is = getClass.getResourceAsStream(r)
-    val ret = scala.io.Source.fromInputStream(is)("UTF-8").getLines().mkString("\n").replaceAll(PACKAGE_PLACEHOLDER, packageName.toString)
-    is.close()
-    st"""${ret}"""
+    val e = Library.getFiles.withFilter(p => p._1.native == r)
+    assert(e.size == 1)
+    val c = e(0)._2.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
+    st"""${c}"""
   }
 }
 

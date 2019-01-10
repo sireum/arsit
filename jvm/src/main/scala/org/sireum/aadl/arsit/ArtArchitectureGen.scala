@@ -4,9 +4,7 @@ import java.io.File
 
 import org.sireum._
 import org.sireum.aadl.ir._
-import org.sireum.cli.Cli.ArsitOption
-import org.sireum.util.MList
-import org.sireum.util.MMap
+import org.sireum.ops.ISZOps
 
 import scala.language.implicitConversions
 
@@ -19,13 +17,13 @@ class ArtArchitectureGen {
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
 
-  val seenConnections: MMap[Name, MList[Name]] = org.sireum.util.mmapEmpty
+  var seenConnections: HashMap[Name, ISZ[Name]] = HashMap.empty
 
-  val componentMap : MMap[String, Component] = org.sireum.util.mmapEmpty
+  var componentMap : HashMap[String, Component] = HashMap.empty
 
   var basePackage: String = _
 
-  def generator(dir: File, m: Aadl, topPackageName: String, o: ArsitOption) : (Z, Z) = {
+  def generator(dir: File, m: Aadl, topPackageName: String, o: Cli.ArsitOption) : (Z, Z) = {
     assert(dir.exists)
     basePackage = Util.sanitizeName(topPackageName)
     outDir = dir
@@ -213,19 +211,25 @@ class ArtArchitectureGen {
     }
 
     val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
-    val catSrc = componentMap(Util.getName(c.src.component)).category
-    val catDest = componentMap(Util.getName(c.dst.component)).category
+    val catSrc = componentMap.get(Util.getName(c.src.component)).get.category
+    val catDest = componentMap.get(Util.getName(c.dst.component)).get.category
 
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
       println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
       return F
     }
 
-    if(seenConnections.contains(c.src.feature.get) && seenConnections(c.src.feature.get).contains(c.dst.feature.get)) {
+    if(seenConnections.contains(c.src.feature.get) && ISZOps(seenConnections.get(c.src.feature.get).get).contains(c.dst.feature.get)) {
       println(s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}")
       return F
     }
-    seenConnections.getOrElseUpdate(c.src.feature.get, org.sireum.util.mlistEmpty[Name]) += c.dst.feature.get
+
+    val seq = if(!seenConnections.contains(c.src.feature.get)) {
+      ISZ(c.dst.feature.get)
+    } else {
+      seenConnections.get(c.src.feature.get).get :+ c.dst.feature.get
+    }
+    seenConnections = seenConnections + (c.src.feature.get ~> seq)
 
     return T
   }
@@ -331,5 +335,5 @@ class ArtArchitectureGen {
 }
 
 object ArtArchitectureGen {
-  def apply(dir: File, m: Aadl, topPackage: String, o: ArsitOption) = new ArtArchitectureGen().generator(dir, m, topPackage, o)
+  def apply(dir: File, m: Aadl, topPackage: String, o: Cli.ArsitOption) = new ArtArchitectureGen().generator(dir, m, topPackage, o)
 }

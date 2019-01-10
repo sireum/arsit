@@ -1,12 +1,8 @@
 package org.sireum.aadl.arsit
 
 import java.io.File
-
 import org.sireum._
 import org.sireum.aadl.ir._
-import org.sireum.cli.Cli.ArsitOption
-import org.sireum.ops.ISZOps
-
 import scala.language.implicitConversions
 
 class ArtStubGenerator {
@@ -14,9 +10,9 @@ class ArtStubGenerator {
   var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
   var basePackage: String = _
-  var arsitOptions : ArsitOption = _
+  var arsitOptions : Cli.ArsitOption = _
 
-  def generator(dir: File, m: Aadl, packageName: String, o: ArsitOption) : Unit = {
+  def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
     assert(dir.exists)
 
     outDir = dir
@@ -473,5 +469,5 @@ class ArtStubGenerator {
 
 
 object ArtStubGenerator {
-  def apply(dir: File, m: Aadl, packageName: String, o: ArsitOption) = new ArtStubGenerator().generator(dir, m, packageName, o)
+  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) = new ArtStubGenerator().generator(dir, m, packageName, o)
 }
