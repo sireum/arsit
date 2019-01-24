@@ -31,7 +31,7 @@ trait Module extends JvmOnly {
 
   final override def crossDeps = Seq(arsitObject)
 
-  final override def ivyDeps = Agg(ivy"com.lihaoyi::ammonite-ops:$ammoniteOpsVersion")
+  final override def ivyDeps = Agg(ivy"com.lihaoyi::os-lib:$osLibVersion")
 
   final override def deps = Seq()
 

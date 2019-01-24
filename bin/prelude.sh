@@ -5,13 +5,14 @@ set -e
 BIN_DIR=${TOOL_HOME}/bin
 ZULU_VERSION=10.3+5-jdk10.0.2
 MILL_URL=http://files.sireum.org/mill-standalone # see https://github.com/sireum/mill-build
-MILL_SHA3=969783c528bf48cc7017e22af3095e54b9d7652c423270ef9e9b68bced789428
+MILL_SHA3=82549d532d9829b2aae29b10ea5bdf0bb92f106db3568ab5edd16fbc7f82e439
 MILL=${BIN_DIR}/mill
-LIB_URL=https://raw.githubusercontent.com/sireum/kekinian/0ee88fbc16e26a1cf7d7a81510206070fda208db/versions.properties
-LIB_SHA3=cb497ea8cb94a875d63aae7e465be26330f164d475d6ce7f7631f1c31ad10caa
+LIB_URL=https://raw.githubusercontent.com/sireum/kekinian/master/versions.properties
+LIB_SHA3=9ff4de90272023191c85b8c0cb04eab6f19e7de395096f8baeeb8b696b4cdee5
 LIB=${TOOL_HOME}/versions.properties
 SIREUM_URL=http://files.sireum.org/sireum # see https://github.com/sireum/kekinian
-SIREUM_SHA3=5c94d19d3fd3082f10018ca5e8f3681b17ee30219df3eceed55692324bc60c7d
+SIREUM_SHA3=032328751b66a03fe0fd201c8dbcf999825f32c822be3f8f77718574b871135b
+CURL="curl -c /dev/null -Lo"
 if [ -z "${PLATFORM}" ]; then
   if [ -n "$COMSPEC" -a -x "$COMSPEC" ]; then
     PLATFORM=win
@@ -56,7 +57,7 @@ if [ ! -d jdk ] || [ "${ZULU_UPDATE}" = "true" ]; then
       echo
     else
       echo "Downloading Zulu JDK ${ZULU_VERSION} ..."
-      curl -Lo ${ZULU} ${ZULU_URL}
+      ${CURL} ${ZULU} ${ZULU_URL}
       echo
       if [ ! -z ${SIREUM_CACHE} ]; then
         echo "Copying to ${SIREUM_CACHE}/${ZULU} ..."
@@ -82,12 +83,12 @@ if [ ! -d jdk ] || [ "${ZULU_UPDATE}" = "true" ]; then
 fi
 if [ ! -f ${SHA3} ]; then
   echo "Downloading sha3 ..."
-  curl -Lo ${SHA3} ${SHA3_URL}
+  ${CURL} ${SHA3} ${SHA3_URL}
   chmod +x ${SHA3}
 fi
 if [ ! -f ${MILL} ] || [ "$(${SHA3} 256 < ${MILL})" != ${MILL_SHA3} ]; then
   echo "Downloading mill ..."
-  curl -Lo ${MILL} ${MILL_URL}
+  ${CURL} ${MILL} ${MILL_URL}
   chmod +x ${MILL}
   MILL_SHA3_LOCAL="$(${SHA3} 256 < ${MILL})"
   if [ "$(${SHA3} 256 < ${MILL})" != ${MILL_SHA3} ]; then
@@ -96,7 +97,7 @@ if [ ! -f ${MILL} ] || [ "$(${SHA3} 256 < ${MILL})" != ${MILL_SHA3} ]; then
 fi
 if [ ! -f ${LIB} ] || [ "$(${SHA3} 256 < ${LIB})" != ${LIB_SHA3} ]; then
   echo "Downloading versions.properties ..."
-  curl -Lo ${LIB} ${LIB_URL}
+  ${CURL} ${LIB} ${LIB_URL}
   LIB_SHA3_LOCAL="$(${SHA3} 256 < ${LIB})"
   if [ ${LIB_SHA3_LOCAL} != ${LIB_SHA3} ]; then
     >&2 echo "Library dependency versions mismatch (${LIB_SHA3_LOCAL} != ${LIB_SHA3}); please notify TOOL maintainers."
@@ -104,7 +105,7 @@ if [ ! -f ${LIB} ] || [ "$(${SHA3} 256 < ${LIB})" != ${LIB_SHA3} ]; then
 fi
 if [ ! -f ${SIREUM} ] || [ "$(${SHA3} 256 < ${SIREUM})" != ${SIREUM_SHA3} ]; then
   echo "Downloading sireum ..."
-  curl -Lo ${SIREUM} ${SIREUM_URL}
+  ${CURL} ${SIREUM} ${SIREUM_URL}
   chmod +x ${SIREUM}
   SIREUM_SHA3_LOCAL="$(${SHA3} 256 < ${SIREUM})"
   if [ ${SIREUM_SHA3_LOCAL} != ${SIREUM_SHA3} ]; then
