@@ -11,6 +11,7 @@ class ArtStubGenerator {
   var toImpl : ISZ[(ST, ST)] = ISZ()
   var basePackage: String = _
   var arsitOptions : Cli.ArsitOption = _
+  var seenComponents : HashSet[String] = HashSet.empty
 
   def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
     assert(dir.exists)
@@ -68,6 +69,12 @@ class ArtStubGenerator {
     assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
 
     val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+    val filename = s"component/${names.packagePath}/${names.componentImpl}.scala"
+
+    if(seenComponents.contains(filename)) {
+      return
+    }
+
     val componentName = "component"
     var ports: ISZ[Port] = ISZ()
 
@@ -98,7 +105,10 @@ class ArtStubGenerator {
         case Some(x) => ISZ(block, x)
         case _ => ISZ(block)
       })
-    Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.componentImpl}.scala"), ci, false)
+
+    Util.writeFile(new File(outDir, filename), ci, false)
+
+    seenComponents = seenComponents + filename
   }
 
   def genSubprograms(m: Component) : Option[ST] = {

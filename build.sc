@@ -57,10 +57,6 @@ object arsit extends Arsit.Module {
   final override def airObject = air
 
   final override def millSourcePath = super.millSourcePath / up
-
-  //final override def libraryObject = runtime.library
-
-  //final override def testObject = runtime.test
 }
 
 
