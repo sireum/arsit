@@ -34,10 +34,10 @@ class ArtArchitectureGen {
   }
 
   def gen(m: Aadl): Unit = {
-    val systems = m.components.withFilter(c => c.category == ComponentCategory.System)
+    val systems = m.components.filter(c => c.category == ComponentCategory.System)
     assert(systems.size == 1)
 
-    m.components.withFilter(c => c.category != ComponentCategory.System).foreach(c => assert(c.category == ComponentCategory.Data))
+    m.components.filter(c => c.category != ComponentCategory.System).foreach(c => assert(c.category == ComponentCategory.Data))
 
     { // build the component map
       def r(c: Component): Unit = {
@@ -190,7 +190,7 @@ class ArtArchitectureGen {
   var seenTypes: ISZ[String] = ISZ()
   def addTypeSkeleton(port: Port): Unit = {
     if((Util.isDataPort(port.feature) || Util.isEventDataPort(port.feature)) &&
-      seenTypes.withFilter(_ == port.portType.qualifiedTypeName).isEmpty) {
+      seenTypes.filter(_ == port.portType.qualifiedTypeName).isEmpty) {
       seenTypes :+= port.portType.qualifiedTypeName
       val ts = Template.typeSkeleton(basePackage, port.portType.qualifiedPackageName,
         port.portType.typeName, port.portType.payloadName, port.portType.isEnum)

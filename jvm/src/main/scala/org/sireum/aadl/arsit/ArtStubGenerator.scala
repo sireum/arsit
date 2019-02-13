@@ -112,14 +112,14 @@ class ArtStubGenerator {
   }
 
   def genSubprograms(m: Component) : Option[ST] = {
-    val subprograms: ISZ[(ST, ST)] = m.subComponents.withFilter(p => p.category == ComponentCategory.Subprogram).map(p => {
+    val subprograms: ISZ[(ST, ST)] = m.subComponents.filter(p => p.category == ComponentCategory.Subprogram).map(p => {
       // only expecting in or out parameters
       Util.getFeatureEnds(p.features).elements.forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut)
 
       val methodName = Util.getLastName(p.identifier)
-      val params: ISZ[String] = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
+      val params: ISZ[String] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
         .map(param => s"${Util.getLastName(param.identifier)} : ${Util.getDataTypeNames(param, basePackage).referencedTypeName}")
-      val rets = Util.getFeatureEnds(p.features).withFilter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
+      val rets = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
       assert(rets.size == 1)
       val returnType = Util.getDataTypeNames(rets(0), basePackage).referencedTypeName
 
@@ -179,16 +179,16 @@ class ArtStubGenerator {
                   |    all = ISZ(${(ports.map(_.name), ",\n")}),
                   |
                   |    dataIns = ISZ(${
-                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInFeature(v.feature)).map(_.name), ",\n")}),
+                         (ports.filter(v => Util.isDataPort(v.feature) && Util.isInFeature(v.feature)).map(_.name), ",\n")}),
                   |
                   |    dataOuts = ISZ(${
-                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutFeature(v.feature)).map(_.name), ",\n")}),
+                         (ports.filter(v => Util.isDataPort(v.feature) && Util.isOutFeature(v.feature)).map(_.name), ",\n")}),
                   |
                   |    eventIns = ISZ(${
-                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInFeature(v.feature)).map(_.name), ",\n")}),
+                         (ports.filter(v => Util.isEventPort(v.feature) && Util.isInFeature(v.feature)).map(_.name), ",\n")}),
                   |
                   |    eventOuts = ISZ(${
-                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(_.name), ",\n")})
+                         (ports.filter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(_.name), ",\n")})
                   |  )
                   |
                   |  val api : ${bridgeName}.Api =
@@ -213,9 +213,9 @@ class ArtStubGenerator {
                   |    id : Art.BridgeId,
                   |    ${(ports.map(p => s"${addId(p.name)} : Art.PortId"), ",\n")}) {
                   |
-                  |    ${(ports.withFilter(p => Util.isEventPort(p.feature)).map(p => Template.eventPortApi(p).render), "\n\n")}
+                  |    ${(ports.filter(p => Util.isEventPort(p.feature)).map(p => Template.eventPortApi(p).render), "\n\n")}
                   |
-                  |    ${(ports.withFilter(p => Util.isDataPort(p.feature)).map(p => Template.dataPortApi(p).render), "\n\n")}
+                  |    ${(ports.filter(p => Util.isDataPort(p.feature)).map(p => Template.dataPortApi(p).render), "\n\n")}
                   |
                   |    def logInfo(msg: String): Unit = {
                   |      Art.logInfo(id, msg)
@@ -238,16 +238,16 @@ class ArtStubGenerator {
                   |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
                   |
                   |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isInFeature(v.feature)).map(p => addId(p.name)), ",\n")})
+                         (ports.filter(v => Util.isDataPort(v.feature) && Util.isInFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val eventInPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isInFeature(v.feature)).map(p => addId(p.name)), ",\n")})
+                         (ports.filter(v => Util.isEventPort(v.feature) && Util.isInFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val dataOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ports.withFilter(v => Util.isDataPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
+                         (ports.filter(v => Util.isDataPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
-                         (ports.withFilter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
+                         (ports.filter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
                   |    def initialise(): Unit = {
                   |      ${componentName}.${if(arsitOptions.bless) "Initialize_Entrypoint()" else "initialise()"}

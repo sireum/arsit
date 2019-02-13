@@ -21,43 +21,42 @@
  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */ {
+ */
 
-  import org.sireum._
+import org.sireum._
   import org.sireum.cli.CliOpt._
 
-  val arsitTool: Tool = Tool(
-    name = "arsit",
-    command = "arsit",
-    description = "Generate Slang project from Aadl IR",
-    header = "Slang Generator",
-    usage = "<option>* air-file",
-    opts = ISZ(
-      Opt(name = "json", longKey = "json", shortKey = Some('j'),
-        tpe = Type.Flag(F), description = "Input serialized using Json (otherwise MsgPack assumed)"),
+val arsitTool: Tool = Tool(
+  name = "arsit",
+  command = "arsit",
+  description = "Generate Slang project from Aadl IR",
+  header = "Slang Generator",
+  usage = "<option>* air-file",
+  opts = ISZ(
+    Opt(name = "json", longKey = "json", shortKey = Some('j'),
+      tpe = Type.Flag(F), description = "Input serialized using Json (otherwise MsgPack assumed)"),
 
-      Opt(name = "outputDir", longKey = "output-dir", shortKey = Some('o'),
-        tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated project files"),
+    Opt(name = "outputDir", longKey = "output-dir", shortKey = Some('o'),
+      tpe = Type.Path(multiple = F, default = Some(".")), description = "Output directory for the generated project files"),
 
-      Opt(name = "packageName", longKey = "package-name", shortKey = None(),
-        tpe = Type.Str(sep = None(), default = None()), description = "Base package name for Slang project (output-dir's simple name used if not provided)"),
+    Opt(name = "packageName", longKey = "package-name", shortKey = None(),
+      tpe = Type.Str(sep = None(), default = None()), description = "Base package name for Slang project (output-dir's simple name used if not provided)"),
 
-      Opt(name = "noart", longKey = "noart", shortKey = None(),
-        tpe = Type.Flag(F), description = "Do not embed ART project files"),
+    Opt(name = "noart", longKey = "noart", shortKey = None(),
+      tpe = Type.Flag(F), description = "Do not embed ART project files"),
 
-      Opt(name = "bless", longKey = "bless", shortKey = None(),
-        tpe = Type.Flag(F), description = "Generate Bless entrypoints")
-    ),
-    groups = ISZ(
-      OptGroup(name = "Transpiler", opts = ISZ(
-        Opt(name = "genTrans", longKey = "trans", shortKey = None(),
-          tpe = Type.Flag(F), description = "Generate Slang/C code required for transpiler"),
-        Opt(name = "ipc", longKey = "ipc", shortKey = None(),
-          tpe = Type.Choice(name = "ipcmech", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
-          description = "IPC communication mechanism (requires 'trans' option)")
-      ))
-    )
+    Opt(name = "bless", longKey = "bless", shortKey = None(),
+      tpe = Type.Flag(F), description = "Generate Bless entrypoints")
+  ),
+  groups = ISZ(
+    OptGroup(name = "Transpiler", opts = ISZ(
+      Opt(name = "genTrans", longKey = "trans", shortKey = None(),
+        tpe = Type.Flag(F), description = "Generate Slang/C code required for transpiler"),
+      Opt(name = "ipc", longKey = "ipc", shortKey = None(),
+        tpe = Type.Choice(name = "ipcmech", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
+        description = "IPC communication mechanism (requires 'trans' option)")
+    ))
   )
+)
 
-  arsitTool
-}
+println(org.sireum.cli.JSON.fromCliOpt(arsitTool, T))

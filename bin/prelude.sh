@@ -5,13 +5,13 @@ set -e
 BIN_DIR=${TOOL_HOME}/bin
 ZULU_VERSION=10.3+5-jdk10.0.2
 MILL_URL=http://files.sireum.org/mill-standalone # see https://github.com/sireum/mill-build
-MILL_SHA3=82549d532d9829b2aae29b10ea5bdf0bb92f106db3568ab5edd16fbc7f82e439
+MILL_SHA3=5ce9fdcb0835c01a3830a76168e8f75e79e80338c8dfcf2f17b8decb0ddc6097
 MILL=${BIN_DIR}/mill
 LIB_URL=https://raw.githubusercontent.com/sireum/kekinian/master/versions.properties
-LIB_SHA3=9ff4de90272023191c85b8c0cb04eab6f19e7de395096f8baeeb8b696b4cdee5
+LIB_SHA3=d4083dd0e299ab9c838ccea841e859adf104aa92aa7be2b37a32a2b5ece897dc
 LIB=${TOOL_HOME}/versions.properties
 SIREUM_URL=http://files.sireum.org/sireum # see https://github.com/sireum/kekinian
-SIREUM_SHA3=032328751b66a03fe0fd201c8dbcf999825f32c822be3f8f77718574b871135b
+SIREUM_SHA3=2095ccb5b3b5e7a50bd70050bf6a01b4a2d9f4824c9b2e518fd8fc47a09a96d9
 CURL="curl -c /dev/null -Lo"
 if [ -z "${PLATFORM}" ]; then
   if [ -n "$COMSPEC" -a -x "$COMSPEC" ]; then

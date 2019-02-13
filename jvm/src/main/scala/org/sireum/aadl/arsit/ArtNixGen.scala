@@ -61,7 +61,7 @@ class ArtNixGen {
     var aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
 
-    val components = componentMap.entries.withFilter(p =>
+    val components = componentMap.entries.filter(p =>
       p._2.category == ComponentCategory.Thread || p._2.category == ComponentCategory.Device)
 
     for ((archVarName, m) <- components) {
@@ -188,7 +188,8 @@ class ArtNixGen {
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/IPC.scala"), stIPC)
 
     val stArtNix = Template.artNix(basePackage, artNixCases,
-      inPorts.withFilter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
+      inPorts.filter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
+
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/ArtNix.scala"), stArtNix)
 
     val stMain = Template.main(basePackage, mainSends)
@@ -396,7 +397,7 @@ class ArtNixGen {
       val isSharedMemory = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
-      val inPorts = Util.getFeatureEnds(component.features).withFilter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
+      val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
 
       val aepinit =
         if(!isSharedMemory && portIds.nonEmpty) {
