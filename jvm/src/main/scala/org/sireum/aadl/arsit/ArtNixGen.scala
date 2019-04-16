@@ -146,15 +146,14 @@ class ArtNixGen {
       Util.writeFile(new File(nixOutputDir, s"${basePackage}/${App_Id}.scala"), stApp)
     }
 
-    var artNixCases: ISZ[ST] = ISZ()
+    var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
     for(c <- connections) {
       val dstComp = componentMap.get(Util.getName(c.dst.component)).get
       val srcComp = componentMap.get(Util.getName(c.src.component)).get
 
       if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
         val dstPath = Util.getName(c.dst.feature.get)
-        val dstArchPortInstanceName =
-          s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature.get)}"
+        val dstArchPortInstanceName = s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature.get)}"
         val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackage)
 
         val srcArchPortInstanceName =
@@ -163,8 +162,15 @@ class ArtNixGen {
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
           val dstComp = if (arsitOptions.ipc == Cli.Ipcmech.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
-          artNixCases = artNixCases :+
-            Template.artNixCase(srcArchPortInstanceName, dstArchPortInstanceName, dstComp)
+          var cases: ISZ[ST] = {
+            if (artNixCasesM.contains(srcArchPortInstanceName)) {
+              artNixCasesM.get(srcArchPortInstanceName).get
+            } else {
+              ISZ()
+            }
+          }
+          cases = cases :+ Template.artNixCase(dstComp, dstArchPortInstanceName)
+          artNixCasesM = artNixCasesM + (srcArchPortInstanceName, cases)
         }
       } else {
         println(s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
@@ -187,6 +193,7 @@ class ArtNixGen {
     val stIPC = Template.ipc(basePackage, platformPorts, platformPayloads)
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/IPC.scala"), stIPC)
 
+    val artNixCases: ISZ[ST] = artNixCasesM.entries.map(k => Template.artNixCases(k._1, k._2))
     val stArtNix = Template.artNix(basePackage, artNixCases,
       inPorts.filter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
 
@@ -285,11 +292,15 @@ class ArtNixGen {
                  |) extends DataContent"""
     }
 
-    @pure def artNixCase(srcArchPortId: String,
-                         dstArchPortId: String,
-                         aepPortId: String): ST =
-      return st"""r(Arch.$srcArchPortId.id) =
-                 |  (IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"""
+    @pure def artNixCases(srcArchPortId: String,
+                         cases: ISZ[ST]): ST =
+      return st"""r(Arch.$srcArchPortId.id) = ISZ(
+                 |  ${(cases, ",\n")}
+                 |)"""
+
+    @pure def artNixCase(aepPortId: String,
+                         dstArchPortId: String): ST =
+      return st"(IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"
 
     @pure def mainSend(portId: String): ST = {
       val isSM = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
@@ -575,8 +586,8 @@ class ArtNixGen {
                  |  val timeTriggered: TimeTriggered = TimeTriggered()
                  |  val data: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, None())
                  |  val noData: Option[DataContent] = None()
-                 |  val connection: MS[Art.PortId, (Art.PortId, Art.PortId)] = {
-                 |    val r = MS.create[Art.PortId, (Art.PortId, Art.PortId)](maxPortIds, (IPCPorts.Main, IPCPorts.Main))
+                 |  val connection: MS[Art.PortId, ISZ[(Art.PortId, Art.PortId)]] = {
+                 |    val r = MS.create[Art.PortId, ISZ[(Art.PortId, Art.PortId)]](maxPortIds, ISZ())
                  |
                  |    ${(cases, "\n")}
                  |
@@ -633,8 +644,9 @@ class ArtNixGen {
                  |      outgoing(p) match {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
-                 |          val (app, port) = connection(p)
-                 |          Platform.send${if(isSharedMemory)"Async" else ""}(app, port, d)
+                 |          for(e <- connection(p)){
+                 |            Platform.send(e._1, e._2, d)
+                 |          }
                  |        case _ =>
                  |      }
                  |    }
@@ -643,8 +655,9 @@ class ArtNixGen {
                  |      outgoing(p) match {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
-                 |          val (app, port) = connection(p)
-                 |          Platform.send${if(isSharedMemory)"Async" else ""}(app, port, d)
+                 |          for(e <- connection(p)){
+                 |            Platform.send(e._1, e._2, d)
+                 |          }
                  |        case _ =>
                  |      }
                  |    }
