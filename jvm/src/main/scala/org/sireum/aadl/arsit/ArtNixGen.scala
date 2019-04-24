@@ -112,7 +112,10 @@ class ArtNixGen {
         portIds :+= Template.portId(portIdName, archPortInstanceName)
         portIdOpts :+= Template.portOpt(portIdName, portOptName, "Art.PortId", F)
 
-        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
+        if(!isPeriodic) {
+          aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
+        }
+
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
@@ -126,16 +129,14 @@ class ArtNixGen {
       mainSends :+= Template.mainSend(App_Id)
       appNames = appNames :+ App_Id
 
-      if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue && portOpts.nonEmpty) {
+      val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
+      if(!isPeriodic && portOpts.nonEmpty && arsitOptions.ipc == Cli.Ipcmech.MessageQueue) {
         platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
         platformPayloads :+= Template.platformPayload(AEPPayloadTypeName, portDefs)
 
         mainSends :+= Template.mainSend(AEP_Id)
         aepNames = aepNames :+ AEP_Id
-      }
 
-      val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
-      if(portOpts.nonEmpty && arsitOptions.ipc == Cli.Ipcmech.MessageQueue) {
         val stAep = Template.aep(basePackage, AEP_Id, portOpts,
           portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/${AEP_Id}.scala"), stAep)
@@ -226,13 +227,13 @@ class ArtNixGen {
     if(!nixOutputDir.getAbsolutePath.contains(projOutputDir.getAbsolutePath))
       outputPaths = outputPaths :+ nixOutputDir.getAbsolutePath
 
-    val tranpiler = Template.transpiler(
+    val transpiler = Template.transpiler(
       outputPaths,
       (((if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
       ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       portId
     )
-    Util.writeFile(new File(binOutputDir, "transpile.sh"), tranpiler)
+    Util.writeFile(new File(binOutputDir, "transpile.sh"), transpiler)
 
     import scala.language.postfixOps
     import sys.process._
@@ -413,7 +414,7 @@ class ArtNixGen {
       val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
 
       val aepinit =
-        if(!isSharedMemory && portIds.nonEmpty) {
+        if(!isSharedMemory && !isPeriodic && portIds.nonEmpty) {
           st"""val empty = art.Empty()
               |val aepPortId = IPCPorts.${AEP_Id}
               |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)""".render
@@ -473,8 +474,8 @@ class ArtNixGen {
           st"""while (true) {
               |  ${if(isPeriodic) {
                    s"Process.sleep($period)"
-                 } else ""}
-              |  ${if(portIds.nonEmpty) {
+                   } else ""}
+              |  ${if(!isPeriodic && portIds.nonEmpty) {
                    st"""Platform.send(aepPortId, appPortId, empty)
                        |val (_, d) = Platform.receive(aepPortIdOpt)
                        |val ${AEP_Payload} = d
@@ -1044,13 +1045,13 @@ class ArtNixGen {
           |# shared memory
           |IPCS_Q=`ipcs -m | egrep "[0-9a-f]+[0-9]+" | grep $$ME | awk '{print $$2}'`
           |for id in $$IPCS_Q; do
-          |  ipcrm -q $$id;
+          |  ipcrm -m $$id;
           |done
           |
           |# semaphores
           |IPCS_Q=`ipcs -s | egrep "[0-9a-f]+[0-9]+" | grep $$ME | awk '{print $$2}'`
           |for id in $$IPCS_Q; do
-          |  ipcrm -q $$id;
+          |  ipcrm -s $$id;
           |done
           |
           |ipcs
