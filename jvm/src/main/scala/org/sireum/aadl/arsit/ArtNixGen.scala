@@ -445,7 +445,8 @@ class ArtNixGen {
                   val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
                   st"""Platform.receiveAsync(${portIdOpt(p)}) match {
                       |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v); dispatch = ${dispatch}
-                      |  case _ =>
+                      |  case Some((_, v)) => halt(s"Unexpected payload on port $${${portId(p)}}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
+                      |  case None() => // do nothing
                       |}"""
                 }
               st"""var dispatch = F
@@ -648,7 +649,7 @@ class ArtNixGen {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
                  |          for(e <- connection(p)){
-                 |            Platform.send(e._1, e._2, d)
+                 |            Platform.send${if(isSharedMemory)"Async" else ""}(e._1, e._2, d)
                  |          }
                  |        case _ =>
                  |      }
@@ -659,7 +660,7 @@ class ArtNixGen {
                  |        case Some(d) =>
                  |          outgoing(p) = noData
                  |          for(e <- connection(p)){
-                 |            Platform.send(e._1, e._2, d)
+                 |            Platform.send${if(isSharedMemory)"Async" else ""}(e._1, e._2, d)
                  |          }
                  |        case _ =>
                  |      }
