@@ -102,7 +102,7 @@ Unit PACKAGE_NAME_SharedMemory_send(StackFrame caller, Z destid, Z port, art_Dat
 
     lock(sid);
 
-    int shmid = shmget((key_t) destid, sizeof(union Option_8E9F45), 0666);
+    int shmid = shmget((key_t) port, sizeof(union Option_8E9F45), 0666);
 
     Option_8E9F45 p = (Option_8E9F45) shmat(shmid, (void *) 0, 0);
 
