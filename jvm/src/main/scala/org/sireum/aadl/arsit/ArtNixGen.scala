@@ -213,7 +213,7 @@ class ArtNixGen {
     Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile("linux"))
     Util.writeFile(new File(binOutputDir, "compile-mac.sh"), Template.compile("mac"))
 
-    Util.writeFile(new File(binOutputDir, "run-cygwin.sh"), Template.run(aepNames, appNames, "win"))
+    Util.writeFile(new File(binOutputDir, "run-cygwin.bat"), Template.run(aepNames, appNames, "win"))
     Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, "linux"))
     Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, "mac"))
 
