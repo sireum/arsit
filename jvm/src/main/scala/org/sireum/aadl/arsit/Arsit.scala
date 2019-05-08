@@ -54,6 +54,37 @@ object Arsit {
     }
   }
 
+  def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
+          genBlessEntryPoints: B, genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava): Int = {
+    val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
+    val m = Cli.Ipcmech.MessageQueue
+
+    val destDir: File = new File(outDir.native)
+    if(!destDir.exists()) {
+      if(!destDir.mkdirs()){
+        println(s"Could not create directory ${destDir.getPath}")
+        return -1
+      }
+    }
+    if (!destDir.isDirectory) {
+      println(s"Path ${destDir.getPath} is not a directory")
+      return -1
+    }
+
+    val opt = Cli.ArsitOption(
+      help = "",
+      args = ISZ(),
+      json = T,
+      outputDir = if(optOutputDir.nonEmpty) Some(optOutputDir.get) else None(),
+      packageName = if(optBasePackageName.nonEmpty) Some(optBasePackageName.get) else None(),
+      noart = !embedArt,
+      bless = genBlessEntryPoints,
+      genTrans = genTranspilerArtifact,
+      m
+    )
+    return run(destDir, model, opt)
+  }
+
   def run(destDir : File, m: Aadl, o: Cli.ArsitOption) : Int = {
 
     if(m.components.isEmpty) {
