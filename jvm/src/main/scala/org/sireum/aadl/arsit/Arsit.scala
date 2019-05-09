@@ -57,7 +57,11 @@ object Arsit {
   def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
           genBlessEntryPoints: B, genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava): Int = {
     val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
-    val m = Cli.Ipcmech.MessageQueue
+    val m = ipcMechanism match {
+      case ArsitBridge.IPCMechanismJava.MessageQueue => Cli.Ipcmech.MessageQueue
+      case ArsitBridge.IPCMechanismJava.SharedMemory => Cli.Ipcmech.SharedMemory
+      case _ => throw new RuntimeException(s"Not expecting ${ipcMechanism}")
+    }
 
     val destDir: File = new File(outDir.native)
     if(!destDir.exists()) {
