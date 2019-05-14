@@ -436,19 +436,23 @@ class ArtNixGen {
           /********** SHARED MEMORY BODY **********/
 
           val loopBody = {
+
+            val receiveOnInPorts =
+              for(p <- inPorts) yield {
+                val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
+                st"""Platform.receiveAsync(${portIdOpt(p)}) match {
+                    |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v)${ if(!isPeriodic) s"; dispatch = ${dispatch}" else "" }
+                    |  case Some((_, v)) => halt(s"Unexpected payload on port $${${portId(p)}}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
+                    |  case None() => // do nothing
+                    |}"""
+              }
+
             if(isPeriodic)
-              st"""entryPoints.compute()
+              st"""${(receiveOnInPorts, "\n")}
+                  |entryPoints.compute()
                   |Process.sleep($period)"""
             else {
-              val receiveOnInPorts =
-                for(p <- inPorts) yield {
-                  val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
-                  st"""Platform.receiveAsync(${portIdOpt(p)}) match {
-                      |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v); dispatch = ${dispatch}
-                      |  case Some((_, v)) => halt(s"Unexpected payload on port $${${portId(p)}}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
-                      |  case None() => // do nothing
-                      |}"""
-                }
+
               st"""var dispatch = F
                   |${(receiveOnInPorts, "\n")}
                   |if (dispatch) {
@@ -515,6 +519,8 @@ class ArtNixGen {
                  |
                  |    ${(portSection, "\n\n")}
                  |    Art.run(Arch.ad)
+                 |
+                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"})
                  |
                  |    entryPoints.initialise()
                  |
@@ -1021,7 +1027,9 @@ class ArtNixGen {
           |cd $$SCRIPT_HOME
           |${(staep, "\n")}
           |${(stapp, "\n")}
-          |read -p "Press enter to start ..."
+          |read -p "Press enter to initialise components ..."
+          |$arch/Main$ext
+          |read -p "Press enter again to start ..."
           |$arch/Main$ext"""
     }
 
