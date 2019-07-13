@@ -147,8 +147,8 @@ object Util {
       case Cli.Ipcmech.SharedMemory => "ipc_shared_memory.c"
       case Cli.Ipcmech.MessageQueue => "ipc_message_queue.c"
     }
-    val e = Library.getFiles.withFilter(p => p._1.native == r)
-    assert(e.size == 1)
+    val e = Library.getFiles.filter(p => p._1.native == r)
+    assert(e.length == 1)
     val c = e(0)._2.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
     st"""${c}"""
   }

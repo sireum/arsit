@@ -6,7 +6,7 @@ import org.sireum.$internal.{RC}
 object Library_Ext {
 
   def getFiles: ISZ[(String, String)] = {
-    val map = RC.text(Seq(
+    val map = RC.text(Vector(
       "../../../../../../../../resources/art/src/main/scala/",
       "../../../../../../../../resources/util")) { (p, f) =>
       f.getName.endsWith(".scala") || f.getName.contains("ipc")
