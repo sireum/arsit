@@ -9,6 +9,7 @@ object BlessST {
 
   @pure def main(packageName: String,
                  imports: ISZ[ST],
+                 completeStateEnumName: String,
                  states: ISZ[ST],
                  componentName: String,
                  bridgeName: String,
@@ -24,13 +25,13 @@ object BlessST {
                |import org.sireum._
                |${(imports, "\n")}
                |
-               |@enum object CompleteState {
+               |@enum object ${completeStateEnumName} {
                |  ${(states, "\n")}
                |}
                |
                |@record class ${componentName}(api: ${bridgeName}.Api) {
                |
-               |  var currentState : CompleteState.Type = CompleteState.${initialState}
+               |  var currentState : ${completeStateEnumName}.Type = ${completeStateEnumName}.${initialState}
                |
                |  ${if(localVars.isEmpty) "// no local vars" else (localVars, "\n")}
                |
@@ -41,9 +42,11 @@ object BlessST {
                |"""
   }
 
-  @pure def method(name: String,
-                   body: ST): ST = {
-    return st"""def ${name}_Entrypoint(): Unit = {
+  @pure def method(name: ST,
+                   params: ISZ[ST],
+                   body: ST,
+                   retType: ST): ST = {
+    return st"""def ${name}(${params}): ${retType} = {
                |  ${body}
                |}"""
   }
@@ -54,10 +57,17 @@ object BlessST {
                                 |}""")
     return st"""if(${ifbranch._1}) {
                |  ${ifbranch._2}
-               |} ${e}"""
+               |}
+               |${e}"""
   }
-  @pure def typeDec(varName: String,
-                    varType: String): ST = {
-    return st"var ${varName}: ${varType}"
+
+  @pure def variableDec(varName: String,
+                        varType: String): ST = {
+    return st"var ${varName}: Option[${varType}] = None[${varType}]()"
+  }
+
+  @pure def portSend(portName: String,
+                     arg: ST): ST = {
+    return st"api.send${portName}(${arg})"
   }
 }

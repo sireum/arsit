@@ -2,8 +2,6 @@
 
 package org.sireum.aadl.arsit
 
-import java.io.File
-
 import org.sireum._
 import org.sireum.aadl.ir._
 import org.sireum.ops._
@@ -11,6 +9,8 @@ import org.sireum.ops._
 @record class BlessGen(basePackage: String,
                        component: Component,
                        componentNames: Names) {
+
+  val completeStateEnumName: String = s"${componentNames.component}_CompleteState"
 
   var btsStates: Map[String, BTSStateDeclaration] = Map.empty
 
@@ -21,7 +21,7 @@ import org.sireum.ops._
 
   var stateMachines: Map[BTSStateCategory.Type, ISZ[GuardedTransition]] = Map.empty
 
-  var transitionMethods: ISZ[ST] = ISZ()
+  var transitionMethods: Map[String, ST] = Map.empty
 
   def process(a: BTSBLESSAnnexClause): ST = {
     if(a.assertions.nonEmpty) {
@@ -36,15 +36,15 @@ import org.sireum.ops._
     val states: ISZ[ST] = a.states.map(s => visitStates(s))
     val componentName = componentNames.componentImpl
     val bridgeName = componentNames.bridge
-    val globalVars: ISZ[ST] = a.variables.map(v => visitVariable(v))
-    var methods: ISZ[ST] = a.transitions.map(t => visitTransition(t))
+    val globalVars: ISZ[ST] = a.variables.map(v => visitBTSVariableDeclaration(v))
+    a.transitions.map(t => visitBTSTransition(t))
     val extensions: ISZ[ST] = ISZ()
 
-    for(entry <- stateMachines.entries) {
-      methods = methods :+ buildSM(entry._1, entry._2)
-    }
+    var methods = stateMachines.entries.map(entry => buildSM(entry._1, entry._2))
 
-    return BlessST.main(packageName, imports, states, componentName, bridgeName, initialState,
+    methods = methods ++ this.transitionMethods.values
+
+    return BlessST.main(packageName, imports, completeStateEnumName, states, componentName, bridgeName, initialState,
       globalVars, methods, extensions)
   }
 
@@ -55,9 +55,9 @@ import org.sireum.ops._
         (m.transCondition, st"${m.actionMethodName}()"))
       assert(inits.length == 1)
 
-      val options = BlessST.ifST(inits(0), ISZOps(inits).tail)
+      val body = BlessST.ifST(inits(0), ISZOps(inits).tail)
 
-      return BlessST.method("Initialize", options)
+      return BlessST.method(st"Initialize_EntryPoint", ISZ(), body, st"Unit")
     } else {
       var cases: ISZ[ST] = ISZ()
 
@@ -72,7 +72,7 @@ import org.sireum.ops._
           BlessST.ifST(gts(0), ISZOps(gts).tail)
         }
 
-        val _case = st"""case CompleteState.${stateName} =>
+        val _case = st"""case ${completeStateEnumName}.${stateName} =>
                         |  $options"""
 
         cases = cases :+ _case
@@ -83,7 +83,7 @@ import org.sireum.ops._
                      |  ${(cases, "\n")}
                      |}"""
 
-      return BlessST.method("Compute", body)
+      return BlessST.method(st"Compute_EntryPoint", ISZ(), body, st"Unit")
     }
   }
 
@@ -103,7 +103,7 @@ import org.sireum.ops._
     return st"'${stateName}"
   }
 
-  def visitVariable(variable: BTSVariableDeclaration): ST = {
+  def visitBTSVariableDeclaration(variable: BTSVariableDeclaration): ST = {
     val typ = variable.category // TODO
     val assignExp = variable.assignExpression // TODO
     val arraySize = variable.arraySize // TODO
@@ -111,14 +111,14 @@ import org.sireum.ops._
 
     val varName: String = Util.getLastName(variable.name)
 
-    val varType = getType(variable.varType)
+    val varType = visitBTSType(variable.varType)
 
     globalVariables = globalVariables + (varName ~> variable)
 
-    return BlessST.typeDec(varName, varType)
+    return BlessST.variableDec(varName, varType)
   }
 
-  def visitTransition(t: BTSTransition): ST = {
+  def visitBTSTransition(t: BTSTransition): Unit = {
 
     assert(t.assertion.isEmpty)
 
@@ -130,32 +130,116 @@ import org.sireum.ops._
     val dst: String = t.destState.name(0)
 
     val cond: ST = t.transitionCondition match {
-      case Some(c) => visitTransitionCondition(c)
-      case _ => st"true"
+      case Some(c) => visitBTSTransitionCondition(c)
+      case _ => st"T"
     }
 
     assert(t.label.priority.isEmpty)
     val label = t.label.id.name(0)
 
-    val actions: ISZ[ST] = t.actions match {
-      case Some(actions) => ISZ()
-      case _ => ISZ()
+
+    val actionMethodName = st"do_${label}"
+
+    var body: ST = t.actions match {
+      case Some(behaviorActions) => visitBTSBehaviorActions(behaviorActions)
+      case _ => st"// empty body"
     }
 
-    val transActions = st"do_${label}"
+    body = st"""${body}
+               |
+               |currentState = ${completeStateEnumName}.${dst}"""
+
+    val doMethod = BlessST.method(actionMethodName, ISZ(), body, st"Unit")
+    transitionMethods = transitionMethods + (actionMethodName.render ~> doMethod)
+
     assert(btsStates.get(src).get.categories.length == 1)
 
     val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0)
     val list: ISZ[GuardedTransition] = stateMachines.getOrElse(key, ISZ())
 
-    val gt = GuardedTransition(src, dst, cond, transActions)
+    val gt = GuardedTransition(src, dst, cond, actionMethodName)
 
     stateMachines = stateMachines + (key ~> (list :+ gt))
-
-    return st"" // TODO opt ret
   }
 
-  def visitTransitionCondition(condition: BTSTransitionCondition): ST = {
+  def visitBTSBehaviorActions(actions: BTSBehaviorActions): ST = {
+    assert(actions.executionOrder == BTSExecutionOrder.Sequential)
+
+    val _a = actions.actions.map(assertedAction => visitBTSAssertedAction(assertedAction))
+
+    return st"${(_a, "\n")}"
+  }
+
+  def visitBTSAssertedAction(action: BTSAssertedAction): ST = {
+    assert(action.precondition.isEmpty)
+    assert(action.postcondition.isEmpty)
+
+    return visitBTSAction(action.action)
+  }
+
+  def visitBTSAction(action: BTSAction): ST = {
+    val ret: ST = action match {
+      case c: BTSIfBLESSAction => visitBTSIfBLESSAction(c)
+      case c: BTSExistentialLatticeQuantification => visitBTSExistentialLatticeQuantification(c)
+      case c: BTSAssignmentAction => visitBTSAssignmentAction(c)
+      case c: BTSPortOutAction => visitBTSPortOutAction(c)
+      case c: BTSSkipAction => st"// skip"
+    }
+
+    return ret;
+  }
+
+  def visitBTSAssignmentAction(action: BTSAssignmentAction): ST = {
+    val lhs = visitBTSExp(action.lhs)
+
+    val rhs = visitBTSExp(action.rhs)
+
+    return st"$lhs = $rhs"
+  }
+
+  def visitBTSPortOutAction(action: BTSPortOutAction): ST = {
+    val portName = Util.getLastName(action.name)
+
+    val arg: ST = if(action.exp.nonEmpty) {
+      visitBTSExp(action.exp.get)
+    } else {
+      st""
+    }
+
+    return BlessST.portSend(portName, arg)
+  }
+
+  def visitBTSIfBLESSAction(action: BTSIfBLESSAction): ST = {
+    assert(action.availability.isEmpty)
+
+    val _actions = action.alternatives.map(a => {
+      val guard = visitBTSExp(a.guard)
+      val action = visitBTSAssertedAction(a.action)
+
+      (guard, action)
+    })
+
+    return BlessST.ifST(_actions(0), ISZOps(_actions).tail)
+  }
+
+  def visitBTSExistentialLatticeQuantification(quantification: BTSExistentialLatticeQuantification): ST = {
+    assert(quantification.timeout.isEmpty) // TODO
+    assert(quantification.catchClause.isEmpty) // TODO
+
+    val localVars: ISZ[ST] = quantification.quantifiedVariables.map(m => visitBTSVariableDeclaration(m))
+
+    val actions = visitBTSBehaviorActions(quantification.actions)
+
+    val body = st"""$localVars
+                   |
+                   |$actions"""
+
+    return st"""// DO ME TOO
+               |
+               |$body"""
+  }
+
+  def visitBTSTransitionCondition(condition: BTSTransitionCondition): ST = {
     condition match {
       case c: BTSDispatchCondition => return visitBTSDispatchCondition(c)
       case _ => halt("Unexpected trans cond")
@@ -166,17 +250,22 @@ import org.sireum.ops._
     if(condition.dispatchTriggers.isEmpty) {
       assert(Util.isPeriodic(this.component))
 
-      return st"true"
+      return st"T"
     } else {
+      val ret = visitBTSDispatchConjunction(condition.dispatchTriggers(0))
 
-      return ISZOps(condition.dispatchTriggers).foldLeft((r: ST, t) =>
-        st"$r && ${visitBTSDispatchConjunction(t)}", st"")
+      val tail = ISZOps(condition.dispatchTriggers).tail
+      return ISZOps(tail).foldLeft((r: ST, t) =>
+        st"$r && ${visitBTSDispatchConjunction(t)}", ret)
     }
   }
 
   def visitBTSDispatchConjunction(conjunction: BTSDispatchConjunction): ST = {
-    return ISZOps(conjunction.conjunction).foldLeft((r: ST, t) =>
-      st"$r || ${visitBTSDispatchTrigger(t)}", st"")
+    val ret = visitBTSDispatchTrigger(conjunction.conjunction(0))
+
+    val tail = ISZOps(conjunction.conjunction).tail
+    return ISZOps(tail).foldLeft((r: ST, t) =>
+      st"$r || ${visitBTSDispatchTrigger(t)}", ret)
   }
 
   def visitBTSDispatchTrigger(trigger: BTSDispatchTrigger): ST = {
@@ -184,16 +273,76 @@ import org.sireum.ops._
       case BTSDispatchTriggerStop() => st"STOP"
       case BTSDispatchTriggerPort(port) =>
         val portName = Util.getLastName(port)
-        st"api.get${portName}.nonEmpty"
+        st"api.get${portName}().nonEmpty"
       case BTSDispatchTriggerTimeout(ports, time) => st"TIMEOUT"
     }
 
     return ret
   }
 
-  def getType(t: BTSType): String = {
+  def visitBTSExp(e: BTSExp): ST = {
+    val ret: ST = e match {
+      case c: BTSBinaryExp => visitBTSBinaryExp(c)
+      case c: BTSLiteralExp => visitBTSLiteralExp(c)
+      case c: BTSNameExp => st"${Util.getLastName(c.name)}"
+      case c: BTSFunctionCall => visitBTSFunctionCall(c)
+    }
+    return ret
+  }
+
+  def visitBTSLiteralExp(exp: BTSLiteralExp): ST = {
+    val ret: ST = exp.typ match {
+      case BTSLiteralType.BOOLEAN =>
+        if(exp.exp == "true") st"T" else st"F"
+      case BTSLiteralType.STRING => st"${exp.exp}"
+    }
+    return ret
+  }
+
+  def visitBTSBinaryExp(exp: BTSBinaryExp): ST = {
+    val lhs = visitBTSExp(exp.lhs)
+    val rhs = visitBTSExp(exp.rhs)
+
+    val op: String = exp.op match {
+      case BTSBinaryOp.AND => "&&"
+      case BTSBinaryOp.ANDTHEN => "&"
+      case BTSBinaryOp.OR => "||"
+      case BTSBinaryOp.ORELSE => "|"
+
+      case BTSBinaryOp.EQ => "=="
+      case BTSBinaryOp.NEQ => "!="
+      case BTSBinaryOp.LT=> "<"
+      case BTSBinaryOp.LTE=> "<="
+      case BTSBinaryOp.GT => ">"
+      case BTSBinaryOp.GTE => ">="
+
+      case BTSBinaryOp.PLUS => "+"
+      case BTSBinaryOp.MINUS => "-"
+      case BTSBinaryOp.DIV => "/"
+      case BTSBinaryOp.MULT=> "*"
+      case BTSBinaryOp.MOD => "%"
+      case BTSBinaryOp.REM => "rem"
+
+      case BTSBinaryOp.EXP => "??? EXP"
+      case BTSBinaryOp.XOR => "??? XOR"
+    }
+
+    return st"($lhs $op $rhs)"
+  }
+
+  def visitBTSFunctionCall(call: BTSFunctionCall): ST = {
+    val fname = Util.getLastName(call.name)
+
+    val args: ISZ[ST] = ISZ()
+    assert(call.args.isEmpty)
+
+    return st"$fname(${(args, ",")})"
+  }
+
+  def visitBTSType(t: BTSType): String = {
     t match {
-      case o: BTSClassifier => return Util.getName(o.name)
+      case o: BTSClassifier =>
+        return Util.getNamesFromClassifier(o.classifier, this.basePackage).component
       case _ =>
         halt(s"Need to handle type $t")
     }

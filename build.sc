@@ -29,6 +29,8 @@ import $file.runtime.Runtime
 import $file.air.Air
 import $file.Arsit
 import $file.cli.Cli
+import mill.scalalib.ScalaModule
+import org.sireum.mill.SireumModule
 
 object runtime extends mill.Module {
 
@@ -46,6 +48,10 @@ object runtime extends mill.Module {
     override def macrosObject = macros
   }
 
+  object bin extends ScalaModule {
+    final override def scalaVersion = SireumModule.scalaVersion
+    final override def moduleDeps = Seq(runtime.library.jvm)
+  }
 }
 
 object air extends Air.Module with runtime.testProvider {
@@ -57,6 +63,11 @@ object arsit extends Arsit.Module {
   final override def airObject = air
 
   final override def millSourcePath = super.millSourcePath / up
+
+  object bin extends ScalaModule {
+    final override def scalaVersion = SireumModule.scalaVersion
+    final override def moduleDeps = Seq(runtime.library.jvm)
+  }
 }
 
 
