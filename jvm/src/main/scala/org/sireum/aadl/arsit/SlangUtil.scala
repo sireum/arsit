@@ -36,3 +36,8 @@ object Cli {
 @ext object Library {
   def getFiles: ISZ[(String, String)] = $
 }
+
+@enum object DispatchProtocol {
+  'Periodic
+  'Sporadic
+}

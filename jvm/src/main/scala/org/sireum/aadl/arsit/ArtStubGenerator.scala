@@ -94,19 +94,30 @@ class ArtStubGenerator {
     val b = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
     Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b)
 
-    if(!arsitOptions.bless) {
-      val c = Template.componentTrait(basePackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
-      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
+    val blessAnnexes : ISZ[Annex] = m.annexes.filter(a => a.name == org.sireum.String("BLESS"))
+    if(blessAnnexes.isEmpty) {
+      val compTrait = Template.componentTrait(basePackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
+      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), compTrait)
+
+      val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl)
+
+      val compImpl = Template.slangPreamble(T, names.packageName, basePackage,
+        genSubprograms(m) match {
+          case Some(x) => ISZ(block, x)
+          case _ => ISZ(block)
+        })
+
+      Util.writeFile(new File(outDir, filename), compImpl, false)
+
+    } else {
+
+      assert(blessAnnexes.length == 1)
+
+      val compImpl = BlessGen(basePackage, m, names).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
+
+      Util.writeFile(new File(outDir, filename), compImpl, true)
     }
 
-    val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl)
-    val ci = Template.slangPreamble(T, names.packageName, basePackage,
-      genSubprograms(m) match {
-        case Some(x) => ISZ(block, x)
-        case _ => ISZ(block)
-      })
-
-    Util.writeFile(new File(outDir, filename), ci, false)
 
     seenComponents = seenComponents + filename
   }

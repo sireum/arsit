@@ -94,6 +94,31 @@ object Util {
 
   @pure def isDevice(c: Component): B = c.category == ComponentCategory.Device
 
+  @pure def getDispatchProtocol(c: Component): DispatchProtocol.Type = {
+    Util.getDiscreetPropertyValue[ValueProp](c.properties, Util.Prop_DispatchProtocol) match {
+      case Some(x) =>
+        x.value match {
+          case org.sireum.String("Periodic") => return DispatchProtocol.Periodic
+          case org.sireum.String("Sporadic") => return DispatchProtocol.Sporadic
+          case _ => halt(s"Unexpected dispatch protocol ${x}")
+        }
+      case _ =>
+        if (c.category == ComponentCategory.Device) {
+          DispatchProtocol.Periodic
+        } else {
+          halt(s"No dispatch protocol provided ${c}")
+        }
+    }
+  }
+
+  @pure def isPeriodic(c: Component): B = {
+    return getDispatchProtocol(c) == DispatchProtocol.Periodic
+  }
+
+  @pure def isSporadic(c: Component): B = {
+    return getDispatchProtocol(c) == DispatchProtocol.Sporadic
+  }
+
   @pure def doNotEditComment(from: Option[String] = None[String]()) = {
     val _from = if (from.nonEmpty) " from " + from.get else ""
     s"// This file was auto-generated${_from}.  Do not edit"
