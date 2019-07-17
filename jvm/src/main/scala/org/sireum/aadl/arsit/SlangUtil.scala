@@ -41,3 +41,37 @@ object Cli {
   'Periodic
   'Sporadic
 }
+
+
+
+@datatype class AadlTypes (typeMap : Map[String, AadlType])
+
+@sig trait AadlType {
+  def name: String
+  def slangTypeName: String
+  def container: org.sireum.aadl.ir.Component
+}
+
+@datatype class EnumType(val name: String,
+                         val container: org.sireum.aadl.ir.Component,
+                         val slangTypeName: String,
+                         values: ISZ[String]) extends AadlType
+
+@datatype class ArrayType(val name: String,
+                          val container: org.sireum.aadl.ir.Component,
+                          val slangTypeName: String) extends AadlType
+
+@datatype class RecordType(val name: String,
+                           val container: org.sireum.aadl.ir.Component,
+                           val slangTypeName: String,
+                           fields: Map[String, AadlType]
+                          ) extends AadlType
+
+@datatype class BaseType(val name: String,
+                         val container: org.sireum.aadl.ir.Component,
+                         val slangTypeName: String
+                         ) extends AadlType
+
+@datatype class TODOType(val name: String,
+                         val container: org.sireum.aadl.ir.Component,
+                         val slangTypeName: String) extends AadlType

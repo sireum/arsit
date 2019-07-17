@@ -12,6 +12,7 @@ class ArtStubGenerator {
   var basePackage: String = _
   var arsitOptions : Cli.ArsitOption = _
   var seenComponents : HashSet[String] = HashSet.empty
+  var typeMap: Map[String, AadlType] = Map.empty
 
   def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
     assert(dir.exists)
@@ -19,6 +20,8 @@ class ArtStubGenerator {
     outDir = dir
     basePackage = Util.sanitizeName(packageName)
     arsitOptions = o
+
+    processDataTypes(m.dataComponents)
 
     for(c <- m.components)
       gen(c)
@@ -113,7 +116,7 @@ class ArtStubGenerator {
 
       assert(blessAnnexes.length == 1)
 
-      val compImpl = BlessGen(basePackage, m, names).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
+      val compImpl = BlessGen(basePackage, m, names, AadlTypes(typeMap)).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
       Util.writeFile(new File(outDir, filename), compImpl, true)
     }
@@ -155,6 +158,44 @@ class ArtStubGenerator {
       return Some(body)
     } else {
       return None[ST]()
+    }
+  }
+
+
+  def processDataTypes(values: ISZ[Component]): Unit = {
+    for(v <- values){
+      typeMap = typeMap + (v.classifier.get.name ~> processType(v))
+    }
+    println(typeMap)
+  }
+
+  def processType(c: Component): AadlType = {
+    assert(c.category == ComponentCategory.Data)
+    val cname = c.classifier.get.name
+    val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
+
+    if(Util.isEnumType(c)) {
+      return  EnumType(cname, c, names.component, Util.getEnumValues(c))
+
+    } else if(Util.isBaseType(c)) {
+
+      return BaseType(cname, c, "F32")
+
+    } else if(Util.isArrayType(c)) {
+      halt("")
+
+    } else if(Util.isRecordType(c)) {
+      var fields: Map[String, AadlType] = Map.empty
+
+      for(sc <- c.subComponents){
+        val fieldName = Util.getLastName(sc.identifier)
+        fields = fields + (fieldName ~> processType(sc))
+      }
+
+      return RecordType(cname, c, names.component, fields)
+
+    } else {
+      halt("")
     }
   }
 

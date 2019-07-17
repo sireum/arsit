@@ -8,9 +8,10 @@ import org.sireum.ops._
 
 @record class BlessGen(basePackage: String,
                        component: Component,
-                       componentNames: Names) {
+                       componentNames: Names,
+                       aadlTypes: AadlTypes) {
 
-  val completeStateEnumName: String = s"${componentNames.component}_CompleteState"
+  val completeStateEnumName: String = s"${componentNames.componentImpl}_CompleteStates"
 
   var btsStates: Map[String, BTSStateDeclaration] = Map.empty
 
@@ -22,6 +23,8 @@ import org.sireum.ops._
   var stateMachines: Map[BTSStateCategory.Type, ISZ[GuardedTransition]] = Map.empty
 
   var transitionMethods: Map[String, ST] = Map.empty
+
+  var subprograms: Map[Name, Subprogram] = Map.empty
 
   def process(a: BTSBLESSAnnexClause): ST = {
     if(a.assertions.nonEmpty) {
@@ -38,11 +41,16 @@ import org.sireum.ops._
     val bridgeName = componentNames.bridge
     val globalVars: ISZ[ST] = a.variables.map(v => visitBTSVariableDeclaration(v))
     a.transitions.map(t => visitBTSTransition(t))
-    val extensions: ISZ[ST] = ISZ()
 
     var methods = stateMachines.entries.map(entry => buildSM(entry._1, entry._2))
 
     methods = methods ++ this.transitionMethods.values
+
+    var extensions: ISZ[ST] = ISZ()
+
+    if(subprograms.nonEmpty) {
+      extensions = extensions :+ BlessST.externalObject(extSubprogramObject(), subprograms.values.map(sp => sp.extMethod))
+    }
 
     return BlessST.main(packageName, imports, completeStateEnumName, states, componentName, bridgeName, initialState,
       globalVars, methods, extensions)
@@ -105,17 +113,56 @@ import org.sireum.ops._
 
   def visitBTSVariableDeclaration(variable: BTSVariableDeclaration): ST = {
     val typ = variable.category // TODO
-    val assignExp = variable.assignExpression // TODO
     val arraySize = variable.arraySize // TODO
     val variableAssertion = variable.variableAssertion // TODO
 
     val varName: String = Util.getLastName(variable.name)
 
-    val varType = visitBTSType(variable.varType)
-
     globalVariables = globalVariables + (varName ~> variable)
 
-    return BlessST.variableDec(varName, varType)
+    var isEnum: B = F
+
+    val assignExp: ST = if(variable.assignExpression.nonEmpty) {
+      visitBTSExp(variable.assignExpression.get)
+    } else {
+      // emit default value
+      variable.varType match {
+        case BTSClassifier(classifier) =>
+          aadlTypes.typeMap.get(classifier.name) match {
+            case Some(o) =>
+              isEnum = o.isInstanceOf[EnumType]
+              st"${initType(o)} // dummy value"
+            case _ => halt(s"not in type map $classifier")
+          }
+        case _ => st"finish this ${variable}"
+      }
+    }
+
+    var varType:ST = visitBTSType(variable.varType)
+    if(isEnum) {
+      varType = st"${varType}.Type"
+    }
+
+    return BlessST.variableDec(varName, varType, assignExp)
+  }
+
+  def initType(a: AadlType): ST = {
+    a match {
+      case c: ArrayType => halt("")
+
+      case c: BaseType => return st"0f"
+
+      case c: EnumType => return st"${c.slangTypeName}.${c.values(0)}"
+
+      case c: RecordType =>
+
+        val fields = c.fields.values.map(m => initType(m))
+
+        return st"${c.slangTypeName}(${(fields, ", ")})"
+
+      case _ =>
+        halt("TODO")
+    }
   }
 
   def visitBTSTransition(t: BTSTransition): Unit = {
@@ -179,6 +226,7 @@ import org.sireum.ops._
 
   def visitBTSAction(action: BTSAction): ST = {
     val ret: ST = action match {
+      case c: BTSIfBAAction => visitBTSIfBAAction(c)
       case c: BTSIfBLESSAction => visitBTSIfBLESSAction(c)
       case c: BTSExistentialLatticeQuantification => visitBTSExistentialLatticeQuantification(c)
       case c: BTSAssignmentAction => visitBTSAssignmentAction(c)
@@ -209,6 +257,34 @@ import org.sireum.ops._
     return BlessST.portSend(portName, arg)
   }
 
+
+  def visitBTSIfBAAction(action: BTSIfBAAction): ST = {
+    val ifb = visitBTSConditionalActions(action.ifBranch)
+
+    val elsifs = action.elseIfBranches.map(e => visitBTSConditionalActions(e)).map(x => st"else ${x}")
+
+    val elseb: ST = if(action.elseBranch.nonEmpty) {
+      visitBTSBehaviorActions(action.elseBranch.get)
+    } else {
+      st""
+    }
+
+    return st"""${ifb}
+               |${(elsifs, "\n")}
+               |${elseb}"""
+  }
+
+  def visitBTSConditionalActions(actions: BTSConditionalActions): ST = {
+
+    val cond = visitBTSExp(actions.cond);
+
+    val body = visitBTSBehaviorActions(actions.actions)
+
+    return st"""if($cond) {
+               |  $body
+               |}"""
+  }
+
   def visitBTSIfBLESSAction(action: BTSIfBLESSAction): ST = {
     assert(action.availability.isEmpty)
 
@@ -230,13 +306,11 @@ import org.sireum.ops._
 
     val actions = visitBTSBehaviorActions(quantification.actions)
 
-    val body = st"""$localVars
+    val body = st"""${(localVars, "\n")}
                    |
                    |$actions"""
 
-    return st"""// DO ME TOO
-               |
-               |$body"""
+    return body
   }
 
   def visitBTSTransitionCondition(condition: BTSTransitionCondition): ST = {
@@ -273,7 +347,7 @@ import org.sireum.ops._
       case BTSDispatchTriggerStop() => st"STOP"
       case BTSDispatchTriggerPort(port) =>
         val portName = Util.getLastName(port)
-        st"api.get${portName}().nonEmpty"
+        BlessST.portQuery(portName)
       case BTSDispatchTriggerTimeout(ports, time) => st"TIMEOUT"
     }
 
@@ -282,19 +356,57 @@ import org.sireum.ops._
 
   def visitBTSExp(e: BTSExp): ST = {
     val ret: ST = e match {
+      case c: BTSAccessExp => visitBTSAccessExp(c)
       case c: BTSBinaryExp => visitBTSBinaryExp(c)
       case c: BTSLiteralExp => visitBTSLiteralExp(c)
-      case c: BTSNameExp => st"${Util.getLastName(c.name)}"
+      case c: BTSNameExp => visitBTSNameExp(c)
       case c: BTSFunctionCall => visitBTSFunctionCall(c)
     }
     return ret
+  }
+
+  def visitBTSNameExp(e: BTSNameExp): ST = {
+    val n = Util.getLastName(e.name)
+    val st: ST = if(e.name.name.size > 1) {
+
+      val _feature = component.features.filter(f => f.identifier.name == e.name.name)
+      if(_feature.nonEmpty){
+        assert(_feature.size == 1)
+        val feature = _feature(0).asInstanceOf[FeatureEnd]
+
+        assert(Util.isInFeature(feature))
+        assert(Util.isDataPort(feature) || Util.isEventDataPort(feature))
+
+        return BlessST.portGet(n)
+      } else {
+        halt(s"Need to handle ${e}")
+      }
+    } else {
+      st"${n}"
+    }
+
+    return st
+  }
+
+  def visitBTSAccessExp(exp: BTSAccessExp): ST = {
+    val e = visitBTSExp(exp.exp)
+    val a = exp.attributeName
+
+    return st"${e}.${a}"
   }
 
   def visitBTSLiteralExp(exp: BTSLiteralExp): ST = {
     val ret: ST = exp.typ match {
       case BTSLiteralType.BOOLEAN =>
         if(exp.exp == "true") st"T" else st"F"
-      case BTSLiteralType.STRING => st"${exp.exp}"
+      case BTSLiteralType.STRING =>
+        val so = StringOps(exp.exp)
+        if(so.contains("#Enumerators")) {
+          // TODO need to fix bless grammar
+          st"${so.replaceAllLiterally("#Enumerators", "")}"
+        } else {
+          st"${exp.exp}"
+        }
     }
     return ret
   }
@@ -331,23 +443,96 @@ import org.sireum.ops._
   }
 
   def visitBTSFunctionCall(call: BTSFunctionCall): ST = {
-    val fname = Util.getLastName(call.name)
+    val sb = resolveSubprogram(call.name)
 
-    val args: ISZ[ST] = ISZ()
-    assert(call.args.isEmpty)
+    assert(sb.params.size == call.args.size)
 
-    return st"$fname(${(args, ",")})"
+    var args: ISZ[ST] = ISZ()
+    for(i <- 0 until call.args.size) {
+      val pair = call.args(0)
+      val pname = Util.getLastName(pair.paramName.get)
+
+      assert(pname == sb.params(i)._1) // TODO
+
+      val exp = visitBTSExp(pair.exp.get)
+
+      args = args :+ exp
+    }
+
+    return st"${sb.qualifiedName}(${(args, ",")})"
   }
 
-  def visitBTSType(t: BTSType): String = {
+  def visitBTSType(t: BTSType): ST = {
     t match {
       case o: BTSClassifier =>
-        return Util.getNamesFromClassifier(o.classifier, this.basePackage).component
+        return st"${Util.getNamesFromClassifier(o.classifier, this.basePackage).component}"
       case _ =>
         halt(s"Need to handle type $t")
     }
   }
+
+
+  def resolveSubprogram(name: Name): Subprogram = {
+
+    if(!subprograms.contains(name)) {
+      val _c = component.subComponents.filter(sc => sc.identifier.name == name.name)
+      assert(_c.size == 1)
+      val subprog = _c(0)
+      val featureSize = subprog.features.size
+
+      assert(subprog.category == ComponentCategory.Subprogram)
+      assert(subprog.features.size >= 1)
+
+      val methodName = st"${Util.getLastName(subprog.identifier)}"
+      var i = 0
+      val params: ISZ[(ST, ST)] = subprog.features.map(f => {
+        f match {
+          case fe: FeatureEnd =>
+            // last param must be the return type, all others must be in
+            assert(if (i == featureSize - 1) fe.direction == Direction.Out else fe.direction == Direction.In)
+
+            val paramName = Util.getLastName(fe.identifier)
+            var paramType: ST = st"${Util.getNamesFromClassifier(fe.classifier.get, basePackage).component}"
+            if(isEnum(fe.classifier.get)) {
+              paramType = st"${paramType}.Type"
+            }
+
+            i = i + 1
+
+            (st"$paramName", paramType)
+          case _ => halt(s"unexpected param ${f}")
+        }
+      })
+
+      val soParams = ISZOps(params)
+      val last = soParams.last
+      val slangParams = soParams.dropRight(1)
+
+      val extMethod = BlessST.extMethod(methodName, slangParams.map(s => st"${s._1} : ${s._2}"), last._2)
+
+      val qualifiedName = st"${extSubprogramObject}.${methodName}"
+
+      subprograms = subprograms + (name ~> Subprogram(qualifiedName, slangParams.map(s => (s._1.render, s._2.render)), extMethod))
+    }
+
+    return subprograms.get(name).get
+  }
+
+  def isEnum(c: Classifier): B = {
+    aadlTypes.typeMap.get(c.name) match {
+      case Some(c: EnumType)=> return T
+      case _ => return F
+    }
+  }
+
+  def extSubprogramObject(): ST = {
+    return st"${componentNames.componentImpl}_Subprograms"
+  }
 }
+
+@datatype class Subprogram(qualifiedName: ST,
+                           params: ISZ[(String, String)], // paramName : paramType
+                           extMethod: ST)
 
 @datatype class GuardedTransition(srcState: String,
                                   dstState: String,

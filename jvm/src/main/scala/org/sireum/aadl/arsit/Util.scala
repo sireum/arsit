@@ -11,6 +11,7 @@ object Util {
   val Prop_Period: String = "Timing_Properties::Period"
   val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
   val Prop_Urgency: String = "Thread_Properties::Urgency"
+  val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
 
   val EmptyTypeNames = DataTypeNames("", "art", "Empty", false)
   def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
@@ -24,6 +25,10 @@ object Util {
     for (p <- properties if getLastName(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
+  }
+
+  @pure def getPropertyValues(properties: ISZ[Property], propertyName: String): ISZ[PropertyValue] = {
+    return properties.filter(p => getLastName(p.name) == propertyName).flatMap(p => p.propertyValues)
   }
 
   @pure def getPeriod(m: Component): String = {
@@ -43,12 +48,50 @@ object Util {
     }
   }
 
+  @pure def isType(props: ISZ[Property], name: String): B = {
+    for (p <- props if getLastName(p.name) == Prop_DataRepresentation &&
+      ISZOps(p.propertyValues).contains(ValueProp(name)))
+      return true
+    return false
+  }
+
   @pure def isEnum(props: ISZ[Property]): B = {
     for (p <- props if getLastName(p.name) == Prop_DataRepresentation &&
       ISZOps(p.propertyValues).contains(ValueProp("Enum")))
       return true
     return false
   }
+
+  @pure def getEnumValues(v: Component): ISZ[String] = {
+    var ret: ISZ[String] = ISZ()
+    if(isEnum(v.properties)) {
+      for(p <- getPropertyValues(v.properties, Prop_Data_Model__Element_Names)){
+        p match {
+          case ValueProp(v) => ret = ret :+ v
+          case _ => halt(s"Unhandled ${p}")
+        }
+      }
+    }
+
+    return ret
+  }
+
+  @pure def isEnumType(c: Component): B = {
+    return isEnum(c.properties)
+  }
+
+  @pure def isRecordType(c: Component): B = {
+    return c.subComponents.nonEmpty
+  }
+
+  @pure def isArrayType(c: Component): B = {
+    return F
+  }
+
+  @pure def isBaseType(c: Component): B = {
+    return StringOps(c.classifier.get.name).startsWith("Base_Types::")
+  }
+
 
   // replace '-' and '.' with '_'
   @pure def sanitizeName(s: String): String = s.toString.replaceAll("[\\-|\\.]", "_")
