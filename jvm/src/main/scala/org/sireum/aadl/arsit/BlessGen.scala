@@ -7,6 +7,7 @@ import org.sireum.aadl.ir._
 import org.sireum.ops._
 
 @record class BlessGen(basePackage: String,
+                       componentDirectory: String,
                        component: Component,
                        componentNames: Names,
                        aadlTypes: AadlTypes) {
@@ -20,11 +21,14 @@ import org.sireum.ops._
 
   var globalVariables: Map[String, BTSVariableDeclaration] = Map.empty
 
-  var stateMachines: Map[BTSStateCategory.Type, ISZ[GuardedTransition]] = Map.empty
+  var completeStateMachines: Map[BTSStateCategory.Type, ISZ[GuardedTransition]] = Map.empty
+  var executeStateMachines: Map[String, ISZ[GuardedTransition]] = Map.empty
 
   var transitionMethods: Map[String, ST] = Map.empty
 
   var subprograms: Map[Name, Subprogram] = Map.empty
+
+
 
   def process(a: BTSBLESSAnnexClause): ST = {
     if(a.assertions.nonEmpty) {
@@ -36,24 +40,51 @@ import org.sireum.ops._
 
     val packageName: String = componentNames.packageName
     val imports: ISZ[ST] = ISZ()
-    val states: ISZ[ST] = a.states.map(s => visitStates(s))
+    //val states: ISZ[ST] = a.states.map(s => visitStates(s))
+    a.states.map(s => visitBTSStateDeclaration(s))
+
     val componentName = componentNames.componentImpl
     val bridgeName = componentNames.bridge
     val globalVars: ISZ[ST] = a.variables.map(v => visitBTSVariableDeclaration(v))
     a.transitions.map(t => visitBTSTransition(t))
 
-    var methods = stateMachines.entries.map(entry => buildSM(entry._1, entry._2))
 
-    methods = methods ++ this.transitionMethods.values
+    // DONE WALKING
+    var methods = completeStateMachines.entries.map(entry => buildSM(entry._1, entry._2))
+
+    methods = methods ++ executeStateMachines.entries.map(entry => buildExecutionStateMachine(entry._1, entry._2))
+
+    methods = methods ++ transitionMethods.values
 
     var extensions: ISZ[ST] = ISZ()
 
     if(subprograms.nonEmpty) {
-      extensions = extensions :+ BlessST.externalObject(extSubprogramObject(), subprograms.values.map(sp => sp.extMethod))
+      extensions = extensions :+ BlessST.externalObjectSlang(extSubprogramObject(F),
+        subprograms.values.map(sp => st"${sp.extMethod}$$"))
+
+
+      val extName = extSubprogramObject(T)
+      val eo = BlessST.externalObjectJVM(st"${packageName}", extName, ISZ(), subprograms.values.map(sp =>
+        st"""${sp.extMethod} {
+            |  // intentionally empty, perhaps return dummy value
+            |}"""))
+
+      Util.writeFileString(st"${componentDirectory}/${extName}.scala".render, eo, false)
     }
 
-    return BlessST.main(packageName, imports, completeStateEnumName, states, componentName, bridgeName, initialState,
+    val completeStates = a.states.filter(s => !isExecuteState(Util.getLastName(s.id))).map(m => st"'${Util.getLastName(m.id)}")
+
+    return BlessST.main(packageName, imports, completeStateEnumName, completeStates, componentName, bridgeName, initialState,
       globalVars, methods, extensions)
+  }
+
+  def buildExecutionStateMachine(stateName: String, transitions: ISZ[GuardedTransition]): ST = {
+    val t = transitions.map(m => (m.transCondition, st"${m.actionMethodName}()"))
+
+    val body = BlessST.ifST(t(0), ISZOps(t).tail)
+
+    val ret = BlessST.method(executeStateMethodName(stateName), ISZ(), body, st"Unit")
+    return ret
   }
 
   def buildSM(t: BTSStateCategory.Type, l: ISZ[GuardedTransition]) : ST = {
@@ -65,11 +96,11 @@ import org.sireum.ops._
 
       val body = BlessST.ifST(inits(0), ISZOps(inits).tail)
 
-      return BlessST.method(st"Initialize_EntryPoint", ISZ(), body, st"Unit")
+      return BlessST.method(st"Initialize_Entrypoint", ISZ(), body, st"Unit")
     } else {
       var cases: ISZ[ST] = ISZ()
 
-      for(e <- btsStates.entries) {
+      for(e <- btsStates.entries.filter(f => isCompleteState(f._1) || isFinalState(f._1))) {
         val stateName = e._1
         val gts: ISZ[(ST, ST)] = l.filter(f => f.srcState == stateName).map(m =>
           (m.transCondition, st"${m.actionMethodName}()")
@@ -89,13 +120,14 @@ import org.sireum.ops._
 
       val body = st"""currentState match {
                      |  ${(cases, "\n")}
+                     |  case _ => halt("Unexpected")
                      |}"""
 
-      return BlessST.method(st"Compute_EntryPoint", ISZ(), body, st"Unit")
+      return BlessST.method(st"Compute_Entrypoint", ISZ(), body, st"Unit")
     }
   }
 
-  def visitStates(state: BTSStateDeclaration): ST = {
+  def visitBTSStateDeclaration(state: BTSStateDeclaration): ST = {
     assert(state.assertion.isEmpty)
     assert(state.id.name.length == 1)
 
@@ -182,31 +214,47 @@ import org.sireum.ops._
     }
 
     assert(t.label.priority.isEmpty)
-    val label = t.label.id.name(0)
+    val transLabel = t.label.id.name(0)
 
+    val actionMethodName = st"do_${transLabel}"
 
-    val actionMethodName = st"do_${label}"
-
-    var body: ST = t.actions match {
+    var actions: ST = t.actions match {
       case Some(behaviorActions) => visitBTSBehaviorActions(behaviorActions)
-      case _ => st"// empty body"
+      case _ => st"// empty actions"
     }
 
-    body = st"""${body}
-               |
-               |currentState = ${completeStateEnumName}.${dst}"""
+    if(isExecuteState(dst)) {
+      // going to an execute state
+      actions = st"""${actions}
+                    |
+                    |${executeStateMethodName(dst)}()"""
+    } else {
+      // going to a complete state
+      actions = st"""${actions}
+                    |
+                    |currentState = ${completeStateEnumName}.${dst}"""
+    }
 
-    val doMethod = BlessST.method(actionMethodName, ISZ(), body, st"Unit")
+    val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
     transitionMethods = transitionMethods + (actionMethodName.render ~> doMethod)
 
     assert(btsStates.get(src).get.categories.length == 1)
 
-    val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0)
-    val list: ISZ[GuardedTransition] = stateMachines.getOrElse(key, ISZ())
+
 
     val gt = GuardedTransition(src, dst, cond, actionMethodName)
 
-    stateMachines = stateMachines + (key ~> (list :+ gt))
+    if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
+      val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0) // TODO assumes single label per state
+      val list: ISZ[GuardedTransition] = completeStateMachines.getOrElse(key, ISZ())
+      completeStateMachines = completeStateMachines + (key ~> (list :+ gt))
+    } else {
+      assert(isExecuteState(src))
+
+      val key = src
+      val list: ISZ[GuardedTransition] = executeStateMachines.getOrElse(key, ISZ())
+      executeStateMachines = executeStateMachines + (key ~> (list :+ gt))
+    }
   }
 
   def visitBTSBehaviorActions(actions: BTSBehaviorActions): ST = {
@@ -316,8 +364,13 @@ import org.sireum.ops._
   def visitBTSTransitionCondition(condition: BTSTransitionCondition): ST = {
     condition match {
       case c: BTSDispatchCondition => return visitBTSDispatchCondition(c)
+      case c: BTSExecuteConditionExp => return visitBTSExecuteConditionExp(c)
       case _ => halt("Unexpected trans cond")
     }
+  }
+
+  def visitBTSExecuteConditionExp(condition: BTSExecuteConditionExp): ST = {
+    return visitBTSExp(condition.exp)
   }
 
   def visitBTSDispatchCondition(condition: BTSDispatchCondition): ST = {
@@ -330,7 +383,7 @@ import org.sireum.ops._
 
       val tail = ISZOps(condition.dispatchTriggers).tail
       return ISZOps(tail).foldLeft((r: ST, t) =>
-        st"$r && ${visitBTSDispatchConjunction(t)}", ret)
+        st"$r || ${visitBTSDispatchConjunction(t)}", ret)
     }
   }
 
@@ -339,7 +392,7 @@ import org.sireum.ops._
 
     val tail = ISZOps(conjunction.conjunction).tail
     return ISZOps(tail).foldLeft((r: ST, t) =>
-      st"$r || ${visitBTSDispatchTrigger(t)}", ret)
+      st"$r && ${visitBTSDispatchTrigger(t)}", ret)
   }
 
   def visitBTSDispatchTrigger(trigger: BTSDispatchTrigger): ST = {
@@ -510,12 +563,41 @@ import org.sireum.ops._
 
       val extMethod = BlessST.extMethod(methodName, slangParams.map(s => st"${s._1} : ${s._2}"), last._2)
 
-      val qualifiedName = st"${extSubprogramObject}.${methodName}"
+      val qualifiedName = st"${extSubprogramObject(F)}.${methodName}"
 
       subprograms = subprograms + (name ~> Subprogram(qualifiedName, slangParams.map(s => (s._1.render, s._2.render)), extMethod))
     }
 
     return subprograms.get(name).get
+  }
+
+  def isInitialState(str: String): B = {
+    return isStateType(str, BTSStateCategory.Initial)
+  }
+
+  def isFinalState(str: String): B = {
+    return isStateType(str, BTSStateCategory.Final)
+  }
+
+  def isCompleteState(name: String): B = {
+    return isStateType(name, BTSStateCategory.Complete)
+  }
+
+  def isExecuteState(name: String): B = {
+    return isStateType(name, BTSStateCategory.Execute)
+  }
+
+  def isStateType(name: String, typ: BTSStateCategory.Type): B = {
+    val states = btsStates.entries.filter(e => e._1 == name)
+    assert(states.size == 1)
+
+    val state: BTSStateDeclaration = states(0)._2
+
+    return ISZOps(state.categories).contains(typ)
+  }
+
+  def executeStateMethodName(s: String): ST = {
+    return st"executeState_${s}"
   }
 
   def isEnum(c: Classifier): B = {
@@ -525,8 +607,8 @@ import org.sireum.ops._
     }
   }
 
-  def extSubprogramObject(): ST = {
-    return st"${componentNames.componentImpl}_Subprograms"
+  def extSubprogramObject(isJvm: B): ST = {
+    return st"${componentNames.componentImpl}_Subprograms${if(isJvm) "_Ext" else ""}"
   }
 }
 

@@ -12,6 +12,7 @@ object Util {
   val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
   val Prop_Urgency: String = "Thread_Properties::Urgency"
   val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
+  val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
 
   val EmptyTypeNames = DataTypeNames("", "art", "Empty", false)
   def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
@@ -65,7 +66,7 @@ object Util {
   @pure def getEnumValues(v: Component): ISZ[String] = {
     var ret: ISZ[String] = ISZ()
     if(isEnum(v.properties)) {
-      for(p <- getPropertyValues(v.properties, Prop_Data_Model__Element_Names)){
+      for(p <- getPropertyValues(v.properties, Prop_Data_Model__Enumerators)){
         p match {
           case ValueProp(v) => ret = ret :+ v
           case _ => halt(s"Unhandled ${p}")
@@ -165,6 +166,10 @@ object Util {
   @pure def doNotEditComment(from: Option[String] = None[String]()) = {
     val _from = if (from.nonEmpty) " from " + from.get else ""
     s"// This file was auto-generated${_from}.  Do not edit"
+  }
+
+  @pure def writeFileString(fname: String, st: ST, overwrite: Boolean = true): Unit = {
+    writeFile(new File(fname.native), st, overwrite)
   }
 
   @pure def writeFile(fname: File, st: ST, overwrite: Boolean = true): Unit = {

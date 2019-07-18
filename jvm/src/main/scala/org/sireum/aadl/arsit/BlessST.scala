@@ -36,6 +36,16 @@ object BlessST {
                |  ${if(globalVars.isEmpty) "// no local vars" else st"${(globalVars, "\n")}" }
                |
                |  ${(methods, "\n\n")}
+               |
+               |
+               |  //methods for execution states
+               |  def Finalize_Entrypoint(): Unit = {}
+               |
+               |  def Activate_Entrypoint(): Unit = {}
+               |
+               |  def Deactivate_Entrypoint(): Unit = {}
+               |
+               |  def Recover_Entrypoint(): Unit = {}
                |}
                |
                |${(extensions, "\n")}
@@ -52,17 +62,33 @@ object BlessST {
   }
 
 
-  @pure def externalObject(name: ST,
-                           methods: ISZ[ST]) : ST = {
+  @pure def externalObjectSlang(name: ST,
+                                methods: ISZ[ST]) : ST = {
     return st"""@ext object ${name} {
                |  ${(methods, "\n\n")}
                |}"""
   }
 
+  @pure def externalObjectJVM(packageName: ST,
+                              name: ST,
+                              imports: ISZ[ST],
+                              methods: ISZ[ST]) : ST = {
+    return st"""package ${packageName}
+               |
+               |import org.sireum._
+               |${(imports, "\n")}
+               |
+               |object ${name} {
+               |  ${(methods, "\n\n")}
+               |}
+               |"""
+  }
+
+
   @pure def extMethod(name: ST,
                       params: ISZ[ST],
                       retType: ST): ST = {
-    return st"def ${name}(${params}): ${retType} = $$"
+    return st"def ${name}(${params}): ${retType} = "
   }
 
   @pure def ifST(ifbranch: (ST, ST), elsifs: ISZ[(ST, ST)]): ST = {
