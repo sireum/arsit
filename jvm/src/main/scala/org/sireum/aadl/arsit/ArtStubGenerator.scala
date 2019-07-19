@@ -25,6 +25,16 @@ class ArtStubGenerator {
 
     for(c <- m.components)
       gen(c)
+
+    if(BlessGen.vizEntries.nonEmpty) {
+      val eo = BlessST.vizExtObject(basePackage, ISZ(), BlessGen.vizEntries)
+      val so = BlessST.vizSlangObject(basePackage)
+
+      val utilDir = new File(outDir, s"component/${basePackage}/util")
+
+      Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}.scala"), so, true)
+      Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}_Ext.scala"), eo,true)
+    }
   }
 
   def gen(m: Component) : Unit = {
@@ -124,12 +134,11 @@ class ArtStubGenerator {
 
       assert(blessAnnexes.length == 1)
 
-      val compImpl = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names,
-        AadlTypes(typeMap)).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
+      val sm = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names,
+        AadlTypes(typeMap), T).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
-      Util.writeFile(new File(outDir, filename), compImpl, true)
+      Util.writeFile(new File(outDir, filename), sm, true)
     }
-
 
     seenComponents = seenComponents + filename
   }

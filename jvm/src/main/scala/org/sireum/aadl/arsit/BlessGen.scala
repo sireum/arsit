@@ -6,11 +6,16 @@ import org.sireum._
 import org.sireum.aadl.ir._
 import org.sireum.ops._
 
+object BlessGen{
+  var vizEntries: ISZ[ST] = ISZ()
+}
+
 @record class BlessGen(basePackage: String,
                        componentDirectory: String,
                        component: Component,
                        componentNames: Names,
-                       aadlTypes: AadlTypes) {
+                       aadlTypes: AadlTypes,
+                       addViz: B) {
 
   val completeStateEnumName: String = s"${componentNames.componentImpl}_CompleteStates"
 
@@ -48,6 +53,26 @@ import org.sireum.ops._
     val globalVars: ISZ[ST] = a.variables.map(v => visitBTSVariableDeclaration(v))
     a.transitions.map(t => visitBTSTransition(t))
 
+
+    if(addViz) {
+
+      val trans = a.transitions.map(bts => {
+        val label = Util.getLastName(bts.label.id)
+        val src = Util.getLastName(bts.sourceStates(0))
+        val dst = Util.getLastName(bts.destState)
+
+        BlessST.vizTrans(src, dst, label)
+      })
+
+      val stateDecs: ISZ[ST] = a.states.map(m => BlessST.vizCreate(Util.getLastName(m.id), st"state desc"))
+      val stateNames: ISZ[ST] = a.states.map(m => st"${Util.getLastName(m.id)}")
+
+      val id = st"Arch.${Util.getName(component.identifier)}.id".render
+
+      val viz = BlessST.vizBuildSm(stateDecs, id, componentNames.componentImpl, initialState, stateNames, trans)
+
+      BlessGen.vizEntries = BlessGen.vizEntries :+ viz
+    }
 
     // DONE WALKING
     var methods = completeStateMachines.entries.map(entry => buildSM(entry._1, entry._2))
@@ -94,7 +119,13 @@ import org.sireum.ops._
         (m.transCondition, st"${m.actionMethodName}()"))
       assert(inits.length == 1)
 
-      val body = BlessST.ifST(inits(0), ISZOps(inits).tail)
+      var body = BlessST.ifST(inits(0), ISZOps(inits).tail)
+
+      if(addViz) {
+        body = st"""${BlessST.vizCallCreateStateMachines(basePackage)}
+                   |
+                   |$body"""
+      }
 
       return BlessST.method(st"Initialize_Entrypoint", ISZ(), body, st"Unit")
     } else {
@@ -235,6 +266,11 @@ import org.sireum.ops._
       actions = st"""${actions}
                     |
                     |currentState = ${completeStateEnumName}.${dst}"""
+
+      if(addViz) {
+        actions = st"""${actions}
+                      |${BlessST.vizCallTransition(basePackage)}"""
+      }
     }
 
     val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
@@ -243,15 +279,23 @@ import org.sireum.ops._
     assert(btsStates.get(src).get.categories.length == 1)
 
 
-
-    val gt = GuardedTransition(src, dst, cond, actionMethodName)
-
     if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
+      val gt = GuardedTransition(src, dst, cond, actionMethodName)
+
       val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0) // TODO assumes single label per state
       val list: ISZ[GuardedTransition] = completeStateMachines.getOrElse(key, ISZ())
       completeStateMachines = completeStateMachines + (key ~> (list :+ gt))
     } else {
       assert(isExecuteState(src))
+
+      var actions = actionMethodName
+      if(addViz) {
+        actions = st"""${BlessST.vizCallTransitionWithStateName(basePackage, src)}
+
+                      |$actions"""
+      }
+
+      val gt = GuardedTransition(src, dst, cond, actions)
 
       val key = src
       val list: ISZ[GuardedTransition] = executeStateMachines.getOrElse(key, ISZ())

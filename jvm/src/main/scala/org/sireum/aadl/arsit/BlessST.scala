@@ -7,6 +7,9 @@ import org.sireum.aadl.ir._
 
 object BlessST {
 
+  val vizObjectName: String = "StateMachineVisualizer"
+
+
   @pure def main(packageName: String,
                  imports: ISZ[ST],
                  completeStateEnumName: String,
@@ -131,5 +134,93 @@ object BlessST {
 
   @pure def wrapDispatchedPorts(): ST = {
     return st"val ports = org.sireum.ops.ISZOps(dispatchedPorts)"
+  }
+
+
+
+
+  @pure def vizCreate(stateName: String, desc: ST): ST = {
+    return st"""val ${stateName} = State.create("${stateName}", "${desc}")"""
+  }
+
+  @pure def vizBuildSm(stateDecs: ISZ[ST], id: String, label: String, initialState: String, states: ISZ[ST], trans: ISZ[ST]): ST = {
+    return st"""{
+               |  ${(stateDecs, "\n")}
+               |
+               |  Inspector.addStateMachineView($id, "${label}",
+               |    StateMachine
+               |      .builder()
+               |      .addStates(${(states, ", ")})
+               |      ${(trans, "\n")}
+               |      .setInitialState(${initialState})
+               |      .build())
+               |}"""
+  }
+
+  @pure def vizTrans(src: String, dst: String, name: String): ST = {
+    return st""".addTransition(Transition.create(${src}, ${dst}, "${name}"))"""
+  }
+
+
+  @pure def vizPackageName(basePackage: String): ST = {
+    return st"$basePackage.util"
+  }
+
+  @pure def vizSlangObject(basePackage: String): ST = {
+    return st"""// #Sireum
+               |
+               |package ${vizPackageName(basePackage)}
+               |
+               |import org.sireum._
+               |
+               |@ext object ${vizObjectName} {
+               |  def createStateMachines(): Unit = $$
+               |
+               |  def transition(componentId: art.Art.PortId, stateName: String): Unit = $$
+               |}
+               |"""
+  }
+
+  @pure def vizCallCreateStateMachines(basePackage: String): ST = {
+    return st"${basePackage}.util.${vizObjectName}.createStateMachines()"
+  }
+
+  @pure def vizCallTransition(basePackage: String): ST = {
+    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, currentState.name)"""
+  }
+
+  @pure def vizCallTransitionWithStateName(basePackage: String, stateName: String): ST = {
+    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, "$stateName")"""
+  }
+
+  @pure def vizExtObject(basePackage: String,
+                         imports: ISZ[ST],
+                         entries: ISZ[ST]
+                        ): ST = {
+    return st"""package ${vizPackageName(basePackage)}
+               |
+               |${(imports, "\n")}
+               |import java.util.concurrent.atomic.AtomicBoolean
+               |import ${basePackage}.Arch
+               |import ${basePackage}.Inspector
+               |import org.santos.inspectorgui.fsm.model.{State, StateMachine, Transition}
+               |
+               |object ${vizObjectName}_Ext {
+               |
+               |  var isFirst = new AtomicBoolean(true)
+               |
+               |  def createStateMachines(): Unit = {
+               |    if(isFirst.getAndSet(false)){
+               |        ${(entries, "\n")}
+               |    }
+               |  }
+               |
+               |  def transition(componentId: art.Art.PortId, stateName: org.sireum.String): Unit = {
+               |    Inspector.updateStateMachineView(componentId, stateName.value)
+               |  }
+               |}
+               |
+               |
+               |"""
   }
 }
