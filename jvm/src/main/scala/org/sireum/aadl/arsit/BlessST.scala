@@ -122,6 +122,14 @@ object BlessST {
   }
 
   @pure def portQuery(portName: String): ST = {
-    return st"${portFetch(portName)}.nonEmpty"
+    return st"ports.contains(api.${portName}_Id)"
+  }
+
+  @pure def dispatchedPortsDec(): ST = {
+    return st"dispatchedPorts : ISZ[art.Art.PortId]"
+  }
+
+  @pure def wrapDispatchedPorts(): ST = {
+    return st"val ports = org.sireum.ops.ISZOps(dispatchedPorts)"
   }
 }

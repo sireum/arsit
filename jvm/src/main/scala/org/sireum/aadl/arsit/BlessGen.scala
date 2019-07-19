@@ -118,12 +118,14 @@ import org.sireum.ops._
 
       }
 
-      val body = st"""currentState match {
+      val body = st"""${BlessST.wrapDispatchedPorts()}
+                     |
+                     |currentState match {
                      |  ${(cases, "\n")}
                      |  case _ => halt("Unexpected")
                      |}"""
 
-      return BlessST.method(st"Compute_Entrypoint", ISZ(), body, st"Unit")
+      return BlessST.method(st"Compute_Entrypoint", ISZ(BlessST.dispatchedPortsDec()), body, st"Unit")
     }
   }
 
@@ -399,8 +401,15 @@ import org.sireum.ops._
     val ret: ST = trigger match {
       case BTSDispatchTriggerStop() => st"STOP"
       case BTSDispatchTriggerPort(port) =>
-        val portName = Util.getLastName(port)
-        BlessST.portQuery(portName)
+        val name = Util.getLastName(port)
+
+        val d = this.component.features.filter(f => f.identifier.name == port.name )
+        assert(d.size == 1)
+        if(!Util.isEventPort(d(0).asInstanceOf[FeatureEnd])){
+          println(s"WARNING: Processing dispatch trigger in ${componentNames.componentImpl}.  '${name}' is not an event port so will not be dispatched")
+        }
+
+        BlessST.portQuery(name)
       case BTSDispatchTriggerTimeout(ports, time) => st"TIMEOUT"
     }
 

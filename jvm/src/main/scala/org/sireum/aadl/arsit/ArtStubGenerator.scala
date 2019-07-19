@@ -363,9 +363,17 @@ class ArtStubGenerator {
                        |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
         }
       } else {
-        return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
-                   |${componentName}.Compute_Entrypoint()
-                   |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        dispatchProtocol.toString match {
+          case "Sporadic" =>
+            return st"""val EventTriggered(dispatchedPortIds) = Art.dispatchStatus(${bridgeName})
+                       |Art.receiveInput(dispatchedPortIds, dataInPortIds)
+                       |${componentName}.Compute_Entrypoint(dispatchedPortIds)
+                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+          case "Periodic" =>
+            return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
+                       |${componentName}.Compute_Entrypoint(ISZ())
+                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        }
       }
     }
 
