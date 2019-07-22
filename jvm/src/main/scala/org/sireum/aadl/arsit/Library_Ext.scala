@@ -13,4 +13,9 @@ object Library_Ext {
     }
     ISZ(map.toSeq.map(p => (String(p._1.mkString("/")), String(p._2))): _*)
   }
+
+  def tripleQuote(): ST = {
+    val x = "\"\"\""
+    return st"$x"
+  }
 }

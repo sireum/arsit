@@ -134,8 +134,8 @@ class ArtStubGenerator {
 
       assert(blessAnnexes.length == 1)
 
-      val sm = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names,
-        AadlTypes(typeMap), T).process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
+      val sm = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap), T, T).
+        process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
       Util.writeFile(new File(outDir, filename), sm, true)
     }

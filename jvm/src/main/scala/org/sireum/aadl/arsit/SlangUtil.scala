@@ -35,6 +35,8 @@ object Cli {
 
 @ext object Library {
   def getFiles: ISZ[(String, String)] = $
+
+  def tripleQuote: ST = $
 }
 
 @enum object DispatchProtocol {

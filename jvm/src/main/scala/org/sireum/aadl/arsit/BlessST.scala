@@ -28,6 +28,8 @@ object BlessST {
                |import org.sireum._
                |${(imports, "\n")}
                |
+               |${doNotEditComment()}
+               |
                |@enum object ${completeStateEnumName} {
                |  ${(states, "\n")}
                |}
@@ -36,7 +38,7 @@ object BlessST {
                |
                |  var currentState : ${completeStateEnumName}.Type = ${completeStateEnumName}.${initialState}
                |
-               |  ${if(globalVars.isEmpty) "// no local vars" else st"${(globalVars, "\n")}" }
+               |  ${if(globalVars.isEmpty) "// no global vars" else st"${(globalVars, "\n")}" }
                |
                |  ${(methods, "\n\n")}
                |
@@ -137,7 +139,39 @@ object BlessST {
   }
 
 
+  @pure def debugRegister(): ST = {
+    return st"art.ArtDebug.setDebugObject(api.id.string, debugObject)"
+  }
 
+  @pure def debugObjectAccess(fieldName: String): ST = {
+    return st"debugObject.${fieldName}"
+  }
+
+  @pure def debugObject(componentName: String,
+                        fields: ISZ[ST],
+                        names: ISZ[ST]): ST = {
+    val vars: ST = st"${(names.map(s => st"${s} = $${$s}"), "\n|\n|")}"
+    val tq: ST = Library.tripleQuote // TODO how to write triple quote in slang
+    val flds: ST = if(fields.isEmpty) st"// no global vars" else st"${(fields, ",\n")}"
+
+    return st"""@record class ${componentName}_DebugObject (
+               |  ${flds}
+               |) {
+               |  override def string: String = {
+               |    return  st$tq$vars$tq.render
+               |  }
+               |}
+               |"""
+  }
+
+  @pure def debugObjectDec(componentName: String,
+                           initExps: ISZ[ST]): ST = {
+    val inits: ST = if(initExps.isEmpty) st"// no global vars" else st"${(initExps, ",\n")}"
+    return st"""val debugObject : ${componentName}_DebugObject = ${componentName}_DebugObject (
+               |  ${inits}
+               |)
+               |"""
+  }
 
   @pure def vizCreate(stateName: String, desc: ST): ST = {
     return st"""val ${stateName} = State.create("${stateName}", "${desc}")"""
@@ -173,6 +207,8 @@ object BlessST {
                |
                |import org.sireum._
                |
+               |${doNotEditComment()}
+               |
                |@ext object ${vizObjectName} {
                |  def createStateMachines(): Unit = $$
                |
@@ -205,6 +241,8 @@ object BlessST {
                |import ${basePackage}.Inspector
                |import org.santos.inspectorgui.fsm.model.{State, StateMachine, Transition}
                |
+               |${doNotEditComment()}
+               |
                |object ${vizObjectName}_Ext {
                |
                |  var isFirst = new AtomicBoolean(true)
@@ -222,5 +260,9 @@ object BlessST {
                |
                |
                |"""
+  }
+
+  @pure def doNotEditComment(): ST = {
+    return st"// This file was auto-generated.  Do not edit"
   }
 }

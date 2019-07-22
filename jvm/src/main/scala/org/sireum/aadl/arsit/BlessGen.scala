@@ -15,7 +15,8 @@ object BlessGen{
                        component: Component,
                        componentNames: Names,
                        aadlTypes: AadlTypes,
-                       addViz: B) {
+                       addViz: B,
+                       genDebugObjects: B) {
 
   val completeStateEnumName: String = s"${componentNames.componentImpl}_CompleteStates"
 
@@ -24,7 +25,7 @@ object BlessGen{
   var declaredStates: ISZ[String] = ISZ()
   var initialState: String = ""
 
-  var globalVariables: Map[String, BTSVariableDeclaration] = Map.empty
+  var globalVariables: Map[String, GlobalVar] = Map.empty
 
   var completeStateMachines: Map[BTSStateCategory.Type, ISZ[GuardedTransition]] = Map.empty
   var executeStateMachines: Map[String, ISZ[GuardedTransition]] = Map.empty
@@ -50,9 +51,13 @@ object BlessGen{
 
     val componentName = componentNames.componentImpl
     val bridgeName = componentNames.bridge
-    val globalVars: ISZ[ST] = a.variables.map(v => visitBTSVariableDeclaration(v))
-    a.transitions.map(t => visitBTSTransition(t))
 
+    for(v <- a.variables){
+      val gv = visitBTSVariableDeclaration(v)
+      globalVariables = globalVariables + (gv.slangName ~> gv)
+    }
+
+    a.transitions.map(t => visitBTSTransition(t))
 
     if(addViz) {
 
@@ -73,6 +78,7 @@ object BlessGen{
 
       BlessGen.vizEntries = BlessGen.vizEntries :+ viz
     }
+
 
     // DONE WALKING
     var methods = completeStateMachines.entries.map(entry => buildSM(entry._1, entry._2))
@@ -95,6 +101,17 @@ object BlessGen{
             |}"""))
 
       Util.writeFileString(st"${componentDirectory}/${extName}.scala".render, eo, false)
+    }
+
+    val globalVars: ISZ[ST] = if(genDebugObjects) {
+      val fields = globalVariables.values.map(m => st"var ${m.slangName}: ${m.slangTypeName}")
+      val names = globalVariables.values.map(m => st"${m.slangName}")
+      val initExps = globalVariables.values.map(m => m.initExp)
+
+      extensions = extensions :+ BlessST.debugObject(componentNames.componentImpl, fields, names)
+      ISZ(BlessST.debugObjectDec(componentNames.componentImpl, initExps))
+    } else {
+      globalVariables.values.map(v => BlessST.variableDec(v.slangName, v.slangTypeName, v.initExp))
     }
 
     val completeStates = a.states.filter(s => !isExecuteState(Util.getLastName(s.id))).map(m => st"'${Util.getLastName(m.id)}")
@@ -123,6 +140,12 @@ object BlessGen{
 
       if(addViz) {
         body = st"""${BlessST.vizCallCreateStateMachines(basePackage)}
+                   |
+                   |$body"""
+      }
+
+      if(genDebugObjects) {
+        body = st"""${BlessST.debugRegister()}
                    |
                    |$body"""
       }
@@ -176,31 +199,28 @@ object BlessGen{
     return st"'${stateName}"
   }
 
-  def visitBTSVariableDeclaration(variable: BTSVariableDeclaration): ST = {
+  def visitBTSVariableDeclaration(variable: BTSVariableDeclaration): GlobalVar = {
     val typ = variable.category // TODO
     val arraySize = variable.arraySize // TODO
     val variableAssertion = variable.variableAssertion // TODO
 
     val varName: String = Util.getLastName(variable.name)
 
-    globalVariables = globalVariables + (varName ~> variable)
-
     var isEnum: B = F
+
+    val aadlType: AadlType = variable.varType match {
+      case BTSClassifier(classifier) =>
+        val r = aadlTypes.typeMap.get(classifier.name).get
+        isEnum = r.isInstanceOf[EnumType]
+        r
+      case _ => halt("finish this ${variable}")
+    }
 
     val assignExp: ST = if(variable.assignExpression.nonEmpty) {
       visitBTSExp(variable.assignExpression.get)
     } else {
       // emit default value
-      variable.varType match {
-        case BTSClassifier(classifier) =>
-          aadlTypes.typeMap.get(classifier.name) match {
-            case Some(o) =>
-              isEnum = o.isInstanceOf[EnumType]
-              st"${initType(o)} // dummy value"
-            case _ => halt(s"not in type map $classifier")
-          }
-        case _ => st"finish this ${variable}"
-      }
+      st"${initType(aadlType)}"
     }
 
     var varType:ST = visitBTSType(variable.varType)
@@ -208,7 +228,7 @@ object BlessGen{
       varType = st"${varType}.Type"
     }
 
-    return BlessST.variableDec(varName, varType, assignExp)
+    return GlobalVar(varName, varType, aadlType, assignExp)
   }
 
   def initType(a: AadlType): ST = {
@@ -396,7 +416,10 @@ object BlessGen{
     assert(quantification.timeout.isEmpty) // TODO
     assert(quantification.catchClause.isEmpty) // TODO
 
-    val localVars: ISZ[ST] = quantification.quantifiedVariables.map(m => visitBTSVariableDeclaration(m))
+    val localVars: ISZ[ST] = quantification.quantifiedVariables.map(m => {
+      val gt = visitBTSVariableDeclaration(m)
+      BlessST.variableDec(gt.slangName, gt.slangTypeName, gt.initExp)
+    })
 
     val actions = visitBTSBehaviorActions(quantification.actions)
 
@@ -488,7 +511,14 @@ object BlessGen{
         halt(s"Need to handle ${e}")
       }
     } else {
-      st"${n}"
+      assert(e.name.name.size == 1)
+
+      if (genDebugObjects && isGlobalVariables(n)) {
+        BlessST.debugObjectAccess(n)
+      }
+      else {
+        st"${n}"
+      }
     }
 
     return st
@@ -660,6 +690,10 @@ object BlessGen{
     }
   }
 
+  def isGlobalVariables(name: String): B = {
+    return globalVariables.get(name).nonEmpty
+  }
+
   def extSubprogramObject(isJvm: B): ST = {
     return st"${componentNames.componentImpl}_Subprograms${if(isJvm) "_Ext" else ""}"
   }
@@ -673,3 +707,9 @@ object BlessGen{
                                   dstState: String,
                                   transCondition: ST,
                                   actionMethodName: ST)
+
+@datatype class GlobalVar(slangName: String,
+                          slangTypeName: ST,
+                          typ: AadlType,
+                          initExp: ST
+                         )
