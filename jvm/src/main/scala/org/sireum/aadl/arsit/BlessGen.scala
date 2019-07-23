@@ -69,7 +69,11 @@ object BlessGen{
         BlessST.vizTrans(src, dst, label)
       })
 
-      val stateDecs: ISZ[ST] = a.states.map(m => BlessST.vizCreate(Util.getLastName(m.id), st"state desc"))
+      val stateDecs: ISZ[ST] = a.states.map(m => {
+        val stateTypes = m.categories.map(m => BlessST.vizStateType(m))
+        BlessST.vizCreate(Util.getLastName(m.id), st"state desc", stateTypes)
+      })
+
       val stateNames: ISZ[ST] = a.states.map(m => st"${Util.getLastName(m.id)}")
 
       val id = st"Arch.${Util.getName(component.identifier)}.id".render
@@ -86,6 +90,8 @@ object BlessGen{
     methods = methods ++ executeStateMachines.entries.map(entry => buildExecutionStateMachine(entry._1, entry._2))
 
     methods = methods ++ transitionMethods.values
+
+    methods = methods :+ BlessST.tranpilerWorkaroundContains()
 
     var extensions: ISZ[ST] = ISZ()
 
@@ -543,6 +549,10 @@ object BlessGen{
         } else {
           st"${exp.exp}"
         }
+      case BTSLiteralType.INTEGER =>
+        st"${exp.exp}"
+      case BTSLiteralType.FLOAT =>
+        st"${exp.exp}f"
     }
     return ret
   }
@@ -611,6 +621,8 @@ object BlessGen{
   def resolveSubprogram(name: Name): Subprogram = {
 
     if(!subprograms.contains(name)) {
+      println(name)
+
       val _c = component.subComponents.filter(sc => sc.identifier.name == name.name)
       assert(_c.size == 1)
       val subprog = _c(0)

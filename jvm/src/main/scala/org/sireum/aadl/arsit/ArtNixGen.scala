@@ -1081,16 +1081,8 @@ class ArtNixGen {
           |export OUTPUT_DIR=$$SCRIPT_HOME/../src/c
           |export EXTS=$$OUTPUT_DIR/ext/ext.c:$$OUTPUT_DIR/ext/ipc.c
           |
-          |if [ -n "$$1" ]; then
-          |  TRANSPILER_JAR_HOME=$$1
-          |fi
           |
-          |if [ -z "$$TRANSPILER_JAR_HOME" ]; then
-          |  echo "Specify the location of the Sireum-Transpiler jar file"
-          |  exit 1
-          |fi
-          |
-          |$$TRANSPILER_JAR_HOME transpiler c \
+          |$$SIREUM_HOME/bin/sireum slang transpilers c \
           |  --sourcepath $$PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \

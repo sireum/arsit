@@ -29,11 +29,13 @@ class ArtStubGenerator {
     if(BlessGen.vizEntries.nonEmpty) {
       val eo = BlessST.vizExtObject(basePackage, ISZ(), BlessGen.vizEntries)
       val so = BlessST.vizSlangObject(basePackage)
+      val bv = BlessST.vizBlessViz(basePackage)
 
       val utilDir = new File(outDir, s"component/${basePackage}/util")
 
       Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}.scala"), so, true)
       Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}_Ext.scala"), eo,true)
+      Util.writeFile(new File(utilDir, s"${BlessST.vizBlessVizName.render}.scala"), bv,true)
     }
   }
 

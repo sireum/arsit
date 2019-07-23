@@ -127,7 +127,8 @@ object BlessST {
   }
 
   @pure def portQuery(portName: String): ST = {
-    return st"ports.contains(api.${portName}_Id)"
+    // return st"ports.contains(api.${portName}_Id)"  // FIXME transpiler doesn't handle ((Z) => B @pure)
+    return st"contains(dispatchedPorts, api.${portName}_Id)"
   }
 
   @pure def dispatchedPortsDec(): ST = {
@@ -136,6 +137,22 @@ object BlessST {
 
   @pure def wrapDispatchedPorts(): ST = {
     return st"val ports = org.sireum.ops.ISZOps(dispatchedPorts)"
+  }
+
+  @pure def doNotEditComment(): ST = {
+    return st"// This file was auto-generated.  Do not edit"
+  }
+
+
+  @pure def tranpilerWorkaroundContains(): ST = {
+    return st"""def contains(ids: ISZ[art.Art.PortId], id: art.Art.PortId): B = {
+               |  for (i <- ids) {
+               |    if (i == id) {
+               |      return T
+               |    }
+               |  }
+               |  return F
+               |}"""
   }
 
 
@@ -173,15 +190,30 @@ object BlessST {
                |"""
   }
 
-  @pure def vizCreate(stateName: String, desc: ST): ST = {
-    return st"""val ${stateName} = State.create("${stateName}", "${desc}")"""
+
+
+
+  @pure def vizStateType(m: BTSStateCategory.Type): ST = {
+    val name = m match {
+      case BTSStateCategory.Execute => "EXECUTE"
+      case BTSStateCategory.Complete => "COMPLETE"
+      case BTSStateCategory.Final => "FINAL"
+      case BTSStateCategory.Initial => "INITIAL"
+    }
+    return st"StateType.${name}"
+  }
+
+  @pure def vizCreate(stateName: String,
+                      desc: ST,
+                      stateTypes: ISZ[ST]): ST = {
+    return st"""val ${stateName} = State.create("${stateName}", "${desc}", Seq(${(stateTypes, ", ")}))"""
   }
 
   @pure def vizBuildSm(stateDecs: ISZ[ST], id: String, label: String, initialState: String, states: ISZ[ST], trans: ISZ[ST]): ST = {
     return st"""{
                |  ${(stateDecs, "\n")}
                |
-               |  Inspector.addStateMachineView($id, "${label}",
+               |  addStateMachineView($id, "${label}",
                |    StateMachine
                |      .builder()
                |      .addStates(${(states, ", ")})
@@ -222,7 +254,7 @@ object BlessST {
   }
 
   @pure def vizCallTransition(basePackage: String): ST = {
-    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, currentState.name)"""
+    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, s"$$currentState") // TODO transpiler handle $$currentState.name"""
   }
 
   @pure def vizCallTransitionWithStateName(basePackage: String, stateName: String): ST = {
@@ -238,14 +270,24 @@ object BlessST {
                |${(imports, "\n")}
                |import java.util.concurrent.atomic.AtomicBoolean
                |import ${basePackage}.Arch
-               |import ${basePackage}.Inspector
-               |import org.santos.inspectorgui.fsm.model.{State, StateMachine, Transition}
+               |import org.santos.inspectorgui.fsm.model.{State, StateMachine, StateType, Transition}
+               |import javax.swing.SwingUtilities
+               |import org.sireum.{IS, Z}
                |
                |${doNotEditComment()}
                |
                |object ${vizObjectName}_Ext {
                |
+               |  private val blessVisualizer = ${vizBlessVizName()}()
+               |  blessVisualizer.init()
+               |
                |  var isFirst = new AtomicBoolean(true)
+               |
+               |  def addStateMachineView(bridgeId: Z, name: org.sireum.String, stateMachine: StateMachine): Unit =
+               |    SwingUtilities.invokeAndWait(() => blessVisualizer.addStateMachineView(bridgeId, name.value, stateMachine))
+               |
+               |  def updateStateMachineView(bridgeId: Z, state: org.sireum.String): Unit =
+               |    SwingUtilities.invokeLater(() => blessVisualizer.updateStateMachine(bridgeId, state.value))
                |
                |  def createStateMachines(): Unit = {
                |    if(isFirst.getAndSet(false)){
@@ -254,7 +296,7 @@ object BlessST {
                |  }
                |
                |  def transition(componentId: art.Art.PortId, stateName: org.sireum.String): Unit = {
-               |    Inspector.updateStateMachineView(componentId, stateName.value)
+               |    updateStateMachineView(componentId, stateName.value)
                |  }
                |}
                |
@@ -262,7 +304,88 @@ object BlessST {
                |"""
   }
 
-  @pure def doNotEditComment(): ST = {
-    return st"// This file was auto-generated.  Do not edit"
+  @pure def vizBlessVizName(): ST = {
+    return st"BlessVisualizer"
+  }
+
+  @pure def vizBlessViz(basePackage: String): ST = {
+    return st"""package ${vizPackageName(basePackage)}
+        |
+        |import javax.swing._
+        |import org.santos.inspectorgui.fsm.form.StateMachineViewPanel
+        |import org.santos.inspectorgui.fsm.model.{StateMachine, Transition}
+        |import org.sireum.{HashMap, Z}
+        |
+        |import scala.collection.JavaConverters
+        |
+        |object ${vizBlessVizName()} {
+        |  def apply(): ${vizBlessVizName()} = new ${vizBlessVizName()}
+        |}
+        |
+        |class ${vizBlessVizName()} {
+        |
+        |  var frame: JFrame = _
+        |  var tabbedPane: JTabbedPane = _
+        |
+        |  private var fsmMap: HashMap[Z, StateMachine] = org.sireum.HashMap.empty
+        |  private var panelMap: HashMap[Z, StateMachineViewPanel] = org.sireum.HashMap.empty
+        |
+        |  def init(): Unit = {
+        |    initialize()
+        |  }
+        |
+        |  def initialize(): Unit = {
+        |    frame = new JFrame()
+        |
+        |    frame.setBounds(100, 10, 675, 450)
+        |
+        |    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+        |
+        |    tabbedPane = new JTabbedPane()
+        |    frame.getContentPane.add(tabbedPane)
+        |  }
+        |
+        |  def addStateMachineView(bridgeId: Z, name: String, fsm: StateMachine): Unit = {
+        |    try {
+        |      fsmMap = fsmMap + (bridgeId, fsm)
+        |      val panel = new StateMachineViewPanel(fsm)
+        |      panelMap = panelMap + (bridgeId, panel)
+        |      tabbedPane.addTab(name, panel)
+        |      frame.pack()
+        |      frame.setVisible(true)
+        |    } catch {
+        |      case t: Throwable => t.printStackTrace()
+        |    }
+        |  }
+        |
+        |  def updateStateMachine(bridgeId: Z, state: String): Unit = {
+        |    try {
+        |      val fsm = fsmMap.get(bridgeId).get
+        |      val transition = findTransitionWithStateNames(state, fsm)
+        |      var s = ""
+        |      if (!art.ArtDebug.getDebugObject[Any](bridgeId.string).isEmpty) {
+        |        s = art.ArtDebug.getDebugObject[Any](bridgeId.string).get.toString
+        |      }
+        |
+        |      transition match {
+        |        case scala.Some(t) => fsm.update(t, s)
+        |        case scala.None => panelMap.get(bridgeId).get.beginTimeline() // should occur once if graph made correctly
+        |      }
+        |    } catch {
+        |      case t: Throwable => t.printStackTrace()
+        |    }
+        |  }
+        |
+        |  private def findTransitionWithStateNames(state: String, fsm: StateMachine): scala.Option[Transition] =
+        |    toIterator(fsm.getGraph.getOutEdges(fsm.currentState)).find(_.getTo.getName.equals(state))
+        |
+        |  private def toIterator[T](l: java.util.Collection[T]): Iterator[T] = {
+        |    if (l == null) {
+        |      return Iterator[T]()
+        |    }
+        |    JavaConverters.collectionAsScalaIterableConverter(l).asScala.toIterator
+        |  }
+        |}
+        |"""
   }
 }
