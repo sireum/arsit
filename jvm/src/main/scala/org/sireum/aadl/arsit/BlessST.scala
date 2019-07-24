@@ -347,6 +347,9 @@ object BlessST {
         |
         |  def addStateMachineView(bridgeId: Z, name: String, fsm: StateMachine): Unit = {
         |    try {
+        |      if (fsmMap.contains(bridgeId)) {
+        |        throw new IllegalStateException("Cannot add duplicate bridge view to ${vizBlessVizName()}.")
+        |      }
         |      fsmMap = fsmMap + (bridgeId, fsm)
         |      val panel = new StateMachineViewPanel(fsm)
         |      panelMap = panelMap + (bridgeId, panel)

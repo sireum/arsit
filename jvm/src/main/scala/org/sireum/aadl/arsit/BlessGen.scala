@@ -6,10 +6,6 @@ import org.sireum._
 import org.sireum.aadl.ir._
 import org.sireum.ops._
 
-object BlessGen{
-  var vizEntries: ISZ[ST] = ISZ()
-}
-
 @record class BlessGen(basePackage: String,
                        componentDirectory: String,
                        component: Component,
@@ -34,9 +30,9 @@ object BlessGen{
 
   var subprograms: Map[Name, Subprogram] = Map.empty
 
+  var vizEntries: ISZ[ST] = ISZ()
 
-
-  def process(a: BTSBLESSAnnexClause): ST = {
+  def process(a: BTSBLESSAnnexClause): BlessResults = {
     if(a.assertions.nonEmpty) {
       println(s"Need to handle assertions")
     } // TODO
@@ -80,7 +76,7 @@ object BlessGen{
 
       val viz = BlessST.vizBuildSm(stateDecs, id, componentNames.componentImpl, initialState, stateNames, trans)
 
-      BlessGen.vizEntries = BlessGen.vizEntries :+ viz
+      vizEntries = vizEntries :+ viz
     }
 
 
@@ -122,8 +118,10 @@ object BlessGen{
 
     val completeStates = a.states.filter(s => !isExecuteState(Util.getLastName(s.id))).map(m => st"'${Util.getLastName(m.id)}")
 
-    return BlessST.main(packageName, imports, completeStateEnumName, completeStates, componentName, bridgeName, initialState,
+    val ci = BlessST.main(packageName, imports, completeStateEnumName, completeStates, componentName, bridgeName, initialState,
       globalVars, methods, extensions)
+
+    return BlessResults(ci, vizEntries)
   }
 
   def buildExecutionStateMachine(stateName: String, transitions: ISZ[GuardedTransition]): ST = {
@@ -621,8 +619,6 @@ object BlessGen{
   def resolveSubprogram(name: Name): Subprogram = {
 
     if(!subprograms.contains(name)) {
-      println(name)
-
       val _c = component.subComponents.filter(sc => sc.identifier.name == name.name)
       assert(_c.size == 1)
       val subprog = _c(0)
@@ -725,3 +721,6 @@ object BlessGen{
                           typ: AadlType,
                           initExp: ST
                          )
+
+@datatype class BlessResults(component: ST,
+                             optVizEntries: ISZ[ST])

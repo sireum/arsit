@@ -14,6 +14,8 @@ class ArtStubGenerator {
   var seenComponents : HashSet[String] = HashSet.empty
   var typeMap: Map[String, AadlType] = Map.empty
 
+  var optVizEntries: ISZ[ST] = ISZ()
+
   def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
     assert(dir.exists)
 
@@ -26,8 +28,8 @@ class ArtStubGenerator {
     for(c <- m.components)
       gen(c)
 
-    if(BlessGen.vizEntries.nonEmpty) {
-      val eo = BlessST.vizExtObject(basePackage, ISZ(), BlessGen.vizEntries)
+    if(optVizEntries.nonEmpty) {
+      val eo = BlessST.vizExtObject(basePackage, ISZ(), optVizEntries)
       val so = BlessST.vizSlangObject(basePackage)
       val bv = BlessST.vizBlessViz(basePackage)
 
@@ -136,10 +138,12 @@ class ArtStubGenerator {
 
       assert(blessAnnexes.length == 1)
 
-      val sm = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap), T, T).
+      val br = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap), T, T).
         process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
-      Util.writeFile(new File(outDir, filename), sm, true)
+      Util.writeFile(new File(outDir, filename), br.component, true)
+
+      optVizEntries = optVizEntries ++ br.optVizEntries
     }
 
     seenComponents = seenComponents + filename
