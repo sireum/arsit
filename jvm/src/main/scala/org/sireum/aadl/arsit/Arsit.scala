@@ -55,7 +55,8 @@ object Arsit {
   }
 
   def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
-          genBlessEntryPoints: B, genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava): Int = {
+          genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava,
+          baTranslate: B, baAddViz: B, baExposeState: B): Int = {
     val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
     val m = ipcMechanism match {
       case ArsitBridge.IPCMechanismJava.MessageQueue => Cli.Ipcmech.MessageQueue
@@ -82,9 +83,11 @@ object Arsit {
       outputDir = if(optOutputDir.nonEmpty) Some(optOutputDir.get) else None(),
       packageName = if(optBasePackageName.nonEmpty) Some(optBasePackageName.get) else None(),
       noart = !embedArt,
-      bless = genBlessEntryPoints,
       genTrans = genTranspilerArtifact,
-      m
+      ipc = m,
+      baTranslate = baTranslate,
+      baAddViz = baAddViz,
+      baExposeState = baExposeState
     )
     return run(destDir, model, opt)
   }

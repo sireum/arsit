@@ -50,9 +50,11 @@ object Cli {
     outputDir: Option[String],
     packageName: Option[String],
     noart: B,
-    bless: B,
     genTrans: B,
-    ipc: Ipcmech.Type
+    ipc: Ipcmech.Type,
+    baTranslate: B,
+    baAddViz: B,
+    baExposeState: B
   ) extends ArsitTopOption
 }
 
@@ -93,22 +95,28 @@ import Cli._
           |    --package-name       Base package name for Slang project (output-dir's
           |                           simple name used if not provided) (expects a string)
           |    --noart              Do not embed ART project files
-          |    --bless              Generate Bless entrypoints
           |-h, --help               Display this information
           |
           |Transpiler Options:
           |    --trans              Generate Slang/C code required for transpiler
           |    --ipc                IPC communication mechanism (requires 'trans' option)
           |                           (expects one of { MessageQueue, SharedMemory };
-          |                           default: MessageQueue)""".render
+          |                           default: MessageQueue)
+          |
+          |BA Options:
+          |    --ba-translate       Translate state machines to Slang
+          |    --ba-add-visualizer  Add state machine visualization
+          |    --ba-expose-state    Expose component state""".render
 
     var json: B = false
     var outputDir: Option[String] = Some(".")
     var packageName: Option[String] = None[String]()
     var noart: B = false
-    var bless: B = false
     var genTrans: B = false
     var ipc: Ipcmech.Type = Ipcmech.MessageQueue
+    var baTranslate: B = false
+    var baAddViz: B = false
+    var baExposeState: B = false
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -141,12 +149,6 @@ import Cli._
              case Some(v) => noart = v
              case _ => return None()
            }
-         } else if (arg == "--bless") {
-           val o: Option[B] = { j = j - 1; Some(!bless) }
-           o match {
-             case Some(v) => bless = v
-             case _ => return None()
-           }
          } else if (arg == "--trans") {
            val o: Option[B] = { j = j - 1; Some(!genTrans) }
            o match {
@@ -159,6 +161,24 @@ import Cli._
              case Some(v) => ipc = v
              case _ => return None()
            }
+         } else if (arg == "--ba-translate") {
+           val o: Option[B] = { j = j - 1; Some(!baTranslate) }
+           o match {
+             case Some(v) => baTranslate = v
+             case _ => return None()
+           }
+         } else if (arg == "--ba-add-visualizer") {
+           val o: Option[B] = { j = j - 1; Some(!baAddViz) }
+           o match {
+             case Some(v) => baAddViz = v
+             case _ => return None()
+           }
+         } else if (arg == "--ba-expose-state") {
+           val o: Option[B] = { j = j - 1; Some(!baExposeState) }
+           o match {
+             case Some(v) => baExposeState = v
+             case _ => return None()
+           }
          } else {
           eprintln(s"Unrecognized option '$arg'.")
           return None()
@@ -168,7 +188,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, genTrans, ipc))
+    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, genTrans, ipc, baTranslate, baAddViz, baExposeState))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

@@ -77,7 +77,7 @@ object cli extends Cli.Module {
 
 
 def regenCli() = T.command {
-  val out = pwd / 'bin / "sireum"
+  val out = "sireum"
   val sireumPackagePath = pwd / 'cli / 'jvm / 'src / 'main / 'scala / 'org / 'sireum
   log(%%(out, 'tools, 'cligen, "-p", "org.sireum", "-l", pwd / "license.txt",
     sireumPackagePath / "cli.sc")(sireumPackagePath))

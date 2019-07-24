@@ -110,7 +110,7 @@ class ArtStubGenerator {
 
     val blessAnnexes : ISZ[Annex] = m.annexes.filter(a => a.name == org.sireum.String("BLESS"))
 
-    val genBlessEntryPoints: B = blessAnnexes.nonEmpty
+    val genBlessEntryPoints: B = blessAnnexes.nonEmpty && arsitOptions.baTranslate
 
     val b = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName,
                             names.component, names.componentImpl, ports, genBlessEntryPoints)
@@ -138,7 +138,8 @@ class ArtStubGenerator {
 
       assert(blessAnnexes.length == 1)
 
-      val br = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap), T, T).
+      val br = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap),
+        arsitOptions.baAddViz, arsitOptions.baExposeState).
         process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
       Util.writeFile(new File(outDir, filename), br.component, true)
@@ -513,20 +514,7 @@ class ArtStubGenerator {
     @pure def componentImplBlock(componentType : String,
                                  bridgeName : String,
                                  componentImplType : String) : ST = {
-      return st"""@record class $componentImplType (val api : ${bridgeName}.Api) ${if(arsitOptions.bless) "" else s"extends ${componentType}"} {
-                 |  ${if(arsitOptions.bless) {
-                      st"""def Initialize_Entrypoint(): Unit = {}
-                          |
-                          |def Compute_Entrypoint(): Unit = {}
-                          |
-                          |def Activate_Entrypoint(): Unit = {}
-                          |
-                          |def Deactivate_Entrypoint(): Unit = {}
-                          |
-                          |def Recover_Entrypoint(): Unit = {}
-                          |
-                          |def Finalize_Entrypoint(): Unit = {}""".render.toString
-                    } else { "" }}
+      return st"""@record class $componentImplType (val api : ${bridgeName}.Api) extends ${componentType}"} {
                  |}"""
     }
 

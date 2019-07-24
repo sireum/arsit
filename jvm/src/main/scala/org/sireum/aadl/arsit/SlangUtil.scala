@@ -27,9 +27,11 @@ object Cli {
                                outputDir: Option[String],
                                packageName: Option[String],
                                noart: B,
-                               bless: B,
                                genTrans: B,
-                               ipc: Ipcmech.Type
+                               ipc: Ipcmech.Type,
+                               baTranslate: B,
+                               baAddViz: B,
+                               baExposeState: B
                              ) extends ArsitTopOption
 }
 

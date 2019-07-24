@@ -43,10 +43,7 @@ val arsitTool: Tool = Tool(
       tpe = Type.Str(sep = None(), default = None()), description = "Base package name for Slang project (output-dir's simple name used if not provided)"),
 
     Opt(name = "noart", longKey = "noart", shortKey = None(),
-      tpe = Type.Flag(F), description = "Do not embed ART project files"),
-
-    Opt(name = "bless", longKey = "bless", shortKey = None(),
-      tpe = Type.Flag(F), description = "Generate Bless entrypoints")
+      tpe = Type.Flag(F), description = "Do not embed ART project files")
   ),
   groups = ISZ(
     OptGroup(name = "Transpiler", opts = ISZ(
@@ -55,6 +52,14 @@ val arsitTool: Tool = Tool(
       Opt(name = "ipc", longKey = "ipc", shortKey = None(),
         tpe = Type.Choice(name = "ipcmech", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
         description = "IPC communication mechanism (requires 'trans' option)")
+    )),
+    OptGroup(name = "BA", opts = ISZ(
+      Opt(name = "baTranslate", longKey = "ba-translate", shortKey = None(),
+        tpe = Type.Flag(F), description = "Translate state machines to Slang"),
+      Opt(name = "baAddViz", longKey = "ba-add-visualizer", shortKey = None(),
+        tpe = Type.Flag(F), description = "Add state machine visualization"),
+      Opt(name = "baExposeState", longKey = "ba-expose-state", shortKey = None(),
+        tpe = Type.Flag(F), description = "Expose component state")
     ))
   )
 )
