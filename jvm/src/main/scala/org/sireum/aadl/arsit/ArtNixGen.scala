@@ -112,9 +112,7 @@ class ArtNixGen {
         portIds :+= Template.portId(portIdName, archPortInstanceName)
         portIdOpts :+= Template.portOpt(portIdName, portOptName, "Art.PortId", F)
 
-        if(!isPeriodic) {
-          aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
-        }
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
 
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
@@ -130,7 +128,7 @@ class ArtNixGen {
       appNames = appNames :+ App_Id
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
-      if(!isPeriodic && portOpts.nonEmpty && arsitOptions.ipc == Cli.Ipcmech.MessageQueue) {
+      if(portOpts.nonEmpty && arsitOptions.ipc == Cli.Ipcmech.MessageQueue) {
         platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
         platformPayloads :+= Template.platformPayload(AEPPayloadTypeName, portDefs)
 
@@ -414,7 +412,7 @@ class ArtNixGen {
       val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
 
       val aepinit =
-        if(!isSharedMemory && !isPeriodic && portIds.nonEmpty) {
+        if(!isSharedMemory && portIds.nonEmpty) {
           st"""val empty = art.Empty()
               |val aepPortId = IPCPorts.${AEP_Id}
               |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)""".render
@@ -480,7 +478,7 @@ class ArtNixGen {
               |  ${if(isPeriodic) {
                    s"Process.sleep($period)"
                    } else ""}
-              |  ${if(!isPeriodic && portIds.nonEmpty) {
+              |  ${if(portIds.nonEmpty) {
                    st"""Platform.send(aepPortId, appPortId, empty)
                        |val (_, d) = Platform.receive(aepPortIdOpt)
                        |val ${AEP_Payload} = d
@@ -1081,16 +1079,8 @@ class ArtNixGen {
           |export OUTPUT_DIR=$$SCRIPT_HOME/../src/c
           |export EXTS=$$OUTPUT_DIR/ext/ext.c:$$OUTPUT_DIR/ext/ipc.c
           |
-          |if [ -n "$$1" ]; then
-          |  TRANSPILER_JAR_HOME=$$1
-          |fi
           |
-          |if [ -z "$$TRANSPILER_JAR_HOME" ]; then
-          |  echo "Specify the location of the Sireum-Transpiler jar file"
-          |  exit 1
-          |fi
-          |
-          |$$TRANSPILER_JAR_HOME transpiler c \
+          |$$SIREUM_HOME/bin/sireum slang transpilers c \
           |  --sourcepath $$PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
