@@ -127,7 +127,13 @@ import org.sireum.ops._
   def buildExecutionStateMachine(stateName: String, transitions: ISZ[GuardedTransition]): ST = {
     val t = transitions.map(m => (m.transCondition, st"${m.actionMethodName}()"))
 
-    val body = BlessST.ifST(t(0), ISZOps(t).tail)
+    var body = BlessST.ifST(t(0), ISZOps(t).tail)
+
+    if(addViz) {
+      body = st"""${BlessST.vizCallTransitionWithStateName(basePackage, stateName)}
+                 |
+                 |${body}"""
+    }
 
     val ret = BlessST.method(executeStateMethodName(stateName), ISZ(), body, st"Unit")
     return ret
@@ -164,7 +170,7 @@ import org.sireum.ops._
           (m.transCondition, st"${m.actionMethodName}()")
         )
         val options: ST = if(gts.isEmpty) {
-          st"// empty"
+          st"// no transitions defined leaving this state"
         } else {
           BlessST.ifST(gts(0), ISZOps(gts).tail)
         }
@@ -176,11 +182,9 @@ import org.sireum.ops._
 
       }
 
-      val body = st"""${BlessST.wrapDispatchedPorts()}
-                     |
-                     |currentState match {
+      val body = st"""currentState match {
                      |  ${(cases, "\n")}
-                     |  case _ => halt("Unexpected")
+                     |  case _ => halt(s"Unexpected: $$currentState")
                      |}"""
 
       return BlessST.method(st"Compute_Entrypoint", ISZ(BlessST.dispatchedPortsDec()), body, st"Unit")
@@ -304,21 +308,24 @@ import org.sireum.ops._
 
 
     if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
+      // transitioning to a complete state
       val gt = GuardedTransition(src, dst, cond, actionMethodName)
 
-      val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0) // TODO assumes single label per state
+      val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0) // TODO assumes single state type per state
       val list: ISZ[GuardedTransition] = completeStateMachines.getOrElse(key, ISZ())
       completeStateMachines = completeStateMachines + (key ~> (list :+ gt))
     } else {
+      // transitioning to an execute state
       assert(isExecuteState(src))
 
       var actions = actionMethodName
+      /*
       if(addViz) {
         actions = st"""${BlessST.vizCallTransitionWithStateName(basePackage, src)}
-
+                      |
                       |$actions"""
       }
-
+      */
       val gt = GuardedTransition(src, dst, cond, actions)
 
       val key = src

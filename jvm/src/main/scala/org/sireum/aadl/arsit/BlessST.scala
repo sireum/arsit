@@ -135,10 +135,6 @@ object BlessST {
     return st"dispatchedPorts : ISZ[art.Art.PortId]"
   }
 
-  @pure def wrapDispatchedPorts(): ST = {
-    return st"val ports = org.sireum.ops.ISZOps(dispatchedPorts)"
-  }
-
   @pure def doNotEditComment(): ST = {
     return st"// This file was auto-generated.  Do not edit"
   }
