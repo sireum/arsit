@@ -127,7 +127,7 @@ import org.sireum.ops._
   def buildExecutionStateMachine(stateName: String, transitions: ISZ[GuardedTransition]): ST = {
     val t = transitions.map(m => (m.transCondition, st"${m.actionMethodName}()"))
 
-    var body = BlessST.ifST(t(0), ISZOps(t).tail)
+    var body = BlessST.ifST(t(0), ISZOps(t).tail, None[ST]())
 
     if(addViz) {
       body = st"""${BlessST.vizCallTransitionWithStateName(basePackage, stateName)}
@@ -146,7 +146,7 @@ import org.sireum.ops._
         (m.transCondition, st"${m.actionMethodName}()"))
       assert(inits.length == 1)
 
-      var body = BlessST.ifST(inits(0), ISZOps(inits).tail)
+      var body = BlessST.ifST(inits(0), ISZOps(inits).tail, None[ST]())
 
       if(addViz) {
         body = st"""${BlessST.vizCallCreateStateMachines(basePackage)}
@@ -172,7 +172,7 @@ import org.sireum.ops._
         val options: ST = if(gts.isEmpty) {
           st"// no transitions defined leaving this state"
         } else {
-          BlessST.ifST(gts(0), ISZOps(gts).tail)
+          BlessST.ifST(gts(0), ISZOps(gts).tail, None[ST]())
         }
 
         val _case = st"""case ${completeStateEnumName}.${stateName} =>
@@ -420,7 +420,7 @@ import org.sireum.ops._
       (guard, action)
     })
 
-    return BlessST.ifST(_actions(0), ISZOps(_actions).tail)
+    return BlessST.ifST(_actions(0), ISZOps(_actions).tail, None[ST]())
   }
 
   def visitBTSExistentialLatticeQuantification(quantification: BTSExistentialLatticeQuantification): ST = {

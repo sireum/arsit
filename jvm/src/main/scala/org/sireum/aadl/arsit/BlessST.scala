@@ -96,15 +96,32 @@ object BlessST {
     return st"def ${name}(${params}): ${retType} = "
   }
 
-  @pure def ifST(ifbranch: (ST, ST), elsifs: ISZ[(ST, ST)]): ST = {
+  @pure def ifST(ifbranch: (ST, ST), elsifs: ISZ[(ST, ST)], els: Option[ST]): ST = {
     val e = elsifs.map(x => st"""else if(${x._1}) {
                                 |  ${x._2}
                                 |}
                                 |""")
-    return st"""if(${ifbranch._1}) {
+    var body = st"""if(${ifbranch._1}) {
                |  ${ifbranch._2}
-               |}
-               |${e}"""
+               |}"""
+
+    if(elsifs.nonEmpty) {
+      val e = elsifs.map(x => st"""else if(${x._1}) {
+                                  |  ${x._2}
+                                  |}
+                                  |""")
+      body = st"""${body}
+                 |${e}"""
+    }
+
+    if(els.nonEmpty) {
+      body = st"""${body}
+                 |else {
+                 |  ${els.get}
+                 |}"""
+    }
+
+    return body
   }
 
   @pure def variableDec(varName: String,
@@ -190,7 +207,7 @@ object BlessST {
 
 
   @pure def vizStateType(m: BTSStateCategory.Type): ST = {
-    val name = m match {
+    val name: String = m match {
       case BTSStateCategory.Execute => "EXECUTE"
       case BTSStateCategory.Complete => "COMPLETE"
       case BTSStateCategory.Final => "FINAL"
@@ -240,7 +257,7 @@ object BlessST {
                |@ext object ${vizObjectName} {
                |  def createStateMachines(): Unit = $$
                |
-               |  def transition(componentId: art.Art.PortId, stateName: String): Unit = $$
+               |  def transition(componentId: art.Art.BridgeId, stateName: String): Unit = $$
                |}
                |"""
   }
@@ -291,12 +308,10 @@ object BlessST {
                |    }
                |  }
                |
-               |  def transition(componentId: art.Art.PortId, stateName: org.sireum.String): Unit = {
+               |  def transition(componentId: art.Art.BridgeId, stateName: org.sireum.String): Unit = {
                |    updateStateMachineView(componentId, stateName.value)
                |  }
                |}
-               |
-               |
                |"""
   }
 
