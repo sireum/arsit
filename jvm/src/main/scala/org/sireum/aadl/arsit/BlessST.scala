@@ -257,7 +257,7 @@ object BlessST {
                |@ext object ${vizObjectName} {
                |  def createStateMachines(): Unit = $$
                |
-               |  def transition(componentId: art.Art.BridgeId, stateName: String): Unit = $$
+               |  def transition(componentId: art.Art.BridgeId, transitionName: String): Unit = $$
                |}
                |"""
   }
@@ -266,12 +266,8 @@ object BlessST {
     return st"${basePackage}.util.${vizObjectName}.createStateMachines()"
   }
 
-  @pure def vizCallTransition(basePackage: String): ST = {
-    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, s"$$currentState") // TODO transpiler handle $$currentState.name"""
-  }
-
-  @pure def vizCallTransitionWithStateName(basePackage: String, stateName: String): ST = {
-    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, "$stateName")"""
+  @pure def vizCallTransition(basePackage: String, transitionName: String): ST = {
+    return st"""${basePackage}.util.${vizObjectName}.transition(api.id, "$transitionName")"""
   }
 
   @pure def vizExtObject(basePackage: String,
@@ -299,8 +295,13 @@ object BlessST {
                |  def addStateMachineView(bridgeId: Z, name: org.sireum.String, stateMachine: StateMachine): Unit =
                |    SwingUtilities.invokeAndWait(() => blessVisualizer.addStateMachineView(bridgeId, name.value, stateMachine))
                |
-               |  def updateStateMachineView(bridgeId: Z, state: org.sireum.String): Unit =
-               |    SwingUtilities.invokeLater(() => blessVisualizer.updateStateMachine(bridgeId, state.value))
+               |  def updateStateMachineView(bridgeId: Z, state: org.sireum.String): Unit = {
+               |    var data = ""
+               |    if (!art.ArtDebug.getDebugObject[Any](bridgeId.string).isEmpty) {
+               |      data = art.ArtDebug.getDebugObject[Any](bridgeId.string).get.toString
+               |    }
+               |    SwingUtilities.invokeLater(() => blessVisualizer.updateStateMachine(bridgeId, state.value, data))
+               |  }
                |
                |  def createStateMachines(): Unit = {
                |    if(isFirst.getAndSet(false)){
@@ -308,8 +309,8 @@ object BlessST {
                |    }
                |  }
                |
-               |  def transition(componentId: art.Art.BridgeId, stateName: org.sireum.String): Unit = {
-               |    updateStateMachineView(componentId, stateName.value)
+               |  def transition(componentId: art.Art.BridgeId, transitionName: org.sireum.String): Unit = {
+               |    updateStateMachineView(componentId, transitionName.value)
                |  }
                |}
                |"""
@@ -372,26 +373,26 @@ object BlessST {
         |    }
         |  }
         |
-        |  def updateStateMachine(bridgeId: Z, state: String): Unit = {
+        |  def updateStateMachine(bridgeId: Z, state: String, data: String): Unit = {
         |    try {
         |      val fsm = fsmMap.get(bridgeId).get
-        |      val transition = findTransitionWithStateNames(state, fsm)
-        |      var s = ""
-        |      if (!art.ArtDebug.getDebugObject[Any](bridgeId.string).isEmpty) {
-        |        s = art.ArtDebug.getDebugObject[Any](bridgeId.string).get.toString
-        |      }
+        |      val transition = findTransitionFromName(state, fsm)
         |
         |      transition match {
-        |        case scala.Some(t) => fsm.update(t, s)
-        |        case scala.None => panelMap.get(bridgeId).get.beginTimeline() // should occur once if graph made correctly
+        |        case scala.Some(t) => fsm.update(t, data)
+        |        case scala.None => panelMap.get(bridgeId).get.beginTimeline() // should occur 0 or 1 times if weird graph start
         |      }
         |    } catch {
         |      case t: Throwable => t.printStackTrace()
         |    }
         |  }
         |
-        |  private def findTransitionWithStateNames(state: String, fsm: StateMachine): scala.Option[Transition] =
-        |    toIterator(fsm.getGraph.getOutEdges(fsm.currentState)).find(_.getTo.getName.equals(state))
+        |  def getCurrentState(bridgeId: Z): String = {
+        |    fsmMap.get(bridgeId).get.currentState().toString
+        |  }
+        |
+        |  private def findTransitionFromName(name: String, fsm: StateMachine): scala.Option[Transition] =
+        |    toIterator(fsm.getGraph.getEdges).find(_.getName.equals(name))
         |
         |  private def toIterator[T](l: java.util.Collection[T]): Iterator[T] = {
         |    if (l == null) {

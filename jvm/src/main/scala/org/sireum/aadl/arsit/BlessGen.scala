@@ -129,12 +129,6 @@ import org.sireum.ops._
 
     var body = BlessST.ifST(t(0), ISZOps(t).tail, None[ST]())
 
-    if(addViz) {
-      body = st"""${BlessST.vizCallTransitionWithStateName(basePackage, stateName)}
-                 |
-                 |${body}"""
-    }
-
     val ret = BlessST.method(executeStateMethodName(stateName), ISZ(), body, st"Unit")
     return ret
   }
@@ -284,6 +278,12 @@ import org.sireum.ops._
       case _ => st"// empty actions"
     }
 
+    if(addViz) {
+      actions = st"""${actions}
+                    |
+                    |${BlessST.vizCallTransition(basePackage, transLabel)}"""
+    }
+
     if(isExecuteState(dst)) {
       // going to an execute state
       actions = st"""${actions}
@@ -294,11 +294,6 @@ import org.sireum.ops._
       actions = st"""${actions}
                     |
                     |currentState = ${completeStateEnumName}.${dst}"""
-
-      if(addViz) {
-        actions = st"""${actions}
-                      |${BlessST.vizCallTransition(basePackage)}"""
-      }
     }
 
     val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
