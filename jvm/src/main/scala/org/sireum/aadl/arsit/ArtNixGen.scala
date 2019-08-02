@@ -5,7 +5,13 @@ import java.io.File
 import org.sireum._
 import org.sireum.aadl.ir._
 
-class ArtNixGen {
+class ArtNixGen(outputDir: File,
+                m: Aadl,
+                topPackageName: String,
+                nextPortId: Z,
+                nextComponentId: Z,
+                o: Cli.ArsitOption,
+                types: AadlTypes) {
   var projOutputDir: File = _
   var nixOutputDir : File = _
   var cOutputDir : File = _
@@ -24,7 +30,7 @@ class ArtNixGen {
     return r
   }
 
-  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption): Z = {
+  def generator(): Z = {
     basePackage = Util.sanitizeName(topPackageName)
     this.projOutputDir = outputDir // where the slang-embedded code was generated
 
@@ -1088,7 +1094,7 @@ class ArtNixGen {
           |  --bits 32 \
           |  --string-size 256 \
           |  --sequence-size ${sequenceSize} \
-          |  --sequence ISZ[org.sireumString]=2 \
+          |  --sequence ISZ[org.sireum.String]=2 \
           |  --output-dir $$OUTPUT_DIR \
           |  --exts $$EXTS
           |"""
@@ -1098,7 +1104,8 @@ class ArtNixGen {
 }
 
 object ArtNixGen{
-  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption) : Z =
-    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId, o)
+  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption,
+            types: AadlTypes) : Z =
+    new ArtNixGen(outputDir, m, topPackage, nextPortId, nextComponentId, o, types).generator()
 }
 

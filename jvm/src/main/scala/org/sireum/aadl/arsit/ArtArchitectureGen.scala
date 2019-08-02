@@ -8,7 +8,11 @@ import org.sireum.ops.ISZOps
 
 import scala.language.implicitConversions
 
-class ArtArchitectureGen {
+class ArtArchitectureGen(dir: File,
+                         m: Aadl,
+                         topPackageName: String,
+                         o: Cli.ArsitOption,
+                         types: AadlTypes) {
   var componentId = 0
   var portId = 0
   var outDir : File = _
@@ -23,10 +27,14 @@ class ArtArchitectureGen {
 
   var basePackage: String = _
 
-  def generator(dir: File, m: Aadl, topPackageName: String, o: Cli.ArsitOption) : (Z, Z) = {
+  def generator() : (Z, Z) = {
     assert(dir.exists)
     basePackage = Util.sanitizeName(topPackageName)
     outDir = dir
+
+    for(t <- types.typeMap.values) {
+      emitType(t)
+    }
 
     gen(m)
 
@@ -182,19 +190,71 @@ class ArtArchitectureGen {
       case _ => "???"
     })
 
-    addTypeSkeleton(port)
+    //addTypeSkeleton(port)
 
     return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode)
+  }
+
+  def emitType(t: AadlType): Unit = {
+
+    val typeNames: DataTypeNames = Util.getDataTypeNames(t, basePackage)
+    val typeName = t.typeName
+
+    val body: ST = t match {
+      case e: EnumType => Template.enumType(typeName, e.values)
+      case e: RecordType =>
+        val flds: ISZ[ST] = e.fields.entries.map(e => {
+          val fname = e._1
+          val typeName = Util.getDataTypeNames(e._2, basePackage)
+
+          st"${fname} : ${typeName.qualifiedReferencedTypeName}"
+        })
+        Template.dataType(typeName, flds)
+      case e: BaseType =>
+        Template.dataType(e.typeName, ISZ(st"value : org.sireum.${e.slangType.name}"))
+
+      case e: TODOType =>
+        println(s"Don't know how to handle ${e}")
+        Template.typeSkeleton(typeName)
+      case _ => halt(s"${t}")
+    }
+
+    val ts = Template.typeS(basePackage, typeNames.qualifiedPackageName,
+      typeNames.typeName, typeNames.payloadName,
+      body,
+      typeNames.isEnum)
+
+    Util.writeFile(new File(outDir, "../data/" + typeNames.filePath.toString), ts, true)
   }
 
   var seenTypes: ISZ[String] = ISZ()
   def addTypeSkeleton(port: Port): Unit = {
     if((Util.isDataPort(port.feature) || Util.isEventDataPort(port.feature)) &&
       seenTypes.filter(_ == port.portType.qualifiedTypeName).isEmpty) {
+
       seenTypes :+= port.portType.qualifiedTypeName
-      val ts = Template.typeSkeleton(basePackage, port.portType.qualifiedPackageName,
-        port.portType.typeName, port.portType.payloadName, port.portType.isEnum)
-      Util.writeFile(new File(outDir, "../data/" + port.portType.filePath.toString), ts, false)
+
+      val typeName = port.portType.typeName
+
+      val body: ST = types.typeMap.get(port.portType.qualifiedName) match {
+        case Some(e: EnumType) => Template.enumType(typeName, e.values)
+        case Some(e: RecordType) =>
+          val flds: ISZ[ST] = e.fields.entries.map(e => {
+            val fname = e._1
+            val typeName = Util.getDataTypeNames(e._2, basePackage)
+
+            st"${fname} : ${typeName}"
+          })
+          Template.dataType(typeName, flds)
+        case _ => halt(s"${port}")
+      }
+
+      val ts = Template.typeS(basePackage, port.portType.qualifiedPackageName,
+        port.portType.typeName, port.portType.payloadName,
+        body,
+        port.portType.isEnum)
+
+      Util.writeFile(new File(outDir, "../data/" + port.portType.filePath.toString), ts, true)
     }
   }
 
@@ -306,11 +366,30 @@ class ArtArchitectureGen {
                  |}"""
     }
 
-    @pure def typeSkeleton(topLevelPackageName: String,
-                           packageName: String,
-                           typeName: String,
-                           payloadTypeName: String,
-                           isEnum: B): ST = {
+    @pure def enumType(typeName: String,
+                       values: ISZ[String]): ST = {
+      val vals = values.map(m => st"'$m")
+      return st"""@enum object $typeName {
+                 |  ${(vals, "\n")}
+                 |}"""
+    }
+
+    @pure def dataType(typeName: String,
+                       fields: ISZ[ST]): ST = {
+      return st"""@datatype class $typeName(
+                 |  ${(fields, ",\n")})"""
+    }
+
+    @pure def typeSkeleton(typeName: String): ST = {
+      return st"""@datatype class $typeName() // type skeleton"""
+    }
+
+    @pure def typeS(topLevelPackageName: String,
+                    packageName: String,
+                    typeName: String,
+                    payloadTypeName: String,
+                    body: ST,
+                    isEnum: B): ST = {
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -318,15 +397,9 @@ class ArtArchitectureGen {
                  |import org.sireum._
                  |import $topLevelPackageName._
                  |
-                 |${if(isEnum)
-                      st"""@enum object $typeName {
-                      |  // add enum names here
-                      |}""".render.toString
-                    else
-                      st"""@datatype class $typeName(
-                      |  // add fields here
-                      |)""".render.toString
-                   }
+                 |${Util.doNotEditComment()}
+                 |
+                 |$body
                  |
                  |@datatype class $payloadTypeName(value: $typeName${if(isEnum) ".Type" else ""}) extends art.DataContent
                  |"""
@@ -335,5 +408,6 @@ class ArtArchitectureGen {
 }
 
 object ArtArchitectureGen {
-  def apply(dir: File, m: Aadl, topPackage: String, o: Cli.ArsitOption) = new ArtArchitectureGen().generator(dir, m, topPackage, o)
+  def apply(dir: File, m: Aadl, topPackage: String, o: Cli.ArsitOption, types: AadlTypes) =
+    new ArtArchitectureGen(dir, m, topPackage, o, types).generator()
 }
