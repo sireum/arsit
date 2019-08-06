@@ -411,22 +411,33 @@ class ArtNixGen {
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
       val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
 
-      val aepinit =
-        if(!isSharedMemory && portIds.nonEmpty) {
-          st"""val empty = art.Empty()
-              |val aepPortId = IPCPorts.${AEP_Id}
-              |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)""".render
-        } else ""
+      var globals: ISZ[ST] = ISZ(st"""val entryPoints: Bridge.EntryPoints = Arch.${bridge}.entryPoints
+                                     |val appPortId: Art.PortId = IPCPorts.${IPCPort_Id}
+                                     |val appPortIdOpt: Option[Art.PortId] = Some(appPortId)""")
+
+      var inits: ISZ[ST] = ISZ(st"Platform.initialise(seed, appPortIdOpt)")
+
+      if(!isSharedMemory && portIds.nonEmpty) {
+        globals = globals :+ st"""val empty = art.Empty()
+                                 |val aepPortId = IPCPorts.${AEP_Id}
+                                 |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)"""
+      }
 
       val portSection =
         if(isSharedMemory) {
           for(p <- inPorts) yield {
-            st"""val ${portId(p)} = Arch.${bridge}.${p.name}.id
-                |val ${portIdOpt(p)} = Some(${portId(p)})
-                |Platform.initialise(seed, ${portIdOpt(p)})"""
+            globals = globals :+
+              st"val ${portId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id" :+
+              st"val ${portIdOpt(p)}: Option[Art.PortId] = Some(${portId(p)})"
+
+            inits = inits :+ st"Platform.initialise(seed, ${portIdOpt(p)})"
           }
         } else
           portIds
+
+
+
+      var computeBody: ST = st""
 
       // @formatter:off
       val body = {
@@ -462,11 +473,13 @@ class ArtNixGen {
             }
           }
 
+          computeBody = loopBody
+
           st"""var terminated = F
               |while (!terminated) {
               |  val termOpt = Platform.receiveAsync(appPortIdOpt)
               |  if (termOpt.isEmpty) {
-              |    ${loopBody}
+              |    compute()
               |  } else {
               |    terminated = T
               |  }
@@ -500,6 +513,18 @@ class ArtNixGen {
                  |
                  |object ${objectName} extends App {
                  |
+                 |  ${(globals, "\n")}
+                 |
+                 |  def initialise(seed: Z): Unit = {
+                 |    ${(inits, "\n")}
+                 |
+                 |    Art.run(Arch.ad)
+                 |  }
+                 |
+                 |  def compute(): Unit = {
+                 |    ${computeBody}
+                 |  }
+                 |
                  |  def main(args: ISZ[String]): Z = {
                  |
                  |    val seed: Z = if (args.size == z"1") {
@@ -509,20 +534,13 @@ class ArtNixGen {
                  |      1
                  |    }
                  |
-                 |    val entryPoints = Arch.${bridge}.entryPoints
-                 |    ${aepinit}
-                 |    val appPortId: Art.PortId = IPCPorts.${IPCPort_Id}
-                 |    val appPortIdOpt: Option[Art.PortId] = Some(appPortId)
-                 |    Platform.initialise(seed, appPortIdOpt)
+                 |    initialise(seed)
                  |
-                 |    ${(portSection, "\n\n")}
-                 |    Art.run(Arch.ad)
-                 |
-                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"})
+                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"}) // pause after setting up component
                  |
                  |    entryPoints.initialise()
                  |
-                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"})
+                 |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"}) // pause after component init
                  |
                  |    println("${objectName} starting ...")
                  |
