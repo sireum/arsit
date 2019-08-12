@@ -51,8 +51,11 @@ object Cli {
     packageName: Option[String],
     noart: B,
     bless: B,
+    verbose: B,
     genTrans: B,
-    ipc: Ipcmech.Type
+    ipc: Ipcmech.Type,
+    excludeImpl: B,
+    hamrTime: B
   ) extends ArsitTopOption
 }
 
@@ -94,21 +97,27 @@ import Cli._
           |                           simple name used if not provided) (expects a string)
           |    --noart              Do not embed ART project files
           |    --bless              Generate Bless entrypoints
+          |    --verbose            Enable verbose mode
           |-h, --help               Display this information
           |
           |Transpiler Options:
           |    --trans              Generate Slang/C code required for transpiler
           |    --ipc                IPC communication mechanism (requires 'trans' option)
           |                           (expects one of { MessageQueue, SharedMemory };
-          |                           default: MessageQueue)""".render
+          |                           default: MessageQueue)
+          |    --exclude-impl       Exclude Slang component implementations
+          |    --hamr-time          HAMR build""".render
 
     var json: B = false
     var outputDir: Option[String] = Some(".")
     var packageName: Option[String] = None[String]()
     var noart: B = false
     var bless: B = false
+    var verbose: B = false
     var genTrans: B = false
     var ipc: Ipcmech.Type = Ipcmech.MessageQueue
+    var excludeImpl: B = false
+    var hamrTime: B = false
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -147,6 +156,12 @@ import Cli._
              case Some(v) => bless = v
              case _ => return None()
            }
+         } else if (arg == "--verbose") {
+           val o: Option[B] = { j = j - 1; Some(!verbose) }
+           o match {
+             case Some(v) => verbose = v
+             case _ => return None()
+           }
          } else if (arg == "--trans") {
            val o: Option[B] = { j = j - 1; Some(!genTrans) }
            o match {
@@ -159,6 +174,18 @@ import Cli._
              case Some(v) => ipc = v
              case _ => return None()
            }
+         } else if (arg == "--exclude-impl") {
+           val o: Option[B] = { j = j - 1; Some(!excludeImpl) }
+           o match {
+             case Some(v) => excludeImpl = v
+             case _ => return None()
+           }
+         } else if (arg == "--hamr-time") {
+           val o: Option[B] = { j = j - 1; Some(!hamrTime) }
+           o match {
+             case Some(v) => hamrTime = v
+             case _ => return None()
+           }
          } else {
           eprintln(s"Unrecognized option '$arg'.")
           return None()
@@ -168,7 +195,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, genTrans, ipc))
+    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, genTrans, ipc, excludeImpl, hamrTime))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

@@ -46,6 +46,18 @@ object Arsit extends scala.App {
       case Cli.Ipcmech.SharedMemory => org.sireum.aadl.arsit.Cli.Ipcmech.SharedMemory
     }
 
-    org.sireum.aadl.arsit.Arsit.run(xArsitOption(o.help, o.args, o.json, o.outputDir, o.packageName, o.noart, o.bless, o.genTrans, ipc))
+    org.sireum.aadl.arsit.Arsit.run(xArsitOption(
+      help = o.help,
+      args = o.args,
+      json = o.json,
+      outputDir = o.outputDir,
+      packageName = o.packageName,
+      noart = o.noart,
+      bless = o.bless,
+      verbose = o.verbose,
+      genTrans = o.genTrans,
+      ipc = ipc,
+      excludeImpl = o.excludeImpl,
+      hamrTime = o.hamrTime))
   }
 }

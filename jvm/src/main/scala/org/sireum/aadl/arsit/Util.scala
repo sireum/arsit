@@ -7,6 +7,8 @@ import org.sireum.aadl.ir._
 import org.sireum.ops._
 
 object Util {
+  var verbose: B = F
+
   val Prop_DispatchProtocol: String = "Thread_Properties::Dispatch_Protocol"
   val Prop_Period: String = "Timing_Properties::Period"
   val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
@@ -111,12 +113,12 @@ object Util {
         bw.write(st.render.toString)
         bw.close()
 
-        println("Wrote: " + fname)
+        report("Wrote: " + fname, T)
       }
     } catch {
       case e: Throwable =>
-        println("Error encountered while trying to create file: " + fname)
-        println(e.getMessage)
+        reportError("Error encountered while trying to create file: " + fname)
+        reportError(e.getMessage)
     }
   }
 
@@ -141,16 +143,30 @@ object Util {
     }
   }
 
+  @pure def getLibraryFile(fileName: String): ST = {
+    val e = Library.getFiles.filter(p => p._1 == fileName)
+    assert(e.length == 1)
+    return st"${e(0)._2}"
+  }
+
   @pure def getIpc(ipcmech: Cli.Ipcmech.Type , packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r = ipcmech match {
       case Cli.Ipcmech.SharedMemory => "ipc_shared_memory.c"
       case Cli.Ipcmech.MessageQueue => "ipc_message_queue.c"
     }
-    val e = Library.getFiles.filter(p => p._1.native == r)
-    assert(e.length == 1)
-    val c = e(0)._2.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
-    st"""${c}"""
+    val c = getLibraryFile(r).render.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
+    st"${c}"
+  }
+
+  def report(msg: String, canSupress: B): Unit = {
+    if(!canSupress || verbose) {
+      Console.println(msg);
+    }
+  }
+
+  def reportError(str: String): Unit = {
+    Console.err.println(str)
   }
 }
 

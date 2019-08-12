@@ -13,12 +13,12 @@ object Arsit {
     val destDir: File = new File(outDir.native)
     if(!destDir.exists()) {
       if(!destDir.mkdirs()){
-        println(s"Could not create directory ${destDir.getPath}")
+        Util.reportError(s"Could not create directory ${destDir.getPath}")
         return -1
       }
     }
     if (!destDir.isDirectory) {
-      println(s"Path ${destDir.getPath} is not a directory")
+      Util.reportError(s"Path ${destDir.getPath} is not a directory")
       return -1
     }
 
@@ -26,7 +26,7 @@ object Arsit {
     val input = if (inputFile.nonEmpty && inputFile.get.exists) {
       scala.io.Source.fromFile(inputFile.get).getLines.mkString
     } else {
-      println("Input file not found.  Expecting exactly 1")
+      Util.reportError("Input file not found.  Expecting exactly 1")
       return -1
     }
 
@@ -34,7 +34,7 @@ object Arsit {
       JSON.toAadl(input) match {
         case Either.Left(m) => run(destDir, m, o)
         case Either.Right(m) =>
-          Console.println(s"Json deserialization error at (${m.line}, ${m.column}): ${m.message}")
+          Util.reportError(s"Json deserialization error at (${m.line}, ${m.column}): ${m.message}")
           -1
       }
     }
@@ -44,18 +44,19 @@ object Arsit {
           MsgPack.toAadl(u) match {
             case Either.Left(m) => run(destDir, m, o)
             case Either.Right(m) =>
-              Console.println(s"MsgPack deserialization error at offset ${m.offset}: ${m.message}")
+              Util.reportError(s"MsgPack deserialization error at offset ${m.offset}: ${m.message}")
               -1
           }
         case Either.Right(m) =>
-          Console.println(m)
+          Util.reportError(m)
           -1
       }
     }
   }
 
   def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
-          genBlessEntryPoints: B, genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava): Int = {
+          genBlessEntryPoints: B, verbose: B,
+          genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava, excludeImpl: B, hamrTime: B): Int = {
     val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
     val m = ipcMechanism match {
       case ArsitBridge.IPCMechanismJava.MessageQueue => Cli.Ipcmech.MessageQueue
@@ -66,12 +67,12 @@ object Arsit {
     val destDir: File = new File(outDir.native)
     if(!destDir.exists()) {
       if(!destDir.mkdirs()){
-        println(s"Could not create directory ${destDir.getPath}")
+        Util.reportError(s"Could not create directory ${destDir.getPath}")
         return -1
       }
     }
     if (!destDir.isDirectory) {
-      println(s"Path ${destDir.getPath} is not a directory")
+      Util.reportError(s"Path ${destDir.getPath} is not a directory")
       return -1
     }
 
@@ -83,16 +84,20 @@ object Arsit {
       packageName = if(optBasePackageName.nonEmpty) Some(optBasePackageName.get) else None(),
       noart = !embedArt,
       bless = genBlessEntryPoints,
+      verbose = verbose,
       genTrans = genTranspilerArtifact,
-      m
+      ipc = m,
+      excludeImpl = excludeImpl,
+      hamrTime = hamrTime
     )
     return run(destDir, model, opt)
   }
 
   def run(destDir : File, m: Aadl, o: Cli.ArsitOption) : Int = {
+    Util.verbose = o.verbose
 
     if(m.components.isEmpty) {
-      Console.err.println("Model is empty")
+      Util.reportError("Model is empty")
       return -1
     }
 
@@ -103,7 +108,7 @@ object Arsit {
     _destDir.mkdirs // try creating the dir structure if it doesn't exist yet
 
     if(!_destDir.exists){
-      Console.err.println(s"Could not create directory: ${_destDir.getAbsolutePath}")
+      Util.reportError(s"Could not create directory: ${_destDir.getAbsolutePath}")
       return -1
     }
 

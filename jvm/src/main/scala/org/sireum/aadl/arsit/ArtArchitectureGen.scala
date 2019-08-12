@@ -103,7 +103,7 @@ class ArtArchitectureGen {
           components :+= name
         case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
-          println(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
+          Util.report(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}", T)
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
@@ -202,11 +202,11 @@ class ArtArchitectureGen {
     val str = s"${Util.getName(c.name)}  from  ${Util.getName(m.identifier)}"
 
     if(c.src.component == c.dst.component){
-      println(s"Skipping: Port connected to itself. $str")
+      Util.report(s"Skipping: Port connected to itself. $str", T)
       return F
     }
     if(c.kind != ConnectionKind.Port){
-      println(s"Skipping: ${c.kind} connection.  $str")
+      Util.report(s"Skipping: ${c.kind} connection.  $str", T)
       return F
     }
 
@@ -215,12 +215,12 @@ class ArtArchitectureGen {
     val catDest = componentMap.get(Util.getName(c.dst.component)).get.category
 
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
-      println(s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
+      Util.report(s"Skipping: connection between ${catSrc} to ${catDest}.  $str", T)
       return F
     }
 
     if(seenConnections.contains(c.src.feature.get) && ISZOps(seenConnections.get(c.src.feature.get).get).contains(c.dst.feature.get)) {
-      println(s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}")
+      Util.report(s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}", T)
       return F
     }
 

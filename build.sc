@@ -90,7 +90,7 @@ def tipe() = T.command {
   log(%%(out, 'slang, 'tipe, "-s", paths)(pwd))
 }
 
-def refreshResources() = T.command {
+def refresh() = T.command {
   val libraryFile = Path(new java.io.File(pwd.toString, "jvm/src/main/scala/org/sireum/aadl/arsit/Library_Ext.scala").getCanonicalFile)
 
   def touche(p: Path): Unit = {

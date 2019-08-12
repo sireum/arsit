@@ -28,8 +28,11 @@ object Cli {
                                packageName: Option[String],
                                noart: B,
                                bless: B,
+                               verbose: B,
                                genTrans: B,
-                               ipc: Ipcmech.Type
+                               ipc: Ipcmech.Type,
+                               excludeImpl: B,
+                               hamrTime: B
                              ) extends ArsitTopOption
 }
 

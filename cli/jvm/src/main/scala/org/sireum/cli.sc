@@ -46,7 +46,11 @@ val arsitTool: Tool = Tool(
       tpe = Type.Flag(F), description = "Do not embed ART project files"),
 
     Opt(name = "bless", longKey = "bless", shortKey = None(),
-      tpe = Type.Flag(F), description = "Generate Bless entrypoints")
+      tpe = Type.Flag(F), description = "Generate Bless entrypoints"),
+
+    Opt(name = "verbose", longKey = "verbose", shortKey = None(),
+      tpe = Type.Flag(F), description = "Enable verbose mode")
+
   ),
   groups = ISZ(
     OptGroup(name = "Transpiler", opts = ISZ(
@@ -54,7 +58,11 @@ val arsitTool: Tool = Tool(
         tpe = Type.Flag(F), description = "Generate Slang/C code required for transpiler"),
       Opt(name = "ipc", longKey = "ipc", shortKey = None(),
         tpe = Type.Choice(name = "ipcmech", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
-        description = "IPC communication mechanism (requires 'trans' option)")
+        description = "IPC communication mechanism (requires 'trans' option)"),
+      Opt(name = "excludeImpl", longKey = "exclude-impl", shortKey = None(),
+        tpe = Type.Flag(F), description = "Exclude Slang component implementations"),
+      Opt(name = "hamrTime", longKey = "hamr-time", shortKey = None(),
+        tpe = Type.Flag(F), description = "HAMR build")
     ))
   )
 )

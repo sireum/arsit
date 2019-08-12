@@ -50,7 +50,7 @@ class ArtStubGenerator {
         case ComponentCategory.Thread | ComponentCategory.Device => genThread(c)
         case ComponentCategory.Subprogram => // ignore
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
-          println(s"Skipping: ${c.category} component: ${Util.getName(c.identifier)}")
+          Util.report(s"Skipping: ${c.category} component: ${Util.getName(c.identifier)}", T)
         case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }
     }
