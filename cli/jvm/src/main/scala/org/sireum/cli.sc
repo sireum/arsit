@@ -49,7 +49,10 @@ val arsitTool: Tool = Tool(
       tpe = Type.Flag(F), description = "Generate Bless entrypoints"),
 
     Opt(name = "verbose", longKey = "verbose", shortKey = None(),
-      tpe = Type.Flag(F), description = "Enable verbose mode")
+      tpe = Type.Flag(F), description = "Enable verbose mode"),
+
+    Opt(name = "devicesAsThreads", longKey="devices-as-thread", shortKey = None(),
+      tpe = Type.Flag(F), description = "Treat AADL devices as threads")
 
   ),
   groups = ISZ(

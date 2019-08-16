@@ -55,7 +55,7 @@ object Arsit {
   }
 
   def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
-          genBlessEntryPoints: B, verbose: B,
+          genBlessEntryPoints: B, verbose: B, devicesAsThreads: B,
           genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava, excludeImpl: B, hamrTime: B): Int = {
     val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
     val m = ipcMechanism match {
@@ -85,6 +85,7 @@ object Arsit {
       noart = !embedArt,
       bless = genBlessEntryPoints,
       verbose = verbose,
+      devicesAsThreads = devicesAsThreads,
       genTrans = genTranspilerArtifact,
       ipc = m,
       excludeImpl = excludeImpl,

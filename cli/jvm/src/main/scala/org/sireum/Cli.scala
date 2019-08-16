@@ -52,6 +52,7 @@ object Cli {
     noart: B,
     bless: B,
     verbose: B,
+    devicesAsThreads: B,
     genTrans: B,
     ipc: Ipcmech.Type,
     excludeImpl: B,
@@ -98,6 +99,7 @@ import Cli._
           |    --noart              Do not embed ART project files
           |    --bless              Generate Bless entrypoints
           |    --verbose            Enable verbose mode
+          |    --devices-as-thread  Treat AADL devices as threads
           |-h, --help               Display this information
           |
           |Transpiler Options:
@@ -114,6 +116,7 @@ import Cli._
     var noart: B = false
     var bless: B = false
     var verbose: B = false
+    var devicesAsThreads: B = false
     var genTrans: B = false
     var ipc: Ipcmech.Type = Ipcmech.MessageQueue
     var excludeImpl: B = false
@@ -162,6 +165,12 @@ import Cli._
              case Some(v) => verbose = v
              case _ => return None()
            }
+         } else if (arg == "--devices-as-thread") {
+           val o: Option[B] = { j = j - 1; Some(!devicesAsThreads) }
+           o match {
+             case Some(v) => devicesAsThreads = v
+             case _ => return None()
+           }
          } else if (arg == "--trans") {
            val o: Option[B] = { j = j - 1; Some(!genTrans) }
            o match {
@@ -195,7 +204,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, genTrans, ipc, excludeImpl, hamrTime))
+    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, devicesAsThreads, genTrans, ipc, excludeImpl, hamrTime))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

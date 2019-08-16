@@ -47,7 +47,10 @@ class ArtStubGenerator {
       c.category match {
         case ComponentCategory.Process | ComponentCategory.System => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
-        case ComponentCategory.Thread | ComponentCategory.Device => genThread(c)
+        case ComponentCategory.Thread | ComponentCategory.Device =>
+          if(Util.isThread(c) || arsitOptions.devicesAsThreads) {
+            genThread(c)
+          }
         case ComponentCategory.Subprogram => // ignore
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
           Util.report(s"Skipping: ${c.category} component: ${Util.getName(c.identifier)}", T)
@@ -66,7 +69,7 @@ class ArtStubGenerator {
   }
 
   def genThread(m: Component) : Unit = {
-    assert(m.category == ComponentCategory.Device || m.category == ComponentCategory.Thread)
+    assert(Util.isDevice(m) || Util.isThread(m))
 
     val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
     val filename = s"component/${names.packagePath}/${names.componentImpl}.scala"
@@ -86,7 +89,7 @@ class ArtStubGenerator {
       Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
         case Some(x) => x.value
         case _ =>
-          if(m.category == ComponentCategory.Device) "Periodic"
+          if(Util.isDevice(m)) "Periodic"
           else ???
       }
     }

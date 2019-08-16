@@ -29,6 +29,7 @@ object Cli {
                                noart: B,
                                bless: B,
                                verbose: B,
+                               devicesAsThreads: B,
                                genTrans: B,
                                ipc: Ipcmech.Type,
                                excludeImpl: B,

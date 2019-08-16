@@ -55,6 +55,7 @@ object Arsit extends scala.App {
       noart = o.noart,
       bless = o.bless,
       verbose = o.verbose,
+      devicesAsThreads = o.devicesAsThreads,
       genTrans = o.genTrans,
       ipc = ipc,
       excludeImpl = o.excludeImpl,

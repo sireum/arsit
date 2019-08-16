@@ -62,7 +62,7 @@ class ArtNixGen {
     var appNames: ISZ[String] = ISZ()
 
     val components = componentMap.entries.filter(p =>
-      p._2.category == ComponentCategory.Thread || p._2.category == ComponentCategory.Device)
+      Util.isThread(p._2) || (Util.isDevice(p._2) && arsitOptions.devicesAsThreads))
 
     for ((archVarName, m) <- components) {
 
@@ -74,7 +74,7 @@ class ArtNixGen {
               case "Periodic" => T
             }
           case _ =>
-            if (m.category == ComponentCategory.Device) T
+            if (Util.isDevice(m)) T
             else ???
         }
       }

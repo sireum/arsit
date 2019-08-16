@@ -23,10 +23,13 @@ class ArtArchitectureGen {
 
   var basePackage: String = _
 
+  var arsitOptions: Cli.ArsitOption = _
+
   def generator(dir: File, m: Aadl, topPackageName: String, o: Cli.ArsitOption) : (Z, Z) = {
     assert(dir.exists)
     basePackage = Util.sanitizeName(topPackageName)
     outDir = dir
+    arsitOptions = o
 
     gen(m)
 
@@ -98,9 +101,11 @@ class ArtArchitectureGen {
         case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
-          val name = Util.getName(c.identifier)
-          bridges :+= genThread(c, name)
-          components :+= name
+          if(Util.isThread(c) || arsitOptions.devicesAsThreads) {
+            val name = Util.getName(c.identifier)
+            bridges :+= genThread(c, name)
+            components :+= name
+          }
         case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
           Util.report(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}", T)
@@ -133,7 +138,7 @@ class ArtArchitectureGen {
   }
 
   def genThread(m:Component, varName: String) : ST = {
-    assert(m.category == ComponentCategory.Thread || m.category == ComponentCategory.Device)
+    assert(Util.isThread(m) || Util.isDevice(m))
     assert(m.connections.isEmpty)
     //assert(m.subComponents.isEmpty)
 
@@ -151,7 +156,9 @@ class ArtArchitectureGen {
             case "Periodic" => Template.periodic(period)
           }
         case _ =>
-          if (m.category == ComponentCategory.Device) Template.periodic(period)
+          if (Util.isDevice(m)){
+            Template.periodic(period)
+          }
           else ???
       }
     }
