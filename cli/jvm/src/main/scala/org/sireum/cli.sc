@@ -65,7 +65,12 @@ val arsitTool: Tool = Tool(
       Opt(name = "excludeImpl", longKey = "exclude-impl", shortKey = None(),
         tpe = Type.Flag(F), description = "Exclude Slang component implementations"),
       Opt(name = "hamrTime", longKey = "hamr-time", shortKey = None(),
-        tpe = Type.Flag(F), description = "HAMR build")
+        tpe = Type.Flag(F), description = "HAMR build"),
+      Opt(name = "behaviorDir", longKey = "behavior-dir", shortKey = None(),
+        tpe = Type.Path(multiple = F, default = None()), description = "Auxillary C source code directory"),
+      Opt(name = "cdir", longKey = "output-c-directory", shortKey = None(),
+        tpe = Type.Path(multiple = F, default = None()), description = "Output directory for C artifacts")
+
     ))
   )
 )

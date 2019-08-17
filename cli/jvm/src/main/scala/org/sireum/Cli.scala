@@ -56,7 +56,9 @@ object Cli {
     genTrans: B,
     ipc: Ipcmech.Type,
     excludeImpl: B,
-    hamrTime: B
+    hamrTime: B,
+    behaviorDir: Option[String],
+    cdir: Option[String]
   ) extends ArsitTopOption
 }
 
@@ -108,7 +110,9 @@ import Cli._
           |                           (expects one of { MessageQueue, SharedMemory };
           |                           default: MessageQueue)
           |    --exclude-impl       Exclude Slang component implementations
-          |    --hamr-time          HAMR build""".render
+          |    --hamr-time          HAMR build
+          |    --behavior-dir       Auxillary C source code directory (expects a path)
+          |    --output-c-directory Output directory for C artifacts (expects a path)""".render
 
     var json: B = false
     var outputDir: Option[String] = Some(".")
@@ -121,6 +125,8 @@ import Cli._
     var ipc: Ipcmech.Type = Ipcmech.MessageQueue
     var excludeImpl: B = false
     var hamrTime: B = false
+    var behaviorDir: Option[String] = None[String]()
+    var cdir: Option[String] = None[String]()
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -195,6 +201,18 @@ import Cli._
              case Some(v) => hamrTime = v
              case _ => return None()
            }
+         } else if (arg == "--behavior-dir") {
+           val o: Option[Option[String]] = parsePath(args, j + 1)
+           o match {
+             case Some(v) => behaviorDir = v
+             case _ => return None()
+           }
+         } else if (arg == "--output-c-directory") {
+           val o: Option[Option[String]] = parsePath(args, j + 1)
+           o match {
+             case Some(v) => cdir = v
+             case _ => return None()
+           }
          } else {
           eprintln(s"Unrecognized option '$arg'.")
           return None()
@@ -204,7 +222,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, devicesAsThreads, genTrans, ipc, excludeImpl, hamrTime))
+    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, devicesAsThreads, genTrans, ipc, excludeImpl, hamrTime, behaviorDir, cdir))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

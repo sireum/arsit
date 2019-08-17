@@ -33,10 +33,18 @@ object Cli {
                                genTrans: B,
                                ipc: Ipcmech.Type,
                                excludeImpl: B,
-                               hamrTime: B
+                               hamrTime: B,
+                               behaviorDir: Option[String],
+                               cdir: Option[String]
                              ) extends ArsitTopOption
 }
 
 @ext object Library {
   def getFiles: ISZ[(String, String)] = $
+}
+
+@enum object TargetPlatform {
+  'linux
+  'mac
+  'win
 }

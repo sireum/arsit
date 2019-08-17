@@ -9,6 +9,8 @@ class ArtNixGen {
   var projOutputDir: File = _
   var nixOutputDir : File = _
   var cOutputDir : File = _
+  var cExtensionDir : File = _
+  var cUserExtensionDir : Option[File] = None()
   var binOutputDir: File = _
 
   var arsitOptions: Cli.ArsitOption = _
@@ -29,8 +31,13 @@ class ArtNixGen {
     this.projOutputDir = outputDir // where the slang-embedded code was generated
 
     binOutputDir = new File(projOutputDir, "../../bin")
-    cOutputDir = new File(projOutputDir, "../c")
+    cOutputDir = if(o.cdir.nonEmpty) new File(o.cdir.get.native) else new File(projOutputDir, "../c")
+    cExtensionDir = if(o.behaviorDir.nonEmpty) new File(o.behaviorDir.get.native) else new File(cOutputDir, "/ext-c")
     nixOutputDir = new File(projOutputDir, "nix")
+    if(o.behaviorDir.nonEmpty) {
+      cUserExtensionDir = Some(new File(o.behaviorDir.get.native))
+    }
+
     portId = nextPortId
 
     arsitOptions = o
@@ -207,20 +214,23 @@ class ArtNixGen {
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process.scala"), Template.Process(basePackage))
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process_Ext.scala"), Template.ProcessExt(basePackage))
 
-    Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile("win"))
-    Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile("linux"))
-    Util.writeFile(new File(binOutputDir, "compile-mac.sh"), Template.compile("mac"))
+    if(!arsitOptions.hamrTime) {
+      Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile(TargetPlatform.win))
+      Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile(TargetPlatform.linux))
+      Util.writeFile(new File(binOutputDir, "compile-mac.sh"), Template.compile(TargetPlatform.mac))
 
-    Util.writeFile(new File(binOutputDir, "run-cygwin.bat"), Template.run(aepNames, appNames, "win"))
-    Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, "linux"))
-    Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, "mac"))
+      Util.writeFile(new File(binOutputDir, "run-cygwin.bat"), Template.run(aepNames, appNames, TargetPlatform.win))
+      Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, TargetPlatform.linux))
+      Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, TargetPlatform.mac))
 
-    Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
-      (if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
+      Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
+        (if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
 
-    Util.writeFile(new File(cOutputDir, s"ext/ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
-    Util.writeFile(new File(cOutputDir, s"ext/ext.c"), Util.getLibraryFile("ext.c"), false)
-    Util.writeFile(new File(cOutputDir, s"ext/ext.h"), Util.getLibraryFile("ext.h"), false)
+    }
+
+    Util.writeFile(new File(cExtensionDir, s"ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
+    Util.writeFile(new File(cExtensionDir, s"ext.c"), Util.getLibraryFile("ext.c"), false)
+    Util.writeFile(new File(cExtensionDir, s"ext.h"), Util.getLibraryFile("ext.h"), false)
 
     var outputPaths: ISZ[String] = ISZ(projOutputDir.getAbsolutePath)
     if(!nixOutputDir.getAbsolutePath.contains(projOutputDir.getAbsolutePath))
@@ -236,9 +246,9 @@ class ArtNixGen {
     }
 
     var transpileScriptName = "transpile-camkes.sh"
-    var extensions: ISZ[String] = ISZ("$OUTPUT_DIR/ext/ext.c", "$OUTPUT_DIR/ext/ext.h")
+    var extensions: ISZ[String] = ISZ(s"${cExtensionDir.getAbsolutePath}/ext.c", s"${cExtensionDir.getAbsolutePath}/ext.h")
     if(!arsitOptions.hamrTime){
-      extensions = extensions :+ "$OUTPUT_DIR/ext/ipc.c"
+      extensions = extensions :+ s"${cExtensionDir.getAbsolutePath}/ipc.c"
       transpileScriptName = "transpile.sh"
     }
 
@@ -1018,13 +1028,14 @@ class ArtNixGen {
                  |}"""
     }
 
-    @pure def compile(arch: String): ST = {
-      val mv = if(arch.toString == "win")
-        "mv *.exe $SCRIPT_HOME/win/"
+    @pure def compile(arch: TargetPlatform.Type): ST = {
+      val buildDir = st"${arch}-build"
+      val mv: ST = if(arch == TargetPlatform.win)
+        st"mv *.exe $$SCRIPT_HOME/${buildDir}/"
       else {
-        s"""mv *_App $$SCRIPT_HOME/$arch/
-           |${if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) s"mv *_AEP $$SCRIPT_HOME/$arch/" else ""}
-           |mv Main $$SCRIPT_HOME/$arch/""".stripMargin
+        st"""mv *_App $$SCRIPT_HOME/${buildDir}/
+            |${if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) s"mv *_AEP $$SCRIPT_HOME/${buildDir}/" else ""}
+            |mv Main $$SCRIPT_HOME/${buildDir}/"""
       }
       st"""#!/usr/bin/env bash
           |#
@@ -1033,9 +1044,9 @@ class ArtNixGen {
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
           |cd $$SCRIPT_HOME
-          |mkdir -p $arch
-          |mkdir -p $$SCRIPT_HOME/../src/c/$arch
-          |cd $$SCRIPT_HOME/../src/c/$arch
+          |mkdir -p ${buildDir}
+          |mkdir -p ${cOutputDir.getAbsolutePath}/${buildDir}
+          |cd ${cOutputDir.getAbsolutePath}/${buildDir}
           |cmake -DCMAKE_BUILD_TYPE=Release ..
           |make $$MAKE_ARGS
           |$mv"""
@@ -1043,16 +1054,17 @@ class ArtNixGen {
 
     @pure def run(aeps: ISZ[String],
                   apps: ISZ[String],
-                  arch: String): ST = {
+                  arch: TargetPlatform.Type): ST = {
+      val buildDir = st"${arch}-build"
       val ext = if(arch.toString == "win") ".exe" else ""
       val staep = if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
-        val prefix = arch.toString match {
-          case "win" => "cygstart mintty /bin/bash"
-          case "linux" => "x-terminal-emulator -e sh -c"
-          case "mac" => "open -a Terminal"
+        val prefix = arch match {
+          case TargetPlatform.win => "cygstart mintty /bin/bash"
+          case TargetPlatform.linux => "x-terminal-emulator -e sh -c"
+          case TargetPlatform.mac => "open -a Terminal"
         }
-        st"""$prefix $arch/${st}$ext &""" })
+        st"""$prefix ${buildDir}/${st}$ext &""" })
       st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
@@ -1063,9 +1075,9 @@ class ArtNixGen {
           |${(staep, "\n")}
           |${(stapp, "\n")}
           |read -p "Press enter to initialise components ..."
-          |$arch/Main$ext
+          |${buildDir}/Main$ext
           |read -p "Press enter again to start ..."
-          |$arch/Main$ext"""
+          |${buildDir}/Main$ext"""
     }
 
     @pure def stop(apps: ISZ[String]) : ST = {
@@ -1114,7 +1126,7 @@ class ArtNixGen {
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
           |export PROJ_HOME=$$SCRIPT_HOME/../src/main
-          |export OUTPUT_DIR=$$SCRIPT_HOME/../src/c
+          |export OUTPUT_DIR=${cOutputDir.getAbsolutePath}
           |
           |$$SIREUM_HOME/bin/sireum slang transpilers c \
           |  --sourcepath $$PROJ_HOME \

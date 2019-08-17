@@ -59,6 +59,9 @@ object Arsit extends scala.App {
       genTrans = o.genTrans,
       ipc = ipc,
       excludeImpl = o.excludeImpl,
-      hamrTime = o.hamrTime))
+      hamrTime = o.hamrTime,
+      behaviorDir = o.behaviorDir,
+      cdir = o.cdir
+    ))
   }
 }
