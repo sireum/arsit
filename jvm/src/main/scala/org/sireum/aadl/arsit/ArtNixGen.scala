@@ -5,15 +5,19 @@ import java.io.File
 import org.sireum._
 import org.sireum.aadl.ir._
 
-class ArtNixGen {
+class ArtNixGen(outputDir: File,
+                m: Aadl,
+                topPackageName: String,
+                nextPortId: Z,
+                nextComponentId: Z,
+                arsitOptions: Cli.ArsitOption,
+                types: AadlTypes) {
   var projOutputDir: File = _
   var nixOutputDir : File = _
   var cOutputDir : File = _
   var cExtensionDir : File = _
   var cUserExtensionDir : Option[File] = None()
   var binOutputDir: File = _
-
-  var arsitOptions: Cli.ArsitOption = _
 
   var basePackage: String = _
 
@@ -26,21 +30,19 @@ class ArtNixGen {
     return r
   }
 
-  def generator(outputDir: File, m: Aadl, topPackageName: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption): Z = {
+  def generator(): Z = {
     basePackage = Util.sanitizeName(topPackageName)
-    this.projOutputDir = outputDir // where the slang-embedded code was generated
+    projOutputDir = outputDir // where the slang-embedded code was generated
 
     binOutputDir = new File(projOutputDir, "../../bin")
-    cOutputDir = if(o.cdir.nonEmpty) new File(o.cdir.get.native) else new File(projOutputDir, "../c")
-    cExtensionDir = if(o.behaviorDir.nonEmpty) new File(o.behaviorDir.get.native) else new File(cOutputDir, "/ext-c")
+    cOutputDir = if(arsitOptions.cdir.nonEmpty) new File(arsitOptions.cdir.get.native) else new File(projOutputDir, "../c")
+    cExtensionDir = if(arsitOptions.behaviorDir.nonEmpty) new File(arsitOptions.behaviorDir.get.native) else new File(cOutputDir, "/ext-c")
     nixOutputDir = new File(projOutputDir, "nix")
-    if(o.behaviorDir.nonEmpty) {
-      cUserExtensionDir = Some(new File(o.behaviorDir.get.native))
+    if(arsitOptions.behaviorDir.nonEmpty) {
+      cUserExtensionDir = Some(new File(arsitOptions.behaviorDir.get.native))
     }
 
     portId = nextPortId
-
-    arsitOptions = o
 
     gen(m)
 
@@ -1154,7 +1156,7 @@ class ArtNixGen {
 }
 
 object ArtNixGen{
-  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption) : Z =
-    new ArtNixGen().generator(outputDir, m, topPackage, nextPortId, nextComponentId, o)
+  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption, types: AadlTypes) : Z =
+    new ArtNixGen(outputDir, m, topPackage, nextPortId, nextComponentId, o, types).generator()
 }
 

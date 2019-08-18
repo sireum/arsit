@@ -5,20 +5,21 @@ import org.sireum._
 import org.sireum.aadl.ir._
 import scala.language.implicitConversions
 
-class ArtStubGenerator {
-
+class ArtStubGenerator(dir: File,
+                       m: Aadl,
+                       packageName: String,
+                       arsitOptions: Cli.ArsitOption,
+                       types: AadlTypes)  {
   var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
   var basePackage: String = _
-  var arsitOptions : Cli.ArsitOption = _
   var seenComponents : HashSet[String] = HashSet.empty
 
-  def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
+  def generator() : Unit = {
     assert(dir.exists)
 
     outDir = dir
     basePackage = Util.sanitizeName(packageName)
-    arsitOptions = o
 
     for(c <- m.components)
       gen(c)
@@ -443,6 +444,7 @@ class ArtStubGenerator {
                           |
                           |def Finalize_Entrypoint(): Unit = {}""".render.toString
                     } else { "" }}
+                 |  val x: SW.Map = SW.Map(ISZ())
                  |}"""
     }
 
@@ -482,5 +484,6 @@ class ArtStubGenerator {
 
 
 object ArtStubGenerator {
-  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) = new ArtStubGenerator().generator(dir, m, packageName, o)
+  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption, types: AadlTypes) =
+    new ArtStubGenerator(dir, m, packageName, o, types).generator()
 }

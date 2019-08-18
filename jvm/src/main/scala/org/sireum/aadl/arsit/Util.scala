@@ -13,8 +13,11 @@ object Util {
   val Prop_Period: String = "Timing_Properties::Period"
   val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
   val Prop_Urgency: String = "Thread_Properties::Urgency"
+  val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
+  val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
+  val Prop_DataModel__Base_Type: String = "Data_Model::Base_Type"
 
-  val EmptyTypeNames = DataTypeNames("", "art", "Empty", false)
+  val EmptyTypeNames = DataTypeNames("", "", "art", "Empty", false)
   def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
   def isEmptyType(t : DataTypeNames) = t == EmptyTypeNames
 
@@ -26,6 +29,10 @@ object Util {
     for (p <- properties if getLastName(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
     return None[T]
+  }
+
+  @pure def getPropertyValues(properties: ISZ[Property], propertyName: String): ISZ[PropertyValue] = {
+    return properties.filter(p => getLastName(p.name) == propertyName).flatMap(p => p.propertyValues)
   }
 
   @pure def getPeriod(m: Component): String = {
@@ -45,11 +52,51 @@ object Util {
     }
   }
 
+  @pure def getEnumValues(v: Component): ISZ[String] = {
+    var ret: ISZ[String] = ISZ()
+    if(isEnum(v.properties)) {
+      for(p <- getPropertyValues(v.properties, Prop_Data_Model__Enumerators)){
+        p match {
+          case ValueProp(v) => ret = ret :+ v
+          case _ => halt(s"Unhandled ${p}")
+        }
+      }
+    }
+
+    return ret
+  }
+
+  @pure def getArrayBaseType(c: Component): String = {
+    for (p <- c.properties if getLastName(p.name) == Prop_DataModel__Base_Type) {
+      return p.propertyValues(0).asInstanceOf[ClassifierProp].name
+    }
+    halt(s"${c} isn't an array")
+  }
+
   @pure def isEnum(props: ISZ[Property]): B = {
     for (p <- props if getLastName(p.name) == Prop_DataRepresentation &&
       ISZOps(p.propertyValues).contains(ValueProp("Enum")))
       return true
     return false
+  }
+
+  @pure def isEnumType(c: Component): B = {
+    return isEnum(c.properties)
+  }
+
+  @pure def isRecordType(c: Component): B = {
+    return c.subComponents.nonEmpty
+  }
+
+  @pure def isArrayType(c: Component): B = {
+    for (p <- c.properties if getLastName(p.name) == Prop_DataRepresentation &&
+      ISZOps(p.propertyValues).contains(ValueProp("Array")))
+      return true
+    return false
+  }
+
+  @pure def isBaseType(c: Component): B = {
+    return StringOps(c.classifier.get.name).startsWith("Base_Types::")
   }
 
   // replace '-' and '.' with '_'
@@ -62,12 +109,32 @@ object Util {
     Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
   }
 
+  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
+    typ match {
+      case e: BaseType =>
+        return DataTypeNames(qualifiedName = typ.container.classifier.get.name,
+          basePackage = topPackage,
+          packageName = "Base_Types",
+          typeName = e.typeName,
+          F)
+      case _ =>
+        val classifier = typ.container.classifier.get
+
+        val a = classifier.name.toString.split("::")
+        assert(a.size == 2)
+
+        val dt = DataTypeNames(classifier.name, topPackage, a(0), sanitizeName(a(1)), typ.isInstanceOf[EnumType])
+
+        return dt
+    }
+  }
+
   @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
     return f.classifier match {
       case Some(c) =>
         val a = c.name.toString.split("::")
         assert(a.size == 2)
-        DataTypeNames(topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
+        DataTypeNames(c.name, topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
       case _ =>
         EmptyTypeNames
     }
@@ -176,21 +243,32 @@ case class Names(packageName : String,
                  component: String,
                  componentImpl: String)
 
-case class DataTypeNames(basePackage: String,
+case class DataTypeNames(qualifiedName: String,
+                         basePackage: String,
                          packageName: String,
                          typeName: String,
                          isEnum: B) {
 
-  def filePath: String = s"$basePackage/$packageName/$typeName.scala"
+  def sanitizedName: String = typeName //if(typeName.native == "Map") "Map_" else typeName
+
+  def filePath: String = s"$basePackage/$packageName/$sanitizedName.scala"
 
   def qualifiedPackageName: String = s"$basePackage.$packageName"
 
-  def qualifiedTypeName: String = s"$packageName.$typeName"
+  def qualifiedTypeName: String = s"$packageName.$sanitizedName"
 
-  def referencedTypeName: String = typeName + (if(isEnum) ".Type" else "")
+  def referencedTypeName: String = sanitizedName + (if(isEnum) ".Type" else "")
   def qualifiedReferencedTypeName: String = s"${packageName}.${referencedTypeName}"
 
-  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"
+  def baseQualifiedReferencedTypeName: String = {
+    if(packageName.native == "Base_Types") {
+      s"org.sireum.${TypeResolver.getSlangType(referencedTypeName)}"
+    } else {
+      qualifiedReferencedTypeName
+    }
+  }
+
+  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${sanitizedName}_Payload"
   def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
 }
 
