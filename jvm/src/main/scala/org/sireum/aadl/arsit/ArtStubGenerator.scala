@@ -83,17 +83,11 @@ class ArtStubGenerator(dir: File,
     var ports: ISZ[Port] = ISZ()
 
     for(f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
-      ports :+= Port(f, m, basePackage)
+      val pType = Util.getFeatureEndType(f, types)
+      ports :+= Port(f, m, pType, basePackage)
     }
 
-    val dispatchProtocol: String = {
-      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
-        case Some(x) => x.value
-        case _ =>
-          if(Util.isDevice(m)) "Periodic"
-          else ???
-      }
-    }
+    val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
 
     val b = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
     Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b)
@@ -103,14 +97,14 @@ class ArtStubGenerator(dir: File,
       Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
     }
 
-    val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl)
+    val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl, dispatchProtocol, ports)
     val ci = Template.slangPreamble(T, names.packageName, basePackage,
       genSubprograms(m) match {
         case Some(x) => ISZ(block, x)
         case _ => ISZ(block)
       })
 
-    Util.writeFile(new File(outDir, filename), ci, false)
+    Util.writeFile(new File(outDir, filename), ci, F)
 
     seenComponents = seenComponents + filename
   }
@@ -122,10 +116,14 @@ class ArtStubGenerator(dir: File,
 
       val methodName = Util.getLastName(p.identifier)
       val params: ISZ[String] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
-        .map(param => s"${Util.getLastName(param.identifier)} : ${Util.getDataTypeNames(param, basePackage).referencedTypeName}")
-      val rets = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
+        .map(param => {
+          val pType = Util.getFeatureEndType(param, types)
+          s"${Util.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).referencedTypeName}"
+        })
+      val rets: ISZ[FeatureEnd] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
       assert(rets.size == 1)
-      val returnType = Util.getDataTypeNames(rets(0), basePackage).referencedTypeName
+      val rType = Util.getFeatureEndType(rets(0), types)
+      val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
 
       Template.subprogram(methodName, params, returnType)
     })
@@ -156,11 +154,17 @@ class ArtStubGenerator(dir: File,
     @pure def bridge(topLevelPackageName: String,
                      packageName : String,
                      bridgeName : String,
-                     dispatchProtocol : String,
+                     dispatchProtocol : DispatchProtocol.Type,
                      componentName : String,
                      componentType : String,
                      componentImplType : String,
                      ports : ISZ[Port]) : ST = {
+
+      val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute).map(m =>
+        st"""def ${m.string}: Unit = {
+            |  ${componentName}.${m.string}()
+            |}""")
+
       return st"""// #Sireum
                   |
                   |package $packageName
@@ -253,38 +257,22 @@ class ArtStubGenerator(dir: File,
                   |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
                          (ports.filter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |
-                  |    def initialise(): Unit = {
-                  |      ${componentName}.${if(arsitOptions.bless) "Initialize_Entrypoint()" else "initialise()"}
-                  |    }
-                  |
                   |    def compute(): Unit = {
                   |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol)}
                   |    }
                   |
-                  |    def activate(): Unit = {
-                  |      ${componentName}.${if(arsitOptions.bless) "Activate_Entrypoint()" else "activate()"}
-                  |    }
-                  |
-                  |    def deactivate(): Unit = {
-                  |      ${componentName}.${if(arsitOptions.bless) "Deactivate_Entrypoint()" else "deactivate()"}
-                  |    }
-                  |
-                  |    def recover(): Unit = {
-                  |      ${componentName}.${if(arsitOptions.bless) "Recover_Entrypoint()" else "recover()"}
-                  |    }
-                  |
-                  |    def finalise(): Unit = {
-                  |      ${componentName}.${if(arsitOptions.bless) "Finalize_Entrypoint()" else "finalise()"}
-                  |    }
+                  |    ${(entryPoints, "\n\n")}
                   |  }
                   |}"""
     }
 
-    @pure def computeBody(bridgeName: String, componentName: String,
-                          ports: ISZ[Port], dispatchProtocol:String) : ST = {
+    @pure def computeBody(bridgeName: String,
+                          componentName: String,
+                          ports: ISZ[Port],
+                          dispatchProtocol: DispatchProtocol.Type) : ST = {
       if(!arsitOptions.bless) {
-        dispatchProtocol.toString match {
-          case "Sporadic" =>
+        dispatchProtocol match {
+          case DispatchProtocol.Sporadic =>
             return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
                        |Art.receiveInput(portIds, dataInPortIds)
                        |
@@ -297,7 +285,7 @@ class ArtStubGenerator(dir: File,
                        |}
                        |
                        |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
-          case "Periodic" =>
+          case DispatchProtocol.Periodic =>
             return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
                        |${componentName}.timeTriggered()
                        |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
@@ -316,10 +304,12 @@ class ArtStubGenerator(dir: File,
 
     @pure def componentTrait(topLevelPackageName: String,
                              packageName : String,
-                             dispatchProtocol : String,
+                             dispatchProtocol : DispatchProtocol.Type,
                              componentType : String,
                              bridgeName : String,
                              ports : ISZ[Port]) : ST = {
+      val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute).map(m => st"def ${m.string}(): Unit = {}")
+
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -332,24 +322,16 @@ class ArtStubGenerator(dir: File,
                  |@msig trait ${componentType} {
                  |
                  |  def api : ${bridgeName}.Api
-                 |
-                 |  def initialise(): Unit = {}
-                 |
-                 |  def finalise(): Unit = {}
-                 |  ${dispatchProtocol.toString match {
-                        case "Sporadic" =>
+                 |  ${dispatchProtocol match {
+                        case DispatchProtocol.Sporadic =>
                           var s = ""
                           for (p <- ports if Util.isEventPort(p.feature) && Util.isInFeature(p.feature))
-                            s += "\n" + Template.portCaseMethod(p).render + "\n"
+                            s += "\n" + Template.portCaseMethod(p, F).render + "\n"
                           s
-                        case "Periodic" => "\ndef timeTriggered() : Unit = {}\n"
+                        case DispatchProtocol.Periodic => "\ndef timeTriggered() : Unit = {}\n"
                       }
                     }
-                 |  def activate(): Unit = {}
-                 |
-                 |  def deactivate(): Unit = {}
-                 |
-                 |  def recover(): Unit = {}
+                 |  ${(entryPoints, "\n\n")}
                  |}"""
     }
 
@@ -396,6 +378,25 @@ class ArtStubGenerator(dir: File,
       }
     }
 
+    @pure def portApiUsage(p: Port): ST = {
+      if(Util.isInFeature(p.feature)) {
+        val typeName = p.portType.qualifiedReferencedTypeName
+        return st"val apiUsage_${p.name}: Option[${typeName}] = api.get${p.name}()"
+      } else {
+        val payload = if(Util.isEmptyType(p.portType)) {
+          ""
+        } else {
+          p.portType.empty()
+        }
+        val methodName = if(Util.isDataPort(p.feature)) {
+          "set"
+        } else {
+          "send"
+        }
+        return st"api.${methodName}${p.name}($payload)"
+      }
+    }
+
     @pure def portCase(cname:String, v: Port, first : B) : ST = {
       v.feature.category match {
         case FeatureCategory.EventDataPort =>
@@ -411,17 +412,21 @@ class ArtStubGenerator(dir: File,
       }
     }
 
-    @pure def portCaseMethod(v: Port) : ST = {
+    @pure def portCaseMethod(v: Port, isImpl: B) : ST = {
+      val or = if(isImpl){ "override "} else { "" }
+      val ed = if(isImpl) { "example" } else { "default" }
+      val methodName = s"handle${v.name}"
+
       v.feature.category match {
         case FeatureCategory.EventDataPort =>
-          return st"""def handle${v.name}(value : ${v.portType.qualifiedReferencedTypeName}): Unit = {
+          return st"""${or}def $methodName(value : ${v.portType.qualifiedReferencedTypeName}): Unit = {
                      |  api.logInfo(s"received ${"${value}"}")
-                     |  api.logInfo("default ${v.name} implementation")
+                     |  api.logInfo("${ed} $methodName implementation")
                      |}"""
         case FeatureCategory.EventPort =>
-          return st"""def handle${v.name}(): Unit = {
+          return st"""${or}def $methodName(): Unit = {
                      |  api.logInfo("received ${v.name}")
-                     |  api.logInfo("default ${v.name} implementation")
+                     |  api.logInfo("${ed} $methodName implementation")
                      |}"""
         case _ => throw new RuntimeException("Unexpected " + v.feature.category)
       }
@@ -429,22 +434,42 @@ class ArtStubGenerator(dir: File,
 
     @pure def componentImplBlock(componentType : String,
                                  bridgeName : String,
-                                 componentImplType : String) : ST = {
-      return st"""@record class $componentImplType (val api : ${bridgeName}.Api) ${if(arsitOptions.bless) "" else s"extends ${componentType}"} {
-                 |  ${if(arsitOptions.bless) {
-                      st"""def Initialize_Entrypoint(): Unit = {}
-                          |
-                          |def Compute_Entrypoint(): Unit = {}
-                          |
-                          |def Activate_Entrypoint(): Unit = {}
-                          |
-                          |def Deactivate_Entrypoint(): Unit = {}
-                          |
-                          |def Recover_Entrypoint(): Unit = {}
-                          |
-                          |def Finalize_Entrypoint(): Unit = {}""".render.toString
-                    } else { "" }}
-                 |  val x: SW.Map = SW.Map(ISZ())
+                                 componentImplType : String,
+                                 dispatchProtocol: DispatchProtocol.Type,
+                                 ports: ISZ[Port]) : ST = {
+
+      val init =  st"""override def ${EntryPoints.initialise.string}(): Unit = {
+                      |  // example api usage
+                      |
+                      |  api.logInfo("Example info logging")
+                      |  api.logDebug("Example debug logging")
+                      |  api.logError("Example error logging")
+                      |
+                      |  ${(ports.map(p => portApiUsage(p)), "\n")}
+                      |}"""
+
+      val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute && f != EntryPoints.initialise).map(m => {
+          st"""override def ${m.string}(): Unit = {
+              |  // example override of ${m.string}
+              |}"""
+        })
+
+      val eventHandlers = if(dispatchProtocol == DispatchProtocol.Periodic) {
+        ISZ(st"""override def timeTriggered(): Unit = {
+                |  // example override of timeTriggered
+                |}""")
+      } else {
+        ports.filter(p => Util.isInFeature(p.feature)).map(m => portCaseMethod(m, T))
+      }
+
+      return st"""// the contents of this file will not be overwritten
+                 |@record class $componentImplType (val api : ${bridgeName}.Api) ${if(arsitOptions.bless) "" else s"extends ${componentType}"} {
+                 |
+                 |  ${init}
+                 |
+                 |  ${(eventHandlers, "\n\n")}
+                 |
+                 |  ${(entryPoints, "\n\n")}
                  |}"""
     }
 

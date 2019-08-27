@@ -50,6 +50,20 @@ object Cli {
   'win
 }
 
+@enum object DispatchProtocol {
+  'Periodic
+  'Sporadic
+}
+
+@enum object EntryPoints {
+  'activate
+  'compute
+  'deactivate
+  'finalise
+  'initialise
+  'recover
+}
+
 object TypeResolver {
 
   def getSlangType(s: String): SlangType.Type = {
@@ -94,29 +108,26 @@ object TypeResolver {
     val cname = c.classifier.get.name
     val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
 
-    if(Util.isEnumType(c)) {
-      val slangPackageName = "DO_ME"
-      val slangSimpleName = names.component
+    val container = Some(c)
 
-      return  EnumType(cname, c, slangPackageName, slangSimpleName, Util.getEnumValues(c))
+    if(Util.isEnumType(c)) {
+
+      return  EnumType(cname, container, Util.getEnumValues(c))
 
     } else if(Util.isBaseType(c)) {
 
       val aadlType = org.sireum.ops.StringOps(c.classifier.get.name).replaceAllLiterally("Base_Types::", "")
-      val slangPackageName = "DO_ME"
 
       val t: SlangType.Type = TypeResolver.getSlangType(aadlType)
 
-      val slangSimpleName = t.name
-
-      return BaseType(cname, c, slangPackageName, aadlType, t, "org.sireum")
+      return BaseType(cname, container, t)
 
     } else if(Util.isArrayType(c)) {
-      val slangPackageName = "DO_ME"
-      val slangSimpleName= names.component
-      val baseType = Util.getArrayBaseType(c)
 
-      return ArrayType(cname, c, slangPackageName, slangSimpleName, baseType)
+      val baseTypeName = Util.getArrayBaseType(c)
+      val baseType = typeMap.get(baseTypeName).get
+
+      return ArrayType(cname, container, baseType)
     } else if(Util.isRecordType(c)) {
       var fields: Map[String, AadlType] = Map.empty
 
@@ -124,16 +135,11 @@ object TypeResolver {
         val fieldName = Util.getLastName(sc.identifier)
         fields = fields + (fieldName ~> processType(sc))
       }
-      val slangPackageName = "DO_ME"
-      val slangSimpleName= names.component
 
-      return RecordType(cname, c, slangPackageName, slangSimpleName, fields)
+      return RecordType(cname, container, fields)
 
     } else {
-      val slangPackageName = "DO_ME"
-      val slangSimpleName= names.component
-
-      return TODOType(cname, c, slangPackageName, slangSimpleName)
+      return TODOType(cname, None())
     }
   }
 }
@@ -141,68 +147,57 @@ object TypeResolver {
 @datatype class AadlTypes (typeMap : Map[String, AadlType])
 
 @sig trait AadlType {
-  def container: org.sireum.aadl.ir.Component
+  def container: Option[org.sireum.aadl.ir.Component]
 
   def name: String
-
-  def packageName: String // slang package name
-  def typeName: String // simple slang name to emit
 }
 
 @datatype class EnumType(val name: String,
-                         val container: org.sireum.aadl.ir.Component,
-                         val packageName: String,
-                         val typeName: String,
+                         val container: Option[org.sireum.aadl.ir.Component],
 
                          values: ISZ[String]) extends AadlType
 
 @datatype class ArrayType(val name: String,
-                          val container: org.sireum.aadl.ir.Component,
-                          val packageName: String,
-                          val typeName: String,
+                          val container: Option[org.sireum.aadl.ir.Component],
 
-                          baseType: String) extends AadlType
+                          baseType: AadlType) extends AadlType
 
 @datatype class RecordType(val name: String,
-                           val container: org.sireum.aadl.ir.Component,
-                           val packageName: String,
-                           val typeName: String,
+                           val container: Option[org.sireum.aadl.ir.Component],
 
                            fields: Map[String, AadlType]
                           ) extends AadlType
 
 @datatype class BaseType(val name: String,
-                         val container: org.sireum.aadl.ir.Component,
-                         val packageName: String,
-                         val typeName: String,
+                         val container: Option[org.sireum.aadl.ir.Component],
 
-                         slangType: SlangType.Type,
-                         slangPackageName: String // probably always 'org.sireum'
+                         slangType: SlangType.Type
                         ) extends AadlType
 
 @datatype class TODOType(val name: String,
-                         val container: org.sireum.aadl.ir.Component,
-                         val packageName: String,
-                         val typeName: String) extends AadlType
+                         val container: Option[org.sireum.aadl.ir.Component]
+                        ) extends AadlType
 
 @enum object SlangType {
-  'B
+  'B   // Base_Types::Boolean
 
-  'Z
-  'Z8
-  'Z16
-  'Z32
-  'Z64
+  'Z   // Base_Types::Integer
+  'Z8  // Base_Types::Integer_8
+  'Z16 // Base_Types::Integer_16
+  'Z32 // Base_Types::Integer_32
+  'Z64 // Base_Types::Integer_64
 
-  'U8
-  'U16
-  'U32
-  'U64
+  'U8  // Base_Types::Unsigned_8
+  'U16 // Base_Types::Unsigned_16
+  'U32 // Base_Types::Unsigned_32
+  'U64 // Base_Types::Unsigned_64
 
-  'R
-  'F32
-  'F64
+  // TODO: Base_Types::Natural
 
-  'C
-  'String
+  'R   // Base_Types::Float ??
+  'F32 // Base_Types::Float_32
+  'F64 // Base_Types::Float_64
+
+  'C   // Base_Types::Character
+  'String // Base_Types::String
 }

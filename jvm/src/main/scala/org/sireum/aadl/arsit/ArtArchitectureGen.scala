@@ -35,6 +35,8 @@ class ArtArchitectureGen(dir : File,
     for(t <- types.typeMap.values) {
       emitType(t)
     }
+    val baseTypes = StringTemplate.Base_Types(basePackage)
+    Util.writeFile(new File(outDir, s"../data/${basePackage}/Base_Types.scala"), baseTypes, true)
 
     gen(m)
 
@@ -153,28 +155,24 @@ class ArtArchitectureGen(dir : File,
 
     val period: String = Util.getPeriod(m)
 
-    val dispatchProtocol: ST = {
-      Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
-        case Some(x) =>
-          x.value.toString match {
-            case "Sporadic" => Template.sporadic(period)
-            case "Periodic" => Template.periodic(period)
-          }
-        case _ =>
-          if (Util.isDevice(m)){
-            Template.periodic(period)
-          }
-          else ???
+    val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
+
+    val dispatchProtocolST: ST = {
+      dispatchProtocol match {
+        case DispatchProtocol.Sporadic => Template.sporadic(period)
+        case DispatchProtocol.Periodic => Template.periodic(period)
       }
     }
 
     var ports: ISZ[ST] = ISZ()
-    for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f))
-      ports :+= genPort(Port(f, m, basePackage))
+    for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
+      val typ = Util.getFeatureEndType(f, types)
+      ports :+= genPort(Port(f, m, typ, basePackage))
+    }
 
     val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
 
-    return Template.bridge(varName, bridgeTypeName, id, dispatchProtocol, ports)
+    return Template.bridge(varName, bridgeTypeName, id, dispatchProtocolST, ports)
   }
 
   def genPort(port: Port) : ST = {
@@ -194,41 +192,62 @@ class ArtArchitectureGen(dir : File,
       case _ => "???"
     })
 
-    //addTypeSkeleton(port)
-
     return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode)
   }
 
   def emitType(t: AadlType): Unit = {
+    if(t.isInstanceOf[BaseType]){
+      return
+    }
 
     val typeNames: DataTypeNames = Util.getDataTypeNames(t, basePackage)
-    //val typeName = t.typeName
-    val typeName = typeNames.sanitizedName
+
+    var imports: org.sireum.Set[String] = org.sireum.Set.empty[String]
 
     val body: ST = t match {
-      case e: EnumType => Template.enumType(typeName, e.values)
+      case e: EnumType => Template.enumType(typeNames, e.values)
 
       case e: RecordType =>
-        val flds: ISZ[ST] = e.fields.entries.map(e => {
-          val fname = e._1
-          val typeName = Util.getDataTypeNames(e._2, basePackage)
+        var fldInits: ISZ[String] = ISZ()
+        var flds: ISZ[ST] = ISZ()
 
-          st"${fname} : ${typeName.baseQualifiedReferencedTypeName}"
-        })
-        Template.dataType(typeName, flds)
+        for(f <- e.fields.entries){
+          val fname = f._1
+          val fieldTypeNames = Util.getDataTypeNames(f._2, basePackage)
 
-      case e: BaseType =>
-        Template.dataType(e.typeName, ISZ(st"value : org.sireum.${e.slangType.name}"))
+          fldInits = fldInits :+ fieldTypeNames.empty()
+
+          flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedTypeName}"
+        }
+
+        Template.dataType(typeNames, flds, fldInits, None[ST]())
 
       case e: ArrayType =>
-        val baseType: AadlType = types.typeMap.get(e.baseType).get
-        val names = Util.getDataTypeNames(baseType, basePackage)
+        val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
+        val baseTypeEmpty = baseTypeNames.empty()
 
-        Template.dataType(typeName, ISZ(st"value : ISZ[${names.baseQualifiedReferencedTypeName}]"))
+        val dims = Util.getArrayDimensions(e)
+
+        val emptyInit: String = if(dims.nonEmpty){
+          assert(dims.size == 1)
+          s"ISZ.create(${dims(0)}, ${baseTypeEmpty})"
+        } else {
+          s"ISZ(${baseTypeEmpty})"
+        }
+
+        val flds = ISZ(st"value : ISZ[${baseTypeNames.qualifiedReferencedTypeName}]")
+
+        val optChecks: Option[ST] = if(dims.nonEmpty) {
+          Some(st"{ assert (value.size == ${dims(0)}) }")
+        } else {
+          None[ST]()
+        }
+
+        Template.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
 
       case e: TODOType =>
         println(s"Don't know how to handle ${e}")
-        Template.typeSkeleton(typeName)
+        Template.typeSkeleton(typeNames)
 
       case _ => halt(s"${t}")
     }
@@ -236,46 +255,10 @@ class ArtArchitectureGen(dir : File,
     val ts = Template.typeS(
       basePackage,
       typeNames.qualifiedPackageName,
-      typeNames.qualifiedReferencedTypeName,
-      typeNames.payloadName,
       body,
-      typeNames.isEnum)
+      Template.payloadType(typeNames))
 
     Util.writeFile(new File(outDir, "../data/" + typeNames.filePath.toString), ts, true)
-  }
-
-  var seenTypes: ISZ[String] = ISZ()
-  def addTypeSkeleton(port: Port): Unit = {
-    if((Util.isDataPort(port.feature) || Util.isEventDataPort(port.feature)) &&
-      seenTypes.filter(_ == port.portType.qualifiedTypeName).isEmpty) {
-
-      seenTypes :+= port.portType.qualifiedTypeName
-
-      val typeName = port.portType.typeName
-
-      val body: ST = types.typeMap.get(port.portType.qualifiedName) match {
-        case Some(e: EnumType) => Template.enumType(typeName, e.values)
-        case Some(e: RecordType) =>
-          val flds: ISZ[ST] = e.fields.entries.map(e => {
-            val fname = e._1
-            val typeName = Util.getDataTypeNames(e._2, basePackage)
-
-            st"${fname} : ${typeName}"
-          })
-          Template.dataType(typeName, flds)
-        case _ => halt(s"${port}")
-      }
-
-      val ts = Template.typeS(
-        basePackage,
-        port.portType.qualifiedPackageName,
-        port.portType.typeName,
-        port.portType.payloadName,
-        body,
-        port.portType.isEnum)
-
-      Util.writeFile(new File(outDir, "../data/" + port.portType.filePath.toString), ts, true)
-    }
   }
 
   def allowConnection(c : ConnectionInstance, m : Component) : B = {
@@ -387,30 +370,55 @@ class ArtArchitectureGen(dir : File,
     }
 
 
-    @pure def enumType(typeName: String,
+    @pure def enumType(typeNames: DataTypeNames,
                        values: ISZ[String]): ST = {
       val vals = values.map(m => st"'$m")
-      return st"""@enum object $typeName {
+      return st"""@enum object ${typeNames.typeName} {
                  |  ${(vals, "\n")}
-                 |}"""
+                 |}
+                 |"""
     }
 
-    @pure def dataType(typeName: String,
-                       fields: ISZ[ST]): ST = {
-      return st"""@datatype class $typeName(
-                 |  ${(fields, ",\n")})"""
+    @pure def dataType(typeNames: DataTypeNames,
+                       fields: ISZ[ST],
+                       paramInits: ISZ[String],
+                       optChecks: Option[ST]): ST = {
+      return st"""object ${typeNames.typeName} {
+                 |  def empty(): ${typeNames.qualifiedTypeName} = {
+                 |    return ${typeNames.qualifiedTypeName}(${(paramInits, ", ")})
+                 |  }
+                 |}
+                 |
+                 |@datatype class ${typeNames.typeName}(
+                 |  ${(fields, ",\n")}) {
+                 |  $optChecks
+                 |}
+                 |"""
     }
 
-    @pure def typeSkeleton(typeName: String): ST = {
-      return st"""@datatype class $typeName() // type skeleton"""
+    @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
+      return st"""@datatype class ${typeNames.typeName}() // type skeleton"""
+    }
+
+    @pure def payloadType(typeNames: DataTypeNames) : ST = {
+      val typeName = typeNames.qualifiedReferencedTypeName
+      val payloadTypeName = typeNames.payloadName
+      val emptyPayload = typeNames.empty()
+
+      return st"""object $payloadTypeName {
+                 |  def empty(): $payloadTypeName = {
+                 |    return $payloadTypeName($emptyPayload)
+                 |  }
+                 |}
+                 |
+                 |@datatype class $payloadTypeName(value: $typeName) extends art.DataContent"""
     }
 
     @pure def typeS(topLevelPackageName: String,
                     packageName: String,
-                    typeName: String,
-                    payloadTypeName: String,
                     body: ST,
-                    isEnum: B): ST = {
+                    payload: ST): ST = {
+
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -421,8 +429,7 @@ class ArtArchitectureGen(dir : File,
                  |${Util.doNotEditComment()}
                  |
                  |$body
-                 |
-                 |@datatype class $payloadTypeName(value: $typeName) extends art.DataContent
+                 |$payload
                  |"""
     }
   }

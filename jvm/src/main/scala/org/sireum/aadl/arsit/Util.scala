@@ -16,8 +16,10 @@ object Util {
   val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
   val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
   val Prop_DataModel__Base_Type: String = "Data_Model::Base_Type"
+  val Prop_Data_Model__Dimension: String = "Data_Model::Dimension"
 
-  val EmptyTypeNames = DataTypeNames("", "", "art", "Empty", false)
+  val EmptyType = TODOType("--EmptyType--", None())
+  val EmptyTypeNames = DataTypeNames(EmptyType, "", "art", "Empty")
   def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
   def isEmptyType(t : DataTypeNames) = t == EmptyTypeNames
 
@@ -35,6 +37,33 @@ object Util {
     return properties.filter(p => getLastName(p.name) == propertyName).flatMap(p => p.propertyValues)
   }
 
+  @pure def getDispatchProtocol(m: Component): Option[DispatchProtocol.Type] = {
+    Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
+      case Some(x) =>
+        x.value.toString match {
+          case "Sporadic" => return Some(DispatchProtocol.Sporadic)
+          case "Periodic" => return Some(DispatchProtocol.Periodic)
+          case s =>
+            val name: Names = Util.getNamesFromClassifier(m.classifier.get, "")
+            halt(s"${s} dispatch protocol for ${name.componentImpl} is not currently supported")
+        }
+      case _ => None[DispatchProtocol.Type]()
+    }
+  }
+
+  @pure def getSlangEmbeddedDispatchProtocol(m: Component): DispatchProtocol.Type = {
+    return Util.getDispatchProtocol(m) match {
+      case Some(x) => x
+      case _ =>
+        if (Util.isDevice(m)) {
+          DispatchProtocol.Periodic
+        }
+        else {
+          val name: Names = Util.getNamesFromClassifier(m.classifier.get, "")
+          halt(s"Dispatch Protocol for ${name.componentImpl} must be Periodic or Sporadic")
+        }
+    }
+  }
   @pure def getPeriod(m: Component): String = {
     return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Period) match {
       case Some(UnitProp(value, Some(org.sireum.String("ps")))) =>
@@ -64,6 +93,29 @@ object Util {
     }
 
     return ret
+  }
+
+
+  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
+    val classifier = typ.container.get.classifier.get
+
+    val a = classifier.name.toString.split("::")
+    assert(a.size == 2)
+
+    return DataTypeNames(typ, topPackage, a(0), sanitizeName(a(1)))
+  }
+
+  @pure def getArrayDimensions(a: ArrayType): ISZ[Z] = {
+    return a.container match {
+      case Some(c) =>
+        getPropertyValues(c.properties, Prop_Data_Model__Dimension).map(_.asInstanceOf[UnitProp]).map(m => {
+          R(m.value) match {
+            case Some(x) => conversions.R.toZ(x)
+            case _ => z"-1"
+          }
+        })
+      case _ => ISZ()
+    }
   }
 
   @pure def getArrayBaseType(c: Component): String = {
@@ -99,45 +151,21 @@ object Util {
     return StringOps(c.classifier.get.name).startsWith("Base_Types::")
   }
 
+  @pure def getFeatureEndType(f: FeatureEnd, types: AadlTypes): AadlType = {
+    return f.classifier match {
+      case Some(c) => types.typeMap.get(c.name).get
+      case _ => Util.EmptyType
+    }
+  }
+
   // replace '-' and '.' with '_'
   @pure def sanitizeName(s: String): String = s.toString.replaceAll("[\\-|\\.]", "_")
 
   @pure def getNamesFromClassifier(c: Classifier, basePackage: String): Names = {
     val a: Array[scala.Predef.String] = c.name.toString.split("::")
     assert(a.length == 2)
-    val compName = sanitizeName(a(1)) //a(1).replaceAll("\\.", "_")
+    val compName = sanitizeName(a(1))
     Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
-  }
-
-  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
-    typ match {
-      case e: BaseType =>
-        return DataTypeNames(qualifiedName = typ.container.classifier.get.name,
-          basePackage = topPackage,
-          packageName = "Base_Types",
-          typeName = e.typeName,
-          F)
-      case _ =>
-        val classifier = typ.container.classifier.get
-
-        val a = classifier.name.toString.split("::")
-        assert(a.size == 2)
-
-        val dt = DataTypeNames(classifier.name, topPackage, a(0), sanitizeName(a(1)), typ.isInstanceOf[EnumType])
-
-        return dt
-    }
-  }
-
-  @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
-    return f.classifier match {
-      case Some(c) =>
-        val a = c.name.toString.split("::")
-        assert(a.size == 2)
-        DataTypeNames(c.name, topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
-      case _ =>
-        EmptyTypeNames
-    }
   }
 
   @pure def getPackageName(value: String): String =
@@ -243,36 +271,39 @@ case class Names(packageName : String,
                  component: String,
                  componentImpl: String)
 
-case class DataTypeNames(qualifiedName: String,
+case class DataTypeNames(typ: AadlType,
                          basePackage: String,
                          packageName: String,
-                         typeName: String,
-                         isEnum: B) {
+                         typeName: String) {
 
-  def sanitizedName: String = typeName //if(typeName.native == "Map") "Map_" else typeName
-
-  def filePath: String = s"$basePackage/$packageName/$sanitizedName.scala"
+  def filePath: String = s"$basePackage/$packageName/$typeName.scala"
 
   def qualifiedPackageName: String = s"$basePackage.$packageName"
 
-  def qualifiedTypeName: String = s"$packageName.$sanitizedName"
+  def qualifiedTypeName: String = s"$packageName.$typeName"
 
-  def referencedTypeName: String = sanitizedName + (if(isEnum) ".Type" else "")
+  def referencedTypeName: String = typeName + (if(isEnum) ".Type" else "")
   def qualifiedReferencedTypeName: String = s"${packageName}.${referencedTypeName}"
 
-  def baseQualifiedReferencedTypeName: String = {
-    if(packageName.native == "Base_Types") {
-      s"org.sireum.${TypeResolver.getSlangType(referencedTypeName)}"
-    } else {
-      qualifiedReferencedTypeName
-    }
+  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"
+  def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
+
+  def isEnum():B = {
+    return typ.isInstanceOf[EnumType]
   }
 
-  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${sanitizedName}_Payload"
-  def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
+  def empty(): String = {
+    val ret: String = typ match {
+      case e:EnumType => s"${qualifiedTypeName}.byOrdinal(0).get"
+      case e:BaseType => s"${qualifiedTypeName}_empty()"
+      case e:ArrayType => s"${qualifiedTypeName}.empty()"
+      case e:RecordType => s"${qualifiedTypeName}.empty()"
+    }
+    return ret
+  }
 }
 
-case class Port(feature: FeatureEnd, parent: Component, basePackageName: String){
+case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, basePackageName: String){
 
   def name: String = Util.getLastName(feature.identifier)
   def path: String = Util.getName(feature.identifier)
@@ -280,7 +311,7 @@ case class Port(feature: FeatureEnd, parent: Component, basePackageName: String)
   def parentName: String = Util.getLastName(parent.identifier)
   def parentPath: String = Util.getName(parent.identifier)
 
-  def portType: DataTypeNames = Util.getDataTypeNames(feature, basePackageName)
+  def portType: DataTypeNames = Util.getDataTypeNames(_portType, basePackageName)
 
   def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Urgency) match {
     case Some(v) => v.value.toString.toDouble.toInt

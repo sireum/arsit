@@ -75,20 +75,11 @@ class ArtNixGen(outputDir: File,
 
     for ((archVarName, m) <- components) {
 
-      val isPeriodic: B = {
-        Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
-          case Some(x) =>
-            x.value.toString match {
-              case "Sporadic" => F
-              case "Periodic" => T
-            }
-          case _ =>
-            if (Util.isDevice(m)) T
-            else ???
-        }
-      }
-
       val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+
+      val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
+
+      val isPeriodic: B = dispatchProtocol == DispatchProtocol.Periodic
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
       val AEP_Id: String = s"${name.component}_AEP"
@@ -108,7 +99,8 @@ class ArtNixGen(outputDir: File,
 
       for (p <- Util.getFeatureEnds(m.features) if Util.isInFeature(p)) {
         assert (Util.isPort(p))
-        val port = Port(p, m, basePackage)
+        val _portType = Util.getFeatureEndType(p, types)
+        val port = Port(p, m, _portType, basePackage)
         val portIdName: String = port.name + "PortId"
         val portOptName: String = port.name + "Opt"
         val portType: String = port.portType.qualifiedReferencedTypeName
@@ -440,7 +432,10 @@ class ArtNixGen(outputDir: File,
       val isSharedMemory = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
-      val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(Port(_, component, basePackage))
+      val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(f => {
+        val pType = Util.getFeatureEndType(f, types)
+        Port(f, component, pType, basePackage)
+      })
 
       var globals: ISZ[ST] = ISZ(st"""val entryPoints: Bridge.EntryPoints = Arch.${bridge}.entryPoints
                                      |val appPortId: Art.PortId = IPCPorts.${IPCPort_Id}
