@@ -1088,7 +1088,7 @@ class ArtNixGen {
           |  --bits 32 \
           |  --string-size 256 \
           |  --sequence-size ${sequenceSize} \
-          |  --sequence ISZ[org.sireumString]=2 \
+          |  --sequence ISZ[org.sireum.String]=2 \
           |  --output-dir $$OUTPUT_DIR \
           |  --exts $$EXTS
           |"""
