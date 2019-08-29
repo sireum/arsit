@@ -14,7 +14,7 @@ object Util {
   val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
   val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
 
-  val EmptyTypeNames = DataTypeNames("", "", "art", "Empty", false)
+  val EmptyTypeNames = DataTypeNames("", "art", "Empty", false)
   def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
   def isEmptyType(t : DataTypeNames) = t == EmptyTypeNames
 
@@ -104,33 +104,12 @@ object Util {
     Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
   }
 
-  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
-    typ match {
-      case e: BaseType =>
-        println(e)
-        return DataTypeNames(qualifiedName = typ.container.classifier.get.name,
-                      basePackage = topPackage,
-                      packageName = "BaseTypes",
-                      typeName = e.typeName,
-                      F)
-      case _ =>
-        val classifier = typ.container.classifier.get
-
-        val a = classifier.name.toString.split("::")
-        assert(a.size == 2)
-
-        val dt = DataTypeNames(classifier.name, topPackage, a(0), sanitizeName(a(1)), typ.isInstanceOf[EnumType])
-
-        return dt
-    }
-  }
-
   @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
     return f.classifier match {
       case Some(c) =>
         val a = c.name.toString.split("::")
         assert(a.size == 2)
-        DataTypeNames(c.name, topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
+        DataTypeNames(topPackage, a(0), sanitizeName(a(1)), isEnum(f.properties))
       case _ =>
         EmptyTypeNames
     }
@@ -254,8 +233,7 @@ case class Names(packageName : String,
                  component: String,
                  componentImpl: String)
 
-case class DataTypeNames(qualifiedName: String,
-                         basePackage: String,
+case class DataTypeNames(basePackage: String,
                          packageName: String,
                          typeName: String,
                          isEnum: B) {

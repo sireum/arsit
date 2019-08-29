@@ -5,25 +5,25 @@ import org.sireum._
 import org.sireum.aadl.ir._
 import scala.language.implicitConversions
 
-class ArtStubGenerator(dir: File,
-                       m: Aadl,
-                       packageName: String,
-                       o: Cli.ArsitOption,
-                       types: AadlTypes) {
+class ArtStubGenerator {
 
   var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
   var basePackage: String = _
   var arsitOptions : Cli.ArsitOption = _
   var seenComponents : HashSet[String] = HashSet.empty
+  var typeMap: Map[String, AadlType] = Map.empty
+
   var optVizEntries: ISZ[ST] = ISZ()
 
-  def generator() : Unit = {
+  def generator(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) : Unit = {
     assert(dir.exists)
 
     outDir = dir
     basePackage = Util.sanitizeName(packageName)
     arsitOptions = o
+
+    processDataTypes(m.dataComponents)
 
     for(c <- m.components)
       gen(c)
@@ -138,7 +138,7 @@ class ArtStubGenerator(dir: File,
 
       assert(blessAnnexes.length == 1)
 
-      val br = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, types,
+      val br = BlessGen(basePackage, compOutDir.getAbsolutePath, m, names, AadlTypes(typeMap),
         arsitOptions.baAddViz, arsitOptions.baExposeState).
         process(blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause])
 
@@ -183,6 +183,43 @@ class ArtStubGenerator(dir: File,
       return Some(body)
     } else {
       return None[ST]()
+    }
+  }
+
+
+  def processDataTypes(values: ISZ[Component]): Unit = {
+    for (v <- values) {
+      typeMap = typeMap + (v.classifier.get.name ~> processType(v))
+    }
+  }
+
+  def processType(c: Component): AadlType = {
+    assert(c.category == ComponentCategory.Data)
+    val cname = c.classifier.get.name
+    val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
+
+    if(Util.isEnumType(c)) {
+      return  EnumType(cname, c, names.component, Util.getEnumValues(c))
+
+    } else if(Util.isBaseType(c)) {
+
+      return BaseType(cname, c, "F32")
+
+    } else if(Util.isArrayType(c)) {
+      halt("")
+
+    } else if(Util.isRecordType(c)) {
+      var fields: Map[String, AadlType] = Map.empty
+
+      for(sc <- c.subComponents){
+        val fieldName = Util.getLastName(sc.identifier)
+        fields = fields + (fieldName ~> processType(sc))
+      }
+
+      return RecordType(cname, c, names.component, fields)
+
+    } else {
+      halt(s"Can't identify data component type: ${c}")
     }
   }
 
@@ -517,5 +554,5 @@ class ArtStubGenerator(dir: File,
 
 
 object ArtStubGenerator {
-  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption, types: AadlTypes) = new ArtStubGenerator(dir, m, packageName, o, types).generator()
+  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption) = new ArtStubGenerator().generator(dir, m, packageName, o)
 }

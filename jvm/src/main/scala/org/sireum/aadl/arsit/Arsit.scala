@@ -101,8 +101,6 @@ object Arsit {
 
     val basePackageName : String = if (o.packageName.nonEmpty) o.packageName.get else destDir.getName()
 
-    val typeMap = TypeResolver(basePackageName).processDataTypes(m.dataComponents)
-
     val _destDir = new File(destDir, "src/main")
 
     _destDir.mkdirs // try creating the dir structure if it doesn't exist yet
@@ -119,12 +117,12 @@ object Arsit {
     new File(_destDir, "component").mkdir
     new File(_destDir, "data").mkdir
 
-    val (nextPortId, nextComponentId) = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName, o, typeMap)
+    val (nextPortId, nextComponentId) = ArtArchitectureGen(new File(_destDir, "architecture"), m, basePackageName, o)
 
-    ArtStubGenerator(_destDir, m, basePackageName, o, typeMap)
+    ArtStubGenerator(_destDir, m, basePackageName, o)
 
     val maxNixPort: Z =
-      if(o.genTrans) ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o, typeMap)
+      if(o.genTrans) ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o)
       else nextPortId
 
     if(!o.noart) {

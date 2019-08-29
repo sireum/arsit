@@ -239,13 +239,13 @@ import org.sireum.ops._
 
       case c: BaseType => return st"0f"
 
-      case c: EnumType => return st"${c.typeName}.${c.values(0)}"
+      case c: EnumType => return st"${c.slangTypeName}.${c.values(0)}"
 
       case c: RecordType =>
 
         val fields = c.fields.values.map(m => initType(m))
 
-        return st"${c.typeName}(${(fields, ", ")})"
+        return st"${c.slangTypeName}(${(fields, ", ")})"
 
       case _ =>
         halt("TODO")
