@@ -9,14 +9,26 @@ import org.sireum.ops._
 object Util {
   var verbose: B = F
 
-  val Prop_DispatchProtocol: String = "Thread_Properties::Dispatch_Protocol"
-  val Prop_Period: String = "Timing_Properties::Period"
-  val Prop_DataRepresentation: String = "Data_Model::Data_Representation"
-  val Prop_Urgency: String = "Thread_Properties::Urgency"
+  val Prop_Thread_Properties__Dispatch_Protocol: String = "Thread_Properties::Dispatch_Protocol"
+  val Prop_Thread_Properties__Urgency: String = "Thread_Properties::Urgency"
+
+  val Prop_Timing_Properties__Period: String = "Timing_Properties::Period"
+
+  val Prop_Data_Model__Base_Type: String = "Data_Model::Base_Type"
+  val Prop_Data_Model__Data_Representation: String = "Data_Model::Data_Representation"
+  val Prop_Data_Model__Dimension: String = "Data_Model::Dimension"
   val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
   val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
-  val Prop_DataModel__Base_Type: String = "Data_Model::Base_Type"
-  val Prop_Data_Model__Dimension: String = "Data_Model::Dimension"
+
+  val Prop_HAMR__OS: String = "HAMR::OS";
+  val Prop_HAMR__HW: String = "HAMR::HW";
+  val Prop_HAMR__Default_Max_Sequence_Size: String = "HAMR::Default_Max_Sequence_Size";
+  val Prop_HAMR__Default_Bit_Width: String = "HAMR::Default_Bit_Width";
+  val Prop_HAMR__Max_String_Size: String = "HAMR::Max_String_Size";
+
+  val DEFAULT_BIT_WIDTH: Z = 64
+  val DEFAULT_MAX_SEQUENCE_SIZE: Z = 10
+  val DEFAULT_MAX_STRING_SIZE: Z = 256
 
   val EmptyType = TODOType("--EmptyType--", None())
   val EmptyTypeNames = DataTypeNames(EmptyType, "", "art", "Empty")
@@ -38,7 +50,7 @@ object Util {
   }
 
   @pure def getDispatchProtocol(m: Component): Option[DispatchProtocol.Type] = {
-    Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_DispatchProtocol) match {
+    Util.getDiscreetPropertyValue[ValueProp](m.properties, Util.Prop_Thread_Properties__Dispatch_Protocol) match {
       case Some(x) =>
         x.value.toString match {
           case "Sporadic" => return Some(DispatchProtocol.Sporadic)
@@ -65,7 +77,7 @@ object Util {
     }
   }
   @pure def getPeriod(m: Component): String = {
-    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Period) match {
+    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Timing_Properties__Period) match {
       case Some(UnitProp(value, Some(org.sireum.String("ps")))) =>
         val v = value.toString.toDouble / 1e9
         s"${v.toLong}"
@@ -80,6 +92,35 @@ object Util {
       case _ => "1"
     }
   }
+
+  @pure def getZProperty(key: String, properties: ISZ[Property]): Option[Z] = {
+    return Util.getDiscreetPropertyValue[UnitProp](properties, key) match {
+      case Some(UnitProp(value, _)) => Some(Z(value.native.toDouble.toInt))
+      case None() => None[Z]()
+    }
+  }
+
+  @pure def getDefaultBitWidth(c: Component): Z = {
+    return getZProperty(Util.Prop_HAMR__Default_Bit_Width, c.properties) match {
+      case Some(x) => x
+      case None() => Util.DEFAULT_BIT_WIDTH;
+    }
+  }
+
+  @pure def getDefaultMaxSequenceSize(c: Component): Z = {
+    return getZProperty(Util.Prop_HAMR__Default_Max_Sequence_Size, c.properties) match {
+      case Some(x) => x
+      case None() => Util.DEFAULT_MAX_SEQUENCE_SIZE
+    }
+  }
+
+  @pure def getMaxStringSize(c: Component): Z = {
+    return getZProperty(Util.Prop_HAMR__Max_String_Size, c.properties) match {
+      case Some(x) => x
+      case None() => Util.DEFAULT_MAX_STRING_SIZE
+    }
+  }
+
 
   @pure def getEnumValues(v: Component): ISZ[String] = {
     var ret: ISZ[String] = ISZ()
@@ -119,14 +160,14 @@ object Util {
   }
 
   @pure def getArrayBaseType(c: Component): String = {
-    for (p <- c.properties if getLastName(p.name) == Prop_DataModel__Base_Type) {
+    for (p <- c.properties if getLastName(p.name) == Prop_Data_Model__Base_Type) {
       return p.propertyValues(0).asInstanceOf[ClassifierProp].name
     }
     halt(s"${c} isn't an array")
   }
 
   @pure def isEnum(props: ISZ[Property]): B = {
-    for (p <- props if getLastName(p.name) == Prop_DataRepresentation &&
+    for (p <- props if getLastName(p.name) == Prop_Data_Model__Data_Representation &&
       ISZOps(p.propertyValues).contains(ValueProp("Enum")))
       return true
     return false
@@ -141,7 +182,7 @@ object Util {
   }
 
   @pure def isArrayType(c: Component): B = {
-    for (p <- c.properties if getLastName(p.name) == Prop_DataRepresentation &&
+    for (p <- c.properties if getLastName(p.name) == Prop_Data_Model__Data_Representation &&
       ISZOps(p.propertyValues).contains(ValueProp("Array")))
       return true
     return false
@@ -190,6 +231,8 @@ object Util {
   @pure def isThread(c: Component): B = c.category == ComponentCategory.Thread
 
   @pure def isDevice(c: Component): B = c.category == ComponentCategory.Device
+
+  @pure def isSystem(c: Component): B = c.category == ComponentCategory.System
 
   @pure def doNotEditComment(from: Option[String] = None[String]()) = {
     val _from = if (from.nonEmpty) " from " + from.get else ""
@@ -313,7 +356,7 @@ case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, bas
 
   def portType: DataTypeNames = Util.getDataTypeNames(_portType, basePackageName)
 
-  def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Urgency) match {
+  def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Thread_Properties__Urgency) match {
     case Some(v) => v.value.toString.toDouble.toInt
     case _ => 0
   }

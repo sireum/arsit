@@ -64,6 +64,23 @@ object Cli {
   'recover
 }
 
+// see property set in HAMR.aadl
+object HAMR {
+  @enum object OS {
+    'Linux
+    'macOS
+    'Cygwin
+    'CAmkES
+  }
+
+  @enum object HW {
+    'ODROID
+    'QEMU
+    'x86
+    'amd64
+  }
+}
+
 object TypeResolver {
 
   def getSlangType(s: String): SlangType.Type = {

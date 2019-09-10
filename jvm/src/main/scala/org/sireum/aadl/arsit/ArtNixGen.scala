@@ -14,14 +14,20 @@ class ArtNixGen(outputDir: File,
                 types: AadlTypes) {
   var projOutputDir: File = _
   var nixOutputDir : File = _
+
   var cOutputDir : File = _
+  var cOutputDirString : String = _
+
   var cExtensionDir : File = _
   var cUserExtensionDir : Option[File] = None()
+
   var binOutputDir: File = _
 
   var basePackage: String = _
 
   var componentMap : HashMap[String, Component] = HashMap.empty
+
+  var systemImplmentation: Component = _
 
   var portId: Z = _
   def getPortId(): Z = {
@@ -52,6 +58,10 @@ class ArtNixGen(outputDir: File,
   def gen(model: Aadl): Unit = {
 
     var connections: ISZ[ConnectionInstance] = ISZ()
+
+    assert(model.components.size == 1)
+    assert(Util.isSystem(model.components(0)))
+    systemImplmentation = model.components(0)
 
     { // build component map
       def r(c: Component): Unit = {
@@ -250,7 +260,9 @@ class ArtNixGen(outputDir: File,
       outputPaths,
       (((if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
       ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
-      portId,
+      Util.getDefaultBitWidth(systemImplmentation),
+      Util.getDefaultMaxSequenceSize(systemImplmentation),
+      Util.getMaxStringSize(systemImplmentation),
       extensions,
       excludes
     )
@@ -1110,11 +1122,13 @@ class ArtNixGen(outputDir: File,
     }
 
     @pure def transpiler(sourcepaths: ISZ[String],
-                apps: ISZ[String],
-                forwards: ISZ[String],
-                sequenceSize: Z,
-                extensions: ISZ[String],
-                excludes: ISZ[String]): ST = {
+                         apps: ISZ[String],
+                         forwards: ISZ[String],
+                         numBits: Z,
+                         maxSequenceSize: Z,
+                         maxStringSize: Z,
+                         extensions: ISZ[String],
+                         excludes: ISZ[String]): ST = {
 
       var ret = st"""#!/usr/bin/env bash
           |#
@@ -1129,9 +1143,9 @@ class ArtNixGen(outputDir: File,
           |  --sourcepath $$PROJ_HOME \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
-          |  --bits 32 \
-          |  --string-size 256 \
-          |  --sequence-size ${sequenceSize} \
+          |  --bits ${numBits} \
+          |  --string-size ${maxStringSize} \
+          |  --sequence-size ${maxSequenceSize} \
           |  --sequence ISZ[org.sireum.String]=2 \
           |  --output-dir $$OUTPUT_DIR"""
 

@@ -13,14 +13,16 @@ object StringTemplate {
 package ${basePackage}
 
 import org.sireum._
-import org.sireum.Z8._
-import org.sireum.Z16._
-import org.sireum.Z32._
-import org.sireum.Z64._
+import org.sireum.S8._
+import org.sireum.S16._
+import org.sireum.S32._
+import org.sireum.S64._
 import org.sireum.U8._
 import org.sireum.U16._
 import org.sireum.U32._
 import org.sireum.U64._
+
+${Util.doNotEditComment()}
 
 object Base_Types {
 
@@ -28,10 +30,10 @@ object Base_Types {
 
   type Integer = org.sireum.Z
 
-  type Integer_8 = org.sireum.Z8
-  type Integer_16 = org.sireum.Z16
-  type Integer_32 = org.sireum.Z32
-  type Integer_64 = org.sireum.Z64
+  type Integer_8 = org.sireum.S8
+  type Integer_16 = org.sireum.S16
+  type Integer_32 = org.sireum.S32
+  type Integer_64 = org.sireum.S64
 
   type Unsigned_8 = org.sireum.U8
   type Unsigned_16 = org.sireum.U16
@@ -71,10 +73,10 @@ object Base_Types {
 
   def Integer_empty(): Integer = { return z"0" }
 
-  def Integer_8_empty(): Integer_8 = { return z8"0" }
-  def Integer_16_empty(): Integer_16 = { return z16"0" }
-  def Integer_32_empty(): Integer_32 = { return z32"0" }
-  def Integer_64_empty(): Integer_64 = { return z64"0" }
+  def Integer_8_empty(): Integer_8 = { return s8"0" }
+  def Integer_16_empty(): Integer_16 = { return s16"0" }
+  def Integer_32_empty(): Integer_32 = { return s32"0" }
+  def Integer_64_empty(): Integer_64 = { return s64"0" }
 
   def Unsigned_8_empty(): Unsigned_8 = { return u8"0" }
   def Unsigned_16_empty(): Unsigned_16 = { return u16"0" }
