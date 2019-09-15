@@ -38,9 +38,17 @@ object Cli {
 
   @datatype class HelpOption extends ArsitTopOption
 
-  @enum object Ipcmech {
+  @enum object IpcMechanism {
     'MessageQueue
     'SharedMemory
+  }
+
+  @enum object Platform {
+    'Jvm
+    'Linux
+    'Cygwin
+    'Mac
+    'Sel4
   }
 
   @datatype class ArsitOption(
@@ -53,12 +61,14 @@ object Cli {
     bless: B,
     verbose: B,
     devicesAsThreads: B,
-    genTrans: B,
-    ipc: Ipcmech.Type,
-    excludeImpl: B,
-    hamrTime: B,
+    ipc: IpcMechanism.Type,
     behaviorDir: Option[String],
-    cdir: Option[String]
+    outputCDir: Option[String],
+    excludeImpl: B,
+    platform: Platform.Type,
+    bitWidth: Z,
+    maxStringSize: Z,
+    maxArraySize: Z
   ) extends ArsitTopOption
 }
 
@@ -66,22 +76,44 @@ import Cli._
 
 @record class Cli(pathSep: C) {
 
-  def parseIpcmechH(arg: String): Option[Ipcmech.Type] = {
+  def parseIpcMechanismH(arg: String): Option[IpcMechanism.Type] = {
     arg.native match {
-      case "MessageQueue" => return Some(Ipcmech.MessageQueue)
-      case "SharedMemory" => return Some(Ipcmech.SharedMemory)
+      case "MessageQueue" => return Some(IpcMechanism.MessageQueue)
+      case "SharedMemory" => return Some(IpcMechanism.SharedMemory)
       case s =>
         eprintln(s"Expecting one of the following: { MessageQueue, SharedMemory }, but found '$s'.")
         return None()
     }
   }
 
-  def parseIpcmech(args: ISZ[String], i: Z): Option[Ipcmech.Type] = {
+  def parseIpcMechanism(args: ISZ[String], i: Z): Option[IpcMechanism.Type] = {
     if (i >= args.size) {
       eprintln("Expecting one of the following: { MessageQueue, SharedMemory }, but none found.")
       return None()
     }
-    val r = parseIpcmechH(args(i))
+    val r = parseIpcMechanismH(args(i))
+    return r
+  }
+
+  def parsePlatformH(arg: String): Option[Platform.Type] = {
+    arg.native match {
+      case "jvm" => return Some(Platform.Jvm)
+      case "linux" => return Some(Platform.Linux)
+      case "cygwin" => return Some(Platform.Cygwin)
+      case "mac" => return Some(Platform.Mac)
+      case "sel4" => return Some(Platform.Sel4)
+      case s =>
+        eprintln(s"Expecting one of the following: { jvm, linux, cygwin, mac, sel4 }, but found '$s'.")
+        return None()
+    }
+  }
+
+  def parsePlatform(args: ISZ[String], i: Z): Option[Platform.Type] = {
+    if (i >= args.size) {
+      eprintln("Expecting one of the following: { jvm, linux, cygwin, mac, sel4 }, but none found.")
+      return None()
+    }
+    val r = parsePlatformH(args(i))
     return r
   }
 
@@ -105,14 +137,20 @@ import Cli._
           |-h, --help               Display this information
           |
           |Transpiler Options:
-          |    --trans              Generate Slang/C code required for transpiler
           |    --ipc                IPC communication mechanism (requires 'trans' option)
           |                           (expects one of { MessageQueue, SharedMemory };
           |                           default: MessageQueue)
+          |    --behavior-dir       Auxiliary C source code directory (expects a path)
+          |    --output-c-directory Output directory for C artifacts (expects a path)
           |    --exclude-impl       Exclude Slang component implementations
-          |    --hamr-time          HAMR build
-          |    --behavior-dir       Auxillary C source code directory (expects a path)
-          |    --output-c-directory Output directory for C artifacts (expects a path)""".render
+          |    --platform           Target platform (expects one of { jvm, linux, cygwin,
+          |                           mac, sel4 }; default: jvm)
+          |-b, --bit-width          Default bit-width for unbounded integer types (e.g.,
+          |                           Z) (expects one of { 64, 32, 16, 8 })
+          |    --string-size        Maximum string size (expects an integer; default is
+          |                           100)
+          |    --sequence-size      Default maximum sequence size (expects an integer;
+          |                           default is 100)""".render
 
     var json: B = false
     var outputDir: Option[String] = Some(".")
@@ -121,12 +159,14 @@ import Cli._
     var bless: B = false
     var verbose: B = false
     var devicesAsThreads: B = false
-    var genTrans: B = false
-    var ipc: Ipcmech.Type = Ipcmech.MessageQueue
-    var excludeImpl: B = false
-    var hamrTime: B = false
+    var ipc: IpcMechanism.Type = IpcMechanism.MessageQueue
     var behaviorDir: Option[String] = None[String]()
-    var cdir: Option[String] = None[String]()
+    var outputCDir: Option[String] = None[String]()
+    var excludeImpl: B = false
+    var platform: Platform.Type = Platform.Jvm
+    var bitWidth: Z = 64
+    var maxStringSize: Z = 100
+    var maxArraySize: Z = 100
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -177,28 +217,10 @@ import Cli._
              case Some(v) => devicesAsThreads = v
              case _ => return None()
            }
-         } else if (arg == "--trans") {
-           val o: Option[B] = { j = j - 1; Some(!genTrans) }
-           o match {
-             case Some(v) => genTrans = v
-             case _ => return None()
-           }
          } else if (arg == "--ipc") {
-           val o: Option[Ipcmech.Type] = parseIpcmech(args, j + 1)
+           val o: Option[IpcMechanism.Type] = parseIpcMechanism(args, j + 1)
            o match {
              case Some(v) => ipc = v
-             case _ => return None()
-           }
-         } else if (arg == "--exclude-impl") {
-           val o: Option[B] = { j = j - 1; Some(!excludeImpl) }
-           o match {
-             case Some(v) => excludeImpl = v
-             case _ => return None()
-           }
-         } else if (arg == "--hamr-time") {
-           val o: Option[B] = { j = j - 1; Some(!hamrTime) }
-           o match {
-             case Some(v) => hamrTime = v
              case _ => return None()
            }
          } else if (arg == "--behavior-dir") {
@@ -210,7 +232,37 @@ import Cli._
          } else if (arg == "--output-c-directory") {
            val o: Option[Option[String]] = parsePath(args, j + 1)
            o match {
-             case Some(v) => cdir = v
+             case Some(v) => outputCDir = v
+             case _ => return None()
+           }
+         } else if (arg == "--exclude-impl") {
+           val o: Option[B] = { j = j - 1; Some(!excludeImpl) }
+           o match {
+             case Some(v) => excludeImpl = v
+             case _ => return None()
+           }
+         } else if (arg == "--platform") {
+           val o: Option[Platform.Type] = parsePlatform(args, j + 1)
+           o match {
+             case Some(v) => platform = v
+             case _ => return None()
+           }
+         } else if (arg == "-b" || arg == "--bit-width") {
+           val o: Option[Z] = parseNumChoice(args, j + 1, ISZ(z"64", z"32", z"16", z"8"))
+           o match {
+             case Some(v) => bitWidth = v
+             case _ => return None()
+           }
+         } else if (arg == "--string-size") {
+           val o: Option[Z] = parseNum(args, j + 1, None(), None())
+           o match {
+             case Some(v) => maxStringSize = v
+             case _ => return None()
+           }
+         } else if (arg == "--sequence-size") {
+           val o: Option[Z] = parseNum(args, j + 1, None(), None())
+           o match {
+             case Some(v) => maxArraySize = v
              case _ => return None()
            }
          } else {
@@ -222,7 +274,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, devicesAsThreads, genTrans, ipc, excludeImpl, hamrTime, behaviorDir, cdir))
+    return Some(ArsitOption(help, parseArguments(args, j), json, outputDir, packageName, noart, bless, verbose, devicesAsThreads, ipc, behaviorDir, outputCDir, excludeImpl, platform, bitWidth, maxStringSize, maxArraySize))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

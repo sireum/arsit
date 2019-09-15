@@ -57,20 +57,30 @@ val arsitTool: Tool = Tool(
   ),
   groups = ISZ(
     OptGroup(name = "Transpiler", opts = ISZ(
-      Opt(name = "genTrans", longKey = "trans", shortKey = None(),
-        tpe = Type.Flag(F), description = "Generate Slang/C code required for transpiler"),
       Opt(name = "ipc", longKey = "ipc", shortKey = None(),
-        tpe = Type.Choice(name = "ipcmech", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
+        tpe = Type.Choice(name = "ipcMechanism", sep = None(), elements = ISZ("MessageQueue", "SharedMemory")),
         description = "IPC communication mechanism (requires 'trans' option)"),
-      Opt(name = "excludeImpl", longKey = "exclude-impl", shortKey = None(),
-        tpe = Type.Flag(F), description = "Exclude Slang component implementations"),
-      Opt(name = "hamrTime", longKey = "hamr-time", shortKey = None(),
-        tpe = Type.Flag(F), description = "HAMR build"),
       Opt(name = "behaviorDir", longKey = "behavior-dir", shortKey = None(),
-        tpe = Type.Path(multiple = F, default = None()), description = "Auxillary C source code directory"),
-      Opt(name = "cdir", longKey = "output-c-directory", shortKey = None(),
-        tpe = Type.Path(multiple = F, default = None()), description = "Output directory for C artifacts")
-
+        tpe = Type.Path(multiple = F, default = None()),
+        description = "Auxiliary C source code directory"),
+      Opt(name = "outputCDir", longKey = "output-c-directory", shortKey = None(),
+        tpe = Type.Path(multiple = F, default = None()),
+        description = "Output directory for C artifacts"),
+      Opt(name = "excludeImpl", longKey = "exclude-impl", shortKey = None(),
+        tpe = Type.Flag(F),
+        description = "Exclude Slang component implementations"),
+      Opt(name = "platform", longKey = "platform", shortKey = None(),
+        tpe = Type.Choice(name = "platform", sep = None(), elements = ISZ("jvm", "linux", "cygwin", "mac", "sel4")),
+        description = "Target platform"),
+      Opt(name = "bitWidth", longKey = "bit-width", shortKey = Some('b'),
+        tpe = Type.NumChoice(None(), ISZ(64, 32, 16, 8)),
+        description = "Default bit-width for unbounded integer types (e.g., Z)"),
+      Opt(name = "maxStringSize", longKey = "string-size", shortKey = None(),
+        tpe = Type.Num(None(), 100, None(), None()),
+        description = "Maximum string size"),
+      Opt(name = "maxArraySize", longKey = "sequence-size", shortKey = None(),
+        tpe = Type.Num(None(), 100, None(), None()),
+        description = "Default maximum sequence size"),
     ))
   )
 )

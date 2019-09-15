@@ -41,11 +41,6 @@ object Arsit extends scala.App {
       case _ => println(o.help); return 0
     }
 
-    val ipc = o.ipc match {
-      case Cli.Ipcmech.MessageQueue => org.sireum.aadl.arsit.Cli.Ipcmech.MessageQueue
-      case Cli.Ipcmech.SharedMemory => org.sireum.aadl.arsit.Cli.Ipcmech.SharedMemory
-    }
-
     org.sireum.aadl.arsit.Arsit.run(xArsitOption(
       help = o.help,
       args = o.args,
@@ -56,12 +51,14 @@ object Arsit extends scala.App {
       bless = o.bless,
       verbose = o.verbose,
       devicesAsThreads = o.devicesAsThreads,
-      genTrans = o.genTrans,
-      ipc = ipc,
-      excludeImpl = o.excludeImpl,
-      hamrTime = o.hamrTime,
+      ipc = org.sireum.aadl.arsit.Cli.IpcMechanism.byName(o.ipc.name).get,
       behaviorDir = o.behaviorDir,
-      cdir = o.cdir
+      outputCDir = o.outputCDir,
+      excludeImpl = o.excludeImpl,
+      platform = org.sireum.aadl.arsit.Cli.Platform.byName(o.platform.name).get,
+      bitWidth = o.bitWidth,
+      maxStringSize = o.maxStringSize,
+      maxArraySize = o.maxArraySize
     ))
   }
 }

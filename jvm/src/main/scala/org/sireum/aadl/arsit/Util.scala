@@ -27,7 +27,6 @@ object Util {
   val Prop_HAMR__Max_String_Size: String = "HAMR::Max_String_Size";
 
   val DEFAULT_BIT_WIDTH: Z = 64
-  val DEFAULT_MAX_SEQUENCE_SIZE: Z = 10
   val DEFAULT_MAX_STRING_SIZE: Z = 256
 
   val EmptyType = TODOType("--EmptyType--", None())
@@ -107,10 +106,10 @@ object Util {
     }
   }
 
-  @pure def getDefaultMaxSequenceSize(c: Component): Z = {
+  @pure def getDefaultMaxSequenceSize(c: Component, altMax: Z): Z = {
     return getZProperty(Util.Prop_HAMR__Default_Max_Sequence_Size, c.properties) match {
       case Some(x) => x
-      case None() => Util.DEFAULT_MAX_SEQUENCE_SIZE
+      case None() => altMax
     }
   }
 
@@ -287,11 +286,11 @@ object Util {
     return st"${e(0)._2}"
   }
 
-  @pure def getIpc(ipcmech: Cli.Ipcmech.Type , packageName: String): ST = {
+  @pure def getIpc(ipcmech: Cli.IpcMechanism.Type , packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r = ipcmech match {
-      case Cli.Ipcmech.SharedMemory => "ipc_shared_memory.c"
-      case Cli.Ipcmech.MessageQueue => "ipc_message_queue.c"
+      case Cli.IpcMechanism.SharedMemory => "ipc_shared_memory.c"
+      case Cli.IpcMechanism.MessageQueue => "ipc_message_queue.c"
     }
     val c = getLibraryFile(r).render.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
     st"${c}"

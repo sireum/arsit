@@ -41,9 +41,27 @@ class ArtNixGen(outputDir: File,
     projOutputDir = outputDir // where the slang-embedded code was generated
 
     binOutputDir = new File(projOutputDir, "../../bin")
-    cOutputDir = if(arsitOptions.cdir.nonEmpty) new File(arsitOptions.cdir.get.native) else new File(projOutputDir, "../c")
-    cExtensionDir = if(arsitOptions.behaviorDir.nonEmpty) new File(arsitOptions.behaviorDir.get.native) else new File(cOutputDir, "/ext-c")
+
+    cOutputDir = if(arsitOptions.outputCDir.nonEmpty) {
+      new File(arsitOptions.outputCDir.get.native)
+    } else {
+      val dir = arsitOptions.platform match {
+        case Cli.Platform.Sel4 => "sel4"
+        case o =>
+          assert(SlangUtil.isNix(o))
+          "nix"
+      }
+      new File(projOutputDir, s"../c/${dir}")
+    }
+
+    cExtensionDir = if(arsitOptions.behaviorDir.nonEmpty) {
+      new File(arsitOptions.behaviorDir.get.native)
+    } else {
+      new File(projOutputDir, s"../c/ext-c")
+    }
+
     nixOutputDir = new File(projOutputDir, "nix")
+
     if(arsitOptions.behaviorDir.nonEmpty) {
       cUserExtensionDir = Some(new File(arsitOptions.behaviorDir.get.native))
     }
@@ -139,7 +157,7 @@ class ArtNixGen(outputDir: File,
       appNames = appNames :+ App_Id
 
       val AEP_Payload = Template.AEPPayload(AEPPayloadTypeName, portOptNames)
-      if(portOpts.nonEmpty && arsitOptions.ipc == Cli.Ipcmech.MessageQueue) {
+      if(portOpts.nonEmpty && arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) {
         platformPorts :+= Template.platformPortDecl(AEP_Id, getPortId())
         platformPayloads :+= Template.platformPayload(AEPPayloadTypeName, portDefs)
 
@@ -171,7 +189,7 @@ class ArtNixGen(outputDir: File,
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
-          val dstComp = if (arsitOptions.ipc == Cli.Ipcmech.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
+          val dstComp = if (arsitOptions.ipc == Cli.IpcMechanism.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
           var cases: ISZ[ST] = {
             if (artNixCasesM.contains(srcArchPortInstanceName)) {
               artNixCasesM.get(srcArchPortInstanceName).get
@@ -190,12 +208,12 @@ class ArtNixGen(outputDir: File,
     platformPorts = platformPorts :+ Template.platformPortDecl("Main", getPortId())
 
     arsitOptions.ipc match {
-      case Cli.Ipcmech.MessageQueue =>
+      case Cli.IpcMechanism.MessageQueue =>
 
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue.scala"), Template.MessageQueue(basePackage))
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackage))
 
-      case Cli.Ipcmech.SharedMemory =>
+      case Cli.IpcMechanism.SharedMemory =>
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory.scala"), Template.SharedMemory(basePackage))
         Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackage))
     }
@@ -218,18 +236,16 @@ class ArtNixGen(outputDir: File,
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process.scala"), Template.Process(basePackage))
     Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process_Ext.scala"), Template.ProcessExt(basePackage))
 
-    if(!arsitOptions.hamrTime) {
-      Util.writeFile(new File(binOutputDir, "compile-cygwin.sh"), Template.compile(TargetPlatform.win))
-      Util.writeFile(new File(binOutputDir, "compile-linux.sh"), Template.compile(TargetPlatform.linux))
-      Util.writeFile(new File(binOutputDir, "compile-mac.sh"), Template.compile(TargetPlatform.mac))
+    arsitOptions.platform match {
+      case Cli.Platform.Sel4 => // do nothing
+      case o =>
+        assert(SlangUtil.isNix(o))
+        val platName = ops.StringOps(o.name).firstToLower
 
-      Util.writeFile(new File(binOutputDir, "run-cygwin.bat"), Template.run(aepNames, appNames, TargetPlatform.win))
-      Util.writeFile(new File(binOutputDir, "run-linux.sh"), Template.run(aepNames, appNames, TargetPlatform.linux))
-      Util.writeFile(new File(binOutputDir, "run-mac.sh"), Template.run(aepNames, appNames, TargetPlatform.mac))
-
-      Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
-        (if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
-
+        Util.writeFile(new File(binOutputDir, s"compile-${platName}.sh"), Template.compile(o))
+        Util.writeFile(new File(binOutputDir, s"run-${platName}.sh"), Template.run(aepNames, appNames, o))
+        Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
+          (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
     }
 
     Util.writeFile(new File(cExtensionDir, s"ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
@@ -249,22 +265,34 @@ class ArtNixGen(outputDir: File,
       ISZ()
     }
 
-    var transpileScriptName = "transpile-camkes.sh"
-    var extensions: ISZ[String] = ISZ(s"${cExtensionDir.getAbsolutePath}/ext.c", s"${cExtensionDir.getAbsolutePath}/ext.h")
-    if(!arsitOptions.hamrTime){
-      extensions = extensions :+ s"${cExtensionDir.getAbsolutePath}/ipc.c"
-      transpileScriptName = "transpile.sh"
+    var transpileScriptName = ""
+    var extensions: ISZ[String] = ISZ(s"${cExtensionDir.getCanonicalPath}/ext.c", s"${cExtensionDir.getCanonicalPath}/ext.h")
+    var buildApps: B = T
+    var additionalInstructions: Option[ST] = None()
+
+    arsitOptions.platform match {
+      case Cli.Platform.Sel4 =>
+        transpileScriptName = "transpile-sel4.sh"
+        buildApps = F
+        additionalInstructions = Some(st"""FILE=$${OUTPUT_DIR}/CMakeLists.txt
+                                          |echo -e "\n\nadd_definitions(-DCAMKES)" >> $$FILE""")
+      case o =>
+        assert(SlangUtil.isNix(o))
+        extensions = extensions :+ s"${cExtensionDir.getCanonicalPath}/ipc.c"
+        transpileScriptName = s"transpile.sh"
     }
 
     val transpiler = Template.transpiler(
       outputPaths,
-      (((if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
+      (((if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
       ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
-      Util.getDefaultBitWidth(systemImplmentation),
-      Util.getDefaultMaxSequenceSize(systemImplmentation),
-      Util.getMaxStringSize(systemImplmentation),
+      arsitOptions.bitWidth, //  Util.getDefaultBitWidth(systemImplmentation),
+      arsitOptions.maxArraySize, // Util.getDefaultMaxSequenceSize(systemImplmentation, portId),
+      arsitOptions.maxStringSize, // Util.getMaxStringSize(systemImplmentation),
       extensions,
-      excludes
+      excludes,
+      buildApps,
+      additionalInstructions
     )
 
     Util.writeFile(new File(binOutputDir, transpileScriptName), transpiler)
@@ -339,7 +367,7 @@ class ArtNixGen(outputDir: File,
       return st"(IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"
 
     @pure def mainSend(portId: String): ST = {
-      val isSM = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
+      val isSM = arsitOptions.ipc == Cli.IpcMechanism.SharedMemory
       return st"""Platform.send${if (isSM) "Async" else ""}(IPCPorts.${portId}, IPCPorts.${if(isSM) s"$portId" else "Main"}, empty)"""
     }
 
@@ -441,7 +469,7 @@ class ArtNixGen(outputDir: File,
                   isPeriodic: B
                  ) : ST = {
       // @formatter:off
-      val isSharedMemory = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
+      val isSharedMemory = arsitOptions.ipc == Cli.IpcMechanism.SharedMemory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
       val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(f => {
@@ -604,7 +632,7 @@ class ArtNixGen(outputDir: File,
     @pure def ipc(packageName: String,
                   ports: ISZ[ST],
                   payloads: ISZ[ST]): ST = {
-      val aep = if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue)
+      val aep = if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue)
         st"""
             |@enum object AEPState {
             |  'Start
@@ -634,7 +662,7 @@ class ArtNixGen(outputDir: File,
     @pure def artNix(packageName: String,
                      cases: ISZ[ST],
                      eventInPorts: ISZ[String]): ST = {
-      val isSharedMemory = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
+      val isSharedMemory = arsitOptions.ipc == Cli.IpcMechanism.SharedMemory
       return st"""// #Sireum
                  |
                  |package $packageName
@@ -908,7 +936,7 @@ class ArtNixGen(outputDir: File,
     }
 
     @pure def PlatformNix(packageName: String): ST = {
-      val isSM: B = arsitOptions.ipc == Cli.Ipcmech.SharedMemory
+      val isSM: B = arsitOptions.ipc == Cli.IpcMechanism.SharedMemory
 
       val init =
         if(isSM) st"""val id = seed + port
@@ -1037,14 +1065,21 @@ class ArtNixGen(outputDir: File,
                  |}"""
     }
 
-    @pure def compile(arch: TargetPlatform.Type): ST = {
-      val buildDir = st"${arch}-build"
-      val mv: ST = if(arch == TargetPlatform.win)
-        st"mv *.exe $$SCRIPT_HOME/${buildDir}/"
+    @pure def compile(arch: Cli.Platform.Type): ST = {
+      assert(SlangUtil.isNix(arch))
+
+      val script_home = "${SCRIPT_HOME}"
+      val pathSep = '/'
+      val binCan = binOutputDir.getCanonicalPath
+      val cOutputDirRel = SlangUtil.relativizePaths(binCan, cOutputDir.getCanonicalPath, pathSep, script_home)
+
+      val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
+      val mv: ST = if(arch == Cli.Platform.Cygwin)
+        st"mv *.exe ${script_home}/${buildDir}/"
       else {
-        st"""mv *_App $$SCRIPT_HOME/${buildDir}/
-            |${if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) s"mv *_AEP $$SCRIPT_HOME/${buildDir}/" else ""}
-            |mv Main $$SCRIPT_HOME/${buildDir}/"""
+        st"""mv *_App ${script_home}/${buildDir}/
+            |${if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) s"mv *_AEP ${script_home}/${buildDir}/" else ""}
+            |mv Main ${script_home}/${buildDir}/"""
       }
       st"""#!/usr/bin/env bash
           |#
@@ -1052,10 +1087,10 @@ class ArtNixGen(outputDir: File,
           |#
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
-          |cd $$SCRIPT_HOME
+          |cd ${script_home}
           |mkdir -p ${buildDir}
-          |mkdir -p ${cOutputDir.getAbsolutePath}/${buildDir}
-          |cd ${cOutputDir.getAbsolutePath}/${buildDir}
+          |mkdir -p ${cOutputDirRel}/${buildDir}
+          |cd ${cOutputDirRel}/${buildDir}
           |cmake -DCMAKE_BUILD_TYPE=Release ..
           |make $$MAKE_ARGS
           |$mv"""
@@ -1063,17 +1098,20 @@ class ArtNixGen(outputDir: File,
 
     @pure def run(aeps: ISZ[String],
                   apps: ISZ[String],
-                  arch: TargetPlatform.Type): ST = {
-      val buildDir = st"${arch}-build"
+                  arch: Cli.Platform.Type): ST = {
+      assert(SlangUtil.isNix(arch))
+
+      val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
       val ext = if(arch.toString == "win") ".exe" else ""
-      val staep = if(arsitOptions.ipc == Cli.Ipcmech.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
+      val staep = if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
         val prefix = arch match {
-          case TargetPlatform.win => "cygstart mintty /bin/bash"
-          case TargetPlatform.linux => "x-terminal-emulator -e sh -c"
-          case TargetPlatform.mac => "open -a Terminal"
+          case Cli.Platform.Cygwin => "cygstart mintty /bin/bash"
+          case Cli.Platform.Linux => "x-terminal-emulator -e sh -c"
+          case Cli.Platform.Mac => "open -a Terminal"
+          case _ => halt(s"Unexpected platform ${arch}")
         }
-        st"""$prefix ${buildDir}/${st}$ext &""" })
+        st"""$prefix "${buildDir}/${st}$ext" &""" })
       st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
@@ -1128,35 +1166,55 @@ class ArtNixGen(outputDir: File,
                          maxSequenceSize: Z,
                          maxStringSize: Z,
                          extensions: ISZ[String],
-                         excludes: ISZ[String]): ST = {
+                         excludes: ISZ[String],
+                         buildApps: B,
+                         additionalInstructions: Option[ST]): ST = {
+
+      val script_home = "${SCRIPT_HOME}"
+      val pathSep = '/'
+      val binCan = binOutputDir.getCanonicalPath
+      val cOutputDirRel = SlangUtil.relativizePaths(binCan, cOutputDir.getCanonicalPath, pathSep, script_home)
+      val extsRel = extensions.map(s => SlangUtil.relativizePaths(binCan, s, pathSep, script_home))
 
       var ret = st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
           |#
           |set -e
-          |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
-          |export PROJ_HOME=$$SCRIPT_HOME/../src/main
-          |export OUTPUT_DIR=${cOutputDir.getAbsolutePath}
+          |SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |PROJ_HOME="${script_home}/../src/main"
+          |OUTPUT_DIR="${cOutputDirRel}"
           |
           |$$SIREUM_HOME/bin/sireum slang transpilers c \
-          |  --sourcepath $$PROJ_HOME \
+          |  --sourcepath "$${PROJ_HOME}" \
           |  --apps "${(apps, ",")}" \
           |  --forward "${(forwards, ",")}" \
           |  --bits ${numBits} \
           |  --string-size ${maxStringSize} \
           |  --sequence-size ${maxSequenceSize} \
-          |  --sequence ISZ[org.sireum.String]=2 \
-          |  --output-dir $$OUTPUT_DIR"""
+          |  --output-dir "$${OUTPUT_DIR}""""
 
-      ret = if(extensions.nonEmpty) st"""${ret} \
-                                        |  --exts "${(extensions, ":")}"""" else ret
+      ret = if(extsRel.nonEmpty) {
+        st"""${ret} \
+            |  --exts "${(extsRel, ":")}""""
+      } else { ret }
 
-      ret = if(excludes.nonEmpty) st"""${ret} \
-                                      |  --exclude-build "${(excludes, ",")}"""" else ret
+      ret = if(excludes.nonEmpty) {
+        st"""${ret} \
+            |  --exclude-build "${(excludes, ",")}""""
+      } else { ret }
 
-      ret = if(arsitOptions.hamrTime) st"""${ret} \
-                                          |  --lib-only""" else ret
+      ret = if(!buildApps) {
+        st"""${ret} \
+            |  --lib-only"""
+      } else { ret }
+
+      ret = if(additionalInstructions.nonEmpty) {
+        st"""${ret}
+            |
+            |${additionalInstructions}"""
+      } else { ret }
+
       return st"""
               |$ret"""
     }

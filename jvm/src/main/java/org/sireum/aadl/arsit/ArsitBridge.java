@@ -5,9 +5,19 @@ import org.sireum.Some$;
 
 public class ArsitBridge {
 
-    public enum IPCMechanismJava {
+    // should match Cli.Ipcmech
+    public enum IPCMechanism {
         MessageQueue,
         SharedMemory
+    }
+
+    // should match Cli.Platform
+    public enum Platform {
+        Jvm,
+        Linux,
+        Cygwin,
+        Mac,
+        Sel4
     }
 
     public static <T> org.sireum.Option<T> sireumOption(T o) {

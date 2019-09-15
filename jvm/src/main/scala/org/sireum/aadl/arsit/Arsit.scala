@@ -54,15 +54,23 @@ object Arsit {
     }
   }
 
-  def run(model: Aadl, optOutputDir: Option[scala.Predef.String], optBasePackageName: Option[scala.Predef.String], embedArt: B,
-          genBlessEntryPoints: B, verbose: B, devicesAsThreads: B,
-          genTranspilerArtifact: B, ipcMechanism: ArsitBridge.IPCMechanismJava, excludeImpl: B, hamrTime: B, behaviorDir: Option[scala.Predef.String], cdir: Option[scala.Predef.String]): Int = {
+  def run(model: Aadl, //
+          optOutputDir: Option[scala.Predef.String], //
+          optBasePackageName: Option[scala.Predef.String], //
+          embedArt: B, //
+          genBlessEntryPoints: B, //
+          verbose: B, //
+          devicesAsThreads: B, //
+          // transpiler options
+          ipcMechanism: ArsitBridge.IPCMechanism, //
+          excludeImpl: B, //
+          behaviorDir: Option[scala.Predef.String], //
+          cdir: Option[scala.Predef.String], //
+          platform: ArsitBridge.Platform, //
+          bitWidth: Int, //
+          maxStringSize: Int, //
+          maxArraySize: Int): Int = {
     val outDir: String = if(optOutputDir.nonEmpty) optOutputDir.get else "."
-    val m = ipcMechanism match {
-      case ArsitBridge.IPCMechanismJava.MessageQueue => Cli.Ipcmech.MessageQueue
-      case ArsitBridge.IPCMechanismJava.SharedMemory => Cli.Ipcmech.SharedMemory
-      case _ => throw new RuntimeException(s"Not expecting ${ipcMechanism}")
-    }
 
     val destDir: File = new File(outDir.native)
     if(!destDir.exists()) {
@@ -86,12 +94,14 @@ object Arsit {
       bless = genBlessEntryPoints,
       verbose = verbose,
       devicesAsThreads = devicesAsThreads,
-      genTrans = genTranspilerArtifact,
-      ipc = m,
-      excludeImpl = excludeImpl,
-      hamrTime = hamrTime,
+      ipc = Cli.IpcMechanism.byName(ipcMechanism.name()).get,
       behaviorDir = if(behaviorDir.nonEmpty) Some(behaviorDir.get) else None(),
-      cdir = if(cdir.nonEmpty) Some(cdir.get) else None()
+      outputCDir = if(cdir.nonEmpty) Some(cdir.get) else None(),
+      excludeImpl = excludeImpl,
+      platform = Cli.Platform.byName(platform.name()).get,
+      bitWidth = bitWidth,
+      maxStringSize = maxStringSize,
+      maxArraySize = maxArraySize
     )
     return run(destDir, model, opt)
   }
@@ -129,8 +139,12 @@ object Arsit {
     ArtStubGenerator(_destDir, m, basePackageName, o, typeMap)
 
     val maxNixPort: Z =
-      if(o.genTrans) ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o, typeMap)
-      else nextPortId
+      if(o.platform != Cli.Platform.Jvm) {
+        ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o, typeMap)
+      }
+      else {
+        nextPortId
+      }
 
     if(!o.noart) {
       Util.copyArtFiles(maxNixPort, nextComponentId, _destDir)

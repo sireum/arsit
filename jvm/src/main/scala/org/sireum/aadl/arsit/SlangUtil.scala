@@ -4,6 +4,55 @@ package org.sireum.aadl.arsit
 
 import org.sireum._
 import org.sireum.aadl.ir._
+import org.sireum.ops._
+
+object SlangUtil {
+  def relativizePaths(anchorDir: String, toRel: String, pathSep: C, anchorResource: String) : String = {
+    val ais = conversions.String.toCis(anchorDir)
+    val tis = conversions.String.toCis(toRel)
+
+    var commonPrefix = 0
+    var stop = F
+    while(commonPrefix < ais.size && commonPrefix < tis.size && !stop) {
+      if(ais(commonPrefix) == tis(commonPrefix)){
+        commonPrefix = commonPrefix + 1;
+      } else {
+        stop = T
+      }
+    }
+
+    if(commonPrefix > 0) {
+      var seps = s""
+      for(i <- commonPrefix - 1 until ais.size) {
+        if(ais(i) == pathSep) {
+          seps = s"${pathSep}..${seps}"
+        }
+      }
+      val r = StringOps(toRel)
+      val ret = s"${anchorResource}${seps}${r.substring(commonPrefix - 1, r.size)}"
+
+      /*
+      println(st"""anchorDir = ${anchorDir}
+                  |toRel =     ${toRel}
+                  |ret =       ${ret}""".render)
+      */
+      return ret
+    } else {
+      return toRel
+    }
+  }
+
+  def isNix(platform: Cli.Platform.Type): B = {
+    val ret: B = platform match {
+      case Cli.Platform.Jvm => F
+      case Cli.Platform.Mac => T
+      case Cli.Platform.Linux => T
+      case Cli.Platform.Cygwin => T
+      case Cli.Platform.Sel4 => F
+    }
+    return ret
+  }
+}
 
 @enum object IPCMechanism {
   'MessageQueue
@@ -16,9 +65,17 @@ object Cli {
 
   @datatype class HelpOption extends ArsitTopOption
 
-  @enum object Ipcmech {
+  @enum object IpcMechanism {
     'MessageQueue
     'SharedMemory
+  }
+
+  @enum object Platform {
+    'Jvm
+    'Linux
+    'Cygwin
+    'Mac
+    'Sel4
   }
 
   @datatype class ArsitOption(
@@ -31,23 +88,20 @@ object Cli {
                                bless: B,
                                verbose: B,
                                devicesAsThreads: B,
-                               genTrans: B,
-                               ipc: Ipcmech.Type,
-                               excludeImpl: B,
-                               hamrTime: B,
+                               ipc: IpcMechanism.Type,
                                behaviorDir: Option[String],
-                               cdir: Option[String]
+                               outputCDir: Option[String],
+                               excludeImpl: B,
+                               platform: Platform.Type,
+                               bitWidth: Z,
+                               maxStringSize: Z,
+                               maxArraySize: Z
                              ) extends ArsitTopOption
 }
 
+
 @ext object Library {
   def getFiles: ISZ[(String, String)] = $
-}
-
-@enum object TargetPlatform {
-  'linux
-  'mac
-  'win
 }
 
 @enum object DispatchProtocol {
