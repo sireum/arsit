@@ -139,7 +139,7 @@ object Arsit {
     ArtStubGenerator(_destDir, m, basePackageName, o, typeMap)
 
     val maxNixPort: Z =
-      if(o.platform != Cli.Platform.Jvm) {
+      if(o.platform != Cli.Platform.JVM) {
         ArtNixGen(_destDir, m, basePackageName, nextPortId, nextComponentId, o, typeMap)
       }
       else {

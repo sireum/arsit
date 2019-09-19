@@ -44,19 +44,14 @@ object SlangUtil {
 
   def isNix(platform: Cli.Platform.Type): B = {
     val ret: B = platform match {
-      case Cli.Platform.Jvm => F
-      case Cli.Platform.Mac => T
+      case Cli.Platform.JVM => F
+      case Cli.Platform.MacOS => T
       case Cli.Platform.Linux => T
       case Cli.Platform.Cygwin => T
-      case Cli.Platform.Sel4 => F
+      case Cli.Platform.SeL4 => F
     }
     return ret
   }
-}
-
-@enum object IPCMechanism {
-  'MessageQueue
-  'SharedMemory
 }
 
 object Cli {
@@ -71,11 +66,11 @@ object Cli {
   }
 
   @enum object Platform {
-    'Jvm
+    'JVM
     'Linux
     'Cygwin
-    'Mac
-    'Sel4
+    'MacOS
+    'SeL4
   }
 
   @datatype class ArsitOption(

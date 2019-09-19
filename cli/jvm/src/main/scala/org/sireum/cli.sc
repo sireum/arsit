@@ -70,7 +70,7 @@ val arsitTool: Tool = Tool(
         tpe = Type.Flag(F),
         description = "Exclude Slang component implementations"),
       Opt(name = "platform", longKey = "platform", shortKey = None(),
-        tpe = Type.Choice(name = "platform", sep = None(), elements = ISZ("jvm", "linux", "cygwin", "mac", "sel4")),
+        tpe = Type.Choice(name = "platform", sep = None(), elements = ISZ("JVM", "Linux", "Cygwin", "MacOS", "seL4")),
         description = "Target platform"),
       Opt(name = "bitWidth", longKey = "bit-width", shortKey = Some('b'),
         tpe = Type.NumChoice(None(), ISZ(64, 32, 16, 8)),

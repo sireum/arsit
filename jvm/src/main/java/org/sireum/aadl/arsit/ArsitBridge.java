@@ -13,11 +13,11 @@ public class ArsitBridge {
 
     // should match Cli.Platform
     public enum Platform {
-        Jvm,
+        JVM,
         Linux,
         Cygwin,
-        Mac,
-        Sel4
+        MacOS,
+        SeL4
     }
 
     public static <T> org.sireum.Option<T> sireumOption(T o) {

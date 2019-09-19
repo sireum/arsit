@@ -49,6 +49,8 @@ object Base_Types {
   type Character = org.sireum.C
   type String = org.sireum.String
 
+  type Bits = org.sireum.ISZ[org.sireum.B]
+
   @datatype class Boolean_Payload(value: Boolean) extends art.DataContent
 
   @datatype class Integer_Payload(value: Integer) extends art.DataContent
@@ -68,6 +70,8 @@ object Base_Types {
 
   @datatype class Character_Payload(value: Character) extends art.DataContent
   @datatype class String_Payload(value: String) extends art.DataContent
+
+  @datatype class Bits_Payload(value: Bits) extends art.DataContent
 
   def Boolean_empty(): Boolean = { return F }
 
@@ -89,6 +93,8 @@ object Base_Types {
 
   def Character_empty(): Character = { return ' ' }
   def String_empty(): String = { return "" }
+
+  def Bits_empty(): Bits = { return ISZ() }
 }"""
     return ret
   }

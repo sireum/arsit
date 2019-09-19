@@ -44,11 +44,11 @@ object Cli {
   }
 
   @enum object Platform {
-    'Jvm
+    'JVM
     'Linux
     'Cygwin
-    'Mac
-    'Sel4
+    'MacOS
+    'SeL4
   }
 
   @datatype class ArsitOption(
@@ -97,20 +97,20 @@ import Cli._
 
   def parsePlatformH(arg: String): Option[Platform.Type] = {
     arg.native match {
-      case "jvm" => return Some(Platform.Jvm)
-      case "linux" => return Some(Platform.Linux)
-      case "cygwin" => return Some(Platform.Cygwin)
-      case "mac" => return Some(Platform.Mac)
-      case "sel4" => return Some(Platform.Sel4)
+      case "JVM" => return Some(Platform.JVM)
+      case "Linux" => return Some(Platform.Linux)
+      case "Cygwin" => return Some(Platform.Cygwin)
+      case "MacOS" => return Some(Platform.MacOS)
+      case "seL4" => return Some(Platform.SeL4)
       case s =>
-        eprintln(s"Expecting one of the following: { jvm, linux, cygwin, mac, sel4 }, but found '$s'.")
+        eprintln(s"Expecting one of the following: { JVM, Linux, Cygwin, MacOS, seL4 }, but found '$s'.")
         return None()
     }
   }
 
   def parsePlatform(args: ISZ[String], i: Z): Option[Platform.Type] = {
     if (i >= args.size) {
-      eprintln("Expecting one of the following: { jvm, linux, cygwin, mac, sel4 }, but none found.")
+      eprintln("Expecting one of the following: { JVM, Linux, Cygwin, MacOS, seL4 }, but none found.")
       return None()
     }
     val r = parsePlatformH(args(i))
@@ -143,8 +143,8 @@ import Cli._
           |    --behavior-dir       Auxiliary C source code directory (expects a path)
           |    --output-c-directory Output directory for C artifacts (expects a path)
           |    --exclude-impl       Exclude Slang component implementations
-          |    --platform           Target platform (expects one of { jvm, linux, cygwin,
-          |                           mac, sel4 }; default: jvm)
+          |    --platform           Target platform (expects one of { JVM, Linux, Cygwin,
+          |                           MacOS, seL4 }; default: JVM)
           |-b, --bit-width          Default bit-width for unbounded integer types (e.g.,
           |                           Z) (expects one of { 64, 32, 16, 8 })
           |    --string-size        Maximum string size (expects an integer; default is
@@ -163,7 +163,7 @@ import Cli._
     var behaviorDir: Option[String] = None[String]()
     var outputCDir: Option[String] = None[String]()
     var excludeImpl: B = false
-    var platform: Platform.Type = Platform.Jvm
+    var platform: Platform.Type = Platform.JVM
     var bitWidth: Z = 64
     var maxStringSize: Z = 100
     var maxArraySize: Z = 100
