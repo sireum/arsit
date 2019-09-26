@@ -6,6 +6,11 @@ import org.sireum._
 
 object StringTemplate {
 
+  def doNotEditComment(from: Option[String]): String = {
+    val _from: String = if (from.nonEmpty) s" from ${from.get}" else ""
+    return s"// This file was auto-generated${_from}.  Do not edit"
+  }
+
   def Base_Types(basePackage: String): ST = {
     val ret =
       st"""// #Sireum
@@ -22,7 +27,7 @@ import org.sireum.U16._
 import org.sireum.U32._
 import org.sireum.U64._
 
-${Util.doNotEditComment()}
+${doNotEditComment(None())}
 
 object Base_Types {
 

@@ -307,6 +307,83 @@ object Util {
   }
 }
 
+object TypeResolver {
+
+  var typeMap: Map[String, AadlType] = Map.empty
+
+  def getSlangType(s: String): SlangType.Type = {
+    val t: SlangType.Type = s match {
+      case org.sireum.String("Boolean") => SlangType.B
+
+      case org.sireum.String("Integer") => SlangType.Z
+      case org.sireum.String("Integer_8") => SlangType.Z8
+      case org.sireum.String("Integer_16") => SlangType.Z16
+      case org.sireum.String("Integer_32") => SlangType.Z32
+      case org.sireum.String("Integer_64") => SlangType.Z64
+
+      case org.sireum.String("Unsigned_8") => SlangType.U8
+      case org.sireum.String("Unsigned_16") => SlangType.U16
+      case org.sireum.String("Unsigned_32") => SlangType.U32
+      case org.sireum.String("Unsigned_64") => SlangType.U64
+
+      case org.sireum.String("Float") => SlangType.R // TODO
+      case org.sireum.String("Float_32") => SlangType.F32
+      case org.sireum.String("Float_64") => SlangType.F64
+
+      case org.sireum.String("Character") => SlangType.C
+      case org.sireum.String("String") => SlangType.String
+    }
+    return t
+  }
+
+  def processDataTypes(values: ISZ[Component], basePackage: String): AadlTypes = {
+    for (v <- values) {
+      typeMap = typeMap + (v.classifier.get.name ~> processType(v, basePackage))
+    }
+    return AadlTypes(typeMap)
+  }
+
+  def processType(c: Component, basePackage: String): AadlType = {
+    assert(c.category == ComponentCategory.Data)
+    val cname = c.classifier.get.name
+    val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
+
+    val container = Some(c)
+
+    if(Util.isEnumType(c)) {
+
+      return  EnumType(cname, container, Util.getEnumValues(c))
+
+    } else if(Util.isBaseType(c)) {
+
+      val aadlType = org.sireum.ops.StringOps(c.classifier.get.name).replaceAllLiterally("Base_Types::", "")
+
+      val t: SlangType.Type = TypeResolver.getSlangType(aadlType)
+
+      return BaseType(cname, container, t)
+
+    } else if(Util.isArrayType(c)) {
+
+      val baseTypeName = Util.getArrayBaseType(c)
+      val baseType = typeMap.get(baseTypeName).get
+
+      return ArrayType(cname, container, baseType)
+    } else if(Util.isRecordType(c)) {
+      var fields: Map[String, AadlType] = Map.empty
+
+      for(sc <- c.subComponents){
+        val fieldName = Util.getLastName(sc.identifier)
+        fields = fields + (fieldName ~> processType(sc, basePackage))
+      }
+
+      return RecordType(cname, container, fields)
+
+    } else {
+      return TODOType(cname, None())
+    }
+  }
+}
+
 case class Names(packageName : String,
                  packagePath : String,
                  bridge: String,

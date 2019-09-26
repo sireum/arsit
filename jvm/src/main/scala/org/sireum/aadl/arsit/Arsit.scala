@@ -116,7 +116,7 @@ object Arsit {
 
     val basePackageName : String = if (o.packageName.nonEmpty) o.packageName.get else destDir.getName()
 
-    val typeMap = TypeResolver(basePackageName).processDataTypes(m.dataComponents)
+    val typeMap = TypeResolver.processDataTypes(m.dataComponents, basePackageName)
 
     val _destDir = new File(destDir, "src/main")
 

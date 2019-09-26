@@ -129,7 +129,7 @@ object HAMR {
     'amd64
   }
 }
-
+/*
 object TypeResolver {
 
   def getSlangType(s: String): SlangType.Type = {
@@ -172,7 +172,7 @@ object TypeResolver {
   def processType(c: Component): AadlType = {
     assert(c.category == ComponentCategory.Data)
     val cname = c.classifier.get.name
-    val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
+    val names = SlangUtil.getNamesFromClassifier(c.classifier.get, basePackage)
 
     val container = Some(c)
 
@@ -209,6 +209,7 @@ object TypeResolver {
     }
   }
 }
+ */
 
 @datatype class AadlTypes (typeMap : Map[String, AadlType])
 
