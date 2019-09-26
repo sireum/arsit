@@ -28,7 +28,7 @@ package org.sireum.aadl.arsit
 import org.sireum._
 import org.sireum.cli.CliOpt._
 
-object cli {
+object arsitCli {
 
   val arsitTool: Tool = Tool(
     name = "arsit",
