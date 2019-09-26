@@ -285,6 +285,8 @@ class ArtNixGen(outputDir: File,
       case Cli.Platform.SeL4 =>
         transpileScriptName = "transpile-sel4.sh"
         buildApps = F
+        additionalInstructions = Some(st"""FILE=$${OUTPUT_DIR}/CMakeLists.txt
+                                          |echo -e "\n\nadd_definitions(-DCAMKES)" >> $$FILE""")
       case o =>
         assert(SlangUtil.isNix(o))
         extensions = extensions :+ s"${cExtensionDir.getCanonicalPath}/ipc.c"

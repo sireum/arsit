@@ -27,7 +27,17 @@ import mill._
 import mill.scalalib._
 import org.sireum.mill.SireumModule._
 
-trait Module extends CrossJvmJs {
+trait Module extends CrossJvmJsJitPack {
+
+  final override def description: String = "Sireum Arsit"
+
+  final override def artifactName = "Arsit"
+
+  final override def subUrl: String = "arsit"
+
+  final override def developers = Seq(
+    Developers.jason
+  )
 
   final override def jvmTestIvyDeps = Agg.empty
 
