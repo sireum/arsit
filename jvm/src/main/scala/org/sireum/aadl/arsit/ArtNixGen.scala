@@ -1213,8 +1213,13 @@ class ArtNixGen(outputDir: File,
           |PROJ_HOME="${script_home}/../src/main"
           |OUTPUT_DIR="${cOutputDirRel}"
           |
+          |PATH_SEP=":"
+          |if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
+          |  PATH_SEP=";"
+          |fi
+          |
           |if [ -z "$${SIREUM_HOME}" ]; then
-          |  echo "SIREUM_HOME not set"
+          |  echo "SIREUM_HOME not set. Refer to https://github.com/sireum/kekinian/#installing"
           |  exit 1
           |fi
           |
@@ -1228,29 +1233,30 @@ class ArtNixGen(outputDir: File,
           |  --output-dir "$${OUTPUT_DIR}" \
           |  --stable-type-id"""
 
-      ret = if(extsRel.nonEmpty) {
-        st"""${ret} \
-            |  --exts "${(extsRel, ":")}""""
-      } else { ret }
+      var extras: ISZ[ST] = ISZ()
 
-      ret = if(excludes.nonEmpty) {
-        st"""${ret} \
-            |  --exclude-build "${(excludes, ",")}""""
-      } else { ret }
+      if(extsRel.nonEmpty) {
+        extras = extras :+ st""" \
+                               |  --exts "${(extsRel, s"$${PATH_SEP}")}""""
+      }
 
-      ret = if(!buildApps) {
-        st"""${ret} \
-            |  --lib-only"""
-      } else { ret }
+      if(excludes.nonEmpty) {
+        extras = extras :+ st""" \
+                               |  --exclude-build "${(excludes, ",")}""""
+      }
 
-      ret = if(additionalInstructions.nonEmpty) {
-        st"""${ret}
-            |
-            |${additionalInstructions}"""
-      } else { ret }
+      if(!buildApps) {
+        extras = extras :+ st""" \
+                               |  --lib-only"""
+      }
 
-      return st"""
-              |$ret"""
+      if(additionalInstructions.nonEmpty) {
+        extras = extras :+ st"""
+                               |
+                               |${additionalInstructions}"""
+      }
+
+      return st"""${ret}${(extras, "")}"""
     }
   }
   // @formatter:on
