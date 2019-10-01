@@ -1,9 +1,9 @@
 // #Sireum
 
-package org.sireum.aadl.arsit
+package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.aadl.ir._
+import org.sireum.hamr.ir
 import org.sireum.ops._
 
 object SlangUtil {
@@ -214,35 +214,35 @@ object TypeResolver {
 @datatype class AadlTypes (typeMap : Map[String, AadlType])
 
 @sig trait AadlType {
-  def container: Option[org.sireum.aadl.ir.Component]
+  def container: Option[ir.Component]
 
   def name: String
 }
 
 @datatype class EnumType(val name: String,
-                         val container: Option[org.sireum.aadl.ir.Component],
+                         val container: Option[ir.Component],
 
                          values: ISZ[String]) extends AadlType
 
 @datatype class ArrayType(val name: String,
-                          val container: Option[org.sireum.aadl.ir.Component],
+                          val container: Option[ir.Component],
 
                           baseType: AadlType) extends AadlType
 
 @datatype class RecordType(val name: String,
-                           val container: Option[org.sireum.aadl.ir.Component],
+                           val container: Option[ir.Component],
 
                            fields: Map[String, AadlType]
                           ) extends AadlType
 
 @datatype class BaseType(val name: String,
-                         val container: Option[org.sireum.aadl.ir.Component],
+                         val container: Option[ir.Component],
 
                          slangType: SlangType.Type
                         ) extends AadlType
 
 @datatype class TODOType(val name: String,
-                         val container: Option[org.sireum.aadl.ir.Component]
+                         val container: Option[ir.Component]
                         ) extends AadlType
 
 @enum object SlangType {

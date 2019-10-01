@@ -1,8 +1,8 @@
-package org.sireum.aadl.arsit
+package org.sireum.hamr.arsit
 
 import java.io.File
 
-import org.sireum.aadl.ir.{Aadl, JSON, MsgPack}
+import org.sireum.hamr.ir.{Aadl, JSON, MsgPack}
 import org.sireum.{B, F, T, Z, ISZ, Either, String, Option, Some, None}
 
 object Arsit {
@@ -53,6 +53,39 @@ object Arsit {
       }
     }
   }
+
+  // old arsit osate plugin interface
+  def run(model: Aadl, //
+          optOutputDir: Option[scala.Predef.String], //
+          optBasePackageName: Option[scala.Predef.String], //
+          embedArt: B, //
+          genBlessEntryPoints: B, //
+          genTranspilerArtficats: B, //
+          ipcMechanism: ArsitBridge.IPCMechanism): Int = {
+    val verbose = true
+    val devicesAsThreads = true
+    val excludeImpl = false
+    val behaviorDir = None[Predef.String]()
+    val cdir = None[Predef.String]()
+    val platform = if(genTranspilerArtficats) ArsitBridge.Platform.Linux else ArsitBridge.Platform.JVM
+    val bitWidth = 64
+    val maxStringSize = 256
+    val maxArraySize = 16
+
+    run(model, optOutputDir, optBasePackageName, embedArt, genBlessEntryPoints, //
+      verbose, //
+      devicesAsThreads, //
+      // transpiler options
+      ipcMechanism, //
+      excludeImpl, //
+      behaviorDir, //
+      cdir, //
+      platform, //
+      bitWidth, //
+      maxStringSize, //
+      maxArraySize)
+  }
+
 
   def run(model: Aadl, //
           optOutputDir: Option[scala.Predef.String], //

@@ -1,8 +1,8 @@
-package org.sireum.aadl.arsit
+package org.sireum.hamr.arsit
 
 import java.io.File
 import org.sireum._
-import org.sireum.aadl.ir._
+import org.sireum.hamr.ir._
 import scala.language.implicitConversions
 
 class ArtStubGenerator(dir: File,

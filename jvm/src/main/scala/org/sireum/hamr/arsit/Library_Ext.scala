@@ -1,4 +1,4 @@
-package org.sireum.aadl.arsit
+package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.$internal.{RC}
