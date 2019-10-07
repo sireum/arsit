@@ -7,7 +7,31 @@ import org.sireum.hamr.ir
 import org.sireum.ops._
 
 object SlangUtil {
-  def relativizePaths(anchorDir: String, toRel: String, pathSep: C, anchorResource: String) : String = {
+  var pathSep: C = '/'
+
+  def createResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
+    return Resource(pathAppend(rootDir, path), content, overwrite)
+  }
+
+  def pathAppend(outputDir: String, s: ISZ[String]): String = {
+    if(s.isEmpty) {
+      return outputDir
+    } else {
+      return ISZOps(s).foldLeft((r: String, s: String) => s"${r}${pathSep}${s}", s"${outputDir}")
+    }
+  }
+
+  def pathSimpleName(path: String): String = {
+    val s = StringOps(path)
+    val pos = s.lastIndexOf(pathSep)
+    if(pos < 0) {
+      return path
+    } else {
+      return s.substring(pos + 1, s.size)
+    }
+  }
+
+  def relativizePaths(anchorDir: String, toRel: String, anchorResource: String) : String = {
     val ais = conversions.String.toCis(anchorDir)
     val tis = conversions.String.toCis(toRel)
 
@@ -42,30 +66,25 @@ object SlangUtil {
     }
   }
 
-  def isNix(platform: Cli.Platform.Type): B = {
+  def isNix(platform: Cli.ArsitPlatform.Type): B = {
     val ret: B = platform match {
-      case Cli.Platform.JVM => F
-      case Cli.Platform.MacOS => T
-      case Cli.Platform.Linux => T
-      case Cli.Platform.Cygwin => T
-      case Cli.Platform.SeL4 => F
+      case Cli.ArsitPlatform.JVM => F
+      case Cli.ArsitPlatform.MacOS => T
+      case Cli.ArsitPlatform.Linux => T
+      case Cli.ArsitPlatform.Cygwin => T
+      case Cli.ArsitPlatform.SeL4 => F
     }
     return ret
   }
 }
 
 object Cli {
-
-  @datatype trait ArsitTopOption
-
-  @datatype class HelpOption extends ArsitTopOption
-
   @enum object IpcMechanism {
     'MessageQueue
     'SharedMemory
   }
 
-  @enum object Platform {
+  @enum object ArsitPlatform {
     'JVM
     'Linux
     'Cygwin
@@ -74,24 +93,22 @@ object Cli {
   }
 
   @datatype class ArsitOption(
-                               help: String,
-                               args: ISZ[String],
-                               json: B,
-                               outputDir: Option[String],
-                               packageName: Option[String],
-                               noart: B,
+                               outputDir: String,
+                               packageName: String,
+                               embedArt: B,
                                bless: B,
                                verbose: B,
                                devicesAsThreads: B,
                                ipc: IpcMechanism.Type,
-                               behaviorDir: Option[String],
+                               auxCodeDir: ISZ[String],
                                outputCDir: Option[String],
                                excludeImpl: B,
-                               platform: Platform.Type,
+                               platform: ArsitPlatform.Type,
                                bitWidth: Z,
                                maxStringSize: Z,
-                               maxArraySize: Z
-                             ) extends ArsitTopOption
+                               maxArraySize: Z,
+                               pathSeparator: C
+                             )
 }
 
 
@@ -268,3 +285,33 @@ object TypeResolver {
   'C   // Base_Types::Character
   'String // Base_Types::String
 }
+
+@datatype class ProjectDirectories(rootDir: String) {
+  val src_main: ISZ[String] = ISZ("src", "main")
+
+  val srcDir: String = SlangUtil.pathAppend(rootDir, ISZ("src"))
+
+  val srcMainDir: String = SlangUtil.pathAppend(rootDir, src_main)
+
+  val binDir: String = SlangUtil.pathAppend(rootDir, ISZ("bin"))
+
+  val architectureDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "architecture")
+
+  val bridgeDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "bridge")
+
+  val dataDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "data")
+
+  val componentDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "component")
+
+  val nixDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "nix")
+}
+
+@datatype class Resource(path: String,
+                         content: ST,
+                         overwrite: B)
+
+@datatype class PhaseResult(resources: ISZ[Resource],
+                            maxPort: Z,
+                            maxComponent: Z)
+
+@datatype class ArsitResult(resources: ISZ[Resource])

@@ -1,12 +1,14 @@
 package org.sireum.hamr.arsit
 
-import java.io.{BufferedWriter, File, FileWriter}
-
 import org.sireum._
 import org.sireum.hamr.ir._
+import org.sireum.message.Reporter
 import org.sireum.ops._
 
 object Util {
+  var reporter: Reporter = Reporter.create
+  var toolName: String = "Arsit"
+
   var verbose: B = F
 
   val Prop_Thread_Properties__Dispatch_Protocol: String = "Thread_Properties::Dispatch_Protocol"
@@ -31,8 +33,14 @@ object Util {
 
   val EmptyType = TODOType("--EmptyType--", None())
   val EmptyTypeNames = DataTypeNames(EmptyType, "", "art", "Empty")
-  def isEmptyType(name : String) = name == EmptyTypeNames.qualifiedTypeName
-  def isEmptyType(t : DataTypeNames) = t == EmptyTypeNames
+
+  def isEmptyType(name : String): B = {
+    return name == EmptyTypeNames.qualifiedTypeName
+  }
+
+  def isEmptyType(t : DataTypeNames): B = {
+    return t.typ == EmptyType
+  }
 
   def getName(s: Name): String = s.name.elements.mkString("_")
 
@@ -137,12 +145,17 @@ object Util {
 
 
   @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
-    val classifier = typ.container.get.classifier.get
+    val (packageName, typeName) = if(typ == Util.EmptyType) {
+      ("art", "Empty")
+    } else {
+      val classifier = typ.container.get.classifier.get
 
-    val a = classifier.name.toString.split("::")
-    assert(a.size == 2)
+      val a = classifier.name.toString.split("::")
+      assert(a.size == 2)
 
-    return DataTypeNames(typ, topPackage, a(0), sanitizeName(a(1)))
+      (a(0), a(1))
+    }
+    return DataTypeNames(typ, topPackage, packageName, sanitizeName(typeName))
   }
 
   @pure def getArrayDimensions(a: ArrayType): ISZ[Z] = {
@@ -238,28 +251,8 @@ object Util {
     s"// This file was auto-generated${_from}.  Do not edit"
   }
 
-  @pure def writeFile(fname: File, st: ST, overwrite: Boolean = true): Unit = {
-    try {
-      // try building any missing subdirs
-      fname.getParentFile.mkdirs
-
-      assert(fname.getParentFile.exists)
-
-      if (overwrite || !fname.exists) {
-        val bw = new BufferedWriter(new FileWriter(fname))
-        bw.write(st.render.toString)
-        bw.close()
-
-        report("Wrote: " + fname, T)
-      }
-    } catch {
-      case e: Throwable =>
-        reportError("Error encountered while trying to create file: " + fname)
-        reportError(e.getMessage)
-    }
-  }
-
-  @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: File): Unit = {
+  @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
+    var resources: ISZ[Resource] = ISZ()
     for((p, c) <- Library.getFiles if p.native.contains("art")) {
       val _c = if(p.native.contains("Art.scala")) {
         val out = new StringBuilder()
@@ -276,8 +269,9 @@ object Util {
       } else {
         c
       }
-      Util.writeFile(new File(outputDir, s"${p}"), st"""${_c}""", true)
+      resources = resources :+ SlangUtil.createResource(outputDir, ISZ(p), st"${_c}", T)
     }
+    return resources
   }
 
   @pure def getLibraryFile(fileName: String): ST = {
@@ -294,16 +288,6 @@ object Util {
     }
     val c = getLibraryFile(r).render.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
     st"${c}"
-  }
-
-  def report(msg: String, canSupress: B): Unit = {
-    if(!canSupress || verbose) {
-      Console.println(msg);
-    }
-  }
-
-  def reportError(str: String): Unit = {
-    Console.err.println(str)
   }
 }
 
@@ -379,7 +363,7 @@ object TypeResolver {
       return RecordType(cname, container, fields)
 
     } else {
-      return TODOType(cname, None())
+      return TODOType(cname, container)
     }
   }
 }
@@ -417,6 +401,7 @@ case class DataTypeNames(typ: AadlType,
       case e:BaseType => s"${qualifiedTypeName}_empty()"
       case e:ArrayType => s"${qualifiedTypeName}.empty()"
       case e:RecordType => s"${qualifiedTypeName}.empty()"
+      case e:TODOType => s"${qualifiedTypeName}.empty()"
     }
     return ret
   }

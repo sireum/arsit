@@ -1,22 +1,20 @@
 package org.sireum.hamr.arsit
 
-import java.io.File
-
 import org.sireum._
 import org.sireum.hamr.ir._
 import org.sireum.ops.ISZOps
+import org.sireum.hamr.arsit.Util.reporter
 
 import scala.language.implicitConversions
 
-class ArtArchitectureGen(dir : File,
+class ArtArchitectureGen(directories: ProjectDirectories,
                          m: Aadl,
-                         topPackageName: String,
                          arsitOptions: Cli.ArsitOption,
                          types: AadlTypes) {
   var componentId = 0
   var portId = 0
-  var outDir : File = _
 
+  val basePackage = arsitOptions.packageName
   var bridges : ISZ[ST] = ISZ()
   var components : ISZ[String] = ISZ[String]()
   var connections : ISZ[ST] = ISZ()
@@ -25,22 +23,22 @@ class ArtArchitectureGen(dir : File,
 
   var componentMap : HashMap[String, Component] = HashMap.empty
 
-  var basePackage: String = _
+  var resources: ISZ[Resource] = ISZ()
 
-  def generator() : (Z, Z) = {
-    assert(dir.exists)
-    basePackage = Util.sanitizeName(topPackageName)
-    outDir = dir
+  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ SlangUtil.createResource(baseDir, paths, content, overwrite)
+  }
 
+  def generator() : PhaseResult = {
     for(t <- types.typeMap.values) {
       emitType(t)
     }
     val baseTypes = StringTemplate.Base_Types(basePackage)
-    Util.writeFile(new File(outDir, s"../data/${basePackage}/Base_Types.scala"), baseTypes, true)
+    addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
 
     gen(m)
 
-    (portId, componentId) // return the next available ids
+    return PhaseResult(resources, portId, componentId)
   }
 
   def gen(m: Aadl): Unit = {
@@ -72,10 +70,10 @@ class ArtArchitectureGen(dir : File,
       connections
     )
 
-    Util.writeFile(new File(outDir, s"$basePackage/Arch.scala"), arch)
+    addResource(directories.architectureDir, ISZ(basePackage, "Arch.scala"), arch, T)
 
     val demo = Template.demo(basePackage, architectureName, architectureDescriptionName)
-    Util.writeFile(new File(outDir, s"$basePackage/Demo.scala"), demo)
+    addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
   }
 
   def getComponentId(component: Component): Z = {
@@ -115,7 +113,7 @@ class ArtArchitectureGen(dir : File,
           }
         case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
-          Util.report(s"Skipping: ${c.category} component ${Util.getName(m.identifier)}", T)
+          reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
@@ -204,6 +202,8 @@ class ArtArchitectureGen(dir : File,
 
     var imports: org.sireum.Set[String] = org.sireum.Set.empty[String]
 
+    var canOverwrite: B = T
+
     val body: ST = t match {
       case e: EnumType => Template.enumType(typeNames, e.values)
 
@@ -246,9 +246,10 @@ class ArtArchitectureGen(dir : File,
         Template.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
 
       case e: TODOType =>
-        println(s"Don't know how to handle ${e}")
+        reporter.warn(None(), Util.toolName, s"Don't know how to handle ${e}")
+        canOverwrite = F
         Template.typeSkeleton(typeNames)
-
+        
       case _ => halt(s"${t}")
     }
 
@@ -256,20 +257,21 @@ class ArtArchitectureGen(dir : File,
       basePackage,
       typeNames.qualifiedPackageName,
       body,
-      Template.payloadType(typeNames))
+      Template.payloadType(typeNames),
+      canOverwrite)
 
-    Util.writeFile(new File(outDir, "../data/" + typeNames.filePath.toString), ts, true)
+    addResource(directories.dataDir, ISZ(typeNames.filePath), ts, canOverwrite)
   }
 
   def allowConnection(c : ConnectionInstance, m : Component) : B = {
     val str = s"${Util.getName(c.name)}  from  ${Util.getName(m.identifier)}"
 
     if(c.src.component == c.dst.component){
-      Util.report(s"Skipping: Port connected to itself. $str", T)
+      reporter.info(None(), Util.toolName, s"Skipping: Port connected to itself. $str")
       return F
     }
     if(c.kind != ConnectionKind.Port){
-      Util.report(s"Skipping: ${c.kind} connection.  $str", T)
+      reporter.info(None(), Util.toolName, s"Skipping: ${c.kind} connection.  $str")
       return F
     }
 
@@ -278,12 +280,12 @@ class ArtArchitectureGen(dir : File,
     val catDest = componentMap.get(Util.getName(c.dst.component)).get.category
 
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
-      Util.report(s"Skipping: connection between ${catSrc} to ${catDest}.  $str", T)
+      reporter.info(None(), Util.toolName, s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
       return F
     }
 
     if(seenConnections.contains(c.src.feature.get) && ISZOps(seenConnections.get(c.src.feature.get).get).contains(c.dst.feature.get)) {
-      Util.report(s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}", T)
+      reporter.info(None(), Util.toolName, s"Skipping: already handled connection: ${c.src.feature.get} to ${c.dst.feature.get}")
       return F
     }
 
@@ -397,7 +399,18 @@ class ArtArchitectureGen(dir : File,
     }
 
     @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
-      return st"""@datatype class ${typeNames.typeName}() // type skeleton"""
+      val typeName = typeNames.qualifiedReferencedTypeName
+      val payloadTypeName = typeNames.payloadName
+      val emptyPayload = typeNames.empty()
+
+      return st"""object ${typeNames.typeName} {
+                 |  def empty(): ${typeNames.qualifiedTypeName} = {
+                 |    return ${typeNames.qualifiedTypeName}()
+                 |  }
+                 |}
+                 |
+                 |@datatype class ${typeNames.typeName}() // type skeleton
+                 |"""
     }
 
     @pure def payloadType(typeNames: DataTypeNames) : ST = {
@@ -417,7 +430,13 @@ class ArtArchitectureGen(dir : File,
     @pure def typeS(topLevelPackageName: String,
                     packageName: String,
                     body: ST,
-                    payload: ST): ST = {
+                    payload: ST,
+                    canOverwrite: B): ST = {
+      val overwrite = if(canOverwrite) {
+        st"""
+            |${Util.doNotEditComment() }
+            |"""
+      } else { st"" }
 
       return st"""// #Sireum
                  |
@@ -425,9 +444,7 @@ class ArtArchitectureGen(dir : File,
                  |
                  |import org.sireum._
                  |import $topLevelPackageName._
-                 |
-                 |${Util.doNotEditComment()}
-                 |
+                 |$overwrite
                  |$body
                  |$payload
                  |"""
@@ -436,6 +453,6 @@ class ArtArchitectureGen(dir : File,
 }
 
 object ArtArchitectureGen {
-  def apply(dir: File, m: Aadl, topPackage: String, o: Cli.ArsitOption, types: AadlTypes) =
-    new ArtArchitectureGen(dir, m, topPackage, o, types).generator()
+  def apply(directories: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes) =
+    new ArtArchitectureGen(directories, m, o, types).generator()
 }

@@ -1,28 +1,25 @@
 package org.sireum.hamr.arsit
 
-import java.io.File
 import org.sireum._
 import org.sireum.hamr.ir._
-import scala.language.implicitConversions
+import org.sireum.hamr.arsit.Util.reporter
 
-class ArtStubGenerator(dir: File,
+class ArtStubGenerator(dirs: ProjectDirectories,
                        m: Aadl,
-                       packageName: String,
                        arsitOptions: Cli.ArsitOption,
                        types: AadlTypes)  {
-  var outDir : File = _
   var toImpl : ISZ[(ST, ST)] = ISZ()
-  var basePackage: String = _
+  val basePackage: String = arsitOptions.packageName
   var seenComponents : HashSet[String] = HashSet.empty
+  var resources: ISZ[Resource] = ISZ()
 
-  def generator() : Unit = {
-    assert(dir.exists)
+  def generator() : ISZ[Resource] = {
 
-    outDir = dir
-    basePackage = Util.sanitizeName(packageName)
-
-    for(c <- m.components)
+    for(c <- m.components) {
       gen(c)
+    }
+
+    return resources
   }
 
   def gen(m: Component) : Unit = {
@@ -32,7 +29,7 @@ class ArtStubGenerator(dir: File,
       case ComponentCategory.ThreadGroup =>
         genThreadGroup(m)
       case _ =>
-        for(_c <- m.subComponents)
+        for (_c <- m.subComponents)
           gen(_c)
     }
   }
@@ -54,7 +51,7 @@ class ArtStubGenerator(dir: File,
           }
         case ComponentCategory.Subprogram => // ignore
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
-          Util.report(s"Skipping: ${c.category} component: ${Util.getName(c.identifier)}", T)
+          reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component: ${Util.getName(c.identifier)}")
         case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }
     }
@@ -69,11 +66,15 @@ class ArtStubGenerator(dir: File,
     }
   }
 
+  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ SlangUtil.createResource(baseDir, paths, content, overwrite)
+  }
+
   def genThread(m: Component) : Unit = {
     assert(Util.isDevice(m) || Util.isThread(m))
 
     val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
-    val filename = s"component/${names.packagePath}/${names.componentImpl}.scala"
+    val filename: String = SlangUtil.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
 
     if(seenComponents.contains(filename)) {
       return
@@ -89,22 +90,23 @@ class ArtStubGenerator(dir: File,
 
     val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
 
-    val b = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
-    Util.writeFile(new File(outDir, s"bridge/${names.packagePath}/${names.bridge}.scala"), b)
+    val bridge = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
+    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
     if(!arsitOptions.bless) {
-      val c = Template.componentTrait(basePackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
-      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${names.component}.scala"), c)
+      val component = Template.componentTrait(basePackage, names.packageName, dispatchProtocol, names.component, names.bridge, ports)
+      addResource(dirs.componentDir, ISZ(names.packagePath, s"${names.component}.scala"), component, T)
     }
 
     val block = Template.componentImplBlock(names.component, names.bridge, names.componentImpl, dispatchProtocol, ports)
-    val ci = Template.slangPreamble(T, names.packageName, basePackage,
+    val componentImpl = Template.slangPreamble(T, names.packageName, basePackage,
       genSubprograms(m) match {
         case Some(x) => ISZ(block, x)
         case _ => ISZ(block)
       })
 
-    Util.writeFile(new File(outDir, filename), ci, F)
+    //Util.writeFile(new File(outDir, filename), ci, F)
+    addResource(filename, ISZ(), componentImpl, F)
 
     seenComponents = seenComponents + filename
   }
@@ -136,12 +138,12 @@ class ArtStubGenerator(dir: File,
 
       if(!Util.isThread(m)) {
         val a = Template.slangPreamble(T, basePackage, names.packageName, ISZ(body))
-        Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}.scala"), a)
+        addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}.scala"), a, T)
       }
 
       val b = Template.slangPreamble(F, basePackage, names.packageName,
         ISZ(Template.slangBody("", s"${objectName}_Ext", subprograms.map(_._2))))
-      Util.writeFile(new File(outDir, s"component/${names.packagePath}/${objectName}_Ext.scala"), b, F)
+      addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}_Ext.scala"), b, F)
 
       return Some(body)
     } else {
@@ -160,10 +162,17 @@ class ArtStubGenerator(dir: File,
                      componentImplType : String,
                      ports : ISZ[Port]) : ST = {
 
-      val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute).map(m =>
+      val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute).map(m => {
+        var body = st"${componentName}.${m.string}()"
+        if(m == EntryPoints.initialise) {
+          body = st"""$body
+                     |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        }
+
         st"""def ${m.string}: Unit = {
-            |  ${componentName}.${m.string}()
-            |}""")
+            |  $body
+            |}"""
+      })
 
       return st"""// #Sireum
                   |
@@ -274,7 +283,7 @@ class ArtStubGenerator(dir: File,
         dispatchProtocol match {
           case DispatchProtocol.Sporadic =>
             return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
-                       |Art.receiveInput(portIds, dataInPortIds)
+                       |Art.receiveInput(eventInPortIds, dataInPortIds)
                        |
                        |for(portId <- portIds) {
                        |  ${var s = ""
@@ -509,6 +518,6 @@ class ArtStubGenerator(dir: File,
 
 
 object ArtStubGenerator {
-  def apply(dir: File, m: Aadl, packageName: String, o: Cli.ArsitOption, types: AadlTypes) =
-    new ArtStubGenerator(dir, m, packageName, o, types).generator()
+  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes) =
+    new ArtStubGenerator(dirs, m, o, types).generator()
 }

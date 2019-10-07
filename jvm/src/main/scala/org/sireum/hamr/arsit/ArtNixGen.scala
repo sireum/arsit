@@ -1,33 +1,29 @@
 package org.sireum.hamr.arsit
 
-import java.io.File
-
 import org.sireum._
 import org.sireum.hamr.ir._
+import org.sireum.hamr.arsit.Util.reporter
 
-class ArtNixGen(outputDir: File,
+class ArtNixGen(dirs: ProjectDirectories,
                 m: Aadl,
-                topPackageName: String,
                 nextPortId: Z,
                 nextComponentId: Z,
                 arsitOptions: Cli.ArsitOption,
                 types: AadlTypes) {
-  var projOutputDir: File = _
-  var nixOutputDir : File = _
 
-  var cOutputDir : File = _
-  var cOutputDirString : String = _
+  var cOutputDir : String = _
 
-  var cExtensionDir : File = _
-  var cUserExtensionDir : Option[File] = None()
+  var cExtensionDir : String = _
 
-  var binOutputDir: File = _
+  var cUserExtensionDir : Option[String] = None()
 
-  var basePackage: String = _
+  val basePackage: String = arsitOptions.packageName
 
   var componentMap : HashMap[String, Component] = HashMap.empty
 
   var systemImplmentation: Component = _
+
+  var resources: ISZ[Resource] = ISZ()
 
   var portId: Z = _
   def getPortId(): Z = {
@@ -36,41 +32,44 @@ class ArtNixGen(outputDir: File,
     return r
   }
 
-  def generator(): Z = {
-    basePackage = Util.sanitizeName(topPackageName)
-    projOutputDir = outputDir // where the slang-embedded code was generated
-
-    binOutputDir = new File(projOutputDir, "../../bin")
-
+  def generator(): PhaseResult = {
     cOutputDir = if(arsitOptions.outputCDir.nonEmpty) {
-      new File(arsitOptions.outputCDir.get.native)
+      arsitOptions.outputCDir.get
     } else {
-      val dir = arsitOptions.platform match {
-        case Cli.Platform.SeL4 => "sel4"
+      val dir: String = arsitOptions.platform match {
+        case Cli.ArsitPlatform.SeL4 => "sel4"
         case o =>
           assert(SlangUtil.isNix(o))
           "nix"
       }
-      new File(projOutputDir, s"../c/${dir}")
+      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", dir))
     }
 
-    cExtensionDir = if(arsitOptions.behaviorDir.nonEmpty) {
-      new File(arsitOptions.behaviorDir.get.native)
+
+    cExtensionDir = if(arsitOptions.auxCodeDir.nonEmpty) {
+      assert(arsitOptions.auxCodeDir.size == 1)
+      //new File(arsitOptions.auxCodeDir(0).native)
+      arsitOptions.auxCodeDir(0)
     } else {
-      new File(projOutputDir, s"../c/ext-c")
+      //new File(projOutputDir, s"../c/ext-c")
+      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
     }
 
-    nixOutputDir = new File(projOutputDir, "nix")
-
-    if(arsitOptions.behaviorDir.nonEmpty) {
-      cUserExtensionDir = Some(new File(arsitOptions.behaviorDir.get.native))
+    if(arsitOptions.auxCodeDir.nonEmpty) {
+      assert(arsitOptions.auxCodeDir.size == 1)
+      //cUserExtensionDir = Some(new File(arsitOptions.auxCodeDir(0).native))
+      cUserExtensionDir = Some(arsitOptions.auxCodeDir(0))
     }
 
     portId = nextPortId
 
     gen(m)
 
-    portId
+    return PhaseResult(resources, portId, nextComponentId)
+  }
+
+  def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ SlangUtil.createResource(outDir, path, content, overwrite)
   }
 
   def gen(model: Aadl): Unit = {
@@ -166,12 +165,14 @@ class ArtNixGen(outputDir: File,
 
         val stAep = Template.aep(basePackage, AEP_Id, portOpts,
           portIds, portOptResets, aepPortCases, AEP_Id, App_Id, AEP_Payload, isPeriodic)
-        Util.writeFile(new File(nixOutputDir, s"${basePackage}/${AEP_Id}.scala"), stAep)
+
+        addResource(dirs.nixDir, ISZ(basePackage, s"${AEP_Id}.scala"), stAep, T)
       }
 
       val stApp = Template.app(basePackage, App_Id, App_Id,
         AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, m, isPeriodic)
-      Util.writeFile(new File(nixOutputDir, s"${basePackage}/${App_Id}.scala"), stApp)
+
+      addResource(dirs.nixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
@@ -201,7 +202,7 @@ class ArtNixGen(outputDir: File,
           artNixCasesM = artNixCasesM + (srcArchPortInstanceName, cases)
         }
       } else {
-        Util.report(s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}", T)
+        reporter.info(None(), Util.toolName, s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
       }
     }
 
@@ -210,62 +211,61 @@ class ArtNixGen(outputDir: File,
     arsitOptions.ipc match {
       case Cli.IpcMechanism.MessageQueue =>
 
-        Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue.scala"), Template.MessageQueue(basePackage))
-        Util.writeFile(new File(nixOutputDir, s"${basePackage}/MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackage))
+        addResource(dirs.nixDir, ISZ(basePackage, "MessageQueue.scala"), Template.MessageQueue(basePackage), T)
+        addResource(dirs.nixDir, ISZ(basePackage, "MessageQueue_Ext.scala"), Template.MessageQueueExt(basePackage), T)
 
       case Cli.IpcMechanism.SharedMemory =>
-        Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory.scala"), Template.SharedMemory(basePackage))
-        Util.writeFile(new File(nixOutputDir, s"${basePackage}/SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackage))
+
+        addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory.scala"), Template.SharedMemory(basePackage), T)
+        addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory_Ext.scala"), Template.SharedMemory_Ext(basePackage), T)
     }
 
     val stIPC = Template.ipc(basePackage, platformPorts, platformPayloads)
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/IPC.scala"), stIPC)
+    addResource(dirs.nixDir, ISZ(basePackage, "IPC.scala"), stIPC, T)
 
     val artNixCases: ISZ[ST] = artNixCasesM.entries.map(k => Template.artNixCases(k._1, k._2))
     val stArtNix = Template.artNix(basePackage, artNixCases,
       inPorts.filter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
 
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/ArtNix.scala"), stArtNix)
+    addResource(dirs.nixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
 
     val stMain = Template.main(basePackage, mainSends)
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Main.scala"), stMain)
+    addResource(dirs.nixDir, ISZ(basePackage, "Main.scala"), stMain, T)
 
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Platform.scala"), Template.platform(basePackage))
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Platform_Ext.scala"), Template.PlatformExt(basePackage))
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/PlatformNix.scala"), Template.PlatformNix(basePackage))
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process.scala"), Template.Process(basePackage))
-    Util.writeFile(new File(nixOutputDir, s"${basePackage}/Process_Ext.scala"), Template.ProcessExt(basePackage))
+    addResource(dirs.nixDir, ISZ(basePackage, "Platform.scala"), Template.platform(basePackage), T)
+    addResource(dirs.nixDir, ISZ(basePackage, "Platform_Ext.scala"), Template.PlatformExt(basePackage), T)
+    addResource(dirs.nixDir, ISZ(basePackage, "PlatformNix.scala"), Template.PlatformNix(basePackage), T)
+    addResource(dirs.nixDir, ISZ(basePackage, "Process.scala"), Template.Process(basePackage), T)
+    addResource(dirs.nixDir, ISZ(basePackage, "Process_Ext.scala"), Template.ProcessExt(basePackage), T)
 
     arsitOptions.platform match {
 
-      case o @ Cli.Platform.SeL4 =>
+      case o @ Cli.ArsitPlatform.SeL4 =>
 
         // just compile static lib.  place script in parent dir so transpiler won't
         // erase it
 
-        val f = new File(cOutputDir, s"../compile-hamr-lib.sh")
-        Util.writeFile(f, Template.compileLib(o, cOutputDir.getName))
-
-        import sys.process._
-        Seq("/bin/chmod", "-R", "u+x", f.getAbsolutePath).!!
+        addResource(cOutputDir, ISZ("..", "compile-hamr-lib.sh"), Template.compileLib(o, SlangUtil.pathSimpleName(cOutputDir)), T)
+        //import sys.process._
+        //Seq("/bin/chmod", "-R", "u+x", f.getAbsolutePath).!!
 
       case o =>
         assert(SlangUtil.isNix(o))
         val platName = ops.StringOps(o.name).firstToLower
 
-        Util.writeFile(new File(binOutputDir, s"compile-${platName}.sh"), Template.compile(o))
-        Util.writeFile(new File(binOutputDir, s"run-${platName}.sh"), Template.run(aepNames, appNames, o))
-        Util.writeFile(new File(binOutputDir, "stop.sh"), Template.stop(
-          (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames))
+        addResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), Template.compile(o), T)
+        addResource(dirs.binDir, ISZ(s"run-${platName}.sh"), Template.run(aepNames, appNames, o), T)
+        addResource(dirs.binDir, ISZ("stop.sh"), Template.stop(
+          (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames), T)
     }
 
-    Util.writeFile(new File(cExtensionDir, s"ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage))
-    Util.writeFile(new File(cExtensionDir, s"ext.c"), Util.getLibraryFile("ext.c"), false)
-    Util.writeFile(new File(cExtensionDir, s"ext.h"), Util.getLibraryFile("ext.h"), false)
+    addResource(cExtensionDir, ISZ("ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage), T)
+    addResource(cExtensionDir, ISZ("ext.c"), Util.getLibraryFile("ext.c"), F)
+    addResource(cExtensionDir, ISZ("ext.h"), Util.getLibraryFile("ext.h"), F)
 
-    var outputPaths: ISZ[String] = ISZ(projOutputDir.getAbsolutePath)
-    if(!nixOutputDir.getAbsolutePath.contains(projOutputDir.getAbsolutePath))
-      outputPaths = outputPaths :+ nixOutputDir.getAbsolutePath
+    var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
+    if(!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir))
+      outputPaths = outputPaths :+ dirs.nixDir
 
     val excludes:ISZ[String] = if(arsitOptions.excludeImpl) {
       for ((archVarName, m) <- components) yield {
@@ -277,19 +277,19 @@ class ArtNixGen(outputDir: File,
     }
 
     var transpileScriptName = ""
-    var extensions: ISZ[String] = ISZ(s"${cExtensionDir.getCanonicalPath}/ext.c", s"${cExtensionDir.getCanonicalPath}/ext.h")
+    var extensions: ISZ[String] = ISZ(s"${cExtensionDir}/ext.c", s"${cExtensionDir}/ext.h")
     var buildApps: B = T
     var additionalInstructions: Option[ST] = None()
 
     arsitOptions.platform match {
-      case Cli.Platform.SeL4 =>
+      case Cli.ArsitPlatform.SeL4 =>
         transpileScriptName = "transpile-sel4.sh"
         buildApps = F
         additionalInstructions = Some(st"""FILE=$${OUTPUT_DIR}/CMakeLists.txt
                                           |echo -e "\n\nadd_definitions(-DCAMKES)" >> $$FILE""")
       case o =>
         assert(SlangUtil.isNix(o))
-        extensions = extensions :+ s"${cExtensionDir.getCanonicalPath}/ipc.c"
+        extensions = extensions :+ s"${cExtensionDir}/ipc.c"
         transpileScriptName = s"transpile.sh"
     }
 
@@ -306,10 +306,9 @@ class ArtNixGen(outputDir: File,
       additionalInstructions
     )
 
-    Util.writeFile(new File(binOutputDir, transpileScriptName), transpiler)
-
-    import sys.process._
-    Seq("/bin/chmod", "-R", "u+x", binOutputDir.getAbsolutePath).!!
+    addResource(dirs.binDir, ISZ(transpileScriptName), transpiler, T)
+    //import sys.process._
+    //Seq("/bin/chmod", "-R", "u+x", binOutputDir.getAbsolutePath).!!
   }
 
   object Template {
@@ -1076,7 +1075,7 @@ class ArtNixGen(outputDir: File,
                  |}"""
     }
 
-    @pure def compileLib(arch: Cli.Platform.Type, childDir: String): ST = {
+    @pure def compileLib(arch: Cli.ArsitPlatform.Type, childDir: String): ST = {
       val script_home = "${SCRIPT_HOME}"
 
       return st"""#!/usr/bin/env bash
@@ -1093,16 +1092,14 @@ class ArtNixGen(outputDir: File,
           |"""
     }
 
-    @pure def compile(arch: Cli.Platform.Type): ST = {
+    @pure def compile(arch: Cli.ArsitPlatform.Type): ST = {
       assert(SlangUtil.isNix(arch))
 
       val script_home = "${SCRIPT_HOME}"
-      val pathSep = '/'
-      val binCan = binOutputDir.getCanonicalPath
-      val cOutputDirRel = SlangUtil.relativizePaths(binCan, cOutputDir.getCanonicalPath, pathSep, script_home)
+      val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, cOutputDir, script_home)
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
-      val mv: ST = if(arch == Cli.Platform.Cygwin)
+      val mv: ST = if(arch == Cli.ArsitPlatform.Cygwin)
         st"mv *.exe ${script_home}/${buildDir}/"
       else {
         st"""mv *_App ${script_home}/${buildDir}/
@@ -1126,7 +1123,7 @@ class ArtNixGen(outputDir: File,
 
     @pure def run(aeps: ISZ[String],
                   apps: ISZ[String],
-                  arch: Cli.Platform.Type): ST = {
+                  arch: Cli.ArsitPlatform.Type): ST = {
       assert(SlangUtil.isNix(arch))
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
@@ -1134,9 +1131,9 @@ class ArtNixGen(outputDir: File,
       val staep = if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
         val prefix = arch match {
-          case Cli.Platform.Cygwin => "cygstart mintty /bin/bash"
-          case Cli.Platform.Linux => "x-terminal-emulator -e sh -c"
-          case Cli.Platform.MacOS => "open -a Terminal"
+          case Cli.ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
+          case Cli.ArsitPlatform.Linux => "x-terminal-emulator -e sh -c"
+          case Cli.ArsitPlatform.MacOS => "open -a Terminal"
           case _ => halt(s"Unexpected platform ${arch}")
         }
         st"""$prefix "${buildDir}/${st}$ext" &""" })
@@ -1199,10 +1196,8 @@ class ArtNixGen(outputDir: File,
                          additionalInstructions: Option[ST]): ST = {
 
       val script_home = "${SCRIPT_HOME}"
-      val pathSep = '/'
-      val binCan = binOutputDir.getCanonicalPath
-      val cOutputDirRel = SlangUtil.relativizePaths(binCan, cOutputDir.getCanonicalPath, pathSep, script_home)
-      val extsRel = extensions.map(s => SlangUtil.relativizePaths(binCan, s, pathSep, script_home))
+      val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, cOutputDir, script_home)
+      val extsRel = extensions.map(s => SlangUtil.relativizePaths(dirs.binDir, s, script_home))
 
       var ret = st"""#!/usr/bin/env bash
           |#
@@ -1263,7 +1258,7 @@ class ArtNixGen(outputDir: File,
 }
 
 object ArtNixGen{
-  def apply(outputDir: File, m: Aadl, topPackage: String, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption, types: AadlTypes) : Z =
-    new ArtNixGen(outputDir, m, topPackage, nextPortId, nextComponentId, o, types).generator()
+  def apply(dirs: ProjectDirectories, m: Aadl, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption, types: AadlTypes) : PhaseResult =
+    new ArtNixGen(dirs, m, nextPortId, nextComponentId, o, types).generator()
 }
 

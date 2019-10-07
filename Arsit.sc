@@ -39,29 +39,27 @@ trait Module extends CrossJvmJsJitPack {
     Developers.jason
   )
 
-  final override def jvmTestIvyDeps = Agg.empty
-
-  final override def jsTestIvyDeps = Agg.empty
-
   final override def jvmDeps = Seq()
 
   final override def jsDeps = Seq()
 
+  final override lazy val scalacPluginIvyDeps = Agg(ivy"org.sireum::scalac-plugin:$scalacPluginVersion")
+
   final override def testIvyDeps = Agg.empty
 
-  final override def ivyDeps = Agg.empty
+  final override def jvmTestIvyDeps = Agg.empty
 
-  final override lazy val scalacPluginIvyDeps = Agg(
-    ivy"org.sireum::scalac-plugin:$scalacPluginVersion"
-  )
+  final override def jsTestIvyDeps = Agg.empty
 
   final override def testScalacPluginIvyDeps = scalacPluginIvyDeps
-
-  final override def deps = Seq(airObject)
 
   final override val jvmTestFrameworks = Seq("org.scalatest.tools.Framework")
 
   final override def jsTestFrameworks = jvmTestFrameworks
+
+  final override def ivyDeps = Agg.empty
+
+  final override def deps = Seq(airObject)
 
   def airObject: CrossJvmJsPublish
 }
