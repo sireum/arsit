@@ -6,10 +6,9 @@ import org.sireum.hamr.arsit.Util.reporter
 
 class ArtNixGen(dirs: ProjectDirectories,
                 m: Aadl,
-                nextPortId: Z,
-                nextComponentId: Z,
                 arsitOptions: Cli.ArsitOption,
-                types: AadlTypes) {
+                types: AadlTypes,
+                previousPhase: Result) {
 
   var cOutputDir : String = _
 
@@ -25,47 +24,56 @@ class ArtNixGen(dirs: ProjectDirectories,
 
   var resources: ISZ[Resource] = ISZ()
 
-  var portId: Z = _
+  var transpilerOptions: Option[CTranspilerOption] = None()
+
+  var portId: Z = previousPhase.maxPort
   def getPortId(): Z = {
     val r = portId
     portId = portId + 1
     return r
   }
 
-  def generator(): PhaseResult = {
-    cOutputDir = if(arsitOptions.outputCDir.nonEmpty) {
-      arsitOptions.outputCDir.get
-    } else {
-      val dir: String = arsitOptions.platform match {
-        case Cli.ArsitPlatform.SeL4 => "sel4"
-        case o =>
-          assert(SlangUtil.isNix(o))
-          "nix"
+  def shouldBuildNix(p: Cli.ArsitPlatform.Type): B = {
+    return p match {
+      case Cli.ArsitPlatform.JVM => F
+      case Cli.ArsitPlatform.Linux => T
+      case Cli.ArsitPlatform.Cygwin => T
+      case Cli.ArsitPlatform.MacOS => T
+      case Cli.ArsitPlatform.SeL4 => T
+    }
+  }
+
+  def generator(): ArsitResult = {
+
+    if(shouldBuildNix(arsitOptions.platform)) {
+      cOutputDir = if (arsitOptions.outputCDir.nonEmpty) {
+        arsitOptions.outputCDir.get
+      } else {
+        val dir: String = arsitOptions.platform match {
+          case Cli.ArsitPlatform.SeL4 => "sel4"
+          case o =>
+            assert(SlangUtil.isNix(o))
+            "nix"
+        }
+        SlangUtil.pathAppend(dirs.srcDir, ISZ("c", dir))
       }
-      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", dir))
+
+      cExtensionDir = if (arsitOptions.auxCodeDir.nonEmpty) {
+        assert(arsitOptions.auxCodeDir.size == 1)
+        arsitOptions.auxCodeDir(0)
+      } else {
+        SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
+      }
+
+      if (arsitOptions.auxCodeDir.nonEmpty) {
+        assert(arsitOptions.auxCodeDir.size == 1)
+        cUserExtensionDir = Some(arsitOptions.auxCodeDir(0))
+      }
+
+      gen(m)
     }
 
-
-    cExtensionDir = if(arsitOptions.auxCodeDir.nonEmpty) {
-      assert(arsitOptions.auxCodeDir.size == 1)
-      //new File(arsitOptions.auxCodeDir(0).native)
-      arsitOptions.auxCodeDir(0)
-    } else {
-      //new File(projOutputDir, s"../c/ext-c")
-      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
-    }
-
-    if(arsitOptions.auxCodeDir.nonEmpty) {
-      assert(arsitOptions.auxCodeDir.size == 1)
-      //cUserExtensionDir = Some(new File(arsitOptions.auxCodeDir(0).native))
-      cUserExtensionDir = Some(arsitOptions.auxCodeDir(0))
-    }
-
-    portId = nextPortId
-
-    gen(m)
-
-    return PhaseResult(resources, portId, nextComponentId)
+    return ArsitResult(previousPhase.resources() ++ resources, portId, previousPhase.maxComponent, transpilerOptions)
   }
 
   def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -785,6 +793,10 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |
                  |  def run(): Unit = {
                  |  }
+                 |
+                 |  def time(): Art.Time = {
+                 |    return Process.time()
+                 |  }
                  |}
                  |"""
     }
@@ -1054,11 +1066,14 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |package $packageName
                  |
                  |import org.sireum._
+                 |import art.Art
                  |
                  |${Util.doNotEditComment()}
                  |
                  |@ext object Process {
                  |  def sleep(n: Z): Unit = $$
+                 |
+                 |  def time(): Art.Time = $$
                  |}
                  |"""
     }
@@ -1067,11 +1082,14 @@ class ArtNixGen(dirs: ProjectDirectories,
       return st"""package $packageName
                  |
                  |import org.sireum._
+                 |import art.Art
                  |
                  |${Util.doNotEditComment()}
                  |
                  |object Process_Ext {
                  |  def sleep(millis: Z): Unit = halt("stub")
+                 |
+                 |  def time(): Art.Time = halt("stub")
                  |}"""
     }
 
@@ -1184,6 +1202,7 @@ class ArtNixGen(dirs: ProjectDirectories,
           |"""
     }
 
+
     @pure def transpiler(sourcepaths: ISZ[String],
                          apps: ISZ[String],
                          forwards: ISZ[String],
@@ -1195,54 +1214,97 @@ class ArtNixGen(dirs: ProjectDirectories,
                          buildApps: B,
                          additionalInstructions: Option[ST]): ST = {
 
-      val script_home = "${SCRIPT_HOME}"
-      val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, cOutputDir, script_home)
-      val extsRel = extensions.map(s => SlangUtil.relativizePaths(dirs.binDir, s, script_home))
+      transpilerOptions = Some(
+          CTranspilerOption(
+          sourcepath = ISZ(dirs.srcMainDir),
+          output = Some(cOutputDir),
+          verbose = T,
+          projectName = Some("main"),  // default set in org.sireum.transpilers.cli.cTranspiler
+          apps = apps,
+          unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler
+          fingerprint = 3, // default set in org.sireum.transpilers.cli.cTranspiler
+          bitWidth = numBits,
+          maxStringSize = maxStringSize,
+          maxArraySize = maxSequenceSize,
+          customArraySizes = ISZ(),
+          customConstants = ISZ(),
+          plugins = ISZ(),
+          exts = extensions,
+          forwarding = forwards,
+          stackSize = Some("16 * 1024 * 1024"), // default set in org.sireum.transpilers.cli.cTranspiler
+          excludeBuild = excludes,
+          libOnly = !buildApps,
+          stableTypeId = T,
+          save = None(),
+          load = None()
+        )
+      )
+
+      return transpilerX(transpilerOptions.get, additionalInstructions)
+    }
+
+    @pure def transpilerX(opts: CTranspilerOption,
+                          additionalInstructions: Option[ST]): ST = {
+
+      val script_home = s"$${${Util.SCRIPT_HOME}}"
+
+      val projHomesRel = opts.sourcepath.map(s => SlangUtil.relativizePaths(dirs.binDir, s, script_home))
+      val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, opts.output.get, script_home)
+
+      val path_sep = s"$${PATH_SEP}"
 
       var ret = st"""#!/usr/bin/env bash
           |#
           |# This file is autogenerated.  Do not edit
           |#
           |set -e
-          |SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
-          |PROJ_HOME="${script_home}/../src/main"
-          |OUTPUT_DIR="${cOutputDirRel}"
-          |
-          |PATH_SEP=":"
-          |if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
-          |  PATH_SEP=";"
-          |fi
           |
           |if [ -z "$${SIREUM_HOME}" ]; then
           |  echo "SIREUM_HOME not set. Refer to https://github.com/sireum/kekinian/#installing"
           |  exit 1
           |fi
           |
+          |PATH_SEP=":"
+          |if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
+          |  PATH_SEP=";"
+          |fi
+          |
+          |${Util.SCRIPT_HOME}=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |
           |$${SIREUM_HOME}/bin/sireum slang transpilers c \
-          |  --sourcepath "$${PROJ_HOME}" \
-          |  --apps "${(apps, ",")}" \
-          |  --forward "${(forwards, ",")}" \
-          |  --bits ${numBits} \
-          |  --string-size ${maxStringSize} \
-          |  --sequence-size ${maxSequenceSize} \
-          |  --output-dir "$${OUTPUT_DIR}" \
+          |  --sourcepath "${(projHomesRel, path_sep)}" \
+          |  --output-dir "${cOutputDirRel}" \
+          |  --name "${opts.projectName.get}" \
+          |  --apps "${(opts.apps, ",")}" \
+          |  --fingerprint ${opts.fingerprint} \
+          |  --bits ${opts.bitWidth} \
+          |  --string-size ${opts.maxStringSize} \
+          |  --sequence-size ${opts.maxArraySize} \
+          |  --forward "${(opts.forwarding, ",")}" \
+          |  --stack-size "${opts.stackSize.get}" \
           |  --stable-type-id"""
 
       var extras: ISZ[ST] = ISZ()
 
-      if(extsRel.nonEmpty) {
+      if(opts.exts.nonEmpty) {
+        val extsRel = opts.exts.map(s => SlangUtil.relativizePaths(dirs.binDir, s, script_home))
         extras = extras :+ st""" \
-                               |  --exts "${(extsRel, s"$${PATH_SEP}")}""""
+                               |  --exts "${(extsRel, path_sep)}""""
       }
 
-      if(excludes.nonEmpty) {
+      if(opts.excludeBuild.nonEmpty) {
         extras = extras :+ st""" \
-                               |  --exclude-build "${(excludes, ",")}""""
+                               |  --exclude-build "${(opts.excludeBuild, ",")}""""
       }
 
-      if(!buildApps) {
+      if(opts.libOnly) {
         extras = extras :+ st""" \
                                |  --lib-only"""
+      }
+
+      if(opts.verbose) {
+        extras = extras :+ st""" \
+                               |  --verbose"""
       }
 
       if(additionalInstructions.nonEmpty) {
@@ -1258,7 +1320,7 @@ class ArtNixGen(dirs: ProjectDirectories,
 }
 
 object ArtNixGen{
-  def apply(dirs: ProjectDirectories, m: Aadl, nextPortId: Z, nextComponentId: Z, o: Cli.ArsitOption, types: AadlTypes) : PhaseResult =
-    new ArtNixGen(dirs, m, nextPortId, nextComponentId, o, types).generator()
+  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes, previousPhase: Result) : ArsitResult =
+    new ArtNixGen(dirs, m, o, types, previousPhase).generator()
 }
 

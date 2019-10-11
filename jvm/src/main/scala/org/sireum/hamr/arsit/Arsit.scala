@@ -9,41 +9,34 @@ object Arsit {
   def run(m: Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
     Util.reporter = reporter
     Util.verbose = o.verbose
-    return ArsitResult(runInternal(m, o))
+    return runInternal(m, o)
   }
 
-  private def runInternal(m: Aadl, o: Cli.ArsitOption) : ISZ[Resource] = {
+  private def runInternal(m: Aadl, o: Cli.ArsitOption) : ArsitResult = {
     var resources: ISZ[Resource] = ISZ()
+    var transpilerOptions: Option[CTranspilerOption] = None()
 
     if(m.components.isEmpty) {
       reporter.error(None(), Util.toolName, "Model is empty")
-      return resources
+      return ArsitResult(resources, 0, 0, transpilerOptions)
     }
 
     val typeMap = TypeResolver.processDataTypes(m.dataComponents, o.packageName)
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val archPhase: PhaseResult = ArtArchitectureGen(projectDirectories, m, o, typeMap)
+    val nixPhase = ArtNixGen(projectDirectories, m, o, typeMap,
+      ArtStubGenerator(projectDirectories, m, o, typeMap,
+        ArtArchitectureGen(projectDirectories, m, o, typeMap)))
 
-    val stubPhase: ISZ[Resource] = ArtStubGenerator(projectDirectories, m, o, typeMap)
-
-    resources = resources ++ archPhase.resources ++ stubPhase
-
-    val maxNixPort: Z =
-      if(o.platform != Cli.ArsitPlatform.JVM) {
-        val nixPhase = ArtNixGen(projectDirectories, m, archPhase.maxPort, archPhase.maxComponent, o, typeMap)
-        resources = resources ++ nixPhase.resources
-        nixPhase.maxPort
-      }
-      else {
-        archPhase.maxPort
-      }
-
-    if(o.embedArt) {
-      resources = resources ++ Util.copyArtFiles(maxNixPort, archPhase.maxComponent, projectDirectories.srcMainDir)
+    var artResources: ISZ[Resource] = ISZ()
+    if (o.embedArt) {
+      artResources = Util.copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
-    return resources
+    return ArsitResult(nixPhase.resources ++ artResources,
+      nixPhase.maxPort,
+      nixPhase.maxComponent,
+      nixPhase.transpilerOptions)
   }
 }

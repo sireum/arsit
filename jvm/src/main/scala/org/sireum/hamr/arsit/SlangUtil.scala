@@ -310,8 +310,42 @@ object TypeResolver {
                          content: ST,
                          overwrite: B)
 
-@datatype class PhaseResult(resources: ISZ[Resource],
-                            maxPort: Z,
-                            maxComponent: Z)
+// effectively just a copy of org.sireum.Cli.CTranspilerOption
+@datatype class CTranspilerOption(
+                                   sourcepath: ISZ[String],
+                                   output: Option[String],
+                                   verbose: B,
+                                   projectName: Option[String],
+                                   apps: ISZ[String],
+                                   unroll: B,
+                                   fingerprint: Z,
+                                   bitWidth: Z,
+                                   maxStringSize: Z,
+                                   maxArraySize: Z,
+                                   customArraySizes: ISZ[String],
+                                   customConstants: ISZ[String],
+                                   plugins: ISZ[String],
+                                   exts: ISZ[String],
+                                   forwarding: ISZ[String],
+                                   stackSize: Option[String],
+                                   excludeBuild: ISZ[String],
+                                   libOnly: B,
+                                   stableTypeId: B,
+                                   save: Option[String],
+                                   load: Option[String]
+                                 )
 
-@datatype class ArsitResult(resources: ISZ[Resource])
+@sig trait Result {
+  def resources: ISZ[Resource]
+  def maxPort: Z
+  def maxComponent: Z
+}
+
+@datatype class PhaseResult(val resources: ISZ[Resource],
+                            val maxPort: Z,
+                            val maxComponent: Z) extends Result
+
+@datatype class ArsitResult(val resources: ISZ[Resource],
+                            val maxPort: Z,
+                            val maxComponent: Z,
+                            val transpilerOptions: Option[CTranspilerOption]) extends Result

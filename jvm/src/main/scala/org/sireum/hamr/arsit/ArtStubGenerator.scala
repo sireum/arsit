@@ -7,19 +7,23 @@ import org.sireum.hamr.arsit.Util.reporter
 class ArtStubGenerator(dirs: ProjectDirectories,
                        m: Aadl,
                        arsitOptions: Cli.ArsitOption,
-                       types: AadlTypes)  {
+                       types: AadlTypes,
+                       previousPhase: Result)  {
+
   var toImpl : ISZ[(ST, ST)] = ISZ()
   val basePackage: String = arsitOptions.packageName
   var seenComponents : HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
 
-  def generator() : ISZ[Resource] = {
+  def generator() : Result = {
 
     for(c <- m.components) {
       gen(c)
     }
 
-    return resources
+    return PhaseResult(previousPhase.resources() ++ resources,
+      previousPhase.maxPort,
+      previousPhase.maxComponent)
   }
 
   def gen(m: Component) : Unit = {
@@ -518,6 +522,6 @@ class ArtStubGenerator(dirs: ProjectDirectories,
 
 
 object ArtStubGenerator {
-  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes) =
-    new ArtStubGenerator(dirs, m, o, types).generator()
+  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes, previousPhase: Result) =
+    new ArtStubGenerator(dirs, m, o, types, previousPhase).generator()
 }

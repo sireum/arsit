@@ -9,6 +9,8 @@ object Util {
   var reporter: Reporter = Reporter.create
   var toolName: String = "Arsit"
 
+  val SCRIPT_HOME: String = "SCRIPT_HOME"
+
   var verbose: B = F
 
   val Prop_Thread_Properties__Dispatch_Protocol: String = "Thread_Properties::Dispatch_Protocol"
