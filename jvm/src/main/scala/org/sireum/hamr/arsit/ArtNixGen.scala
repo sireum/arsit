@@ -1231,7 +1231,7 @@ class ArtNixGen(dirs: ProjectDirectories,
           plugins = ISZ(),
           exts = extensions,
           forwarding = forwards,
-          stackSize = Some("16 * 1024 * 1024"), // default set in org.sireum.transpilers.cli.cTranspiler
+          stackSize = Some("16*1024*1024"), // default set in org.sireum.transpilers.cli.cTranspiler
           excludeBuild = excludes,
           libOnly = !buildApps,
           stableTypeId = T,
