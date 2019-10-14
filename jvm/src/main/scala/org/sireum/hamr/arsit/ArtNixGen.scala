@@ -76,6 +76,10 @@ class ArtNixGen(dirs: ProjectDirectories,
     return ArsitResult(previousPhase.resources() ++ resources, portId, previousPhase.maxComponent, transpilerOptions)
   }
 
+  def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ SlangUtil.createExeResource(outDir, path, content, overwrite)
+  }
+
   def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
     resources = resources :+ SlangUtil.createResource(outDir, path, content, overwrite)
   }
@@ -253,7 +257,7 @@ class ArtNixGen(dirs: ProjectDirectories,
         // just compile static lib.  place script in parent dir so transpiler won't
         // erase it
 
-        addResource(cOutputDir, ISZ("..", "compile-hamr-lib.sh"), Template.compileLib(o, SlangUtil.pathSimpleName(cOutputDir)), T)
+        addExeResource(cOutputDir, ISZ("..", "compile-hamr-lib.sh"), Template.compileLib(o, SlangUtil.pathSimpleName(cOutputDir)), T)
         //import sys.process._
         //Seq("/bin/chmod", "-R", "u+x", f.getAbsolutePath).!!
 
@@ -261,9 +265,9 @@ class ArtNixGen(dirs: ProjectDirectories,
         assert(SlangUtil.isNix(o))
         val platName = ops.StringOps(o.name).firstToLower
 
-        addResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), Template.compile(o), T)
-        addResource(dirs.binDir, ISZ(s"run-${platName}.sh"), Template.run(aepNames, appNames, o), T)
-        addResource(dirs.binDir, ISZ("stop.sh"), Template.stop(
+        addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), Template.compile(o), T)
+        addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), Template.run(aepNames, appNames, o), T)
+        addExeResource(dirs.binDir, ISZ("stop.sh"), Template.stop(
           (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames), T)
     }
 
@@ -314,7 +318,7 @@ class ArtNixGen(dirs: ProjectDirectories,
       additionalInstructions
     )
 
-    addResource(dirs.binDir, ISZ(transpileScriptName), transpiler, T)
+    addExeResource(dirs.binDir, ISZ(transpileScriptName), transpiler, T)
     //import sys.process._
     //Seq("/bin/chmod", "-R", "u+x", binOutputDir.getAbsolutePath).!!
   }

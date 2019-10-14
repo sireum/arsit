@@ -9,8 +9,12 @@ import org.sireum.ops._
 object SlangUtil {
   var pathSep: C = '/'
 
+  def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
+    return Resource(pathAppend(rootDir, path), content, overwrite, T)
+  }
+
   def createResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
-    return Resource(pathAppend(rootDir, path), content, overwrite)
+    return Resource(pathAppend(rootDir, path), content, overwrite, F)
   }
 
   def pathAppend(outputDir: String, s: ISZ[String]): String = {
@@ -308,7 +312,8 @@ object TypeResolver {
 
 @datatype class Resource(path: String,
                          content: ST,
-                         overwrite: B)
+                         overwrite: B,
+                         makeExecutable: B)
 
 // effectively just a copy of org.sireum.Cli.CTranspilerOption
 @datatype class CTranspilerOption(
