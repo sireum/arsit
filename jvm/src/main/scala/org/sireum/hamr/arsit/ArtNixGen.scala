@@ -305,13 +305,14 @@ class ArtNixGen(dirs: ProjectDirectories,
         transpileScriptName = s"transpile.sh"
     }
 
+    val maxArraySize = if(arsitOptions.maxArraySize < portId) { portId } else { arsitOptions.maxArraySize }
     val transpiler = Template.transpiler(
       outputPaths,
       (((if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
       ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
-      arsitOptions.bitWidth, //  Util.getDefaultBitWidth(systemImplmentation),
-      arsitOptions.maxArraySize, // Util.getDefaultMaxSequenceSize(systemImplmentation, portId),
-      arsitOptions.maxStringSize, // Util.getMaxStringSize(systemImplmentation),
+      arsitOptions.bitWidth,
+      maxArraySize,
+      arsitOptions.maxStringSize,
       extensions,
       excludes,
       buildApps,
