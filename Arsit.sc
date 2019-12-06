@@ -29,9 +29,9 @@ import org.sireum.mill.SireumModule._
 
 trait Module extends CrossJvmJsJitPack {
 
-  final override def description: String = "Sireum Arsit"
+  final override def description: String = "Sireum HAMR Arsit"
 
-  final override def artifactName = "Arsit"
+  final override def artifactName = "hamr-arsit"
 
   final override def subUrl: String = "arsit"
 
