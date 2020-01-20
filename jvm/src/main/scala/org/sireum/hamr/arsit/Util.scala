@@ -6,6 +6,7 @@ import org.sireum.message.Reporter
 import org.sireum.ops._
 
 object Util {
+  
   var reporter: Reporter = Reporter.create
   var toolName: String = "Arsit"
 
@@ -24,6 +25,8 @@ object Util {
   val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
   val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
 
+  val Prop_Memory_Properties__Stack_Size = "Memory_Properties::Stack_Size"
+  
   val Prop_HAMR__OS: String = "HAMR::OS";
   val Prop_HAMR__HW: String = "HAMR::HW";
   val Prop_HAMR__Default_Max_Sequence_Size: String = "HAMR::Default_Max_Sequence_Size";
@@ -127,6 +130,27 @@ object Util {
     return getZProperty(Util.Prop_HAMR__Max_String_Size, c.properties) match {
       case Some(x) => x
       case None() => Util.DEFAULT_MAX_STRING_SIZE
+    }
+  }
+
+  @pure def getStackSizeInBytes(c: Component): Option[Z] = {
+    return Util.getDiscreetPropertyValue[UnitProp](c.properties, Util.Prop_Memory_Properties__Stack_Size) match {
+      case Some(UnitProp(value, unit)) =>
+        R(value) match {
+          case Some(v) =>
+            val _v: Z = conversions.R.toZ(v)
+            unit match {
+              case Some(string"bits")  => Some(_v / z"8")
+              case Some(string"Bytes") => Some(_v)
+              case Some(string"KByte") => Some(_v * z"1000")
+              case Some(string"MByte") => Some(_v * z"1000" * z"1000")
+              case Some(string"GByte") => Some(_v * z"1000" * z"1000" * z"1000")
+              case Some(string"TByte") => Some(_v * z"1000" * z"1000" * z"1000" * z"1000")
+              case _ => None[Z]()
+            }
+          case _ => None[Z]()
+        }
+      case _ => None[Z]()
     }
   }
 
@@ -256,6 +280,7 @@ object Util {
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
     for((p, c) <- Library.getFiles if p.native.contains("art")) {
+      /*
       val _c = if(p.native.contains("Art.scala")) {
         val out = new StringBuilder()
         c.native.split("\n").map(s =>
@@ -271,7 +296,8 @@ object Util {
       } else {
         c
       }
-      resources = resources :+ SlangUtil.createResource(outputDir, ISZ(p), st"${_c}", T)
+     */
+      resources = resources :+ SlangUtil.createResource(outputDir, ISZ(p), st"${c}", T)
     }
     return resources
   }

@@ -26,6 +26,10 @@ class ArtNixGen(dirs: ProjectDirectories,
 
   var transpilerOptions: Option[CTranspilerOption] = None()
 
+  var maxPortsForComponents: Z = 0
+  var numConnections: Z = 0
+  var maxStackSize: Z = -1
+  
   var portId: Z = previousPhase.maxPort
   def getPortId(): Z = {
     val r = portId
@@ -136,7 +140,20 @@ class ArtNixGen(dirs: ProjectDirectories,
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      for (p <- Util.getFeatureEnds(m.features) if Util.isInFeature(p)) {
+      Util.getStackSizeInBytes(m) match {
+        case Some(bytes) => if(bytes > maxStackSize) { 
+          maxStackSize = bytes
+        }
+        case _ =>
+      }
+      
+      val featureEnds = Util.getFeatureEnds(m.features)
+      val portSize = featureEnds.filter(f => Util.isInFeature(f) || Util.isOutFeature(f)).size
+      if(portSize > maxPortsForComponents) {
+        maxPortsForComponents = portSize
+      }
+      
+      for (p <- featureEnds if Util.isInFeature(p)) {
         assert (Util.isPort(p))
         val _portType = Util.getFeatureEndType(p, types)
         val port = Port(p, m, _portType, basePackage)
@@ -213,6 +230,7 @@ class ArtNixGen(dirs: ProjectDirectories,
           cases = cases :+ Template.artNixCase(dstComp, dstArchPortInstanceName)
           artNixCasesM = artNixCasesM + (srcArchPortInstanceName, cases)
         }
+        numConnections = numConnections + 1
       } else {
         reporter.info(None(), Util.toolName, s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
       }
@@ -305,7 +323,25 @@ class ArtNixGen(dirs: ProjectDirectories,
         transpileScriptName = s"transpile.sh"
     }
 
-    val maxArraySize = if(arsitOptions.maxArraySize < portId) { portId } else { arsitOptions.maxArraySize }
+    val maxArraySize: Z = ops.ISZOps(ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)).foldLeft((a: Z, b: Z) => if(a > b) a else b, z"0")
+    val numPorts: Z = portId
+    val numComponents: Z = previousPhase.maxComponent
+    
+    val customSequenceSizes: ISZ[String] = ISZ(
+      s"MS[org.sireum.Z,art.Bridge]=${numComponents}",
+      s"MS[org.sireum.Z,org.sireum.MOption[art.Bridge]]=${numComponents}",      
+      s"IS[org.sireum.Z,art.UPort]=${numComponents}",
+      s"IS[org.sireum.Z,art.UConnection]=${numConnections}"
+      
+      // not valid
+      //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
+    )
+    
+    val customConstants: ISZ[String] = ISZ(
+      s"art.Art.maxComponents=${numComponents}",
+      s"art.Art.maxPorts=${numPorts}"
+    )
+    
     val transpiler = Template.transpiler(
       outputPaths,
       (((if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
@@ -313,6 +349,9 @@ class ArtNixGen(dirs: ProjectDirectories,
       arsitOptions.bitWidth,
       maxArraySize,
       arsitOptions.maxStringSize,
+      customSequenceSizes,
+      customConstants,
+      maxStackSize,
       extensions,
       excludes,
       buildApps,
@@ -320,8 +359,6 @@ class ArtNixGen(dirs: ProjectDirectories,
     )
 
     addExeResource(dirs.binDir, ISZ(transpileScriptName), transpiler, T)
-    //import sys.process._
-    //Seq("/bin/chmod", "-R", "u+x", binOutputDir.getAbsolutePath).!!
   }
 
   object Template {
@@ -1214,11 +1251,20 @@ class ArtNixGen(dirs: ProjectDirectories,
                          numBits: Z,
                          maxSequenceSize: Z,
                          maxStringSize: Z,
+                         customArraySizes: ISZ[String],
+                         customConstants: ISZ[String],
+                         stackSizeInBytes: Z,
                          extensions: ISZ[String],
                          excludes: ISZ[String],
                          buildApps: B,
                          additionalInstructions: Option[ST]): ST = {
 
+      val _stackSizeInBytes: String = if(stackSizeInBytes < 0) {
+        "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
+      } else {
+        stackSizeInBytes.string
+      }
+      
       transpilerOptions = Some(
           CTranspilerOption(
           sourcepath = ISZ(dirs.srcMainDir),
@@ -1231,12 +1277,12 @@ class ArtNixGen(dirs: ProjectDirectories,
           bitWidth = numBits,
           maxStringSize = maxStringSize,
           maxArraySize = maxSequenceSize,
-          customArraySizes = ISZ(),
-          customConstants = ISZ(),
+          customArraySizes = customArraySizes,
+          customConstants = customConstants,
           plugins = ISZ(),
           exts = extensions,
           forwarding = forwards,
-          stackSize = Some("16*1024*1024"), // default set in org.sireum.transpilers.cli.cTranspiler
+          stackSize = Some(_stackSizeInBytes),
           excludeBuild = excludes,
           libOnly = !buildApps,
           stableTypeId = T,
@@ -1244,7 +1290,7 @@ class ArtNixGen(dirs: ProjectDirectories,
           load = None()
         )
       )
-
+      
       return transpilerX(transpilerOptions.get, additionalInstructions)
     }
 
@@ -1275,16 +1321,19 @@ class ArtNixGen(dirs: ProjectDirectories,
           |fi
           |
           |${Util.SCRIPT_HOME}=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+          |OUTPUT_DIR="${cOutputDirRel}"
           |
           |$${SIREUM_HOME}/bin/sireum slang transpilers c \
           |  --sourcepath "${(projHomesRel, path_sep)}" \
-          |  --output-dir "${cOutputDirRel}" \
+          |  --output-dir "$${OUTPUT_DIR}" \
           |  --name "${opts.projectName.get}" \
           |  --apps "${(opts.apps, ",")}" \
           |  --fingerprint ${opts.fingerprint} \
           |  --bits ${opts.bitWidth} \
           |  --string-size ${opts.maxStringSize} \
           |  --sequence-size ${opts.maxArraySize} \
+          |  --sequence "${(opts.customArraySizes, ";")}" \
+          |  --constants "${(opts.customConstants, ";")}" \
           |  --forward "${(opts.forwarding, ",")}" \
           |  --stack-size "${opts.stackSize.get}" \
           |  --stable-type-id"""
