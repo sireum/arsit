@@ -37,6 +37,9 @@ object Arsit {
     var artResources: ISZ[Resource] = ISZ()
     if (o.embedArt) {
       artResources = Util.copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
+      
+      val dest = (Os.path(o.outputDir) / "build.sbt").value
+      artResources = artResources :+ Resource(dest, Util.getLibraryFile("build.sbt"), F, F)
     }
 
     return ArsitResult(nixPhase.resources ++ artResources,

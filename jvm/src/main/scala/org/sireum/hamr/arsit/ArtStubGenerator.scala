@@ -385,13 +385,11 @@ class ArtStubGenerator(dirs: ProjectDirectories,
             return st"""// fetch received events ordered by highest urgency then earliest arrival-time
                        |val EventTriggered(receivedEvents) = Art.dispatchStatus(${bridgeName})
                        |
-                       |// removing non-dispatching event ports
+                       |// remove non-dispatching event ports
                        |val dispatchableEventPorts: ISZ[Art.PortId] = 
                        |  if(dispatchTriggers.isEmpty) receivedEvents 
                        |  else receivedEvents.filter(p => ops.ISZOps(dispatchTriggers.get).contains(p))
                        |
-                       |// only a single event can be handled per dispatch.  The remaining events
-                       |// should not be available 
                        |Art.receiveInput(eventInPortIds, dataInPortIds)
                        |
                        |for(portId <- dispatchableEventPorts) {
