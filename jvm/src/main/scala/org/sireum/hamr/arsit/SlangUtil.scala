@@ -9,7 +9,47 @@ import org.sireum.ops._
 object SlangUtil {
   var pathSep: C = '/'
 
+  val toolName: String = "Arsit"
+  
+  val PROP_DATA_MODEL__DATA_REPRESENTATION: String = "Data_Model::Data_Representation"
+  val PROP_DATA_MODEL__DIMENSION: String = "Data_Model::Dimension"
+  val PROP_DATA_MODEL__BASE_TYPE: String = "Data_Model::Base_Type"
+  val PROP_DATA_MODEL__ENUMERATORS: String = "Data_Model::Enumerators"
+
+  val PROP_THREAD_PROPERTIES__DISPATCH_PROTOCOL: String = "Thread_Properties::Dispatch_Protocol"
+  val PROP_THREAD_PROPERTIES__PRIORITY: String =  "Thread_Properties::Priority"
+  val PROP_THREAD_PROPERTIES__PERIOD: String = "Timing_Properties::Period"
+
+  val PROP_DEPLOYMENT_PROPERTIES__ACTUAL_PROCESSOR_BINDING: String = "Deployment_Properties::Actual_Processor_Binding"
+  val PROP_COMMUNICATION_PROPERTIES__QUEUE_SIZE: String = "Communication_Properties::Queue_Size"
+
+  val PROP_MEMORY_PROPERTIES__STACK_SIZE: String = "Memory_Properties::Stack_Size"
+
+  val PROP_PROGRAMMING_PROPERTIES__INITIALIZE_ENTRYPOINT_SOURCE_TEXT: String = "Programming_Properties::Initialize_Entrypoint_Source_Text"
+  val PROP_PROGRAMMING_PROPERTIES__SOURCE_TEXT: String = "Programming_Properties::Source_Text"
+
+  val PROP_TB_SYS__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "TB_SYS::Compute_Entrypoint_Source_Text"
+  val PROP_SB_SYS__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "SB_SYS::Compute_Entrypoint_Source_Text"
+  val PROP_PROGRAMMING_PROPERTIES__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "Programming_Properties::Compute_Entrypoint_Source_Text"
+
+
   val MISSING_AADL_TYPE: String = "Missing::MISSING_AADL_TYPE"
+  
+  def isDataPort(f: ir.Feature): B = {
+    return f.category == ir.FeatureCategory.DataPort
+  }
+  
+  def isEventDataPort(f: ir.Feature): B = {
+    return f.category == ir.FeatureCategory.EventDataPort
+  }
+  
+  def isEventPort(f: ir.Feature): B = {
+    return f.category == ir.FeatureCategory.EventPort
+  }
+
+  def getName(n : ir.Name) : String = {
+    return st"${(n.name, "_")}".render
+  }
   
   def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
     return Resource(pathAppend(rootDir, path), content, overwrite, T)
@@ -152,87 +192,7 @@ object HAMR {
     'amd64
   }
 }
-/*
-object TypeResolver {
 
-  def getSlangType(s: String): SlangType.Type = {
-    val t: SlangType.Type = s match {
-      case "Boolean" => SlangType.B
-
-      case "Integer" => SlangType.Z
-      case "Integer_8" => SlangType.Z8
-      case "Integer_16" => SlangType.Z16
-      case "Integer_32" => SlangType.Z32
-      case "Integer_64" => SlangType.Z64
-
-      case "Unsigned_8" => SlangType.U8
-      case "Unsigned_16" => SlangType.U16
-      case "Unsigned_32" => SlangType.U32
-      case "Unsigned_64" => SlangType.U64
-
-      case "Float" => SlangType.R // TODO
-      case "Float_32" => SlangType.F32
-      case "Float_64" => SlangType.F64
-
-      case "Character" => SlangType.C
-      case "String" => SlangType.String
-    }
-    return t
-  }
-}
-
-@record class TypeResolver(basePackage: String) {
-
-  var typeMap: Map[String, AadlType] = Map.empty
-
-  def processDataTypes(values: ISZ[Component]): AadlTypes = {
-    for (v <- values) {
-      typeMap = typeMap + (v.classifier.get.name ~> processType(v))
-    }
-    return AadlTypes(typeMap)
-  }
-
-  def processType(c: Component): AadlType = {
-    assert(c.category == ComponentCategory.Data)
-    val cname = c.classifier.get.name
-    val names = SlangUtil.getNamesFromClassifier(c.classifier.get, basePackage)
-
-    val container = Some(c)
-
-    if(Util.isEnumType(c)) {
-
-      return  EnumType(cname, container, Util.getEnumValues(c))
-
-    } else if(Util.isBaseType(c)) {
-
-      val aadlType = org.sireum.ops.StringOps(c.classifier.get.name).replaceAllLiterally("Base_Types::", "")
-
-      val t: SlangType.Type = TypeResolver.getSlangType(aadlType)
-
-      return BaseType(cname, container, t)
-
-    } else if(Util.isArrayType(c)) {
-
-      val baseTypeName = Util.getArrayBaseType(c)
-      val baseType = typeMap.get(baseTypeName).get
-
-      return ArrayType(cname, container, baseType)
-    } else if(Util.isRecordType(c)) {
-      var fields: Map[String, AadlType] = Map.empty
-
-      for(sc <- c.subComponents){
-        val fieldName = Util.getLastName(sc.identifier)
-        fields = fields + (fieldName ~> processType(sc))
-      }
-
-      return RecordType(cname, container, fields)
-
-    } else {
-      return TODOType(cname, None())
-    }
-  }
-}
- */
 
 @datatype class AadlTypes (typeMap : Map[String, AadlType])
 
@@ -297,7 +257,7 @@ object Transformers {
   @datatype class CTX(requiresMissingType: B,
                       hasErrors: B)
 
-  @datatype class MissingTypeRewriter extends ir.Transformer.PrePost[CTX] {
+  @datatype class MissingTypeRewriter(reporter : org.sireum.message.Reporter) extends ir.Transformer.PrePost[CTX] {
 
     val missingType: ir.Component = ir.Component(
       ir.Name(ISZ(), None()), // identifier
@@ -314,12 +274,12 @@ object Transformers {
     )
 
     val missingArrayBaseType: ir.Property = ir.Property(
-      name = ir.Name(ISZ(Util.Prop_Data_Model__Base_Type), None()),
+      name = ir.Name(ISZ(SlangUtil.PROP_DATA_MODEL__BASE_TYPE), None()),
       propertyValues = ISZ(ir.ClassifierProp(SlangUtil.MISSING_AADL_TYPE)),
       appliesTo = ISZ())
 
     val sporadicProp: ir.Property = ir.Property(
-      name = ir.Name(ISZ(Util.Prop_Thread_Properties__Dispatch_Protocol), None()),
+      name = ir.Name(ISZ(SlangUtil.PROP_THREAD_PROPERTIES__DISPATCH_PROTOCOL), None()),
       propertyValues = ISZ(ir.ValueProp("Sporadic")),
       appliesTo = ISZ())
 
@@ -337,43 +297,20 @@ object Transformers {
       o.category match {
         case ir.ComponentCategory.Data =>
           if(o.classifier.isEmpty) {
-            Util.reporter.warn(None(), Util.toolName, s"Classifier not specified for ${Util.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE}")
+            reporter.warn(None(), SlangUtil.toolName, s"Classifier not specified for ${SlangUtil.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE}")
 
             ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(classifier = Some(ir.Classifier(SlangUtil.MISSING_AADL_TYPE)))))
           }
-          /*else if (TypeUtil.isArrayDef(o) && TypeUtil.getArrayBaseType(o).isEmpty) {
-            Util.reporter.warn(None(), Util.toolName, s"Base type not specified for ${o.classifier.get.name}.  Substituting ${SlangUtil.MISSING_AADL_TYPE}")
-
-            ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(properties = o.properties :+ missingArrayBaseType)))
-          }*/
           else {
             ir.Transformer.TPostResult(ctx, None[ir.Component]())
           }
-          /*
-        case ir.ComponentCategory.Thread =>
-          Util.getDiscreetPropertyValue(o.properties, Util.Prop_Thread_Properties__Dispatch_Protocol) match {
-            case Some(ir.ValueProp(x)) =>
-              if(x != "Periodic" && x != "Sporadic") {
-                Util.reporter.error(None(), Util.toolName, s"${o.classifier.get.name} has unsupported dispatch protocol ${x}.")
-
-                ir.Transformer.TPostResult(ctx(hasErrors = T), None[ir.Component]())
-              } else {
-                ir.Transformer.TPostResult(ctx, None[ir.Component]())
-              }
-            case _ =>
-              Util.reporter.warn(None(), Util.toolName, s"${Util.Prop_Thread_Properties__Dispatch_Protocol} not specified for thread ${o.classifier.get.name}.  Treating it as sporadic.")
-
-              ir.Transformer.TPostResult(ctx, Some(o(properties =  o.properties :+ sporadicProp)))
-          }
-          
-           */
         case _ => ir.Transformer.TPostResult(ctx, None[ir.Component]())
       }
     }
 
     override def postFeatureEnd(ctx: CTX, o: ir.FeatureEnd): ir.Transformer.TPostResult[CTX, ir.FeatureEnd] = {
-      if (Util.isDataPort(o) && o.classifier.isEmpty) {
-        Util.reporter.warn(None(), Util.toolName, s"No datatype specified for data port ${Util.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE} ")
+      if ((SlangUtil.isDataPort(o) || SlangUtil.isEventDataPort(o)) && o.classifier.isEmpty) {
+        reporter.warn(None(), SlangUtil.toolName, s"No datatype specified for data port ${SlangUtil.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE} ")
 
         ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(classifier = Some(ir.Classifier(SlangUtil.MISSING_AADL_TYPE)))))
       } else {

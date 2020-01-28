@@ -23,7 +23,7 @@ object Arsit {
       return ArsitResult(resources, 0, 0, transpilerOptions)
     }
 
-    val result = ir.Transformer(Transformers.MissingTypeRewriter()).transformAadl(Transformers.CTX(F, F), model)
+    val result = ir.Transformer(Transformers.MissingTypeRewriter(Util.reporter)).transformAadl(Transformers.CTX(F, F), model)
     model = if(result.resultOpt.nonEmpty) result.resultOpt.get else model
     
     val typeMap = TypeResolver.processDataTypes(model.dataComponents, o.packageName)
