@@ -9,6 +9,8 @@ import org.sireum.ops._
 object SlangUtil {
   var pathSep: C = '/'
 
+  val MISSING_AADL_TYPE: String = "Missing::MISSING_AADL_TYPE"
+  
   def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
     return Resource(pathAppend(rootDir, path), content, overwrite, T)
   }
@@ -290,6 +292,98 @@ object TypeResolver {
   'String // Base_Types::String
 }
 
+object Transformers {
+
+  @datatype class CTX(requiresMissingType: B,
+                      hasErrors: B)
+
+  @datatype class MissingTypeRewriter extends ir.Transformer.PrePost[CTX] {
+
+    val missingType: ir.Component = ir.Component(
+      ir.Name(ISZ(), None()), // identifier
+      ir.ComponentCategory.Data, // category
+      Some(ir.Classifier(SlangUtil.MISSING_AADL_TYPE)), // classifier
+      ISZ(), // features
+      ISZ(), // subComponents
+      ISZ(), // connections
+      ISZ(), // connectionInstances
+      ISZ(), // properties
+      ISZ(), // flows
+      ISZ(), // modes
+      ISZ() // annexes
+    )
+
+    val missingArrayBaseType: ir.Property = ir.Property(
+      name = ir.Name(ISZ(Util.Prop_Data_Model__Base_Type), None()),
+      propertyValues = ISZ(ir.ClassifierProp(SlangUtil.MISSING_AADL_TYPE)),
+      appliesTo = ISZ())
+
+    val sporadicProp: ir.Property = ir.Property(
+      name = ir.Name(ISZ(Util.Prop_Thread_Properties__Dispatch_Protocol), None()),
+      propertyValues = ISZ(ir.ValueProp("Sporadic")),
+      appliesTo = ISZ())
+
+
+    override def postAadl(ctx: CTX, o: ir.Aadl): ir.Transformer.TPostResult[CTX, ir.Aadl] = {
+      if(ctx.requiresMissingType) {
+        ir.Transformer.TPostResult(ctx, Some(o(dataComponents = o.dataComponents :+ missingType)))
+      } else {
+        ir.Transformer.TPostResult(ctx, None[ir.Aadl]())
+      }
+    }
+
+    override def postComponent(ctx: CTX, o: ir.Component): ir.Transformer.TPostResult[CTX, ir.Component] = {
+
+      o.category match {
+        case ir.ComponentCategory.Data =>
+          if(o.classifier.isEmpty) {
+            Util.reporter.warn(None(), Util.toolName, s"Classifier not specified for ${Util.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE}")
+
+            ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(classifier = Some(ir.Classifier(SlangUtil.MISSING_AADL_TYPE)))))
+          }
+          /*else if (TypeUtil.isArrayDef(o) && TypeUtil.getArrayBaseType(o).isEmpty) {
+            Util.reporter.warn(None(), Util.toolName, s"Base type not specified for ${o.classifier.get.name}.  Substituting ${SlangUtil.MISSING_AADL_TYPE}")
+
+            ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(properties = o.properties :+ missingArrayBaseType)))
+          }*/
+          else {
+            ir.Transformer.TPostResult(ctx, None[ir.Component]())
+          }
+          /*
+        case ir.ComponentCategory.Thread =>
+          Util.getDiscreetPropertyValue(o.properties, Util.Prop_Thread_Properties__Dispatch_Protocol) match {
+            case Some(ir.ValueProp(x)) =>
+              if(x != "Periodic" && x != "Sporadic") {
+                Util.reporter.error(None(), Util.toolName, s"${o.classifier.get.name} has unsupported dispatch protocol ${x}.")
+
+                ir.Transformer.TPostResult(ctx(hasErrors = T), None[ir.Component]())
+              } else {
+                ir.Transformer.TPostResult(ctx, None[ir.Component]())
+              }
+            case _ =>
+              Util.reporter.warn(None(), Util.toolName, s"${Util.Prop_Thread_Properties__Dispatch_Protocol} not specified for thread ${o.classifier.get.name}.  Treating it as sporadic.")
+
+              ir.Transformer.TPostResult(ctx, Some(o(properties =  o.properties :+ sporadicProp)))
+          }
+          
+           */
+        case _ => ir.Transformer.TPostResult(ctx, None[ir.Component]())
+      }
+    }
+
+    override def postFeatureEnd(ctx: CTX, o: ir.FeatureEnd): ir.Transformer.TPostResult[CTX, ir.FeatureEnd] = {
+      if (Util.isDataPort(o) && o.classifier.isEmpty) {
+        Util.reporter.warn(None(), Util.toolName, s"No datatype specified for data port ${Util.getName(o.identifier)}.  Substituting ${SlangUtil.MISSING_AADL_TYPE} ")
+
+        ir.Transformer.TPostResult(ctx(requiresMissingType = T), Some(o(classifier = Some(ir.Classifier(SlangUtil.MISSING_AADL_TYPE)))))
+      } else {
+        ir.Transformer.TPostResult(ctx, None[ir.FeatureEnd]())
+      }
+    }
+  }
+}
+
+
 @datatype class ProjectDirectories(rootDir: String) {
   val src_main: ISZ[String] = ISZ("src", "main")
 
@@ -297,6 +391,10 @@ object TypeResolver {
 
   val srcMainDir: String = SlangUtil.pathAppend(rootDir, src_main)
 
+  val testDir: String = SlangUtil.pathAppend(srcDir, ISZ("test"))
+
+  val testBridgeDir: String = SlangUtil.pathAppend(testDir, ISZ("bridge"))
+  
   val binDir: String = SlangUtil.pathAppend(rootDir, ISZ("bin"))
 
   val architectureDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "architecture")
@@ -309,6 +407,7 @@ object TypeResolver {
 
   val nixDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "nix")
 }
+
 
 @datatype class Resource(path: String,
                          content: ST,

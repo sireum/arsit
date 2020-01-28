@@ -16,7 +16,8 @@ object Util {
 
   val Prop_Thread_Properties__Dispatch_Protocol: String = "Thread_Properties::Dispatch_Protocol"
   val Prop_Thread_Properties__Urgency: String = "Thread_Properties::Urgency"
-
+  val Prop_Thread_Properties__Dispatch_Trigger: String = "Thread_Properties::Dispatch_Trigger"
+  
   val Prop_Timing_Properties__Period: String = "Timing_Properties::Period"
 
   val Prop_Data_Model__Base_Type: String = "Data_Model::Base_Type"
@@ -51,6 +52,10 @@ object Util {
 
   def getLastName(s: Name): String = ISZOps(s.name).last
 
+  @pure def hasProperty(properties: ISZ[Property], propertyName: String): B = {
+    return properties.filter(p => getLastName(p.name) == propertyName).nonEmpty
+  }
+  
   @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String): Option[T] = {
     for (p <- properties if getLastName(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
@@ -68,7 +73,7 @@ object Util {
           case "Sporadic" => return Some(DispatchProtocol.Sporadic)
           case "Periodic" => return Some(DispatchProtocol.Periodic)
           case s =>
-            val name: Names = Util.getNamesFromClassifier(m.classifier.get, "")
+            val name: Names = Util.getComponentNames(m, "")
             halt(s"${s} dispatch protocol for ${name.componentImpl} is not currently supported")
         }
       case _ => None[DispatchProtocol.Type]()
@@ -83,7 +88,7 @@ object Util {
           DispatchProtocol.Periodic
         }
         else {
-          val name: Names = Util.getNamesFromClassifier(m.classifier.get, "")
+          val name: Names = Util.getComponentNames(m, "")
           halt(s"Dispatch Protocol for ${name.componentImpl} must be Periodic or Sporadic")
         }
     }
@@ -93,13 +98,6 @@ object Util {
       case Some(UnitProp(value, Some(org.sireum.String("ps")))) =>
         val v = value.toString.toDouble / 1e9
         s"${v.toLong}"
-        /*
-        assert(x.unit.get == org.sireum.String("ps"))
-        // convert picoseconds to milliseconds.  x.value was a double in osate
-        // ps, ns => ps * 1000, us => ns * 1000, ms => us * 1000
-        val v = x.value.toString.toDouble / 1e9
-        s"${v.toLong}"
-        */
       case Some(UnitProp(value, Some(org.sireum.String("ms")))) => s"${value.toString.toInt}"
       case _ => "1"
     }
@@ -154,7 +152,21 @@ object Util {
     }
   }
 
-
+  @pure def getDispatchTriggers(c: Component): Option[ISZ[String]] = {
+    if(!hasProperty(c.properties, Prop_Thread_Properties__Dispatch_Trigger)){
+      return None()
+    } else {
+      var ret: ISZ[String] = ISZ()
+      for (p <- getPropertyValues(c.properties, Prop_Thread_Properties__Dispatch_Trigger)) {
+        p match {
+          case ReferenceProp(v) => ret = ret :+ Util.getLastName(v)
+          case _ => halt(s"Unhandled ${p}")
+        }
+      }
+      return Some(ret)
+    }
+  }
+  
   @pure def getEnumValues(v: Component): ISZ[String] = {
     var ret: ISZ[String] = ISZ()
     if(isEnum(v.properties)) {
@@ -240,16 +252,39 @@ object Util {
   // replace '-' and '.' with '_'
   @pure def sanitizeName(s: String): String = s.toString.replaceAll("[\\-|\\.]", "_")
 
-  @pure def getNamesFromClassifier(c: Classifier, basePackage: String): Names = {
-    val a: Array[scala.Predef.String] = c.name.toString.split("::")
+  @pure def getComponentNames(c: Component, basePackage: String): Names = {
+    val a: Array[scala.Predef.String] = c.classifier.get.name.toString.split("::")
     assert(a.length == 2)
-    val compName = sanitizeName(a(1))
-    Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
+    val packageName = s"${basePackage}.${a(0)}"
+    val packagePath = s"${basePackage}/${a(0)}"
+    val componentName = sanitizeName(a(1))
+    val componentImplName = componentName + "_Impl"
+    val bridgeName = componentName + "_Bridge"
+
+    val instanceName = Util.getName(c.identifier)
+    val testName = instanceName + "_Test"
+
+    Names(packageName, packagePath, bridgeName, componentName, componentImplName, testName, instanceName)
   }
 
   @pure def getPackageName(value: String): String =
     value.toString.split("::").dropRight(1).mkString(".")
 
+  def getPorts(m: Component, types: AadlTypes, basePackage: String): ISZ[Port] = {
+    
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+    
+    var ports: ISZ[Port] = ISZ()
+    for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
+      val pType = Util.getFeatureEndType(f, types)
+      val portName = Util.getLastName(f.identifier)
+      val isTrigger = if (dispatchTriggers.isEmpty) T else {
+        dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
+      }
+      ports :+= Port(f, m, pType, basePackage, isTrigger)
+    }
+    return ports
+  }
 
   @pure def getFeatureEnds(is: ISZ[Feature]): ISZ[FeatureEnd] = is.withFilter(_.isInstanceOf[FeatureEnd]).map(_.asInstanceOf[FeatureEnd])
 
@@ -358,7 +393,7 @@ object TypeResolver {
   def processType(c: Component, basePackage: String): AadlType = {
     assert(c.category == ComponentCategory.Data)
     val cname = c.classifier.get.name
-    val names = Util.getNamesFromClassifier(c.classifier.get, basePackage)
+    val names = Util.getComponentNames(c, basePackage)
 
     val container = Some(c)
 
@@ -400,7 +435,9 @@ case class Names(packageName : String,
                  packagePath : String,
                  bridge: String,
                  component: String,
-                 componentImpl: String)
+                 componentImpl: String,
+                 testName: String,
+                 instanceName: String)
 
 case class DataTypeNames(typ: AadlType,
                          basePackage: String,
@@ -435,7 +472,8 @@ case class DataTypeNames(typ: AadlType,
   }
 }
 
-case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, basePackageName: String){
+case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, basePackageName: String,
+                dispatchTrigger: B){
 
   def name: String = Util.getLastName(feature.identifier)
   def path: String = Util.getName(feature.identifier)
@@ -445,8 +483,8 @@ case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, bas
 
   def portType: DataTypeNames = Util.getDataTypeNames(_portType, basePackageName)
 
-  def urgency: Z = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Thread_Properties__Urgency) match {
-    case Some(v) => v.value.toString.toDouble.toInt
-    case _ => 0
+  def urgency: Option[Z] = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Thread_Properties__Urgency) match {
+    case Some(v) => Some(v.value.toString.toDouble.toInt)
+    case _ => None()
   }
 }

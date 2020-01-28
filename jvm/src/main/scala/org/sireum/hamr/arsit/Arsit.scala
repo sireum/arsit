@@ -1,33 +1,38 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.ir.Aadl
+import org.sireum.hamr.ir
 import org.sireum.message._
 import org.sireum.hamr.arsit.Util.reporter
 
 object Arsit {
-  def run(m: Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
+  def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
     Util.reporter = reporter
     Util.verbose = o.verbose
     return runInternal(m, o)
   }
 
-  private def runInternal(m: Aadl, o: Cli.ArsitOption) : ArsitResult = {
+  private def runInternal(m: ir.Aadl, o: Cli.ArsitOption) : ArsitResult = {
+    var model = m
+    
     var resources: ISZ[Resource] = ISZ()
     var transpilerOptions: Option[CTranspilerOption] = None()
 
-    if(m.components.isEmpty) {
+    if(model.components.isEmpty) {
       reporter.error(None(), Util.toolName, "Model is empty")
       return ArsitResult(resources, 0, 0, transpilerOptions)
     }
 
-    val typeMap = TypeResolver.processDataTypes(m.dataComponents, o.packageName)
+    val result = ir.Transformer(Transformers.MissingTypeRewriter()).transformAadl(Transformers.CTX(F, F), model)
+    model = if(result.resultOpt.nonEmpty) result.resultOpt.get else model
+    
+    val typeMap = TypeResolver.processDataTypes(model.dataComponents, o.packageName)
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val nixPhase = ArtNixGen(projectDirectories, m, o, typeMap,
-      ArtStubGenerator(projectDirectories, m, o, typeMap,
-        ArtArchitectureGen(projectDirectories, m, o, typeMap)))
+    val nixPhase = ArtNixGen(projectDirectories, model, o, typeMap,
+      ArtStubGenerator(projectDirectories, model, o, typeMap,
+        ArtArchitectureGen(projectDirectories, model, o, typeMap)))
 
     var artResources: ISZ[Resource] = ISZ()
     if (o.embedArt) {

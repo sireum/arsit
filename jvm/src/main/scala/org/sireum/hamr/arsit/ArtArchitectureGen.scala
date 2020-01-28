@@ -107,9 +107,9 @@ class ArtArchitectureGen(directories: ProjectDirectories,
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
           if(Util.isThread(c) || arsitOptions.devicesAsThreads) {
-            val name = Util.getName(c.identifier)
-            bridges :+= genThread(c, name)
-            components :+= name
+            val names = Util.getComponentNames(c, basePackage)
+            bridges :+= genThread(c, names)
+            components :+= names.instanceName
           }
         case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
@@ -130,9 +130,9 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      val varName = Util.getName(c.identifier)
-      bridges :+= genThread(c, varName)
-      components :+= varName
+      val names = Util.getComponentNames(c, basePackage)
+      bridges :+= genThread(c, names)
+      components :+= names.instanceName
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
@@ -142,13 +142,10 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     }
   }
 
-  def genThread(m:Component, varName: String) : ST = {
+  def genThread(m:Component, names: Names) : ST = {
     assert(Util.isThread(m) || Util.isDevice(m))
     assert(m.connections.isEmpty)
-    //assert(m.subComponents.isEmpty)
-
-    val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
-
+    
     val id = getComponentId(m)
 
     val period: String = Util.getPeriod(m)
@@ -162,15 +159,15 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       }
     }
 
-    var ports: ISZ[ST] = ISZ()
-    for (f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
-      val typ = Util.getFeatureEndType(f, types)
-      ports :+= genPort(Port(f, m, typ, basePackage))
-    }
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
 
-    val bridgeTypeName: String =  s"${name.packageName}.${name.bridge}"
+    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage)
 
-    return Template.bridge(varName, bridgeTypeName, id, dispatchProtocolST, ports)
+    val bridgeTypeName: String =  s"${names.packageName}.${names.bridge}"
+
+    val _dispatchTriggers: ST = if(dispatchTriggers.isEmpty) st"None()" else st"Some(ISZ(${(dispatchTriggers.get.map(f => s"${f}.id"), ", ")}))"
+    
+    return Template.bridge(names.instanceName, bridgeTypeName, id, dispatchProtocolST, _dispatchTriggers, ports)
   }
 
   def genPort(port: Port) : ST = {
@@ -190,7 +187,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       case _ => "???"
     })
 
-    return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode)
+    return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode, port.urgency)
   }
 
   def emitType(t: AadlType): Unit = {
@@ -275,7 +272,11 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       return F
     }
 
-    val allowedComponents = Seq(ComponentCategory.Device, ComponentCategory.Thread)
+    val allowedComponents = {
+      if(arsitOptions.devicesAsThreads) Seq(ComponentCategory.Device, ComponentCategory.Thread)
+      else Seq(ComponentCategory.Thread)
+    }
+    
     val catSrc = componentMap.get(Util.getName(c.src.component)).get.category
     val catDest = componentMap.get(Util.getName(c.dst.component)).get.category
 
@@ -308,22 +309,34 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                    typ: String,
                    id: Z,
                    identifier: String,
-                   mode: String): ST = {
-      return st"""$name = Port[$typ] (id = $id, name = "$identifier", mode = $mode)"""
+                   mode: String,
+                   urgency: Option[Z]): ST = {
+      val artPortType = if(urgency.nonEmpty) "UrgentPort" else "Port"
+      val _urgency = if(urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
+      return st"""val $name = ${artPortType}[$typ] (id = $id, name = "$identifier", mode = $mode${_urgency})"""
     }
 
     @pure def bridge(varName: String,
                      typeName: String,
                      id: Z,
                      dispatchProtocol: ST,
-                     ports: ISZ[ST]) : ST = {
-      return st"""val ${varName} : ${typeName} = ${typeName}(
-                  |  id = $id,
-                  |  name = "$varName",
-                  |  dispatchProtocol = $dispatchProtocol,
-                  |
-                  |  ${(ports, ",\n")}
-                  |)"""
+                     dispatchTriggers: ST,
+                     ports: ISZ[Port]) : ST = {
+      val _ports = ports.map(p => genPort(p))
+      val _args = ports.map(p => st"${p.name} = ${p.name}")
+      
+      return st"""val ${varName} : ${typeName} = {
+                  |  ${(_ports, "\n")}
+                  |  
+                  |  ${typeName}(
+                  |    id = $id,
+                  |    name = "$varName",
+                  |    dispatchProtocol = $dispatchProtocol,
+                  |    dispatchTriggers = ${dispatchTriggers},
+                  |    
+                  |    ${(_args, ",\n")}
+                  |  )
+                  |}"""
     }
 
     @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""

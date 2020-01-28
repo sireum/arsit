@@ -118,7 +118,7 @@ class ArtNixGen(dirs: ProjectDirectories,
 
     for ((archVarName, m) <- components) {
 
-      val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+      val name: Names = Util.getComponentNames(m, basePackage)
 
       val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
 
@@ -152,11 +152,19 @@ class ArtNixGen(dirs: ProjectDirectories,
       if(portSize > maxPortsForComponents) {
         maxPortsForComponents = portSize
       }
+
+      val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
       
       for (p <- featureEnds if Util.isInFeature(p)) {
         assert (Util.isPort(p))
-        val _portType = Util.getFeatureEndType(p, types)
-        val port = Port(p, m, _portType, basePackage)
+        val _portType = Util.getFeatureEndType(p, types)     
+
+        val portName = Util.getLastName(p.identifier)
+        val isTrigger = if(dispatchTriggers.isEmpty) T else {
+          dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
+        }
+        val port = Port(p, m, _portType, basePackage, isTrigger)
+
         val portIdName: String = port.name + "PortId"
         val portOptName: String = port.name + "Opt"
         val portType: String = port.portType.qualifiedReferencedTypeName
@@ -212,7 +220,7 @@ class ArtNixGen(dirs: ProjectDirectories,
       if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
         val dstPath = Util.getName(c.dst.feature.get)
         val dstArchPortInstanceName = s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature.get)}"
-        val name: Names = Util.getNamesFromClassifier(dstComp.classifier.get, basePackage)
+        val name: Names = Util.getComponentNames(dstComp, basePackage)
 
         val srcArchPortInstanceName =
           s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature.get)}"
@@ -299,7 +307,7 @@ class ArtNixGen(dirs: ProjectDirectories,
 
     val excludes:ISZ[String] = if(arsitOptions.excludeImpl) {
       for ((archVarName, m) <- components) yield {
-        val name: Names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+        val name: Names = Util.getComponentNames(m, basePackage)
         s"${name.packageName}.${name.componentImpl}"
       }
     } else {
@@ -330,7 +338,7 @@ class ArtNixGen(dirs: ProjectDirectories,
     val customSequenceSizes: ISZ[String] = ISZ(
       s"MS[org.sireum.Z,art.Bridge]=${numComponents}",
       s"MS[org.sireum.Z,org.sireum.MOption[art.Bridge]]=${numComponents}",      
-      s"IS[org.sireum.Z,art.UPort]=${numComponents}",
+      s"IS[org.sireum.Z,art.UPort]=${maxPortsForComponents}",
       s"IS[org.sireum.Z,art.UConnection]=${numConnections}"
       
       // not valid
@@ -532,9 +540,16 @@ class ArtNixGen(dirs: ProjectDirectories,
       val isSharedMemory = arsitOptions.ipc == Cli.IpcMechanism.SharedMemory
       def portId(p: Port) = s"${p.name}PortId"
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
+      
+      val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
       val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(f => {
         val pType = Util.getFeatureEndType(f, types)
-        Port(f, component, pType, basePackage)
+
+        val portName = Util.getLastName(f.identifier)
+        val isTrigger = if(dispatchTriggers.isEmpty) T else {
+          dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
+        }
+        Port(f, component, pType, basePackage, isTrigger)
       })
 
       var globals: ISZ[ST] = ISZ(st"""val entryPoints: Bridge.EntryPoints = Arch.${bridge}.entryPoints

@@ -77,24 +77,25 @@ class ArtStubGenerator(dirs: ProjectDirectories,
   def genThread(m: Component) : Unit = {
     assert(Util.isDevice(m) || Util.isThread(m))
 
-    val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+    val names = Util.getComponentNames(m, basePackage)
     val filename: String = SlangUtil.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
+
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+
+    val componentName = "component"
+    var ports: ISZ[Port] = Util.getPorts(m, types, basePackage)
+
+    val bridgeTestSuite: ST = Template.bridgeTestSuite(basePackage, names, ports)
+    addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
 
     if(seenComponents.contains(filename)) {
       return
     }
 
-    val componentName = "component"
-    var ports: ISZ[Port] = ISZ()
-
-    for(f <- Util.getFeatureEnds(m.features) if Util.isPort(f)) {
-      val pType = Util.getFeatureEndType(f, types)
-      ports :+= Port(f, m, pType, basePackage)
-    }
-
     val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
 
-    val bridge = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, componentName, names.component, names.componentImpl, ports)
+    val bridge = Template.bridge(basePackage, names.packageName, names.bridge, dispatchProtocol, 
+                                 componentName, names.component, names.componentImpl, ports, dispatchTriggers)
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
     if(!arsitOptions.bless) {
@@ -109,8 +110,12 @@ class ArtStubGenerator(dirs: ProjectDirectories,
         case _ => ISZ(block)
       })
 
-    //Util.writeFile(new File(outDir, filename), ci, F)
     addResource(filename, ISZ(), componentImpl, F)
+
+    var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
+    testSuite = ops.StringOps(testSuite).replaceAllLiterally("__PACKAGE_NAME__", names.packageName)
+    testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
+    addResource(dirs.testBridgeDir, ISZ(names.packagePath, "BridgeTestSuite.scala"), st"${testSuite}", T)
 
     seenComponents = seenComponents + filename
   }
@@ -135,7 +140,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
     })
 
     if (subprograms.nonEmpty) {
-      val names = Util.getNamesFromClassifier(m.classifier.get, basePackage)
+      val names = Util.getComponentNames(m, basePackage)
       val objectName = s"${names.component}_subprograms"
 
       val body = Template.slangBody("@ext ", objectName, subprograms.map(_._1))
@@ -157,6 +162,76 @@ class ArtStubGenerator(dirs: ProjectDirectories,
 
   // @formatter:off
   object Template {
+    @pure def bridgeTestSuite(basePackage: String,
+                              names: Names, ports: ISZ[Port]): ST = {
+
+      val inDataPorts = ports.filter(p => Util.isInFeature(p.feature) && p.feature.category != FeatureCategory.EventPort)
+      val inEventPorts = ports.filter(p => Util.isInFeature(p.feature) && p.feature.category == FeatureCategory.EventPort)
+
+      val outDataPorts = ports.filter(p => Util.isOutFeature(p.feature) && p.feature.category != FeatureCategory.EventPort)
+      val outEventPorts = ports.filter(p => Util.isOutFeature(p.feature) && p.feature.category == FeatureCategory.EventPort)
+      
+      var portHelperFunctions = ISZ[ST]()
+      
+      portHelperFunctions = inDataPorts.map(p => {
+        val ptype = p.feature.category
+        
+        st"""// in ${ptype}
+            |def put_${p.name}(value: ${p.portType.qualifiedTypeName}): Unit = {
+            |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, ${p.portType.qualifiedPayloadName}(value))
+            |}
+            |"""
+      })
+      
+      portHelperFunctions = portHelperFunctions ++ inEventPorts.map(p => {
+        val ptype = p.feature.category
+
+        st"""// in ${ptype}
+            |def put_${p.name}(): Unit = {
+            |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, Empty())
+            |}
+            |"""
+      })
+
+      portHelperFunctions = portHelperFunctions ++ outEventPorts.map(p => {
+        val ptype = p.feature.category
+        
+        st"""// out ${ptype}
+            |def get_${p.name}(): Option[Empty] = {
+            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[Empty]]
+            |}
+            |"""
+      })
+
+      portHelperFunctions = portHelperFunctions ++ outDataPorts.map(p => {
+        val ptype = p.feature.category
+        st"""// out ${ptype}
+            |def get_${p.name}(): Option[${p.portType.qualifiedPayloadName}] = {
+            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[${p.portType.qualifiedPayloadName}]]
+            |}
+            |"""
+      })
+
+      st"""package ${names.packageName}
+          |
+          |import art.{ArtNative_Ext, Empty}
+          |import ${basePackage}._
+          |import org.sireum._
+          |
+          |class ${names.testName} extends BridgeTestSuite[${names.bridge}](Arch.${names.instanceName}) {
+          |  test("Example Unit Test"){
+          |    executeTest()
+          |  }
+          |  
+          |  //////////////////////
+          |  // HELPER FUNCTIONS //
+          |  //////////////////////
+          |    
+          |  ${(portHelperFunctions, "\n")}
+          |}
+          |"""
+    }
+
     @pure def bridge(topLevelPackageName: String,
                      packageName : String,
                      bridgeName : String,
@@ -164,7 +239,8 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                      componentName : String,
                      componentType : String,
                      componentImplType : String,
-                     ports : ISZ[Port]) : ST = {
+                     ports : ISZ[Port],
+                     dispatchTriggers: Option[ISZ[String]]) : ST = {
 
       val entryPoints = EntryPoints.elements.filter(f => f != EntryPoints.compute).map(m => {
         var body = st"${componentName}.${m.string}()"
@@ -178,6 +254,11 @@ class ArtStubGenerator(dirs: ProjectDirectories,
             |}"""
       })
 
+      val portParams = ports.map(p => {
+        val artPortType = if(p.urgency.nonEmpty) "UrgentPort" else "Port"
+        s"${p.name}: ${artPortType}[${p.portType.qualifiedReferencedTypeName}]"
+      })
+      
       return st"""// #Sireum
                   |
                   |package $packageName
@@ -192,8 +273,9 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |  val id: Art.BridgeId,
                   |  val name: String,
                   |  val dispatchProtocol: DispatchPropertyProtocol,
-                  |
-                  |  ${(ports.map(p => s"${p.name}: Port[${p.portType.qualifiedReferencedTypeName}]"), ",\n")}
+                  |  val dispatchTriggers: Option[ISZ[Art.PortId]],
+                  |  
+                  |  ${(portParams, ",\n")}
                   |  ) extends Bridge {
                   |
                   |  val ports : Bridge.Ports = Bridge.Ports(
@@ -217,14 +299,18 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |      id,
                   |      ${(ports.map(p => s"${p.name}.id"), ",\n")}
                   |    )
-                  |
+                  |  
+                  |  val component: ${componentImplType} = ${componentImplType}(api)
+                  |  
                   |  val entryPoints : Bridge.EntryPoints =
                   |    ${bridgeName}.EntryPoints(
                   |      id,
                   |
                   |      ${(ports.map(p => s"${p.name}.id"), ",\n")},
                   |
-                  |      ${componentImplType}(api)
+                  |      dispatchTriggers,
+                  |      
+                  |      component
                   |    )
                   |}
                   |
@@ -256,6 +342,8 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |
                   |    ${(ports.map(p => s"${addId(p.name)} : Art.PortId"), ",\n")},
                   |
+                  |    dispatchTriggers : Option[ISZ[Art.PortId]],
+                  |    
                   |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
                   |
                   |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${
@@ -269,11 +357,16 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |
                   |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${
                          (ports.filter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
-                  |
+                  |    
                   |    def compute(): Unit = {
-                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol)}
+                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol, F)}
                   |    }
                   |
+                  |    override
+                  |    def testCompute(): Unit = {
+                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol, T)}
+                  |    }
+                  |    
                   |    ${(entryPoints, "\n\n")}
                   |  }
                   |}"""
@@ -282,14 +375,26 @@ class ArtStubGenerator(dirs: ProjectDirectories,
     @pure def computeBody(bridgeName: String,
                           componentName: String,
                           ports: ISZ[Port],
-                          dispatchProtocol: DispatchProtocol.Type) : ST = {
+                          dispatchProtocol: DispatchProtocol.Type,
+                          isTesting: B) : ST = {
+      val sendOutputName = if(isTesting) "releaseOutput" else "sendOutput"
+      
       if(!arsitOptions.bless) {
         dispatchProtocol match {
           case DispatchProtocol.Sporadic =>
-            return st"""val EventTriggered(portIds) = Art.dispatchStatus(${bridgeName})
+            return st"""// fetch received events ordered by highest urgency then earliest arrival-time
+                       |val EventTriggered(receivedEvents) = Art.dispatchStatus(${bridgeName})
+                       |
+                       |// removing non-dispatching event ports
+                       |val dispatchableEventPorts: ISZ[Art.PortId] = 
+                       |  if(dispatchTriggers.isEmpty) receivedEvents 
+                       |  else receivedEvents.filter(p => ops.ISZOps(dispatchTriggers.get).contains(p))
+                       |
+                       |// only a single event can be handled per dispatch.  The remaining events
+                       |// should not be available 
                        |Art.receiveInput(eventInPortIds, dataInPortIds)
                        |
-                       |for(portId <- portIds) {
+                       |for(portId <- dispatchableEventPorts) {
                        |  ${var s = ""
                             for (p <- ports if Util.isEventPort(p.feature) && Util.isInFeature(p.feature))
                               s += "\n" + Template.portCase(componentName, p, s == "").render
@@ -297,16 +402,16 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                           }
                        |}
                        |
-                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+                       |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
           case DispatchProtocol.Periodic =>
             return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
                        |${componentName}.timeTriggered()
-                       |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+                       |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
         }
       } else {
         return st"""Art.receiveInput(eventInPortIds, dataInPortIds)
                    |${componentName}.Compute_Entrypoint()
-                   |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+                   |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
       }
     }
 
@@ -472,7 +577,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                 |  // example override of timeTriggered
                 |}""")
       } else {
-        ports.filter(p => Util.isInFeature(p.feature)).map(m => portCaseMethod(m, T))
+        ports.filter(p => Util.isInFeature(p.feature) && Util.isEventPort(p.feature)).map(m => portCaseMethod(m, T))
       }
 
       return st"""// the contents of this file will not be overwritten
