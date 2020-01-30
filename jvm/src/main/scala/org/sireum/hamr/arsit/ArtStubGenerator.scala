@@ -164,50 +164,26 @@ class ArtStubGenerator(dirs: ProjectDirectories,
   object Template {
     @pure def bridgeTestSuite(basePackage: String,
                               names: Names, ports: ISZ[Port]): ST = {
-
-      val inDataPorts = ports.filter(p => Util.isInFeature(p.feature) && p.feature.category != FeatureCategory.EventPort)
-      val inEventPorts = ports.filter(p => Util.isInFeature(p.feature) && p.feature.category == FeatureCategory.EventPort)
-
-      val outDataPorts = ports.filter(p => Util.isOutFeature(p.feature) && p.feature.category != FeatureCategory.EventPort)
-      val outEventPorts = ports.filter(p => Util.isOutFeature(p.feature) && p.feature.category == FeatureCategory.EventPort)
       
       var portHelperFunctions = ISZ[ST]()
       
-      portHelperFunctions = inDataPorts.map(p => {
-        val ptype = p.feature.category
+      portHelperFunctions = portHelperFunctions ++ ports.filter(p => Util.isInFeature(p.feature)).map(p => {
+        val (param, arg): (ST, ST) = 
+          if(p.feature.category == FeatureCategory.EventPort) { (st"", st"Empty()") }
+          else { (st"value : ${p.portType.qualifiedTypeName}", st"${p.portType.qualifiedPayloadName}(value)") }
         
-        st"""// in ${ptype}
-            |def put_${p.name}(value: ${p.portType.qualifiedTypeName}): Unit = {
-            |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, ${p.portType.qualifiedPayloadName}(value))
-            |}
-            |"""
-      })
-      
-      portHelperFunctions = portHelperFunctions ++ inEventPorts.map(p => {
-        val ptype = p.feature.category
-
-        st"""// in ${ptype}
-            |def put_${p.name}(): Unit = {
-            |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, Empty())
+        st"""// setter for in ${p.feature.category}
+            |def put_${p.name}(${param}): Unit = {
+            |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, ${arg})
             |}
             |"""
       })
 
-      portHelperFunctions = portHelperFunctions ++ outEventPorts.map(p => {
-        val ptype = p.feature.category
-        
-        st"""// out ${ptype}
-            |def get_${p.name}(): Option[Empty] = {
-            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[Empty]]
-            |}
-            |"""
-      })
-
-      portHelperFunctions = portHelperFunctions ++ outDataPorts.map(p => {
-        val ptype = p.feature.category
-        st"""// out ${ptype}
-            |def get_${p.name}(): Option[${p.portType.qualifiedPayloadName}] = {
-            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[${p.portType.qualifiedPayloadName}]]
+      portHelperFunctions = portHelperFunctions ++ ports.filter(p => Util.isOutFeature(p.feature)).map(p => {
+        val payloadType = if(p.feature.category == FeatureCategory.EventPort) st"Empty" else p.portType.qualifiedPayloadName
+        st"""// getter for out ${p.feature.category}
+            |def get_${p.name}(): Option[${payloadType}] = {
+            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[${payloadType}]]
             |}
             |"""
       })
@@ -218,6 +194,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
           |import ${basePackage}._
           |import org.sireum._
           |
+          |${Util.safeToEditComment()}
           |class ${names.testName} extends BridgeTestSuite[${names.bridge}](Arch.${names.instanceName}) {
           |  test("Example Unit Test"){
           |    executeTest()
@@ -228,6 +205,9 @@ class ArtStubGenerator(dirs: ProjectDirectories,
           |  //////////////////////
           |    
           |  ${(portHelperFunctions, "\n")}
+          |  def getComponent(): ${names.componentImpl} = {
+          |    return bridge.entryPoints.asInstanceOf[${names.bridge}.EntryPoints].component
+          |  }
           |}
           |"""
     }
@@ -299,9 +279,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |      id,
                   |      ${(ports.map(p => s"${p.name}.id"), ",\n")}
                   |    )
-                  |  
-                  |  val component: ${componentImplType} = ${componentImplType}(api)
-                  |  
+                  |
                   |  val entryPoints : Bridge.EntryPoints =
                   |    ${bridgeName}.EntryPoints(
                   |      id,
@@ -310,7 +288,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                   |
                   |      dispatchTriggers,
                   |      
-                  |      component
+                  |      ${componentImplType}(api)
                   |    )
                   |}
                   |
@@ -578,7 +556,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
         ports.filter(p => Util.isInFeature(p.feature) && Util.isEventPort(p.feature)).map(m => portCaseMethod(m, T))
       }
 
-      return st"""// the contents of this file will not be overwritten
+      return st"""${Util.safeToEditComment()}
                  |@record class $componentImplType (val api : ${bridgeName}.Api) ${if(arsitOptions.bless) "" else s"extends ${componentType}"} {
                  |
                  |  ${init}

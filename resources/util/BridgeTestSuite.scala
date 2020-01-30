@@ -18,6 +18,9 @@ import org.scalatest.funsuite.AnyFunSuite
  * @param bridge the bridge being tested, see [[__BASE_PACKAGE_NAME__.Arch]] for potential values.
  * @tparam T the type of the bridge being tested
  */
+
+// This file was auto-generated.  Do no edit
+
 class BridgeTestSuite[+T <: Bridge](val bridge: T) extends AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach {
 
   /**
@@ -31,7 +34,7 @@ class BridgeTestSuite[+T <: Bridge](val bridge: T) extends AnyFunSuite with OneI
    * Automatically called after each test. Currently calls Art.finalizeTest for the given bridge. Override as needed.
    */
   override protected def afterEach(): Unit = {
-    Art.finalizeTest()
+    Art.finalizeTest(bridge)
   }
 
   /**
@@ -44,6 +47,6 @@ class BridgeTestSuite[+T <: Bridge](val bridge: T) extends AnyFunSuite with OneI
    */
   def executeTest(): Unit = {
     Art.manuallyClearOutput()
-    Art.executeTest()
+    Art.executeTest(bridge)
   }
 }

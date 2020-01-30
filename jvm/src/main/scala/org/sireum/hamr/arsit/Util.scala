@@ -312,6 +312,10 @@ object Util {
     s"// This file was auto-generated${_from}.  Do not edit"
   }
 
+  @pure def safeToEditComment(): String = {
+    "// the contents of this file will not be overwritten"
+  }
+  
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
     for((p, c) <- Library.getFiles if p.native.contains("art")) {
