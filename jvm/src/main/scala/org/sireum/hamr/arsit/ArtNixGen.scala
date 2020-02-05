@@ -336,10 +336,10 @@ class ArtNixGen(dirs: ProjectDirectories,
     val numComponents: Z = previousPhase.maxComponent
     
     val customSequenceSizes: ISZ[String] = ISZ(
-      s"MS[org.sireum.Z,art.Bridge]=${numComponents}",
-      s"MS[org.sireum.Z,org.sireum.MOption[art.Bridge]]=${numComponents}",      
-      s"IS[org.sireum.Z,art.UPort]=${maxPortsForComponents}",
-      s"IS[org.sireum.Z,art.UConnection]=${numConnections}"
+      s"MS[Z,art.Bridge]=${numComponents}",
+      s"MS[Z,MOption[art.Bridge]]=${numComponents}",      
+      s"IS[Z,art.UPort]=${maxPortsForComponents}",
+      s"IS[Z,art.UConnection]=${numConnections}"
       
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"

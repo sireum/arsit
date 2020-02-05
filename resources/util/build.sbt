@@ -10,7 +10,7 @@ val scalaVer = "2.12.10"
 
 val sireumScalacVersion = "4.20191127.dd7cc5c"
 
-val runtimeVersion = "edfe6c2"
+val runtimeVersion = "ec7fd14"
 
 val commonSettings = Seq(
   organization := "org.sireum",

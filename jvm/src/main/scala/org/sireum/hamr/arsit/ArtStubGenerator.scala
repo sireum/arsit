@@ -170,7 +170,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       portHelperFunctions = portHelperFunctions ++ ports.filter(p => Util.isInFeature(p.feature)).map(p => {
         val (param, arg): (ST, ST) = 
           if(p.feature.category == FeatureCategory.EventPort) { (st"", st"Empty()") }
-          else { (st"value : ${p.portType.qualifiedTypeName}", st"${p.portType.qualifiedPayloadName}(value)") }
+          else { (st"value : ${p.portType.qualifiedReferencedTypeName}", st"${p.portType.qualifiedPayloadName}(value)") }
         
         st"""// setter for in ${p.feature.category}
             |def put_${p.name}(${param}): Unit = {
@@ -363,10 +363,13 @@ class ArtStubGenerator(dirs: ProjectDirectories,
             return st"""// fetch received events ordered by highest urgency then earliest arrival-time
                        |val EventTriggered(receivedEvents) = Art.dispatchStatus(${bridgeName})
                        |
+                       |// TODO: transpiler workaround
+                       |val dispatchableEventPorts: ISZ[Art.PortId] = receivedEvents
+                       |
                        |// remove non-dispatching event ports
-                       |val dispatchableEventPorts: ISZ[Art.PortId] = 
-                       |  if(dispatchTriggers.isEmpty) receivedEvents 
-                       |  else receivedEvents.filter(p => ops.ISZOps(dispatchTriggers.get).contains(p))
+                       |//val dispatchableEventPorts: ISZ[Art.PortId] = 
+                       |//  if(dispatchTriggers.isEmpty) receivedEvents 
+                       |//  else receivedEvents.filter(p => ops.ISZOps(dispatchTriggers.get).contains(p))
                        |
                        |Art.receiveInput(eventInPortIds, dataInPortIds)
                        |

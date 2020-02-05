@@ -172,7 +172,8 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
   def genPort(port: Port) : ST = {
     val id = getPortId()
-
+    port.portId = id
+    
     import FeatureCategory._
     val prefix = port.feature.category match {
       case EventPort | EventDataPort => "Event"
@@ -235,7 +236,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
         val flds = ISZ(st"value : ISZ[${baseTypeNames.qualifiedReferencedTypeName}]")
 
         val optChecks: Option[ST] = if(dims.nonEmpty) {
-          Some(st"{ assert (value.size == ${dims(0)}) }")
+          Some(st"//{  assert (value.size == ${dims(0)}) }")
         } else {
           None[ST]()
         }

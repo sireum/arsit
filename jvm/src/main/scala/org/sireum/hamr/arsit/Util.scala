@@ -319,24 +319,30 @@ object Util {
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
     for((p, c) <- Library.getFiles if p.native.contains("art")) {
-      /*
-      val _c = if(p.native.contains("Art.scala")) {
-        val out = new StringBuilder()
-        c.native.split("\n").map(s =>
-          out.append(
-            if(s.contains("val maxComponents")) {
-              s"  val maxComponents: BridgeId = $maxComponent"
-            } else if (s.contains("val maxPorts:")) {
-              s"  val maxPorts: PortId = $maxPort"
-            } else {
-              s
+      val _c = 
+        if(p.native.contains("Art.scala")) {
+          val out = new StringBuilder()
+          c.native.split("\n").map(s =>
+            out.append({
+              if (s.contains("val maxComponents")) {
+                s"  val maxComponents: BridgeId = $maxComponent"
+              } else if (s.contains("val maxPorts:")) {
+                s"  val maxPorts: PortId = $maxPort"
+              } else if (s.contains("ArtNative.logInfo(logTitle")) {
+                val pos = s.indexOf("ArtNative.logInfo")
+                val first = s.substring(0, pos)
+                val last = s.substring(pos)
+                s"${first}//${last}"                
+              } else {
+                s
+              }
             }).append("\n"))
-        out.toString()
-      } else {
-        c
-      }
-     */
-      resources = resources :+ SlangUtil.createResource(outputDir, ISZ(p), st"${c}", T)
+          out.toString()
+        } else {
+          c
+        }
+      
+      resources = resources :+ SlangUtil.createResource(outputDir, ISZ(p), st"${_c}", T)
     }
     return resources
   }
@@ -477,9 +483,12 @@ case class DataTypeNames(typ: AadlType,
 }
 
 case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, basePackageName: String,
-                dispatchTrigger: B){
+                dispatchTrigger: B,
+                var portId: Z = -1){
 
   def name: String = Util.getLastName(feature.identifier)
+  def nameWithPortId: String = s"${name}_${portId}"
+  
   def path: String = Util.getName(feature.identifier)
 
   def parentName: String = Util.getLastName(parent.identifier)
