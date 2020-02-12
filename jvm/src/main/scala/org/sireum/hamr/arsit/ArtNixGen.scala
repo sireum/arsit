@@ -751,8 +751,8 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |
                  |  val maxPortIds: Art.PortId = IPCPorts.Main + 1
                  |  val timeTriggered: TimeTriggered = TimeTriggered()
-                 |  val data: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, None())
                  |  val noData: Option[DataContent] = None()
+                 |  val data: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
                  |  val connection: MS[Art.PortId, ISZ[(Art.PortId, Art.PortId)]] = {
                  |    val r = MS.create[Art.PortId, ISZ[(Art.PortId, Art.PortId)]](maxPortIds, ISZ())
                  |
@@ -763,8 +763,8 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |  val eventInPorts: MS[Z, Art.PortId] = MSZ(
                  |    ${(eventInPorts, ",\n")}
                  |  )
-                 |  var frozen: MS[Art.PortId, Option[DataContent]] = MS()
-                 |  var outgoing: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, None())
+                 |  var frozen: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
+                 |  var outgoing: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
                  |  var isTimeDispatch: B = F
                  |
                  |  def updateData(port: Art.PortId, d: DataContent): Unit = {
