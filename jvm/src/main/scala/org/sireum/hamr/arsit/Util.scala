@@ -328,12 +328,14 @@ object Util {
                 s"  val maxComponents: BridgeId = $maxComponent"
               } else if (s.contains("val maxPorts:")) {
                 s"  val maxPorts: PortId = $maxPort"
-              } else if (s.contains("ArtNative.logInfo(logTitle")) {
+              } /* 
+              else if (s.contains("ArtNative.logInfo(logTitle")) {
                 val pos = s.indexOf("ArtNative.logInfo")
                 val first = s.substring(0, pos)
                 val last = s.substring(pos)
                 s"${first}//${last}"                
-              } else {
+              } */
+              else {
                 s
               }
             }).append("\n"))
@@ -366,8 +368,6 @@ object Util {
 
 object TypeResolver {
 
-  var typeMap: Map[String, AadlType] = Map.empty
-
   def getSlangType(s: String): SlangType.Type = {
     val t: SlangType.Type = s match {
       case org.sireum.String("Boolean") => SlangType.B
@@ -394,13 +394,15 @@ object TypeResolver {
   }
 
   def processDataTypes(values: ISZ[Component], basePackage: String): AadlTypes = {
+    var typeMap: Map[String, AadlType] = Map.empty
+    
     for (v <- values) {
-      typeMap = typeMap + (v.classifier.get.name ~> processType(v, basePackage))
+      typeMap = typeMap + (v.classifier.get.name ~> processType(v, basePackage, typeMap))
     }
     return AadlTypes(typeMap)
   }
 
-  def processType(c: Component, basePackage: String): AadlType = {
+  def processType(c: Component, basePackage: String, typeMap: Map[String, AadlType]): AadlType = {
     assert(c.category == ComponentCategory.Data)
     val cname = c.classifier.get.name
     val names = Util.getComponentNames(c, basePackage)
@@ -430,7 +432,7 @@ object TypeResolver {
 
       for(sc <- c.subComponents){
         val fieldName = Util.getLastName(sc.identifier)
-        fields = fields + (fieldName ~> processType(sc, basePackage))
+        fields = fields + (fieldName ~> processType(sc, basePackage, typeMap))
       }
 
       return RecordType(cname, container, fields)
