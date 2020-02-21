@@ -180,10 +180,26 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       })
 
       portHelperFunctions = portHelperFunctions ++ ports.filter(p => Util.isOutFeature(p.feature)).map(p => {
-        val payloadType = if(p.feature.category == FeatureCategory.EventPort) st"Empty" else p.portType.qualifiedPayloadName
+        val isEvent = p.feature.category == FeatureCategory.EventPort
+        val typeName = p.portType.qualifiedReferencedTypeName
+        val payloadType = if(isEvent) st"Empty" else p.portType.qualifiedPayloadName
+        val _match = if(isEvent) st"Empty()" else st"${payloadType}(v)"
+        val value = if(isEvent) st"Empty()" else st"v"
+        val payloadMethodName = s"get_${p.name}_payload()"
+        
         st"""// getter for out ${p.feature.category}
-            |def get_${p.name}(): Option[${payloadType}] = {
-            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${p.name}_Id).asInstanceOf[Option[${payloadType}]]
+            |def get_${p.name}(): Option[${typeName}] = {
+            |  val value: Option[${typeName}] = ${payloadMethodName} match {
+            |    case Some(${_match}) => Some(${value})
+            |    case Some(v) => fail(s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}") 
+            |    case _ => None[${typeName}]()
+            |  }
+            |  return value
+            |}
+            |            
+            |// payload getter for out ${p.feature.category}
+            |def ${payloadMethodName}: Option[${payloadType}] = {
+            |  return ArtNative_Ext.observeOutPortValue(bridge.api.${addId(p.name)}).asInstanceOf[Option[${payloadType}]]
             |}
             |"""
       })
@@ -445,10 +461,16 @@ class ArtStubGenerator(dirs: ProjectDirectories,
     }
 
     @pure def getterApi(p: Port): ST = {
+      val isEvent = p.feature.category == FeatureCategory.EventPort
       val typeName = p.portType.qualifiedReferencedTypeName
+      val payloadType = if(isEvent) st"Empty" else p.portType.qualifiedPayloadName
+      val _match = if(isEvent) st"Empty()" else st"${payloadType}(v)"
+      val value = if(isEvent) st"Empty()" else st"v"
+      
       return st"""def get${p.name}() : Option[${typeName}] = {
                  |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
-                 |    case Some(${typeName.toString.replace(".Type", "")}${if (Util.isEmptyType(p.portType)) "()) => Some(art.Empty())" else "_Payload(v)) => Some(v)"}
+                 |    case Some(${_match}) => Some(${value})
+                 |    case Some(v) => halt(s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}") 
                  |    case _ => None[${typeName}]()
                  |  }
                  |  return value
