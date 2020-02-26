@@ -163,7 +163,6 @@ object Cli {
 
   def getArtVersion(): String = $
   def getRuntimeVersion(): String = $
-  def getSireumVersion(): String = $
   def getSireumScalacVersionVersion(): String = $
   def getScalaVersion(): String = $
   def getScalaTestVersion(): String = $      

@@ -476,6 +476,12 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |    val anyPortOpt: Option[art.Art.PortId] = None()
                  |    ${(portIds, "\n")}
                  |
+                 |    // wait for first ping which should indicate all apps are past 
+                 |    // their IPC init phase
+                 |    Platform.receive(Some(IPCPorts.Main))
+                 |    
+                 |    // wait for second ping which should indicate all apps have completed
+                 |    // their initialise entrypoint
                  |    Platform.receive(Some(IPCPorts.Main))
                  |
                  |    while (true) {
@@ -559,24 +565,19 @@ class ArtNixGen(dirs: ProjectDirectories,
       var inits: ISZ[ST] = ISZ(st"Platform.initialise(seed, appPortIdOpt)")
 
       if(!isSharedMemory && portIds.nonEmpty) {
-        globals = globals :+ st"""val empty = art.Empty()
-                                 |val aepPortId = IPCPorts.${AEP_Id}
+        globals = globals :+ st"""val empty: art.Empty = art.Empty()
+                                 |val aepPortId: Art.PortId = IPCPorts.${AEP_Id}
                                  |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)"""
       }
 
-      val portSection =
+      for(p <- inPorts) {
+        globals = globals :+ st"val ${portId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id" 
+        
         if(isSharedMemory) {
-          for(p <- inPorts) yield {
-            globals = globals :+
-              st"val ${portId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id" :+
-              st"val ${portIdOpt(p)}: Option[Art.PortId] = Some(${portId(p)})"
-
-            inits = inits :+ st"Platform.initialise(seed, ${portIdOpt(p)})"
-          }
-        } else
-          portIds
-
-
+          globals = globals :+ st"val ${portIdOpt(p)}: Option[Art.PortId] = Some(${portId(p)})"
+          inits = inits :+ st"Platform.initialise(seed, ${portIdOpt(p)})"
+        }
+      }
 
       var computeBody: ST = st""
 
@@ -627,18 +628,21 @@ class ArtNixGen(dirs: ProjectDirectories,
               |}
               |exit()"""
         } else {
-          /******* MESSAGE QUEUE BODY *********/
-          st"""while (true) {
-              |  ${if(isPeriodic) {
-                   s"Process.sleep($period)"
-                   } else ""}
-              |  ${if(portIds.nonEmpty) {
-                   st"""Platform.send(aepPortId, appPortId, empty)
+          val optSleep: Option[String] = if(isPeriodic) Some(s"Process.sleep($period)") else None()
+          val optReceives: Option[ST] = if(portIds.nonEmpty) { 
+            Some(st"""Platform.send(aepPortId, appPortId, empty)
                        |val (_, d) = Platform.receive(aepPortIdOpt)
                        |val ${AEP_Payload} = d
-                       |${(cases, "\n")}""".render
-                 } else ""}
-              |  entryPoints.compute()
+                       |${(cases, "\n")}""")
+          } else None()
+
+          computeBody = st"""${optSleep}
+                            |${optReceives}
+                            |entryPoints.compute()"""
+  
+          /******* MESSAGE QUEUE BODY *********/
+          st"""while (true) {
+              |  compute()
               |}"""
         }
       }
@@ -1174,11 +1178,11 @@ class ArtNixGen(dirs: ProjectDirectories,
       val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, cOutputDir, script_home)
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
-      val mv: ST = if(arch == Cli.ArsitPlatform.Cygwin)
+      val mv: ST = if(arch == Cli.ArsitPlatform.Cygwin) {
         st"mv *.exe ${script_home}/${buildDir}/"
-      else {
+      } else {
         st"""mv *_App ${script_home}/${buildDir}/
-            |${if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) s"mv *_AEP ${script_home}/${buildDir}/" else ""}
+            |${if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) st"mv *_AEP ${script_home}/${buildDir}/" else ""}
             |mv Main ${script_home}/${buildDir}/"""
       }
       st"""#!/usr/bin/env bash
@@ -1203,7 +1207,7 @@ class ArtNixGen(dirs: ProjectDirectories,
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
       val ext = if(arch.toString == "win") ".exe" else ""
-      val staep = if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aeps.map(st => st"""$arch/$st$ext 2> /dev/null &""" ) else ISZ()
+      val staep = if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aeps.map(st => st"""${buildDir}/$st$ext 2> /dev/null &""" ) else ISZ()
       val stapp = apps.map(st => {
         val prefix = arch match {
           case Cli.ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
@@ -1234,8 +1238,8 @@ class ArtNixGen(dirs: ProjectDirectories,
           |#
           |APPS="${(apps, " ")}"
           |for APP in $${APPS}; do
-          |  pkill $$APP
-          |  pkill -9 $$APP
+          |  pkill -f $$APP
+          |  pkill -9 -f $$APP
           |done
           |ME=`whoami`
           |

@@ -376,16 +376,25 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       if(!arsitOptions.bless) {
         dispatchProtocol match {
           case DispatchProtocol.Sporadic =>
-            return st"""// fetch received events ordered by highest urgency then earliest arrival-time
+            return st"""// transpiler friendly filter
+                       |def filter(receivedEvents: ISZ[Art.PortId], triggers: ISZ[Art.PortId]): ISZ[Art.PortId] = {
+                       |  var r = ISZ[Art.PortId]()
+                       |  val opsTriggers = ops.ISZOps(triggers)
+                       |  for(e <- receivedEvents) {
+                       |    if(opsTriggers.contains(e)) {
+                       |      r = r :+ e
+                       |    }
+                       |  }
+                       |  return r
+                       |}
+                       |
+                       |// fetch received events ordered by highest urgency then earliest arrival-time
                        |val EventTriggered(receivedEvents) = Art.dispatchStatus(${bridgeName})
                        |
-                       |// TODO: transpiler workaround
-                       |val dispatchableEventPorts: ISZ[Art.PortId] = receivedEvents
-                       |
                        |// remove non-dispatching event ports
-                       |//val dispatchableEventPorts: ISZ[Art.PortId] = 
-                       |//  if(dispatchTriggers.isEmpty) receivedEvents 
-                       |//  else receivedEvents.filter(p => ops.ISZOps(dispatchTriggers.get).contains(p))
+                       |val dispatchableEventPorts: ISZ[Art.PortId] = 
+                       |  if(dispatchTriggers.isEmpty) receivedEvents 
+                       |  else filter(receivedEvents, dispatchTriggers.get)
                        |
                        |Art.receiveInput(eventInPortIds, dataInPortIds)
                        |
@@ -470,7 +479,9 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       return st"""def get${p.name}() : Option[${typeName}] = {
                  |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
                  |    case Some(${_match}) => Some(${value})
-                 |    case Some(v) => halt(s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}") 
+                 |    case Some(v) => 
+                 |      Art.logError(id, s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}")
+                 |      None[${typeName}]() 
                  |    case _ => None[${typeName}]()
                  |  }
                  |  return value

@@ -108,7 +108,6 @@ object Base_Types {
   def buildSbt(projectName: String, embedArt: B): ST = {
     val artVersion = Library.getArtVersion()
     val runtimeVersion = Library.getRuntimeVersion()
-    val sireumVersion = Library.getSireumVersion()
     val sireumScalacVersion = Library.getSireumScalacVersionVersion()
     val scalaTestVersion = Library.getScalaTestVersion()
     val scalaVersion = Library.getScalaVersion()
@@ -125,7 +124,7 @@ object Base_Types {
 //
 // To open the following project in Sireum IVE select 'File > Open ...' and then
 // navigate to the directory containing this file then click 'OK'.  To install
-// Sireum IVE see https://github.com/sireum/kekinian/tree/${sireumVersion}#installing
+// Sireum IVE see https://github.com/sireum/kekinian#installing
 
 lazy val ${projectName} = slangEmbeddedTestProject("${projectName}", ".")
 

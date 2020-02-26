@@ -38,11 +38,6 @@ println(s"Updating $buildSbtProps")
 
 var props: Map[String, String] = buildSbtProps.properties
 
-val sireumVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME)
-val sireumTimestamp = runGit(ISZ("git", "show", "-s", "--format=%cd", "--date=format:%y%m%d%H%M"), SIREUM_HOME)
-
-val sireumBuildstamp = ops.StringOps(Os.proc(ISZ(sireum.value)).run.out).split(c => c =='\n')(2) // should be 3rd line
-
 val runtimeVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "runtime")
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
 val artEmbeddedVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/arsit/resources/art")
@@ -70,9 +65,6 @@ def update(key: String, currentVersion: String): B = {
 
 var updated = update("art.version", artVersion)
 updated |= update("org.sireum.runtime.version", runtimeVersion)
-updated |= update("org.sireum.version", sireumVersion)
-updated |= update("org.sireum.buildstamp", sireumBuildstamp)
-updated |= update("org.sireum.timestamp", sireumTimestamp)
 updated |= update("org.sireum.version.scala", scalaVersion)
 updated |= update("org.sireum.version.scalac-plugin", scalacPluginVersion)
 updated |= update("org.sireum.version.scalatest", scalaTestVersion)

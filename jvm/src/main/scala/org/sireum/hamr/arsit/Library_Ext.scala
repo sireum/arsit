@@ -29,10 +29,6 @@ object Library_Ext {
     return getBuildSbtProperties().getProperty("org.sireum.runtime.version")
   }
 
-  def getSireumVersion(): String = {
-    return getBuildSbtProperties().getProperty("org.sireum.version")
-  }
-  
   def getSireumScalacVersionVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.version.scalac-plugin")
   }
@@ -44,6 +40,4 @@ object Library_Ext {
   def getScalaTestVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.version.scalatest")
   }
-
-  
 }
