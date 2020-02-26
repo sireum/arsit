@@ -4,6 +4,7 @@ import org.sireum._
 import org.sireum.hamr.ir._
 import org.sireum.ops.ISZOps
 import org.sireum.hamr.arsit.Util.reporter
+import org.sireum.hamr.arsit.templates._
 
 import scala.language.implicitConversions
 

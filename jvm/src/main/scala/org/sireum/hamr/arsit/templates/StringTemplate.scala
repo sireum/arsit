@@ -1,8 +1,9 @@
 // #Sireum
 
-package org.sireum.hamr.arsit
+package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.arsit.Library
 
 object StringTemplate {
 
@@ -104,25 +105,13 @@ object Base_Types {
     return ret
   }
   
-  def getArtVersion(): String = {
-    val artLoc = Os.path("hamr/codegen/arsit/resources/art")
-    val p = Os.proc(ISZ("git", "log", "-n", "1", "--pretty=format:%h")).at(artLoc).runCheck()
-    if(p.ok) {
-      return ops.StringOps(p.out).trim
-    }
-    else {
-      println("Error encountered when trying to get ART commit tip")
-      println(p.err)
-      return "f3e9ca4"
-    }
-  }
-  
   def buildSbt(projectName: String, embedArt: B): ST = {
-    val scalaVersion = "2.12.10"
-    val sireumScalacVersion = "4.20200212.6edf3e0"
-    val runtimeVersion = "76a1fa2a19"
-    val artVersion = getArtVersion()
-    val scalaTestVersion = "3.1.0"
+    val artVersion = Library.getArtVersion()
+    val runtimeVersion = Library.getRuntimeVersion()
+    val sireumVersion = Library.getSireumVersion()
+    val sireumScalacVersion = Library.getSireumScalacVersionVersion()
+    val scalaTestVersion = Library.getScalaTestVersion()
+    val scalaVersion = Library.getScalaVersion()
     
     val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if(!embedArt) {
       (Some(st"""val artVersion = "${artVersion}" // https://github.com/sireum/slang-embedded-art/tree/${artVersion}"""),
@@ -135,7 +124,8 @@ object Base_Types {
 // Example sbt build definitions
 //
 // To open the following project in Sireum IVE select 'File > Open ...' and then
-// navigate to the directory containing this file then click 'OK'
+// navigate to the directory containing this file then click 'OK'.  To install
+// Sireum IVE see https://github.com/sireum/kekinian/tree/${sireumVersion}#installing
 
 lazy val ${projectName} = slangEmbeddedTestProject("${projectName}", ".")
 

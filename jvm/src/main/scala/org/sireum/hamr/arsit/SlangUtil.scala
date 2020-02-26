@@ -160,6 +160,13 @@ object Cli {
 
 @ext object Library {
   def getFiles: ISZ[(String, String)] = $
+
+  def getArtVersion(): String = $
+  def getRuntimeVersion(): String = $
+  def getSireumVersion(): String = $
+  def getSireumScalacVersionVersion(): String = $
+  def getScalaVersion(): String = $
+  def getScalaTestVersion(): String = $      
 }
 
 @enum object DispatchProtocol {

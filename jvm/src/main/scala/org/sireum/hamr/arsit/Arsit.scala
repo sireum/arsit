@@ -4,6 +4,7 @@ import org.sireum._
 import org.sireum.hamr.ir
 import org.sireum.message._
 import org.sireum.hamr.arsit.Util.reporter
+import org.sireum.hamr.arsit.templates._
 
 object Arsit {
   def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
