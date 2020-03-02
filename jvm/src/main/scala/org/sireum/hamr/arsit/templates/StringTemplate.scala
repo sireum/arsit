@@ -120,7 +120,7 @@ object Base_Types {
     
     val ret: ST =
       st"""
-// Example sbt build definitions
+// Example sbt build definitions -- the contents of this file will not be overwritten
 //
 // To open the following project in Sireum IVE select 'File > Open ...' and then
 // navigate to the directory containing this file then click 'OK'.  To install
