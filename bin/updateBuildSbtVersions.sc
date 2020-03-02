@@ -73,7 +73,14 @@ if(updated) {
   val pst = st"""${(props.entries.map(m => st"${m._1}=${m._2}"), "\n")}""".render
   buildSbtProps.writeOver(pst)
   println(s"$buildSbtProps updated")
-  Os.exit(1) // return 1 to indicate versions have changed so probably need to rebuild before releasing a plugin
+  
+  println("\nRunning bin/build.cmd -- will touche Library_Ext.scala")
+  val build_cmd = SIREUM_HOME / "bin/build.cmd"
+  Os.proc(ISZ(sireum.value, "slang", "run", build_cmd.value)).console.runCheck()
+    
+  println(s"\n$buildSbtProps updated and Sireum touched/rebuilt -- expect an error to follow")
+  
+  Os.exit(1) // return 1 to indicate versions have changed
 } else {
   println(s"No updates needed")
   Os.exit(0)
