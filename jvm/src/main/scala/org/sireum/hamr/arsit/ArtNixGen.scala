@@ -125,8 +125,8 @@ class ArtNixGen(dirs: ProjectDirectories,
       val isPeriodic: B = dispatchProtocol == DispatchProtocol.Periodic
 
       val bridgeInstanceVarName: String = Util.getName(m.identifier)
-      val AEP_Id: String = s"${name.component}_AEP"
-      val App_Id: String = s"${name.component}_App"
+      val AEP_Id: String = s"${name.instanceName}_AEP"
+      val App_Id: String = s"${name.instanceName}_App"
 
       val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
 
@@ -227,7 +227,7 @@ class ArtNixGen(dirs: ProjectDirectories,
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
-          val dstComp = if (arsitOptions.ipc == Cli.IpcMechanism.SharedMemory) s"${name.component}_App" else s"${name.component}_AEP"
+          val dstComp = if (arsitOptions.ipc == Cli.IpcMechanism.SharedMemory) s"${name.instanceName}_App" else s"${name.instanceName}_AEP"
           var cases: ISZ[ST] = {
             if (artNixCasesM.contains(srcArchPortInstanceName)) {
               artNixCasesM.get(srcArchPortInstanceName).get
@@ -593,7 +593,7 @@ class ArtNixGen(dirs: ProjectDirectories,
                 val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
                 st"""Platform.receiveAsync(${portIdOpt(p)}) match {
                     |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v)${ if(!isPeriodic) s"; dispatch = ${dispatch}" else "" }
-                    |  case Some((_, v)) => halt(s"Unexpected payload on port $${${portId(p)}}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
+                    |  case Some((_, v)) => halt(s"Unexpected payload on port ${p.name}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
                     |  case None() => // do nothing
                     |}"""
               }
