@@ -660,16 +660,24 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |
                  |  ${(globals, "\n")}
                  |
-                 |  def initialise(seed: Z): Unit = {
+                 |  def initialiseArchitecture(seed: Z): Unit = {
                  |    ${(inits, "\n")}
                  |
                  |    Art.run(Arch.ad)
                  |  }
                  |
+                 |  def initialise(): Unit = {
+                 |    entryPoints.initialise()
+                 |  }
+                 |  
                  |  def compute(): Unit = {
                  |    ${computeBody}
                  |  }
                  |
+                 |  def finalise(): Unit = {
+                 |    entryPoints.finalise()
+                 |  }
+                 |  
                  |  def main(args: ISZ[String]): Z = {
                  |
                  |    val seed: Z = if (args.size == z"1") {
@@ -679,11 +687,11 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |      1
                  |    }
                  |
-                 |    initialise(seed)
+                 |    initialiseArchitecture(seed)
                  |
                  |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"}) // pause after setting up component
                  |
-                 |    entryPoints.initialise()
+                 |    initialise()
                  |
                  |    Platform.receive(${if(isSharedMemory) "appPortIdOpt" else "Some(IPCPorts.Main)"}) // pause after component init
                  |
@@ -697,7 +705,7 @@ class ArtNixGen(dirs: ProjectDirectories,
                  |  }
                  |
                  |  def exit(): Unit = {
-                 |    Arch.${bridge}.entryPoints.finalise()
+                 |    finalise()
                  |    Platform.finalise()
                  |  }
                  |
