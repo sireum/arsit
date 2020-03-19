@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.Library
+import org.sireum.hamr.arsit.{CTranspilerOption, Library, SlangUtil, Util}
 
 object StringTemplate {
 
@@ -180,4 +180,5 @@ def slangEmbeddedTestProject(projId: String, projectDirectory: String) =
 """
     return ret
   }
+
 }

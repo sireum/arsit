@@ -122,6 +122,12 @@ object SlangUtil {
     }
     return ret
   }
+
+  @pure def getLibraryFile(fileName: String): ST = {
+    val e = Library.getFiles.filter(p => p._1 == fileName)
+    assert(e.length == 1)
+    return st"${e(0)._2}"
+  }
 }
 
 object Cli {
@@ -349,6 +355,10 @@ object Transformers {
   val componentDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "component")
 
   val nixDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "nix")
+
+  val seL4NixDir: String = SlangUtil.pathAppend(rootDir, src_main :+ "seL4Nix")
+
+  val seL4CDir: String = SlangUtil.pathAppend(srcDir, ISZ("c", "CAmkES_seL4"))
 }
 
 
@@ -395,4 +405,4 @@ object Transformers {
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
-                            val transpilerOptions: Option[CTranspilerOption]) extends Result
+                            val transpilerOptions: ISZ[CTranspilerOption]) extends Result

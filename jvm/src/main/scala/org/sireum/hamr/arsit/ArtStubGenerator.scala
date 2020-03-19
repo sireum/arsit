@@ -83,7 +83,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
 
     val componentName = "component"
-    var ports: ISZ[Port] = Util.getPorts(m, types, basePackage)
+    var ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
     val bridgeTestSuite: ST = Template.bridgeTestSuite(basePackage, names, ports)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)

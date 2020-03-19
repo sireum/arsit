@@ -13,7 +13,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                          arsitOptions: Cli.ArsitOption,
                          types: AadlTypes) {
   var componentId = 0
-  var portId = 0
+  var portId: Z = 0
 
   val basePackage = arsitOptions.packageName
   var bridges : ISZ[ST] = ISZ()
@@ -62,8 +62,9 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
 
-    val arch = Template.architectureDescription(
+    val arch = ArchTemplate.architectureDescription(
       basePackage,
+      ISZ(),
       architectureName,
       architectureDescriptionName,
       bridges,
@@ -83,12 +84,14 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     return id
   }
 
+  /*
   def getPortId(): Z = {
     val id = portId
     portId += 1
     return id
   }
-
+  */
+  
   def gen(c: Component) : Unit = {
     c.category match {
       case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
@@ -149,47 +152,18 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     
     val id = getComponentId(m)
 
-    val period: String = Util.getPeriod(m)
+    val period: Z = Util.getPeriod(m)
 
     val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
 
-    val dispatchProtocolST: ST = {
-      dispatchProtocol match {
-        case DispatchProtocol.Sporadic => Template.sporadic(period)
-        case DispatchProtocol.Periodic => Template.periodic(period)
-      }
-    }
+    val dispatchProtocolST: ST = ArchTemplate.dispatchProtocol(dispatchProtocol, period)
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
 
-    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage)
+    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, portId)
+    portId = portId + ports.size
 
-    val bridgeTypeName: String =  s"${names.packageName}.${names.bridge}"
-
-    val _dispatchTriggers: ST = if(dispatchTriggers.isEmpty) st"None()" else st"Some(ISZ(${(dispatchTriggers.get.map(f => s"${f}.id"), ", ")}))"
-    
-    return Template.bridge(names.instanceName, bridgeTypeName, id, dispatchProtocolST, _dispatchTriggers, ports)
-  }
-
-  def genPort(port: Port) : ST = {
-    val id = getPortId()
-    port.portId = id
-    
-    import FeatureCategory._
-    val prefix = port.feature.category match {
-      case EventPort | EventDataPort => "Event"
-      case DataPort => "Data"
-      case _ => throw new RuntimeException("Not handling " + port.feature.category)
-    }
-
-    import Direction._
-    val mode = prefix + (port.feature.direction match {
-      case In => "In"
-      case Out => "Out"
-      case _ => "???"
-    })
-
-    return Template.port(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode, port.urgency)
+    return ArchTemplate.bridge(names.instanceName, names.bridgeTypeName, id, dispatchProtocolST, dispatchTriggers, ports)
   }
 
   def emitType(t: AadlType): Unit = {
@@ -303,10 +277,11 @@ class ArtArchitectureGen(directories: ProjectDirectories,
   }
 
   object Template {
-
+    /*
     @pure def sporadic (period: String) = st"""Sporadic(min = $period)"""
     @pure def periodic (period: String) = st"""Periodic(period = $period)"""
-
+    */
+    /*
     @pure def port(name: String,
                    typ: String,
                    id: Z,
@@ -340,7 +315,8 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                   |  )
                   |}"""
     }
-
+    */
+    
     @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""
 
     @pure def demo(packageName: String,
@@ -353,6 +329,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                  |  art.Art.run(${architectureName}.${architectureDescriptionName})
                  |}"""
     }
+    /*
 
     @pure def architectureDescription(packageName: String,
                                       architectureName: String,
@@ -385,7 +362,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                  |  }
                  |}"""
     }
-
+    */
 
     @pure def enumType(typeNames: DataTypeNames,
                        values: ISZ[String]): ST = {

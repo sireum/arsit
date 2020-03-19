@@ -17,11 +17,10 @@ object Arsit {
     var model = m
     
     var resources: ISZ[Resource] = ISZ()
-    var transpilerOptions: Option[CTranspilerOption] = None()
 
     if(model.components.isEmpty) {
       reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(resources, 0, 0, transpilerOptions)
+      return ArsitResult(resources, 0, 0, ISZ[CTranspilerOption]())
     }
 
     val result = ir.Transformer(Transformers.MissingTypeRewriter(Util.reporter)).transformAadl(Transformers.CTX(F, F), model)
@@ -31,7 +30,7 @@ object Arsit {
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val nixPhase = ArtNixGen(projectDirectories, model, o, typeMap,
+    val nixPhase = nix.NixGen.generate(projectDirectories, model, o, typeMap,
       ArtStubGenerator(projectDirectories, model, o, typeMap,
         ArtArchitectureGen(projectDirectories, model, o, typeMap)))
 

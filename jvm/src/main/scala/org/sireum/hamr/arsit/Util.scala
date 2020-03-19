@@ -93,14 +93,15 @@ object Util {
         }
     }
   }
-  @pure def getPeriod(m: Component): String = {
-    return Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Timing_Properties__Period) match {
+  @pure def getPeriod(m: Component): Z = {
+    val s: String = Util.getDiscreetPropertyValue[UnitProp](m.properties, Util.Prop_Timing_Properties__Period) match {
       case Some(UnitProp(value, Some(org.sireum.String("ps")))) =>
         val v = value.toString.toDouble / 1e9
         s"${v.toLong}"
       case Some(UnitProp(value, Some(org.sireum.String("ms")))) => s"${value.toString.toInt}"
       case _ => "1"
     }
+    return Z.apply(s).get
   }
 
   @pure def getZProperty(key: String, properties: ISZ[Property]): Option[Z] = {
@@ -270,7 +271,8 @@ object Util {
   @pure def getPackageName(value: String): String =
     value.toString.split("::").dropRight(1).mkString(".")
 
-  def getPorts(m: Component, types: AadlTypes, basePackage: String): ISZ[Port] = {
+  def getPorts(m: Component, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
+    var _counter = counter
     
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
     
@@ -281,7 +283,8 @@ object Util {
       val isTrigger = if (dispatchTriggers.isEmpty) T else {
         dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
       }
-      ports :+= Port(f, m, pType, basePackage, isTrigger)
+      ports :+= Port(f, m, pType, basePackage, isTrigger, _counter)
+      _counter = _counter + 1
     }
     return ports
   }
@@ -449,7 +452,11 @@ case class Names(packageName : String,
                  component: String,
                  componentImpl: String,
                  testName: String,
-                 instanceName: String)
+                 instanceName: String) {
+  def bridgeTypeName: String = {
+    return s"${packageName}.${bridge}"
+  }
+}
 
 case class DataTypeNames(typ: AadlType,
                          basePackage: String,
@@ -484,12 +491,14 @@ case class DataTypeNames(typ: AadlType,
   }
 }
 
-case class Port(feature: FeatureEnd, parent: Component, _portType: AadlType, basePackageName: String,
-                dispatchTrigger: B,
-                var portId: Z = -1){
+case class Port(feature: FeatureEnd, parent: Component,
+                _portType: AadlType, basePackageName: String,
+                dispatchTrigger: B, portId: Z){
 
   def name: String = Util.getLastName(feature.identifier)
   def nameWithPortId: String = s"${name}_${portId}"
+  
+  def nameId: String = s"${name}_id"
   
   def path: String = Util.getName(feature.identifier)
 
