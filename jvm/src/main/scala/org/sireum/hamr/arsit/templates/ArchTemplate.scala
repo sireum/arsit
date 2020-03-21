@@ -55,6 +55,7 @@ object ArchTemplate {
   }
     
   @pure def bridge(varName: String,
+                   instanceName: String,
                    typeName: String,
                    id: Z,
                    dispatchProtocol: ST,
@@ -70,7 +71,7 @@ object ArchTemplate {
                |  
                |  ${typeName}(
                |    id = $id,
-               |    name = "$varName",
+               |    name = "$instanceName",
                |    dispatchProtocol = $dispatchProtocol,
                |    dispatchTriggers = ${_dispatchTriggers},
                |    

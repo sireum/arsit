@@ -163,7 +163,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, portId)
     portId = portId + ports.size
 
-    return ArchTemplate.bridge(names.instanceName, names.bridgeTypeName, id, dispatchProtocolST, dispatchTriggers, ports)
+    return ArchTemplate.bridge(names.instanceName, names.instanceName, names.bridgeTypeName, id, dispatchProtocolST, dispatchTriggers, ports)
   }
 
   def emitType(t: AadlType): Unit = {
@@ -277,46 +277,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
   }
 
   object Template {
-    /*
-    @pure def sporadic (period: String) = st"""Sporadic(min = $period)"""
-    @pure def periodic (period: String) = st"""Periodic(period = $period)"""
-    */
-    /*
-    @pure def port(name: String,
-                   typ: String,
-                   id: Z,
-                   identifier: String,
-                   mode: String,
-                   urgency: Option[Z]): ST = {
-      val artPortType = if(urgency.nonEmpty) "UrgentPort" else "Port"
-      val _urgency = if(urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
-      return st"""val $name = ${artPortType}[$typ] (id = $id, name = "$identifier", mode = $mode${_urgency})"""
-    }
 
-    @pure def bridge(varName: String,
-                     typeName: String,
-                     id: Z,
-                     dispatchProtocol: ST,
-                     dispatchTriggers: ST,
-                     ports: ISZ[Port]) : ST = {
-      val _ports = ports.map(p => genPort(p))
-      val _args = ports.map(p => st"${p.name} = ${p.name}")
-      
-      return st"""val ${varName} : ${typeName} = {
-                  |  ${(_ports, "\n")}
-                  |  
-                  |  ${typeName}(
-                  |    id = $id,
-                  |    name = "$varName",
-                  |    dispatchProtocol = $dispatchProtocol,
-                  |    dispatchTriggers = ${dispatchTriggers},
-                  |    
-                  |    ${(_args, ",\n")}
-                  |  )
-                  |}"""
-    }
-    */
-    
     @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""
 
     @pure def demo(packageName: String,
@@ -329,40 +290,6 @@ class ArtArchitectureGen(directories: ProjectDirectories,
                  |  art.Art.run(${architectureName}.${architectureDescriptionName})
                  |}"""
     }
-    /*
-
-    @pure def architectureDescription(packageName: String,
-                                      architectureName: String,
-                                      architectureDescriptionName: String,
-                                      bridges : ISZ[ST],
-                                      components : ISZ[String],
-                                      connections: ISZ[ST]
-                                     ) : ST = {
-      return st"""// #Sireum
-                 |
-                 |package $packageName
-                 |
-                 |import org.sireum._
-                 |import art._
-                 |import art.PortMode._
-                 |import art.DispatchPropertyProtocol._
-                 |
-                 |${Util.doNotEditComment()}
-                 |
-                 |object $architectureName {
-                 |  ${(bridges, "\n")}
-                 |
-                 |  val $architectureDescriptionName : ArchitectureDescription = {
-                 |
-                 |    ArchitectureDescription(
-                 |      components = MSZ (${(components, ", ")}),
-                 |
-                 |      connections = ISZ (${(connections, ",\n")})
-                 |    )
-                 |  }
-                 |}"""
-    }
-    */
 
     @pure def enumType(typeNames: DataTypeNames,
                        values: ISZ[String]): ST = {

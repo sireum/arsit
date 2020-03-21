@@ -40,10 +40,18 @@ object Sel4NixTemplate {
     return ret
   }
 
+  def portComment(portName: String,
+                  dir: String,
+                  portCategory: String,
+                  portType: String): ST = {
+    return st"${portName}: ${dir} ${portCategory} ${portType}"
+  }
   def portVariable(instanceName: String,
                    portName: String,
-                   portId: String): ST = {
-    val ret: ST = st"""val ${portId}: Art.PortId = ${isolatedArchitectureName}.${instanceName}.${portName}.id
+                   portId: String,
+                   portComment: ST): ST = {
+    val ret: ST = st"""// ${portComment}
+                      |val ${portId}: Art.PortId = ${isolatedArchitectureName}.${instanceName}.${portName}.id
                       |var ${portName}: Option[DataContent] = noData"""
     return ret
   }
@@ -56,7 +64,6 @@ object Sel4NixTemplate {
                       |
                       |import org.sireum._
                       |import art._
-                      |import ${packageName}._
                       |
                       |object ${name} {
                       |  ${entries}
@@ -82,6 +89,7 @@ object Sel4NixTemplate {
   
   def main(packageName: String,
            instanceName: String,
+           identifier: String,
            dispatchStatus: ST,
            globals: ST,
            receiveInput: ST,
@@ -98,19 +106,15 @@ object Sel4NixTemplate {
                    |import art._
                    |import ${packageName}._
                    |
-                   |object ${instanceName} extends App {
+                   |object ${identifier} extends App {
                    |
-                   |  val entryPoints: Bridge.EntryPoints = ${isolatedArchitectureName}.${instanceName}.entryPoints
+                   |  val entryPoints: Bridge.EntryPoints = ${isolatedArchitectureName}.${identifier}.entryPoints
                    |  val noData: Option[DataContent] = None()
                    |  
                    |  ${globals}
                    |
                    |  ${dispatchStatus}
                    |
-                   |  def initialiseArchitecture(): Unit = {
-                   |    Art.run(${isolatedArchitectureName}.ad)
-                   |  }
-                   |                     
                    |  ${getValue}
                    |  
                    |  ${receiveInput}
@@ -118,15 +122,21 @@ object Sel4NixTemplate {
                    |  ${putValue}
                    |  
                    |  ${sendOutput}
+                   |
+                   |  def initialiseArchitecture(): Unit = { Art.run(${isolatedArchitectureName}.ad) }
+                   |
+                   |  def initialiseEntryPoint(): Unit = { entryPoints.initialise() }
+                   |  
+                   |  def computeEntryPoint(): Unit = { entryPoints.compute() }
                    |  
                    |  def main(args: ISZ[String]): Z = {
                    |
                    |    // need to touch the following for transpiler
                    |    initialiseArchitecture()
-                   |    entryPoints.initialise()
-                   |    entryPoints.compute()
+                   |    initialiseEntryPoint()
+                   |    computeEntryPoint()
                    |
-                   |    // call empty on every type in case some are only used as a field in a record
+                   |    // touch each payload/type in case some are only used as a field in a record
                    |    ${typeTouches}
                    |    
                    |    return 0

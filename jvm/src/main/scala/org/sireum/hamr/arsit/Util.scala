@@ -262,10 +262,7 @@ object Util {
     val componentImplName = componentName + "_Impl"
     val bridgeName = componentName + "_Bridge"
 
-    val instanceName = Util.getName(c.identifier)
-    val testName = instanceName + "_Test"
-
-    Names(packageName, packagePath, bridgeName, componentName, componentImplName, testName, instanceName)
+    Names(packageName, packagePath, bridgeName, componentName, componentImplName, c)
   }
 
   @pure def getPackageName(value: String): String =
@@ -451,11 +448,20 @@ case class Names(packageName : String,
                  bridge: String,
                  component: String,
                  componentImpl: String,
-                 testName: String,
-                 instanceName: String) {
+                 c: Component) {
+
+  def instanceName: String = return Util.getName(c.identifier)
+  
+  def identifier: String = return Util.getLastName(c.identifier)
+  
+  def testName: String = return instanceName + "_Test"
+
   def bridgeTypeName: String = {
     return s"${packageName}.${bridge}"
   }
+  
+  
+  def sel4AppName: String = return s"${componentImpl}_App"
 }
 
 case class DataTypeNames(typ: AadlType,
