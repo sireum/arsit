@@ -54,7 +54,7 @@ object ArchTemplate {
     return portType(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode, port.urgency)
   }
     
-  @pure def bridge(varName: String,
+  @pure def bridge(bridgeIdentifier: String,
                    instanceName: String,
                    typeName: String,
                    id: Z,
@@ -66,7 +66,7 @@ object ArchTemplate {
 
     val _dispatchTriggers: ST = if(dispatchTriggers.isEmpty) st"None()" else st"Some(ISZ(${(dispatchTriggers.get.map(f => s"${f}.id"), ", ")}))"
     
-    return st"""val ${varName} : ${typeName} = {
+    return st"""val ${bridgeIdentifier} : ${typeName} = {
                |  ${(_ports, "\n")}
                |  
                |  ${typeName}(

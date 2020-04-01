@@ -210,6 +210,29 @@ object Util {
     }
   }
 
+  @pure def findMaxAadlArraySize(types: AadlTypes): Z = {
+    var max: Z = 0
+    def processType(t: AadlType):Unit = {
+      t match {
+        case a: ArrayType =>
+          val dims = Util.getArrayDimensions(a)
+          assert(dims.size == 1)
+          if(dims(0) > max) {
+            max = dims(0)
+          }
+          processType(a.baseType)
+        case r: RecordType =>
+          r.fields.values.foreach(t => processType(t))
+        case _ =>
+      }
+    }
+
+    types.typeMap.values.foreach(t => processType(t))
+
+    return max
+  }
+
+
   @pure def getArrayBaseType(c: Component): String = {
     for (p <- c.properties if getLastName(p.name) == Prop_Data_Model__Base_Type) {
       return p.propertyValues(0).asInstanceOf[ClassifierProp].name
@@ -256,13 +279,15 @@ object Util {
   @pure def getComponentNames(c: Component, basePackage: String): Names = {
     val a: Array[scala.Predef.String] = c.classifier.get.name.toString.split("::")
     assert(a.length == 2)
-    val packageName = s"${basePackage}.${a(0)}"
-    val packagePath = s"${basePackage}/${a(0)}"
+
+    val aadlPackage = a(0)
+    
     val componentName = sanitizeName(a(1))
     val componentImplName = componentName + "_Impl"
+    
     val bridgeName = componentName + "_Bridge"
 
-    Names(packageName, packagePath, bridgeName, componentName, componentImplName, c)
+    Names(basePackage, aadlPackage, bridgeName, componentName, componentImplName, c)
   }
 
   @pure def getPackageName(value: String): String =
@@ -443,25 +468,48 @@ object TypeResolver {
   }
 }
 
-case class Names(packageName : String,
-                 packagePath : String,
+case class Names(basePackage : String,
+                 aadlPackage: String,
                  bridge: String,
                  component: String,
                  componentImpl: String,
                  c: Component) {
 
+  def packageName: String = return s"${basePackage}.${aadlPackage}"
+  
+  def packagePath: String = return s"${basePackage}/${aadlPackage}"
+  
+  def path: ISZ[String] = return ISZ(basePackage, aadlPackage)
+  
   def instanceName: String = return Util.getName(c.identifier)
   
   def identifier: String = return Util.getLastName(c.identifier)
   
   def testName: String = return instanceName + "_Test"
 
-  def bridgeTypeName: String = {
-    return s"${packageName}.${bridge}"
-  }
+  def bridgeIdentifier: String = return s"${identifier}Bridge" 
+    
+  def bridgeTypeName: String = return s"${packageName}.${bridge}"
+  
+  
+  def cPackageName: String = return st"${(path, "_")}".render
+
+  def cEntryPointAdapterName: String = { return s"${component}_adapter" }
+
+  def cEntryPointAdapterQualifiedName: String = { return s"${cPackageName}_${cEntryPointAdapterName}" }
+  
+  def cComponentImplQualifiedName: String = return st"${cPackageName}_${componentImpl}".render
+
+  def cThisApi: String = return st"${cComponentImplQualifiedName}_api_".render
+
+  def cBridgeApi: String = return s"${cPackageName}_${component}_Bridge_Api"
   
   
   def sel4AppName: String = return s"${componentImpl}_App"
+
+  def sel4ExtensionName: String = return s"${component}_seL4Nix"
+  
+  def sel4ExtensionStubName: String = return s"${sel4ExtensionName}_Ext"
 }
 
 case class DataTypeNames(typ: AadlType,
@@ -481,6 +529,16 @@ case class DataTypeNames(typ: AadlType,
   def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"
   def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
 
+  def qualifiedCTypeName: String = {
+    if(typ == Util.EmptyType) {
+      return "art_Empty"
+    } else {
+      val a: Array[scala.Predef.String] = typ.name.toString.split("::")
+      val tName = s"${a(0)}_${a(1)}"
+      return Util.sanitizeName(s"${basePackage}_${tName}")
+    }  
+  }
+  
   def isEnum():B = {
     return typ.isInstanceOf[EnumType]
   }
@@ -505,6 +563,8 @@ case class Port(feature: FeatureEnd, parent: Component,
   def nameWithPortId: String = s"${name}_${portId}"
   
   def nameId: String = s"${name}_id"
+  
+  def sel4PortVarable: String = s"${name}_port"
   
   def path: String = Util.getName(feature.identifier)
 

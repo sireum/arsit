@@ -20,6 +20,7 @@ object TranspilerTemplate {
                |${(entries, "\n\n")}
                |"""
   }
+  
   @pure def compileLib(childDir: String): ST = {
     val script_home = "${SCRIPT_HOME}"
     return st"""cd "${script_home}/${childDir}"
@@ -92,7 +93,12 @@ object TranspilerTemplate {
 
     val path_sep = s"$${PATH_SEP}"
 
-    var ret = st"""OUTPUT_DIR="${cOutputDirRel}"
+    def expand(optionName: String, elems: ISZ[String]): Option[ST] = {
+      return if(elems.nonEmpty) Some(st"""--${optionName} "${(elems, ";")}" \""") 
+      else None()
+    }
+
+    val ret = st"""OUTPUT_DIR="${cOutputDirRel}"
                   |
                   |$${SIREUM_HOME}/bin/sireum slang transpilers c \
                   |  --sourcepath "${(projHomesRel, path_sep)}" \
@@ -103,8 +109,8 @@ object TranspilerTemplate {
                   |  --bits ${opts.bitWidth} \
                   |  --string-size ${opts.maxStringSize} \
                   |  --sequence-size ${opts.maxArraySize} \
-                  |  --sequence "${(opts.customArraySizes, ";")}" \
-                  |  --constants "${(opts.customConstants, ";")}" \
+                  |  ${expand("sequence", opts.customArraySizes)}
+                  |  ${expand("constants", opts.customConstants)}
                   |  --forward "${(opts.forwarding, ",")}" \
                   |  --stack-size "${opts.stackSize.get}" \
                   |  --stable-type-id"""

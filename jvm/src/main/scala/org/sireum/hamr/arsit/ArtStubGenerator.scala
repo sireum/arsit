@@ -550,13 +550,13 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       v.feature.category match {
         case FeatureCategory.EventDataPort =>
           return st"""${or}def $methodName(value : ${v.portType.qualifiedReferencedTypeName}): Unit = {
-                     |  api.logInfo(s"received ${"${value}"}")
                      |  api.logInfo("${ed} $methodName implementation")
+                     |  api.logInfo(s"received ${"${value}"}")
                      |}"""
         case FeatureCategory.EventPort =>
           return st"""${or}def $methodName(): Unit = {
-                     |  api.logInfo("received ${v.name}")
                      |  api.logInfo("${ed} $methodName implementation")
+                     |  api.logInfo("received ${v.name}")
                      |}"""
         case _ => throw new RuntimeException("Unexpected " + v.feature.category)
       }

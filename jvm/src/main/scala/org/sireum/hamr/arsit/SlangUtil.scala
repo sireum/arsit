@@ -47,6 +47,15 @@ object SlangUtil {
     return f.category == ir.FeatureCategory.EventPort
   }
 
+  def toUpperCase(s: String): String = {
+    val cis = conversions.String.toCis(s)
+    var cismod: ISZ[C] = ISZ()
+    for(c <- cis) {
+      cismod = cismod :+ ops.COps(c).toUpper
+    }
+    return conversions.String.fromCis(cismod)
+  }
+  
   def getName(n : ir.Name) : String = {
     return st"${(n.name, "_")}".render
   }
