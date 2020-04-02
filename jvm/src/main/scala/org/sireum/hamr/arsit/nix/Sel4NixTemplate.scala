@@ -3,14 +3,38 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
-import org.sireum.hamr.arsit.Names
+import org.sireum.hamr.arsit.{DataTypeNames, Names}
 
 
 object Sel4NamesUtil {
   def apiHelperMethodName(methodName: String, names: Names): String = {
     return s"api_${methodName}__${names.cComponentImplQualifiedName}"
   }
-  
+
+  @pure def getTypeFingerprints(slangTypeName: String) : (String, String, String) = {
+
+    @pure def stableTypeSig(t: String, width: Z): String = {
+      val max: Z = if (0 < width && width <= 64) width else 64
+      val bytes = ops.ISZOps(crypto.SHA3.sum512(conversions.String.toU8is(t))).take(max)
+      var cs = ISZ[C]()
+      for (b <- bytes) {
+        val c = conversions.U32.toC(conversions.U8.toU32(b))
+        cs = cs :+ ops.COps.hex2c((c >>> '\u0004') & '\u000F')
+        cs = cs :+ ops.COps.hex2c(c & '\u000F')
+      }
+      return st"$cs".render
+    }
+    
+    val optionType = s"Option[${slangTypeName}]"
+    val someType = s"Some[${slangTypeName}]"
+    val noneType = s"None[${slangTypeName}]"
+
+    val optionSig = s"Option_${stableTypeSig(optionType, 3)}"
+    val someSig = s"Some_${stableTypeSig(someType, 3)}"
+    val noneSig = s"None_${stableTypeSig(noneType, 3)}"
+
+    return (optionSig, someSig, noneSig)
+  }
 }
 
 object Sel4NixTemplate {
@@ -243,18 +267,24 @@ object Sel4NixTemplate {
     return ret
   }
 
-  def stubInitialiseMethod(names: Names): ST = {
-    val ret: ST =st"""
-        
-        """
-    return ret
-  }
-  
-  def apiGet(signature: ST, apiGetMethodName: String, c_this: String,
-             qualifiedTypeName: String, optionSig: String, someSig: String, noneSig: String, isEnum: B): ST = {
-    val addStruct: String = if(!isEnum) {"struct "} else {""}
+  def apiGet(signature: ST, 
+             apiGetMethodName: String, 
+             c_this: String,
+             typeNames: DataTypeNames): ST = {
+    
+    val qualifiedName: String = s"${if(typeNames.isAadlType()) s"${typeNames.basePackage}." else ""}${typeNames.qualifiedReferencedTypeName}" 
+      
+    val (optionSig, someSig, noneSig) = Sel4NamesUtil.getTypeFingerprints(qualifiedName)
+    
+    val useStruct = !typeNames.isEnum() && !typeNames.isBaseType()
+    
+    val typeAssign : String =  
+      if(useStruct) s"Type_assign(value, &t_0.${someSig}.value, sizeof(struct ${typeNames.qualifiedCTypeName}));"
+      else s"Type_assign(value, &t_0.${someSig}.value, sizeof(${typeNames.qualifiedCTypeName}));"
+    
     val ret: ST = st"""${signature}{
-                      |
+                      |  // ${optionSig} = Option[${qualifiedName}]
+                      |  // ${someSig} = Some[${qualifiedName}]
                       |  DeclNew${optionSig}(t_0);
                       |  ${apiGetMethodName}(
                       |    SF
@@ -262,7 +292,7 @@ object Sel4NixTemplate {
                       |    ${c_this}(this));
                       |    
                       |  if(t_0.type == T${someSig}){
-                      |    Type_assign(value, &t_0.${someSig}.value, sizeof(${addStruct}${qualifiedTypeName}));
+                      |    ${typeAssign}
                       |    return T;
                       |  } else {
                       |    return F;

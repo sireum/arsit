@@ -174,7 +174,6 @@ class ArtNixGen(dirs: ProjectDirectories,
         val portIdName: String = port.name + "PortId"
         val portOptName: String = port.name + "Opt"
         val portType: String = port.portType.qualifiedReferencedTypeName
-        val portPayloadTypeName: String = port.portType.qualifiedPayloadName
         val archPortInstanceName: String = s"${bridgeInstanceVarName}.${port.name}"
 
         portDefs = portDefs :+ Template.portDef(portOptName, portType)
@@ -183,13 +182,13 @@ class ArtNixGen(dirs: ProjectDirectories,
         portIds :+= Template.portId(portIdName, archPortInstanceName)
         portIdOpts :+= Template.portOpt(portIdName, portOptName, "Art.PortId", F)
 
-        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, portPayloadTypeName, Util.isDataPort(p))
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, port.portType, Util.isDataPort(p))
 
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
 
-        appCases = appCases :+ Template.appCases(portOptName, portIdName, portPayloadTypeName)
+        appCases = appCases :+ Template.appCases(portOptName, portIdName, port.portType)
 
         inPorts :+= port
       }
@@ -303,8 +302,8 @@ class ArtNixGen(dirs: ProjectDirectories,
     }
 
     addResource(cExtensionDir, ISZ("ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage), T)
-    addResource(cExtensionDir, ISZ("ext.c"), Util.getLibraryFile("ext.c"), F)
-    addResource(cExtensionDir, ISZ("ext.h"), Util.getLibraryFile("ext.h"), F)
+    addResource(cExtensionDir, ISZ("ext.c"), SlangUtil.getLibraryFile("ext.c"), F)
+    addResource(cExtensionDir, ISZ("ext.h"), SlangUtil.getLibraryFile("ext.h"), F)
 
     var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
     if(!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir))
@@ -400,10 +399,10 @@ class ArtNixGen(dirs: ProjectDirectories,
 
     @pure def aepPortCase(portIdName: String,
                           portOptName: String,
-                          payloadTypeName: String,
+                          payloadType: DataTypeNames,
                           isData: B): ST =
       return st"""case `$portIdName` =>
-                 |  $portOptName = Some(d.asInstanceOf[$payloadTypeName]${if(!Util.isEmptyType(payloadTypeName)) ".value" else ""})
+                 |  $portOptName = Some(d.asInstanceOf[${payloadType.qualifiedPayloadName}]${if(!payloadType.isEmptyType()) ".value" else ""})
                  |  ${if(!isData) "eventArrived()" else ""}"""
 
     @pure def AEPPayload(AEPPayloadTypeName: String,
@@ -412,9 +411,9 @@ class ArtNixGen(dirs: ProjectDirectories,
 
     @pure def appCases(portOptName: String,
                        portId: String,
-                       payloadName: String): ST =
+                       payloadType: DataTypeNames): ST =
       return st"""${portOptName} match {
-                 |  case Some(v) => ArtNix.updateData(${portId}, ${if(Util.isEmptyType(payloadName)) "v" else s"${payloadName}(v)"})
+                 |  case Some(v) => ArtNix.updateData(${portId}, ${if(payloadType.isEmptyType()) "v" else s"${payloadType.qualifiedPayloadName}(v)"})
                  |  case _ =>
                  |}"""
 

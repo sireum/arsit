@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.{CTranspilerOption, Library, SlangUtil, Util}
+import org.sireum.hamr.arsit.{ArsitLibrary, CTranspilerOption, SlangUtil, Util}
 
 object StringTemplate {
 
@@ -55,26 +55,27 @@ object Base_Types {
   type Character = org.sireum.C
   type String = org.sireum.String
 
-  type Bits = org.sireum.ISZ[org.sireum.B]
+  type Bits = org.sireum.ISZ[B]
 
-  @datatype class Boolean_Payload(value: Boolean) extends art.DataContent
+  @datatype class Boolean_Payload(value: B) extends art.DataContent
 
-  @datatype class Integer_Payload(value: Integer) extends art.DataContent
-  @datatype class Integer_8_Payload(value: Integer_8) extends art.DataContent
-  @datatype class Integer_16_Payload(value: Integer_16) extends art.DataContent
-  @datatype class Integer_32_Payload(value: Integer_32) extends art.DataContent
-  @datatype class Integer_64_Payload(value: Integer_64) extends art.DataContent
+  @datatype class Integer_Payload(value: Z) extends art.DataContent
+  
+  @datatype class Integer_8_Payload(value: S8) extends art.DataContent
+  @datatype class Integer_16_Payload(value: S16) extends art.DataContent
+  @datatype class Integer_32_Payload(value: S32) extends art.DataContent
+  @datatype class Integer_64_Payload(value: S64) extends art.DataContent
 
-  @datatype class Unsigned_8_Payload(value: Unsigned_8) extends art.DataContent
-  @datatype class Unsigned_16_Payload(value: Unsigned_16) extends art.DataContent
-  @datatype class Unsigned_32_Payload(value: Unsigned_32) extends art.DataContent
-  @datatype class Unsigned_64_Payload(value: Unsigned_64) extends art.DataContent
+  @datatype class Unsigned_8_Payload(value: U8) extends art.DataContent
+  @datatype class Unsigned_16_Payload(value: U16) extends art.DataContent
+  @datatype class Unsigned_32_Payload(value: U32) extends art.DataContent
+  @datatype class Unsigned_64_Payload(value: U64) extends art.DataContent
 
-  @datatype class Float_Payload(value: Float) extends art.DataContent
-  @datatype class Float_32_Payload(value: Float_32) extends art.DataContent
-  @datatype class Float_64_Payload(value: Float_64) extends art.DataContent
+  @datatype class Float_Payload(value: R) extends art.DataContent
+  @datatype class Float_32_Payload(value: F32) extends art.DataContent
+  @datatype class Float_64_Payload(value: F64) extends art.DataContent
 
-  @datatype class Character_Payload(value: Character) extends art.DataContent
+  @datatype class Character_Payload(value: C) extends art.DataContent
   @datatype class String_Payload(value: String) extends art.DataContent
 
   @datatype class Bits_Payload(value: Bits) extends art.DataContent
@@ -106,11 +107,11 @@ object Base_Types {
   }
   
   def buildSbt(projectName: String, embedArt: B): ST = {
-    val artVersion = Library.getArtVersion()
-    val runtimeVersion = Library.getRuntimeVersion()
-    val sireumScalacVersion = Library.getSireumScalacVersionVersion()
-    val scalaTestVersion = Library.getScalaTestVersion()
-    val scalaVersion = Library.getScalaVersion()
+    val artVersion = ArsitLibrary.getArtVersion()
+    val runtimeVersion = ArsitLibrary.getRuntimeVersion()
+    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
+    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
+    val scalaVersion = ArsitLibrary.getScalaVersion()
     
     val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if(!embedArt) {
       (Some(st"""val artVersion = "${artVersion}" // https://github.com/sireum/slang-embedded-art/tree/${artVersion}"""),

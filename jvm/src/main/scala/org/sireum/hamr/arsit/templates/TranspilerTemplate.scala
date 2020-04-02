@@ -88,7 +88,7 @@ object TranspilerTemplate {
 
     val script_home = s"$${${SCRIPT_HOME}}"
 
-    val projHomesRel = opts.sourcepath.map(s => SlangUtil.relativizePaths(binDir, s, script_home))
+    val projHomesRel = opts.sourcepath.map((s: String) => SlangUtil.relativizePaths(binDir, s, script_home))
     val cOutputDirRel = SlangUtil.relativizePaths(binDir, opts.output.get, script_home)
 
     val path_sep = s"$${PATH_SEP}"
@@ -118,7 +118,7 @@ object TranspilerTemplate {
     var extras: ISZ[ST] = ISZ()
 
     if(opts.exts.nonEmpty) {
-      val extsRel = opts.exts.map(s => SlangUtil.relativizePaths(binDir, s, script_home))
+      val extsRel = opts.exts.map((s: String) => SlangUtil.relativizePaths(binDir, s, script_home))
       extras = extras :+ st""" \
                              |  --exts "${(extsRel, path_sep)}""""
     }

@@ -171,7 +171,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       return
     }
 
-    val typeNames: DataTypeNames = Util.getDataTypeNames(t, basePackage)
+    val typeNames: DataTypeNames = SlangUtil.getDataTypeNames(t, basePackage)
 
     var imports: org.sireum.Set[String] = org.sireum.Set.empty[String]
 
@@ -186,7 +186,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
         for(f <- e.fields.entries){
           val fname = f._1
-          val fieldTypeNames = Util.getDataTypeNames(f._2, basePackage)
+          val fieldTypeNames = SlangUtil.getDataTypeNames(f._2, basePackage)
 
           fldInits = fldInits :+ fieldTypeNames.empty()
 
@@ -196,7 +196,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
         Template.dataType(typeNames, flds, fldInits, None[ST]())
 
       case e: ArrayType =>
-        val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
+        val baseTypeNames = SlangUtil.getDataTypeNames(e.baseType, basePackage)
         val baseTypeEmpty = baseTypeNames.empty()
 
         val dims = Util.getArrayDimensions(e)

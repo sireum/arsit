@@ -112,7 +112,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
 
     addResource(filename, ISZ(), componentImpl, F)
 
-    var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
+    var testSuite = SlangUtil.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__PACKAGE_NAME__", names.packageName)
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, "BridgeTestSuite.scala"), st"${testSuite}", T)
@@ -129,12 +129,12 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       val params: ISZ[String] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isInFeature(f))
         .map(param => {
           val pType = Util.getFeatureEndType(param, types)
-          s"${Util.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).referencedTypeName}"
+          s"${Util.getLastName(param.identifier)} : ${SlangUtil.getDataTypeNames(pType, basePackage).referencedTypeName}"
         })
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && Util.isOutFeature(f))
       assert(rets.size == 1)
       val rType = Util.getFeatureEndType(rets(0), types)
-      val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
+      val returnType = SlangUtil.getDataTypeNames(rType, basePackage).referencedTypeName
 
       Template.subprogram(methodName, params, returnType)
     })
@@ -460,7 +460,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
     @pure def addId(s: String) : String = s + "_Id"
 
     @pure def putValue(p: Port) : ST =
-      return st"""Art.putValue(${addId(p.name)}, ${p.portType.qualifiedPayloadName}${if(Util.isEmptyType(p.portType)) "()" else "(value)"})"""
+      return st"""Art.putValue(${addId(p.name)}, ${p.portType.qualifiedPayloadName}${if(p.portType.isEmptyType()) "()" else "(value)"})"""
 
     @pure def apiCall(componentName : String, portName: String): String =
       return s"${componentName}.${portName}Api(${portName}.id)"
@@ -492,7 +492,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       if(Util.isInFeature(p.feature)) {
         return getterApi(p)
       } else {
-        return st"""def send${p.name}(${if (Util.isEmptyType(p.portType)) "" else s"value : ${p.portType.qualifiedReferencedTypeName}"}) : Unit = {
+        return st"""def send${p.name}(${if (p.portType.isEmptyType()) "" else s"value : ${p.portType.qualifiedReferencedTypeName}"}) : Unit = {
                    |  ${putValue(p)}
                    |}"""
         }
@@ -513,7 +513,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
         val typeName = p.portType.qualifiedReferencedTypeName
         return st"val apiUsage_${p.name}: Option[${typeName}] = api.get${p.name}()"
       } else {
-        val payload = if(Util.isEmptyType(p.portType)) {
+        val payload = if(p.portType.isEmptyType()) {
           ""
         } else {
           p.portType.empty()

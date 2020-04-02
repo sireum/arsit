@@ -37,17 +37,6 @@ object Util {
   val DEFAULT_BIT_WIDTH: Z = 64
   val DEFAULT_MAX_STRING_SIZE: Z = 256
 
-  val EmptyType = TODOType("--EmptyType--", None())
-  val EmptyTypeNames = DataTypeNames(EmptyType, "", "art", "Empty")
-
-  def isEmptyType(name : String): B = {
-    return name == EmptyTypeNames.qualifiedTypeName
-  }
-
-  def isEmptyType(t : DataTypeNames): B = {
-    return t.typ == EmptyType
-  }
-
   def getName(s: Name): String = s.name.elements.mkString("_")
 
   def getLastName(s: Name): String = ISZOps(s.name).last
@@ -182,21 +171,6 @@ object Util {
     return ret
   }
 
-
-  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
-    val (packageName, typeName) = if(typ == Util.EmptyType) {
-      ("art", "Empty")
-    } else {
-      val classifier = typ.container.get.classifier.get
-
-      val a = classifier.name.toString.split("::")
-      assert(a.size == 2)
-
-      (a(0), a(1))
-    }
-    return DataTypeNames(typ, topPackage, packageName, sanitizeName(typeName))
-  }
-
   @pure def getArrayDimensions(a: ArrayType): ISZ[Z] = {
     return a.container match {
       case Some(c) =>
@@ -269,7 +243,7 @@ object Util {
   @pure def getFeatureEndType(f: FeatureEnd, types: AadlTypes): AadlType = {
     return f.classifier match {
       case Some(c) => types.typeMap.get(c.name).get
-      case _ => Util.EmptyType
+      case _ => SlangUtil.EmptyType
     }
   }
 
@@ -343,7 +317,7 @@ object Util {
   
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
-    for((p, c) <- Library.getFiles if p.native.contains("art")) {
+    for((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
       val _c = 
         if(p.native.contains("Art.scala")) {
           val out = new StringBuilder()
@@ -374,19 +348,13 @@ object Util {
     return resources
   }
 
-  @pure def getLibraryFile(fileName: String): ST = {
-    val e = Library.getFiles.filter(p => p._1 == fileName)
-    assert(e.length == 1)
-    return st"${e(0)._2}"
-  }
-
   @pure def getIpc(ipcmech: Cli.IpcMechanism.Type , packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r = ipcmech match {
       case Cli.IpcMechanism.SharedMemory => "ipc_shared_memory.c"
       case Cli.IpcMechanism.MessageQueue => "ipc_message_queue.c"
     }
-    val c = getLibraryFile(r).render.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
+    val c = SlangUtil.getLibraryFile(r).render.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
     st"${c}"
   }
 }
@@ -398,10 +366,11 @@ object TypeResolver {
       case org.sireum.String("Boolean") => SlangType.B
 
       case org.sireum.String("Integer") => SlangType.Z
-      case org.sireum.String("Integer_8") => SlangType.Z8
-      case org.sireum.String("Integer_16") => SlangType.Z16
-      case org.sireum.String("Integer_32") => SlangType.Z32
-      case org.sireum.String("Integer_64") => SlangType.Z64
+        
+      case org.sireum.String("Integer_8") => SlangType.S8
+      case org.sireum.String("Integer_16") => SlangType.S16
+      case org.sireum.String("Integer_32") => SlangType.S32
+      case org.sireum.String("Integer_64") => SlangType.S64
 
       case org.sireum.String("Unsigned_8") => SlangType.U8
       case org.sireum.String("Unsigned_16") => SlangType.U16
@@ -430,7 +399,6 @@ object TypeResolver {
   def processType(c: Component, basePackage: String, typeMap: Map[String, AadlType]): AadlType = {
     assert(c.category == ComponentCategory.Data)
     val cname = c.classifier.get.name
-    val names = Util.getComponentNames(c, basePackage)
 
     val container = Some(c)
 
@@ -468,113 +436,3 @@ object TypeResolver {
   }
 }
 
-case class Names(basePackage : String,
-                 aadlPackage: String,
-                 bridge: String,
-                 component: String,
-                 componentImpl: String,
-                 c: Component) {
-
-  def packageName: String = return s"${basePackage}.${aadlPackage}"
-  
-  def packagePath: String = return s"${basePackage}/${aadlPackage}"
-  
-  def path: ISZ[String] = return ISZ(basePackage, aadlPackage)
-  
-  def instanceName: String = return Util.getName(c.identifier)
-  
-  def identifier: String = return Util.getLastName(c.identifier)
-  
-  def testName: String = return instanceName + "_Test"
-
-  def bridgeIdentifier: String = return s"${identifier}Bridge" 
-    
-  def bridgeTypeName: String = return s"${packageName}.${bridge}"
-  
-  
-  def cPackageName: String = return st"${(path, "_")}".render
-
-  def cEntryPointAdapterName: String = { return s"${component}_adapter" }
-
-  def cEntryPointAdapterQualifiedName: String = { return s"${cPackageName}_${cEntryPointAdapterName}" }
-  
-  def cComponentImplQualifiedName: String = return st"${cPackageName}_${componentImpl}".render
-
-  def cThisApi: String = return st"${cComponentImplQualifiedName}_api_".render
-
-  def cBridgeApi: String = return s"${cPackageName}_${component}_Bridge_Api"
-  
-  
-  def sel4AppName: String = return s"${componentImpl}_App"
-
-  def sel4ExtensionName: String = return s"${component}_seL4Nix"
-  
-  def sel4ExtensionStubName: String = return s"${sel4ExtensionName}_Ext"
-}
-
-case class DataTypeNames(typ: AadlType,
-                         basePackage: String,
-                         packageName: String,
-                         typeName: String) {
-
-  def filePath: String = s"$basePackage/$packageName/$typeName.scala"
-
-  def qualifiedPackageName: String = s"$basePackage.$packageName"
-
-  def qualifiedTypeName: String = s"$packageName.$typeName"
-
-  def referencedTypeName: String = typeName + (if(isEnum) ".Type" else "")
-  def qualifiedReferencedTypeName: String = s"${packageName}.${referencedTypeName}"
-
-  def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"
-  def qualifiedPayloadName: String = s"${packageName}.${payloadName}"
-
-  def qualifiedCTypeName: String = {
-    if(typ == Util.EmptyType) {
-      return "art_Empty"
-    } else {
-      val a: Array[scala.Predef.String] = typ.name.toString.split("::")
-      val tName = s"${a(0)}_${a(1)}"
-      return Util.sanitizeName(s"${basePackage}_${tName}")
-    }  
-  }
-  
-  def isEnum():B = {
-    return typ.isInstanceOf[EnumType]
-  }
-
-  def empty(): String = {
-    val ret: String = typ match {
-      case e:EnumType => s"${qualifiedTypeName}.byOrdinal(0).get"
-      case e:BaseType => s"${qualifiedTypeName}_empty()"
-      case e:ArrayType => s"${qualifiedTypeName}.empty()"
-      case e:RecordType => s"${qualifiedTypeName}.empty()"
-      case e:TODOType => s"${qualifiedTypeName}.empty()"
-    }
-    return ret
-  }
-}
-
-case class Port(feature: FeatureEnd, parent: Component,
-                _portType: AadlType, basePackageName: String,
-                dispatchTrigger: B, portId: Z){
-
-  def name: String = Util.getLastName(feature.identifier)
-  def nameWithPortId: String = s"${name}_${portId}"
-  
-  def nameId: String = s"${name}_id"
-  
-  def sel4PortVarable: String = s"${name}_port"
-  
-  def path: String = Util.getName(feature.identifier)
-
-  def parentName: String = Util.getLastName(parent.identifier)
-  def parentPath: String = Util.getName(parent.identifier)
-
-  def portType: DataTypeNames = Util.getDataTypeNames(_portType, basePackageName)
-
-  def urgency: Option[Z] = Util.getDiscreetPropertyValue[UnitProp](feature.properties, Util.Prop_Thread_Properties__Urgency) match {
-    case Some(v) => Some(v.value.toString.toDouble.toInt)
-    case _ => None()
-  }
-}

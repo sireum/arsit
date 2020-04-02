@@ -18,22 +18,63 @@ object SlangUtil {
 
   val PROP_THREAD_PROPERTIES__DISPATCH_PROTOCOL: String = "Thread_Properties::Dispatch_Protocol"
   val PROP_THREAD_PROPERTIES__PRIORITY: String =  "Thread_Properties::Priority"
-  val PROP_THREAD_PROPERTIES__PERIOD: String = "Timing_Properties::Period"
+  val PROP_THREAD_PROPERTIES__URGENCY: String = "Thread_Properties::Urgency"
 
+  val PROP_TIMING_PROPERTIES__PERIOD: String = "Timing_Properties::Period"
+  
   val PROP_DEPLOYMENT_PROPERTIES__ACTUAL_PROCESSOR_BINDING: String = "Deployment_Properties::Actual_Processor_Binding"
   val PROP_COMMUNICATION_PROPERTIES__QUEUE_SIZE: String = "Communication_Properties::Queue_Size"
 
   val PROP_MEMORY_PROPERTIES__STACK_SIZE: String = "Memory_Properties::Stack_Size"
 
   val PROP_PROGRAMMING_PROPERTIES__INITIALIZE_ENTRYPOINT_SOURCE_TEXT: String = "Programming_Properties::Initialize_Entrypoint_Source_Text"
+  val PROP_PROGRAMMING_PROPERTIES__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "Programming_Properties::Compute_Entrypoint_Source_Text"
   val PROP_PROGRAMMING_PROPERTIES__SOURCE_TEXT: String = "Programming_Properties::Source_Text"
 
   val PROP_TB_SYS__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "TB_SYS::Compute_Entrypoint_Source_Text"
   val PROP_SB_SYS__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "SB_SYS::Compute_Entrypoint_Source_Text"
-  val PROP_PROGRAMMING_PROPERTIES__COMPUTE_ENTRYPOINT_SOURCE_TEXT: String = "Programming_Properties::Compute_Entrypoint_Source_Text"
+  
 
 
   val MISSING_AADL_TYPE: String = "Missing::MISSING_AADL_TYPE"
+  
+  val EmptyType: TODOType = TODOType("art::Empty", None())
+
+
+  @pure def getProperty(properties: ISZ[ir.Property], propertyName: String): Option[ir.Property] = {
+    val op = properties.filter(container => getLastName(container.name) == propertyName)
+    val ret: Option[ir.Property] = if(op.nonEmpty) {
+      assert(op.size == 1) // sanity check, OSATE doesn't allow properties to be assigned to more than once
+      Some(op(0))
+    } else {
+      None()
+    }
+    return ret
+  }
+
+  @pure def getDiscreetPropertyValue(properties: ISZ[ir.Property], propertyName: String): Option[ir.PropertyValue] = {
+    val ret: Option[ir.PropertyValue] = getPropertyValues(properties, propertyName) match {
+      case ISZ(a) => Some(a)
+      case _ => None[ir.PropertyValue]()
+    }
+    return ret
+  }
+
+  @pure def getPropertyValues(properties: ISZ[ir.Property], propertyName: String): ISZ[ir.PropertyValue] = {
+    return properties.filter(container => getLastName(container.name) == propertyName).flatMap(p => p.propertyValues)
+  }
+
+  def getUnitPropZ(props: ISZ[ir.Property], propName: String): Option[Z] = {
+    val ret: Option[Z] = getDiscreetPropertyValue(props, propName) match {
+      case Some(v : ir.UnitProp) =>
+        R(v.value) match {
+          case Some(vv) => Some(conversions.R.toZ(vv))
+          case _ => None[Z]()
+        }
+      case _ => None[Z]()
+    }
+    return ret
+  }
   
   def isDataPort(f: ir.Feature): B = {
     return f.category == ir.FeatureCategory.DataPort
@@ -58,6 +99,10 @@ object SlangUtil {
   
   def getName(n : ir.Name) : String = {
     return st"${(n.name, "_")}".render
+  }
+  
+  def getLastName(n: ir.Name): String = {
+    return n.name(n.name.size - 1)
   }
   
   def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
@@ -133,9 +178,53 @@ object SlangUtil {
   }
 
   @pure def getLibraryFile(fileName: String): ST = {
-    val e = Library.getFiles.filter(p => p._1 == fileName)
-    assert(e.length == 1)
+    val e = ArsitLibrary.getFiles.filter(p => p._1 == fileName)
+    assert(e.size == 1)
     return st"${e(0)._2}"
+  }
+
+  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
+    val (packageName, typeName): (String, String) = if(typ == SlangUtil.EmptyType) {
+      ("art", "Empty")
+    } else {
+      val classifier = typ.container.get.classifier.get
+
+      val a = ops.StringOps(ops.StringOps(classifier.name).replaceAllLiterally("::", "|")).split((c: C) => c == c"|")
+      assert(a.size == 2)
+
+      (a(0), a(1))
+    }
+    return DataTypeNames(typ, topPackage, packageName, StringUtil.sanitizeName(typeName))
+  }
+}
+
+object StringUtil {
+  def getDirectory(path: String): String = {
+    val so = StringOps(path)
+    val index = so.lastIndexOf('/')
+    if(index >= 0) {
+      return so.substring(0, index + 1)
+    } else {
+      return path
+    }
+  }
+
+  def replaceAll(s: String, from: String, to: String): String = {
+    return StringOps(s).replaceAllLiterally(from, to)
+  }
+
+  def toLowerCase(s: String):String = {
+    val cms = conversions.String.toCms(s)
+    return conversions.String.fromCms(cms.map((c: C) => COps(c).toLower))
+  }
+
+  def toUpperCase(s: String):String = {
+    val cms = conversions.String.toCms(s)
+    return conversions.String.fromCms(cms.map((c: C) => COps(c).toUpper))
+  }
+
+  def sanitizeName(s: String): String = {
+    return replaceAll(replaceAll(s, "-", "_"), ".", "_")
   }
 }
 
@@ -173,7 +262,7 @@ object Cli {
 }
 
 
-@ext object Library {
+@ext object ArsitLibrary {
   def getFiles: ISZ[(String, String)] = $
 
   def getArtVersion(): String = $
@@ -253,10 +342,11 @@ object HAMR {
   'B   // Base_Types::Boolean
 
   'Z   // Base_Types::Integer
-  'Z8  // Base_Types::Integer_8
-  'Z16 // Base_Types::Integer_16
-  'Z32 // Base_Types::Integer_32
-  'Z64 // Base_Types::Integer_64
+  
+  'S8  // Base_Types::Integer_8
+  'S16 // Base_Types::Integer_16
+  'S32 // Base_Types::Integer_32
+  'S64 // Base_Types::Integer_64
 
   'U8  // Base_Types::Unsigned_8
   'U16 // Base_Types::Unsigned_16
@@ -271,6 +361,133 @@ object HAMR {
 
   'C   // Base_Types::Character
   'String // Base_Types::String
+}
+
+@datatype class DataTypeNames(typ: AadlType,
+                              basePackage: String,
+                              packageName: String,
+                              typeName: String) {
+
+  val split: ISZ[String] = ops.StringOps(ops.StringOps(typ.name).replaceAllChars(':', '|')).split(c => c == '|')
+
+  def filePath: String = { return s"$basePackage/$packageName/$typeName.scala" }
+
+  def qualifiedPackageName: String = { return s"$basePackage.$packageName" }
+
+  def qualifiedTypeName: String = { return s"$packageName.$typeName" }
+
+  def referencedTypeName: String = { return s"${typeName}${ if(isEnum()) ".Type" else "" }" }
+
+  def qualifiedReferencedTypeName: String = {
+    val ret: String = typ match {
+      case b: BaseType => b.slangType.string
+      case _ => s"${packageName}.${referencedTypeName}"
+    }
+    return ret
+  }
+
+  def payloadName: String = { return if(typ == SlangUtil.EmptyType) typeName else s"${typeName}_Payload" }
+  def qualifiedPayloadName: String = { return s"${packageName}.${payloadName}" }
+
+  def qualifiedCTypeName: String = {
+    val ret : String = if(typ == SlangUtil.EmptyType) {
+      "art_Empty"
+    } else {
+      typ match {
+        case b: BaseType => b.slangType.string
+        case _ => StringUtil.sanitizeName(s"${basePackage}_${split(0)}_${split(1)}")
+      }
+    }
+    return ret
+  }
+
+  def isBaseType(): B = { return typ.isInstanceOf[BaseType] }
+
+  def isEnum(): B = { return typ.isInstanceOf[EnumType] }
+
+  def isEmptyType(): B = { return typ == SlangUtil.EmptyType }
+
+  def isAadlType(): B = { return !isBaseType() && !isEmptyType() }
+
+  def empty(): String = {
+    val ret: String = typ match {
+      case e:EnumType => s"${qualifiedTypeName}.byOrdinal(0).get"
+      case e:BaseType => s"${qualifiedTypeName}_empty()"
+      case e:ArrayType => s"${qualifiedTypeName}.empty()"
+      case e:RecordType => s"${qualifiedTypeName}.empty()"
+      case e:TODOType => s"${qualifiedTypeName}.empty()"
+    }
+    return ret
+  }
+}
+
+
+@datatype class Names(basePackage : String,
+                      aadlPackage: String,
+                      bridge: String,
+                      component: String,
+                      componentImpl: String,
+                      c: ir.Component) {
+
+  def packageName: String = { return s"${basePackage}.${aadlPackage}" }
+
+  def packagePath: String = { return s"${basePackage}/${aadlPackage}" }
+
+  def path: ISZ[String] = { return ISZ(basePackage, aadlPackage) }
+
+  def instanceName: String = { return SlangUtil.getName(c.identifier) }
+
+  def identifier: String = { return SlangUtil.getLastName(c.identifier) }
+
+  def testName: String = { return s"${instanceName}_Test" }
+
+  def bridgeIdentifier: String = { return s"${identifier}Bridge" }
+
+  def bridgeTypeName: String = { return s"${packageName}.${bridge}" }
+
+
+  def cPackageName: String = { return st"${(path, "_")}".render }
+
+  def cEntryPointAdapterName: String = { return s"${component}_adapter" }
+
+  def cEntryPointAdapterQualifiedName: String = { return s"${cPackageName}_${cEntryPointAdapterName}" }
+
+  def cComponentImplQualifiedName: String = { return st"${cPackageName}_${componentImpl}".render }
+
+  def cThisApi: String = { return st"${cComponentImplQualifiedName}_api_".render }
+
+  def cBridgeApi: String = { return s"${cPackageName}_${component}_Bridge_Api" }
+
+
+  def sel4AppName: String = { return s"${componentImpl}_App" }
+
+  def sel4ExtensionName: String = { return s"${component}_seL4Nix" }
+
+  def sel4ExtensionStubName: String = { return s"${sel4ExtensionName}_Ext" }
+}
+
+@datatype class Port(feature: ir.FeatureEnd,
+                     parent: ir.Component,
+                     _portType: AadlType,
+                     basePackageName: String,
+                     dispatchTrigger: B,
+                     portId: Z){
+
+  def name: String = { return SlangUtil.getLastName(feature.identifier) }
+  def nameWithPortId: String = { return s"${name}_${portId}" }
+
+  def nameId: String = { return s"${name}_id" }
+
+  def sel4PortVarable: String = { return s"${name}_port" }
+
+  def path: String = { return SlangUtil.getName(feature.identifier) }
+
+  def parentName: String = { return SlangUtil.getLastName(parent.identifier) }
+  def parentPath: String = { return SlangUtil.getName(parent.identifier) }
+
+  def portType: DataTypeNames = { return SlangUtil.getDataTypeNames(_portType, basePackageName) }
+
+  def urgency: Option[Z] = { return SlangUtil.getUnitPropZ(feature.properties, SlangUtil.PROP_THREAD_PROPERTIES__URGENCY) }
 }
 
 object Transformers {

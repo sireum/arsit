@@ -16,7 +16,7 @@ object ArchTemplate {
   @pure def dispatchProtocol(dp: DispatchProtocol.Type, period: Z): ST = {
     val ret: ST = dp match {
       case DispatchProtocol.Sporadic => st"Sporadic(min = $period)"
-      case DispatchProtocol.Periodic =>st"Periodic(period = $period)"
+      case DispatchProtocol.Periodic => st"Periodic(period = $period)"
     }  
     return ret
   }
@@ -37,9 +37,9 @@ object ArchTemplate {
 
     import FeatureCategory._
     val prefix: String = port.feature.category match {
-      case EventPort => "Event"
-      case EventDataPort => "Event"
-      case DataPort => "Data"
+      case FeatureCategory.EventPort => "Event"
+      case FeatureCategory.EventDataPort => "Event"
+      case FeatureCategory.DataPort => "Data"
       case _ => halt(s"Not handling ${port.feature.category}")
     }
 
@@ -61,10 +61,12 @@ object ArchTemplate {
                    dispatchProtocol: ST,
                    dispatchTriggers: Option[ISZ[String]],
                    ports: ISZ[Port]): ST = {
-    val _ports = ports.map(p => genPort(p))
-    val _args = ports.map(p => st"${p.name} = ${p.name}")
+    val _ports = ports.map((p : Port) => genPort(p))
+    val _args = ports.map((p : Port) => st"${p.name} = ${p.name}")
 
-    val _dispatchTriggers: ST = if(dispatchTriggers.isEmpty) st"None()" else st"Some(ISZ(${(dispatchTriggers.get.map(f => s"${f}.id"), ", ")}))"
+    val _dispatchTriggers: ST = 
+      if(dispatchTriggers.isEmpty) st"None()" 
+      else st"Some(ISZ(${(dispatchTriggers.get.map((f: String) => s"${f}.id"), ", ")}))"
     
     return st"""val ${bridgeIdentifier} : ${typeName} = {
                |  ${(_ports, "\n")}
@@ -87,7 +89,7 @@ object ArchTemplate {
                                     bridges : ISZ[ST],
                                     components : ISZ[String],
                                     connections: ISZ[ST]): ST = {
-    val _imports = imports.map(m => st"import ${m}")
+    val _imports = imports.map((m: String) => st"import ${m}")
     
     return st"""// #Sireum
                |

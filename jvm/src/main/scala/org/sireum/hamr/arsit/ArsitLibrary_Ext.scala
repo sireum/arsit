@@ -4,7 +4,7 @@ import org.sireum._
 import org.sireum.$internal.RC
 import java.io.StringReader
 
-object Library_Ext {
+object ArsitLibrary_Ext {
 
   def getFiles: ISZ[(String, String)] = {
     val map = RC.text(Vector(

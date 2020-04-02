@@ -450,36 +450,12 @@ class SeL4NixGen(dirs: ProjectDirectories,
     var counter: Z = z"0"
     for(t <- types.typeMap.entries) {
       val typ = t._2
-      val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
+      val typeNames: DataTypeNames = SlangUtil.getDataTypeNames(typ, basePackage)
       a = a :+ Sel4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
       counter = counter + z"1"
     }
     a = a :+ Sel4NixTemplate.touchType("art.Empty", None())
     return a
-  }
-
-  @pure def stableTypeSig(t: String, width: Z): String = {
-    val max: Z = if (0 < width && width <= 64) width else 64
-    val bytes = ops.ISZOps(crypto.SHA3.sum512(conversions.String.toU8is(t))).take(max)
-    var cs = ISZ[C]()
-    for (b <- bytes) {
-      val c = conversions.U32.toC(conversions.U8.toU32(b))
-      cs = cs :+ ops.COps.hex2c((c >>> '\u0004') & '\u000F')
-      cs = cs :+ ops.COps.hex2c(c & '\u000F')
-    }
-    return st"$cs".render
-  }
-  
-  @pure def getTypeSignatures(slangTypeName: String) : (String, String, String) = {
-    val optionType = s"Option[${slangTypeName}]"
-    val someType = s"Some[${slangTypeName}]"
-    val noneType = s"None[${slangTypeName}]"
-
-    val optionSig = s"Option_${stableTypeSig(optionType, 3)}"
-    val someSig = s"Some_${stableTypeSig(someType, 3)}"
-    val noneSig = s"None_${stableTypeSig(noneType, 3)}"
-    
-    return (optionSig, someSig, noneSig)
   }
 
   def genStubInitializeMethod(names: Names, ports: ISZ[Port]): ST = {
@@ -507,8 +483,8 @@ class SeL4NixGen(dirs: ProjectDirectories,
     
     val extC = root / "ext.c"
     val extH = root / "ext.h"
-    addResource(extC.up.value, ISZ(extC.name), Util.getLibraryFile("ext.c"), F)
-    addResource(extH.up.value, ISZ(extH.name), Util.getLibraryFile("ext.h"), F)
+    addResource(extC.up.value, ISZ(extC.name), SlangUtil.getLibraryFile("ext.c"), F)
+    addResource(extH.up.value, ISZ(extH.name), SlangUtil.getLibraryFile("ext.h"), F)
     
     extensionFiles = (extensionFiles :+ extC) :+ extH
     
@@ -519,30 +495,27 @@ class SeL4NixGen(dirs: ProjectDirectories,
       var headerMethods: ISZ[ST] = ISZ()
       var implMethods: ISZ[ST] = ISZ()
       for(p <- ports) {
-        val typeNames = Util.getDataTypeNames(p._portType, basePackage)
+        val typeNames = SlangUtil.getDataTypeNames(p._portType, basePackage)
           
-        val slangTypeName: String = if(p._portType == Util.EmptyType ) {
-          typeNames.qualifiedReferencedTypeName
-        } else {
-          s"${basePackage}.${typeNames.qualifiedReferencedTypeName}"
-        }
-        
         var params = ISZ(st"${componentName} this")
         
         if(Util.isInFeature(p.feature)) {
           
           val methodName = Sel4NamesUtil.apiHelperMethodName(s"get_${p.name}", names)
           val returnType = "B"
-          val pointer: String = if(typeNames.isEnum()) "*" else ""
+          val pointer: String = if(typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
           params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
 
           val signature = Sel4NixTemplate.methodSignature(methodName, None(), params, returnType)
           val apiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
 
-          val (optionSig, someSig, noneSig) = getTypeSignatures(slangTypeName)          
           headerMethods = headerMethods :+ st"${signature};"
-          implMethods = implMethods :+ Sel4NixTemplate.apiGet(signature, apiGetMethodName, names.cThisApi,
-            typeNames.qualifiedCTypeName, optionSig, someSig, noneSig, typeNames.isEnum())
+
+          implMethods = implMethods :+ Sel4NixTemplate.apiGet(
+            signature, 
+            apiGetMethodName, 
+            names.cThisApi,
+            typeNames)
           
         } else {
           val isEventPort = p.feature.category == FeatureCategory.EventPort
@@ -618,7 +591,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
               val handlerName = s"${componentName}_handle${p.name}"
               var eventDataParams = params
               if(p.feature.category == FeatureCategory.EventDataPort) {
-                val typeNames = Util.getDataTypeNames(p._portType, basePackage)
+                val typeNames = SlangUtil.getDataTypeNames(p._portType, basePackage)
                 eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
               }
               val handler = Sel4NixTemplate.methodSignature(s"${handlerName}_", preParams, eventDataParams, "Unit")
