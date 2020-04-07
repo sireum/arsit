@@ -6,21 +6,16 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
 
-class SeL4NixGen(dirs: ProjectDirectories,
-                m: Aadl,
-                arsitOptions: Cli.ArsitOption,
-                types: AadlTypes,
-                previousPhase: Result) {
-  
-  var cExtensionDir : String = _
-
-  var cUserExtensionDir : Option[String] = None()
+case class SeL4NixGen(val dirs: ProjectDirectories,
+                      val cExtensionDir: String,
+                      val model: Aadl,
+                      val arsitOptions: Cli.ArsitOption,
+                      val types: AadlTypes,
+                      val previousPhase: Result) extends NixGen {
 
   val basePackage: String = arsitOptions.packageName
 
   var componentMap : HashMap[String, Component] = HashMap.empty
-
-  var systemImplmentation: Component = _
 
   var resources: ISZ[Resource] = ISZ()
 
@@ -34,22 +29,10 @@ class SeL4NixGen(dirs: ProjectDirectories,
   var inConnections: HashMap[String, ISZ[ConnectionInstance]] = HashMap.empty
   var outConnections: HashMap[String, ISZ[ConnectionInstance]] = HashMap.empty
 
-  def generator(): ArsitResult = {
+  def generate(): ArsitResult = {
     assert(arsitOptions.platform == Cli.ArsitPlatform.SeL4)
 
-    cExtensionDir = if (arsitOptions.auxCodeDir.nonEmpty) {
-      assert(arsitOptions.auxCodeDir.size == 1)
-      arsitOptions.auxCodeDir(0)
-    } else {
-      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
-    }
-
-    if (arsitOptions.auxCodeDir.nonEmpty) {
-      assert(arsitOptions.auxCodeDir.size == 1)
-      cUserExtensionDir = Some(arsitOptions.auxCodeDir(0))
-    }
-
-    gen(m)
+    gen(model)
 
     return ArsitResult(
       previousPhase.resources() ++ resources,
@@ -70,7 +53,6 @@ class SeL4NixGen(dirs: ProjectDirectories,
 
     assert(model.components.size == 1)
     assert(Util.isSystem(model.components(0)))
-    systemImplmentation = model.components(0)
 
     resolve(model)
 
@@ -89,13 +71,13 @@ class SeL4NixGen(dirs: ProjectDirectories,
     var sel4CompileScripts: ISZ[ST] = ISZ()
     val typeTouches: ISZ[ST] = genTypeTouches(types)
     
-    for (m <- components) {
+    for (component <- components) {
 
-      val names: Names = Util.getComponentNames(m, basePackage)
+      val names: Names = Util.getComponentNames(component, basePackage)
 
-      val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"0")
+      val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
       
-      val dispatchStatus = genDispatchStatus(names, ports, Util.getSlangEmbeddedDispatchProtocol(m))
+      val dispatchStatus = genDispatchStatus(names, ports, Util.getSlangEmbeddedDispatchProtocol(component))
 
       val instanceName: String = names.instanceName
 
@@ -109,8 +91,8 @@ class SeL4NixGen(dirs: ProjectDirectories,
 
       val sendOutput: ST = genSendOutput(ports, names)
 
-      val period: Z = Util.getPeriod(m)
-      val dispatchProtocol: DispatchProtocol.Type = Util.getDispatchProtocol(m).get
+      val period: Z = Util.getPeriod(component)
+      val dispatchProtocol: DispatchProtocol.Type = Util.getDispatchProtocol(component).get
 
       val bridge = ArchTemplate.bridge(
         names.bridgeIdentifier,
@@ -118,7 +100,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
         names.bridgeTypeName,
         z"0",
         ArchTemplate.dispatchProtocol(dispatchProtocol, period),
-        Util.getDispatchTriggers(m),
+        Util.getDispatchTriggers(component),
         ports)
 
       val app = Sel4NixTemplate.app(
@@ -144,20 +126,20 @@ class SeL4NixGen(dirs: ProjectDirectories,
       
       { // extension objects
         
-        val extensionObject: ST = genExtensionObject(ports, names)
+        val slangExtensionObject: ST = genSlangSel4ExtensionObject(ports, names)
 
         addResource(
           dirs.seL4NixDir,
           ISZ(names.packagePath, s"${names.sel4ExtensionName}.scala"),
-          extensionObject,
+          slangExtensionObject,
           T)
 
-        val extensionObjectStub: ST = genExtensionObjectStub(ports, basePackage, names)
+        val slangExtensionObjectStub: ST = genSlangSel4ExtensionObjectStub(ports, basePackage, names)
 
         addResource(
           dirs.seL4NixDir,
           ISZ(names.packagePath, s"${names.sel4ExtensionStubName}.scala"),
-          extensionObjectStub,
+          slangExtensionObjectStub,
           T)
       }
       
@@ -166,9 +148,11 @@ class SeL4NixGen(dirs: ProjectDirectories,
       val relPath = s"${cOutputDir.up.name}/${instanceName}"
       sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath)
 
-      val exts: ISZ[Os.Path] = genExtensionFiles(m, names, ports)
+      val (paths, extResources) = genExtensionFiles(component, names, ports)
+      resources = resources ++ extResources
+      val exts: ISZ[Os.Path] = paths ++ genSel4Adapters(names)
 
-      val stackSize: Z = Util.getStackSizeInBytes(m) match {
+      val stackSize: Z = Util.getStackSizeInBytes(component) match {
         case Some(size) => size
         case _ => maxStackSize
       }
@@ -187,7 +171,6 @@ class SeL4NixGen(dirs: ProjectDirectories,
     { // Slang Type Library
       
       val id = "SlangTypeLibrary"
-      //val dataDir = "data"
       val cOutputDir: Os.Path = rootCOutputDir / id
       val relPath = s"${cOutputDir.up.name}/${id}"
       
@@ -218,7 +201,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
     }
     
     val sel4CompileScript = TranspilerTemplate.compileLibPreamble(sel4CompileScripts)
-    addExeResource(rootCOutputDir.value, ISZ("..", "compile-hamr-lib.sh"), sel4CompileScript, T)
+    addExeResource(rootCOutputDir.value, ISZ("..", "bin", "compile-hamr-lib.sh"), sel4CompileScript, T)
     
     val scripts = transpilerScripts.values.map(m => m._1)
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map(m => m._2)
@@ -312,7 +295,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
 
   def genExtensionMethodName(p: Port, methodName: String): String = { return s"${p.name}_${methodName}" }
   
-  def genExtensionObject(ports: ISZ[Port], names: Names): ST = {
+  def genSlangSel4ExtensionObject(ports: ISZ[Port], names: Names): ST = {
     val entries: ISZ[ST] = ports.map(p => {
       if(Util.isInFeature(p.feature)) {
         st"""// returns T if seL4's ${p.name} port is empty, F otherwise 
@@ -328,7 +311,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
     return Sel4NixTemplate.extensionObject(names.packageName, names.sel4ExtensionName, st"${(entries, "\n\n")}")
   }
   
-  def genExtensionObjectStub(ports: ISZ[Port], packageName: String, names: Names): ST = {
+  def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], packageName: String, names: Names): ST = {
     val entries: ISZ[ST] = ports.map(p => {
       if(Util.isInFeature(p.feature)) {
         st"""def ${genExtensionMethodName(p, "IsEmpty")}(): B = halt("stub")
@@ -352,7 +335,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
                         customConstants: ISZ[String],
                         maxStackSize: Z,
 
-                        extensions: ISZ[String],
+                        extensions: ISZ[Os.Path],
                         excludes: ISZ[String]): (ST, CTranspilerOption) = {
     val packageName = s"${basePackage}/${instanceName}"
     val appName = s"${basePackage}.${instanceName}.${identifier}"
@@ -381,7 +364,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
       customArraySizes = customSequenceSizes,
       customConstants = customConstants,
       stackSizeInBytes = maxStackSize,
-      extensions = extensions,
+      extensions = extensions.map(m => m.value),
       excludes = excludes,
       buildApps = buildApps,
       additionalInstructions = additionalInstructions
@@ -411,8 +394,6 @@ class SeL4NixGen(dirs: ProjectDirectories,
     } else {
       ISZ()
     }
-
-    val extensions: ISZ[String] = cExtensions.map(p => p.value) //ISZ(s"${cExtensionDir}/ext.c", s"${cExtensionDir}/ext.h")
     
     val customSequenceSizes: ISZ[String] = ISZ(
       s"MS[Z,art.Bridge]=1",
@@ -440,7 +421,7 @@ class SeL4NixGen(dirs: ProjectDirectories,
       customConstants = customConstants,
       maxStackSize = maxStackSize,
 
-      extensions = extensions,
+      extensions = cExtensions,
       excludes = excludes)
   }
 
@@ -458,202 +439,46 @@ class SeL4NixGen(dirs: ProjectDirectories,
     return a
   }
 
-  def genStubInitializeMethod(names: Names, ports: ISZ[Port]): ST = {
-    val preParams = Some(st"STACK_FRAME")
-    val params: ISZ[ST] = ISZ(st"${names.cComponentImplQualifiedName} this")
-    val initialiseMethod = Sel4NixTemplate.methodSignature(s"${names.cComponentImplQualifiedName}_initialise_", preParams, params, "Unit")
+  def genSel4Adapters(names: Names) : ISZ[Os.Path] = {
     
-    val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
-    val statements = loggers.map(l => {
-      val mname = Sel4NamesUtil.apiHelperMethodName(l, names)
-      st"""${mname}(this, string("Example ${l}"));"""
-    })
-    val ret: ST = st"""${initialiseMethod} {
-                      | // example api usage
-                      |  
-                      | ${(statements, "\n")}
-                      |}"""
-    return ret
-  }
-
-  def genExtensionFiles(c: Component, names: Names, ports: ISZ[Port]): ISZ[Os.Path] = {
     val root = Os.path(cExtensionDir)
-      
+    
     var extensionFiles: ISZ[Os.Path] = ISZ()
     
-    val extC = root / "ext.c"
-    val extH = root / "ext.h"
-    addResource(extC.up.value, ISZ(extC.name), SlangUtil.getLibraryFile("ext.c"), F)
-    addResource(extH.up.value, ISZ(extH.name), SlangUtil.getLibraryFile("ext.h"), F)
-    
-    extensionFiles = (extensionFiles :+ extC) :+ extH
-    
-    if(arsitOptions.excludeImpl) {
+    val fileName = names.cEntryPointAdapterName
+    val macroName = SlangUtil.toUpperCase(s"${fileName}_h")
+    val implFile = root / "adapters" / names.instanceName / s"${fileName}.c"
+    val headerFile = root / "adapters" / names.instanceName / s"${fileName}.h"
 
-      val componentName = names.cComponentImplQualifiedName
+    var implMethods: ISZ[ST] = ISZ()
+    var headerMethods: ISZ[ST] = ISZ()
 
-      var headerMethods: ISZ[ST] = ISZ()
-      var implMethods: ISZ[ST] = ISZ()
-      for(p <- ports) {
-        val typeNames = SlangUtil.getDataTypeNames(p._portType, basePackage)
-          
-        var params = ISZ(st"${componentName} this")
-        
-        if(Util.isInFeature(p.feature)) {
-          
-          val methodName = Sel4NamesUtil.apiHelperMethodName(s"get_${p.name}", names)
-          val returnType = "B"
-          val pointer: String = if(typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
-          params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
+    val methods: ISZ[String] = ISZ("initialiseArchitecture", "initialiseEntryPoint", "computeEntryPoint")
+    for(m <- methods) {
+      val methodName = s"${names.cEntryPointAdapterQualifiedName}_${m}"
 
-          val signature = Sel4NixTemplate.methodSignature(methodName, None(), params, returnType)
-          val apiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
+      val signature = Sel4NixTemplate.methodSignature(methodName, None(), ISZ(), "Unit")
 
-          headerMethods = headerMethods :+ st"${signature};"
+      val route = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${m}"
 
-          implMethods = implMethods :+ Sel4NixTemplate.apiGet(
-            signature, 
-            apiGetMethodName, 
-            names.cThisApi,
-            typeNames)
-          
-        } else {
-          val isEventPort = p.feature.category == FeatureCategory.EventPort
+      implMethods = implMethods :+ st"""${signature} {
+                                       |  ${route}(SF_LAST);
+                                       |}"""
 
-          val methodName = Sel4NamesUtil.apiHelperMethodName(s"send_${p.name}", names)
-          val returnType = "Unit"
-          val sendSet: String = if(Util.isDataPort(p.feature)) "set" else "send"
-          if(!isEventPort) {
-            params = params :+ st"${typeNames.qualifiedCTypeName} value"
-          }
-
-          val signature = Sel4NixTemplate.methodSignature(methodName, None(), params, returnType)
-          val apiSetMethodName = s"${names.cBridgeApi}_${sendSet}${p.name}_"
-          
-          headerMethods = headerMethods :+ st"${signature};"
-          implMethods = implMethods :+ Sel4NixTemplate.apiSet(signature, apiSetMethodName, names.cThisApi, isEventPort)
-        }
-      }
-
-      { // logging methods
-        
-        val loggers = ISZ("logInfo", "logDebug", "logError")
-        
-        for(l <- loggers) {
-          val methodName = Sel4NamesUtil.apiHelperMethodName(l, names)
-          val params = ISZ(st"${componentName} this", st"String str")
-
-          val signature = Sel4NixTemplate.methodSignature(methodName, None(), params, "Unit")
-          
-          val apiLogMethodName = s"${names.cBridgeApi}_${l}_"
-
-          headerMethods = headerMethods :+ st"${signature};"
-          implMethods = implMethods :+ Sel4NixTemplate.apiLog(signature, apiLogMethodName, names.cThisApi)
-        }
-      }
-      
-      
-      val extRoot = root / names.componentImpl
-      val apiHeaderName = s"${names.componentImpl}_api"
-
-      val headerApiFile = extRoot / s"${apiHeaderName}.h"
-      val implApiFile =  extRoot / s"${apiHeaderName}.c"
-      
-      val macroName = SlangUtil.toUpperCase(s"${apiHeaderName}_h")
-            
-      val headerContents = Sel4NixTemplate.cHeaderFile(macroName, headerMethods)
-      
-      val implContents = Sel4NixTemplate.cImplFile(apiHeaderName, implMethods)
-
-      extensionFiles = extensionFiles :+ headerApiFile
-      extensionFiles = extensionFiles :+ implApiFile
-
-      addResource(headerApiFile.up.value, ISZ(headerApiFile.name), headerContents, T)
-      addResource(implApiFile.up.value, ISZ(implApiFile.name), implContents, T)
-      
-      val preParams: Option[ST] = Some(st"STACK_FRAME")
-      val params: ISZ[ST] = ISZ(st"${componentName} this")
-
-      { // add entrypoint stubs
-        
-        var methods : ISZ[ST] = ISZ(genStubInitializeMethod(names, ports))
-        
-        Util.getDispatchProtocol(c) match {
-          case Some(DispatchProtocol.Periodic) =>
-            // timetriggered
-            val timeTriggered = Sel4NixTemplate.methodSignature(s"${componentName}_timeTriggered_", preParams, params, "Unit")
-            methods = methods :+ st"${timeTriggered} {}"
-            
-          case Some(DispatchProtocol.Sporadic) =>
-            val inEventPorts = ports.filter(f => Util.isEventPort(f.feature) && Util.isInFeature(f.feature))
-            
-            for(p <- inEventPorts) {
-              val handlerName = s"${componentName}_handle${p.name}"
-              var eventDataParams = params
-              if(p.feature.category == FeatureCategory.EventDataPort) {
-                val typeNames = SlangUtil.getDataTypeNames(p._portType, basePackage)
-                eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
-              }
-              val handler = Sel4NixTemplate.methodSignature(s"${handlerName}_", preParams, eventDataParams, "Unit")
-              val logInfo = Sel4NamesUtil.apiHelperMethodName("logInfo", names);
-              methods = methods :+ st"""${handler} {
-                                       |  
-                                       |  DeclNewString(${p.name}String);
-                                       |  String__append((String) &${p.name}String, string("${handlerName} called"));
-                                       |  ${logInfo} (this, (String) &${p.name}String);
-                                       |}"""               
-            }
-          case x => halt(s"Unexpected dispatch protocol ${x}")
-        }
-        
-        val impl = st"""#include <${apiHeaderName}.h>
-                       |#include <ext.h>
-                       |
-                       |${(methods, "\n\n")}
-                       |"""
-
-        val implFile = extRoot / s"${names.componentImpl}.c"
-        extensionFiles = extensionFiles :+ implFile
-        addResource(implFile.up.value, ISZ(implFile.name), impl, F)
-      }
+      headerMethods = headerMethods :+ st"${signature};"
     }
-    
-    { // adapters
-      val fileName = names.cEntryPointAdapterName
-      val macroName = SlangUtil.toUpperCase(s"${fileName}_h")
-      val implFile = root / "adapters" / names.instanceName / s"${fileName}.c"
-      val headerFile = root / "adapters" / names.instanceName / s"${fileName}.h"
-      
-      var implMethods: ISZ[ST] = ISZ()
-      var headerMethods: ISZ[ST] = ISZ()
-      
-      val methods: ISZ[String] = ISZ("initialiseArchitecture", "initialiseEntryPoint", "computeEntryPoint")
-      for(m <- methods) {
-        val methodName = s"${names.cEntryPointAdapterQualifiedName}_${m}"
-        
-        val signature = Sel4NixTemplate.methodSignature(methodName, None(), ISZ(), "Unit")
-        
-        val route = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${m}"
-        
-        implMethods = implMethods :+ st"""${signature} {
-                                         |  ${route}(SF_LAST);
-                                         |}"""
-        
-        headerMethods = headerMethods :+ st"${signature};"
-      }
-      
-      val impl = Sel4NixTemplate.cImplFile(fileName, implMethods)
-      val header = Sel4NixTemplate.cHeaderFile(macroName, headerMethods)
 
-      addResource(implFile.up.value, ISZ(implFile.name), impl, T)
-      addResource(headerFile.up.value, ISZ(headerFile.name), header, T)
-      
-      extensionFiles = (extensionFiles :+ headerFile) :+ implFile
-    }
+    val impl = Sel4NixTemplate.cImplFile(fileName, implMethods)
+    val header = Sel4NixTemplate.cHeaderFile(macroName, headerMethods)
+
+    addResource(implFile.up.value, ISZ(implFile.name), impl, T)
+    addResource(headerFile.up.value, ISZ(headerFile.name), header, T)
+
+    extensionFiles = (extensionFiles :+ headerFile) :+ implFile
     
     return extensionFiles
-  }
-  
+  } 
+     
   def resolve(model: Aadl): B = {
     var connections: ISZ[ConnectionInstance] = ISZ()
     
@@ -716,9 +541,3 @@ class SeL4NixGen(dirs: ProjectDirectories,
   }
 
 }
-
-object SeL4NixGen{
-  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes, previousPhase: Result) : ArsitResult =
-    new SeL4NixGen(dirs, m, o, types, previousPhase).generator()
-}
-

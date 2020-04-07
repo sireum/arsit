@@ -106,13 +106,14 @@ object Base_Types {
     return ret
   }
   
-  def buildSbt(projectName: String, embedArt: B): ST = {
+  def buildSbt(projectName: String, 
+               embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
     val runtimeVersion = ArsitLibrary.getRuntimeVersion()
     val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
     val scalaVersion = ArsitLibrary.getScalaVersion()
-    
+
     val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if(!embedArt) {
       (Some(st"""val artVersion = "${artVersion}" // https://github.com/sireum/slang-embedded-art/tree/${artVersion}"""),
         Some(st""""org.sireum.slang-embedded-art" %% "slang-embedded-art" % artVersion withSources() withJavadoc(),"""),
@@ -161,7 +162,8 @@ val slangEmbeddedSettings = Seq(
   Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/bridge",
   Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/component",
   Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/data",
-  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/nix"
+  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/nix",
+  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/seL4Nix" 
 )
 
 def standardProject(projId: String, projectDirectory: String) =
@@ -181,5 +183,10 @@ def slangEmbeddedTestProject(projId: String, projectDirectory: String) =
 """
     return ret
   }
-
+  
+  def sbtProject(): ST = {
+    val sbtVersion: String = ArsitLibrary.getSBTVersion()
+    return st"""sbt.version=${sbtVersion}
+               |"""
+  }
 }

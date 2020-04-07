@@ -30,7 +30,7 @@ object Arsit {
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val nixPhase = nix.NixGen.generate(projectDirectories, model, o, typeMap,
+    val nixPhase = nix.NixGenDispatch.generate(projectDirectories, model, o, typeMap,
       ArtStubGenerator(projectDirectories, model, o, typeMap,
         ArtArchitectureGen(projectDirectories, model, o, typeMap)))
 
@@ -39,11 +39,15 @@ object Arsit {
       artResources = Util.copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
-    val dest = (Os.path(o.outputDir) / "build.sbt").value
+    val dest = Os.path(o.outputDir) / "build.sbt"
     val projectName = Util.getLastName(m.components(0).identifier)
     val buildSbt = StringTemplate.buildSbt(projectName, o.embedArt)
-    artResources = artResources :+ Resource(dest, buildSbt, F, F)
-
+    artResources = artResources :+ Resource(dest.value, buildSbt, F, F)
+    
+    val projectFile = StringTemplate.sbtProject()
+    val projectFileDest = Os.path(o.outputDir) / "project/build.properties"
+    artResources = artResources :+ Resource(projectFileDest.value, projectFile, F, F)
+    
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
       nixPhase.maxComponent,

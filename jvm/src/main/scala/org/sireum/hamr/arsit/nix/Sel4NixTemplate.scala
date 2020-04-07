@@ -218,12 +218,15 @@ object Sel4NixTemplate {
                    |  
                    |  def computeEntryPoint(): Unit = { entryPoints.compute() }
                    |  
+                   |  def finaliseEntryPoint(): Unit = { entryPoints.finalise() }
+                   |  
                    |  def main(args: ISZ[String]): Z = {
                    |
                    |    // need to touch the following for transpiler
                    |    initialiseArchitecture()
                    |    initialiseEntryPoint()
                    |    computeEntryPoint()
+                   |    finaliseEntryPoint()
                    |
                    |    ${touchTypes(typeTouches)}
                    |    

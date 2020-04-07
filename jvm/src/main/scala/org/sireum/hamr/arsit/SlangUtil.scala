@@ -269,7 +269,8 @@ object Cli {
   def getRuntimeVersion(): String = $
   def getSireumScalacVersionVersion(): String = $
   def getScalaVersion(): String = $
-  def getScalaTestVersion(): String = $      
+  def getScalaTestVersion(): String = $
+  def getSBTVersion(): String = $
 }
 
 @enum object DispatchProtocol {
@@ -395,7 +396,10 @@ object HAMR {
     } else {
       typ match {
         case b: BaseType => b.slangType.string
-        case _ => StringUtil.sanitizeName(s"${basePackage}_${split(0)}_${split(1)}")
+        case _ =>
+          val enumSuffix: String = if(isEnum()) "_Type" else ""  
+          StringUtil.sanitizeName(s"${basePackage}_${split(0)}_${split(1)}${enumSuffix}")
+          
       }
     }
     return ret

@@ -16,14 +16,15 @@ object TranspilerTemplate {
                |#
                |set -e
                |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
+               |export PROJECT_HOME=$$( cd "$$( dirname "$$0" )/.." &> /dev/null && pwd )
                |
                |${(entries, "\n\n")}
                |"""
   }
   
   @pure def compileLib(childDir: String): ST = {
-    val script_home = "${SCRIPT_HOME}"
-    return st"""cd "${script_home}/${childDir}"
+    val project_home = "${PROJECT_HOME}"
+    return st"""cd "${project_home}/${childDir}"
                |mkdir -p sel4-build
                |cd sel4-build
                |cmake ..

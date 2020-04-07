@@ -6,23 +6,18 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
 
-class ArtNixGen(dirs: ProjectDirectories,
-                m: Aadl,
-                arsitOptions: Cli.ArsitOption,
-                types: AadlTypes,
-                previousPhase: Result) {
+case class ArtNixGen(val dirs: ProjectDirectories,
+                     val cExtensionDir: String,
+                     val model: Aadl,
+                     val arsitOptions: Cli.ArsitOption,
+                     val types: AadlTypes,
+                     val previousPhase: Result) extends NixGen {
 
   var cOutputDir : String = _
-
-  var cExtensionDir : String = _
-
-  var cUserExtensionDir : Option[String] = None()
 
   val basePackage: String = arsitOptions.packageName
 
   var componentMap : HashMap[String, Component] = HashMap.empty
-
-  var systemImplmentation: Component = _
 
   var resources: ISZ[Resource] = ISZ()
 
@@ -39,45 +34,16 @@ class ArtNixGen(dirs: ProjectDirectories,
     return r
   }
 
-  def shouldBuildNix(p: Cli.ArsitPlatform.Type): B = {
-    return p match {
-      case Cli.ArsitPlatform.JVM => F
-      case Cli.ArsitPlatform.Linux => T
-      case Cli.ArsitPlatform.Cygwin => T
-      case Cli.ArsitPlatform.MacOS => T
-      case Cli.ArsitPlatform.SeL4 => T
+  def generate(): ArsitResult = {
+    assert(SlangUtil.isNix(arsitOptions.platform))
+
+    cOutputDir = if (arsitOptions.outputCDir.nonEmpty) {
+      arsitOptions.outputCDir.get
+    } else {
+      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "nix"))
     }
-  }
 
-  def generator(): ArsitResult = {
-
-    if(shouldBuildNix(arsitOptions.platform)) {
-      cOutputDir = if (arsitOptions.outputCDir.nonEmpty) {
-        arsitOptions.outputCDir.get
-      } else {
-        val dir: String = arsitOptions.platform match {
-          case Cli.ArsitPlatform.SeL4 => "sel4"
-          case o =>
-            assert(SlangUtil.isNix(o))
-            "nix"
-        }
-        SlangUtil.pathAppend(dirs.srcDir, ISZ("c", dir))
-      }
-
-      cExtensionDir = if (arsitOptions.auxCodeDir.nonEmpty) {
-        assert(arsitOptions.auxCodeDir.size == 1)
-        arsitOptions.auxCodeDir(0)
-      } else {
-        SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
-      }
-
-      if (arsitOptions.auxCodeDir.nonEmpty) {
-        assert(arsitOptions.auxCodeDir.size == 1)
-        cUserExtensionDir = Some(arsitOptions.auxCodeDir(0))
-      }
-
-      gen(m)
-    }
+    gen(model)
 
     return ArsitResult(
       previousPhase.resources() ++ resources,
@@ -100,7 +66,6 @@ class ArtNixGen(dirs: ProjectDirectories,
 
     assert(model.components.size == 1)
     assert(Util.isSystem(model.components(0)))
-    systemImplmentation = model.components(0)
 
     { // build component map
       def r(c: Component): Unit = {
@@ -122,17 +87,20 @@ class ArtNixGen(dirs: ProjectDirectories,
     val components = componentMap.entries.filter(p =>
       Util.isThread(p._2) || (Util.isDevice(p._2) && arsitOptions.devicesAsThreads))
 
-    for ((archVarName, m) <- components) {
+    var extensions: ISZ[Os.Path] = ISZ()
+    
+    for ((archVarName, component) <- components) {
 
-      val name: Names = Util.getComponentNames(m, basePackage)
-
-      val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
+      val names: Names = Util.getComponentNames(component, basePackage)
+      val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
+      
+      val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(component)
 
       val isPeriodic: B = dispatchProtocol == DispatchProtocol.Periodic
 
-      val bridgeInstanceVarName: String = Util.getName(m.identifier)
-      val AEP_Id: String = s"${name.instanceName}_AEP"
-      val App_Id: String = s"${name.instanceName}_App"
+      val bridgeInstanceVarName: String = Util.getName(component.identifier)
+      val AEP_Id: String = s"${names.instanceName}_AEP"
+      val App_Id: String = s"${names.instanceName}_App"
 
       val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
 
@@ -146,20 +114,20 @@ class ArtNixGen(dirs: ProjectDirectories,
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      Util.getStackSizeInBytes(m) match {
+      Util.getStackSizeInBytes(component) match {
         case Some(bytes) => if(bytes > maxStackSize) { 
           maxStackSize = bytes
         }
         case _ =>
       }
       
-      val featureEnds = Util.getFeatureEnds(m.features)
+      val featureEnds = Util.getFeatureEnds(component.features)
       val portSize = featureEnds.filter(f => Util.isInFeature(f) || Util.isOutFeature(f)).size
       if(portSize > maxPortsForComponents) {
         maxPortsForComponents = portSize
       }
 
-      val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+      val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
       
       for (p <- featureEnds if Util.isInFeature(p)) {
         assert (Util.isPort(p))
@@ -169,7 +137,7 @@ class ArtNixGen(dirs: ProjectDirectories,
         val isTrigger = if(dispatchTriggers.isEmpty) T else {
           dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
         }
-        val port = Port(p, m, _portType, basePackage, isTrigger, z"-1000")
+        val port = Port(p, component, _portType, basePackage, isTrigger, z"-1000")
 
         val portIdName: String = port.name + "PortId"
         val portOptName: String = port.name + "Opt"
@@ -212,9 +180,16 @@ class ArtNixGen(dirs: ProjectDirectories,
       }
 
       val stApp = Template.app(basePackage, App_Id, App_Id,
-        AEP_Id, Util.getPeriod(m), bridgeInstanceVarName, AEP_Payload, portIds, appCases, m, isPeriodic)
+        AEP_Id, Util.getPeriod(component), bridgeInstanceVarName, AEP_Payload, portIds, appCases, component, isPeriodic)
 
       addResource(dirs.nixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
+      
+      val (paths, extResources) = genExtensionFiles(component, names, ports)
+      resources = resources ++ extResources
+      extensions = extensions ++ paths
+
+      //addResource(cExtensionDir, ISZ("ext.c"), SlangUtil.getLibraryFile("ext.c"), F)
+      //addResource(cExtensionDir, ISZ("ext.h"), SlangUtil.getLibraryFile("ext.h"), F)
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
@@ -281,29 +256,14 @@ class ArtNixGen(dirs: ProjectDirectories,
     addResource(dirs.nixDir, ISZ(basePackage, "Process.scala"), Template.Process(basePackage), T)
     addResource(dirs.nixDir, ISZ(basePackage, "Process_Ext.scala"), Template.ProcessExt(basePackage), T)
 
-    arsitOptions.platform match {
+    val platName = ops.StringOps(arsitOptions.platform.name).firstToLower
 
-      case o @ Cli.ArsitPlatform.SeL4 =>
-
-        // just compile static lib.  place script in parent dir so transpiler won't
-        // erase it
-
-        addExeResource(cOutputDir, ISZ("..", "compile-hamr-lib.sh"),
-          TranspilerTemplate.compileLib(SlangUtil.pathSimpleName(cOutputDir)), T)
-
-      case o =>
-        assert(SlangUtil.isNix(o))
-        val platName = ops.StringOps(o.name).firstToLower
-
-        addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), Template.compile(o), T)
-        addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), Template.run(aepNames, appNames, o), T)
-        addExeResource(dirs.binDir, ISZ("stop.sh"), Template.stop(
-          (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames), T)
-    }
+    addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), Template.compile(arsitOptions.platform), T)
+    addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), Template.run(aepNames, appNames, arsitOptions.platform), T)
+    addExeResource(dirs.binDir, ISZ("stop.sh"), Template.stop(
+      (if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames), T)
 
     addResource(cExtensionDir, ISZ("ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage), T)
-    addResource(cExtensionDir, ISZ("ext.c"), SlangUtil.getLibraryFile("ext.c"), F)
-    addResource(cExtensionDir, ISZ("ext.h"), SlangUtil.getLibraryFile("ext.h"), F)
 
     var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
     if(!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir))
@@ -317,23 +277,12 @@ class ArtNixGen(dirs: ProjectDirectories,
     } else {
       ISZ()
     }
+    
+    val transpileScriptName = "transpile.sh"
+    val buildApps: B = T
+    val additionalInstructions: Option[ST] = None()
 
-    var transpileScriptName = ""
-    var extensions: ISZ[String] = ISZ(s"${cExtensionDir}/ext.c", s"${cExtensionDir}/ext.h")
-    var buildApps: B = T
-    var additionalInstructions: Option[ST] = None()
-
-    arsitOptions.platform match {
-      case Cli.ArsitPlatform.SeL4 =>
-        transpileScriptName = "transpile-sel4.sh"
-        buildApps = F
-        additionalInstructions = Some(st"""FILE=$${OUTPUT_DIR}/CMakeLists.txt
-                                          |echo -e "\n\nadd_definitions(-DCAMKES)" >> $$FILE""")
-      case o =>
-        assert(SlangUtil.isNix(o))
-        extensions = extensions :+ s"${cExtensionDir}/ipc.c"
-        transpileScriptName = s"transpile.sh"
-    }
+    extensions = extensions :+ Os.path(cExtensionDir) / "ipc.c"
 
     val maxArraySize: Z = ops.ISZOps(ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)).foldLeft((a: Z, b: Z) => if(a > b) a else b, z"0")
     val numPorts: Z = portId
@@ -354,6 +303,8 @@ class ArtNixGen(dirs: ProjectDirectories,
       s"art.Art.maxPorts=${numPorts}"
     )
     
+    val _extensions: ISZ[String] = (Set.empty[String] ++ extensions.map(m => m.value)).elements
+    
     val transpiler = Template.transpiler(
       outputPaths,
       (((if(arsitOptions.ipc == Cli.IpcMechanism.MessageQueue) aepNames else ISZ[String]()) ++ appNames) :+ "Main").map(s => s"${basePackage}.${s}"),
@@ -364,7 +315,7 @@ class ArtNixGen(dirs: ProjectDirectories,
       customSequenceSizes,
       customConstants,
       maxStackSize,
-      extensions,
+      _extensions,
       excludes,
       buildApps,
       additionalInstructions
@@ -1167,7 +1118,6 @@ class ArtNixGen(dirs: ProjectDirectories,
     }
     
     @pure def compile(arch: Cli.ArsitPlatform.Type): ST = {
-      assert(SlangUtil.isNix(arch))
 
       val script_home = "${SCRIPT_HOME}"
       val cOutputDirRel = SlangUtil.relativizePaths(dirs.binDir, cOutputDir, script_home)
@@ -1198,7 +1148,6 @@ class ArtNixGen(dirs: ProjectDirectories,
     @pure def run(aeps: ISZ[String],
                   apps: ISZ[String],
                   arch: Cli.ArsitPlatform.Type): ST = {
-      assert(SlangUtil.isNix(arch))
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
       val ext = if(arch.toString == "win") ".exe" else ""
@@ -1385,9 +1334,3 @@ class ArtNixGen(dirs: ProjectDirectories,
   }
   // @formatter:on
 }
-
-object ArtNixGen{
-  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes, previousPhase: Result) : ArsitResult =
-    new ArtNixGen(dirs, m, o, types, previousPhase).generator()
-}
-
