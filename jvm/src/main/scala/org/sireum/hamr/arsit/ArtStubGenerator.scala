@@ -353,12 +353,12 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                          (ports.filter(v => Util.isEventPort(v.feature) && Util.isOutFeature(v.feature)).map(p => addId(p.name)), ",\n")})
                   |    
                   |    def compute(): Unit = {
-                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol, F)}
+                  |      ${computeBody(s"${bridgeName}Id", componentName, ports, dispatchProtocol, F)}
                   |    }
                   |
                   |    override
                   |    def testCompute(): Unit = {
-                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol, T)}
+                  |      ${computeBody(s"${bridgeName}Id", componentName, ports, dispatchProtocol, T)}
                   |    }
                   |    
                   |    ${(entryPoints, "\n\n")}
@@ -457,7 +457,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
                  |}"""
     }
 
-    @pure def addId(s: String) : String = s + "_Id"
+    @pure def addId(s: String) : String = s"${s}_Id"
 
     @pure def putValue(p: Port) : ST =
       return st"""Art.putValue(${addId(p.name)}, ${p.portType.qualifiedPayloadName}${if(p.portType.isEmptyType()) "()" else "(value)"})"""

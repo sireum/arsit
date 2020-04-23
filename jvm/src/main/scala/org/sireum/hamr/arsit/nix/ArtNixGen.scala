@@ -70,7 +70,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     { // build component map
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.getName(c.identifier)))
-        componentMap += (Util.getName(c.identifier) → c)
+        componentMap += (Util.getName(c.identifier) ~> c)
         connections = connections ++ c.connectionInstances
         for (s <- c.subComponents) r(s)
       }
@@ -139,8 +139,8 @@ case class ArtNixGen(val dirs: ProjectDirectories,
         }
         val port = Port(p, component, _portType, basePackage, isTrigger, z"-1000")
 
-        val portIdName: String = port.name + "PortId"
-        val portOptName: String = port.name + "Opt"
+        val portIdName: String = s"${port.name}PortId"
+        val portOptName: String = s"${port.name}Opt"
         val portType: String = port.portType.qualifiedReferencedTypeName
         val archPortInstanceName: String = s"${bridgeInstanceVarName}.${port.name}"
 

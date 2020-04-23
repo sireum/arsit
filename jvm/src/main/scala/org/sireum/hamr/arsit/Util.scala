@@ -257,9 +257,9 @@ object Util {
     val aadlPackage = a(0)
     
     val componentName = sanitizeName(a(1))
-    val componentImplName = componentName + "_Impl"
+    val componentImplName = s"${componentName}_Impl"
     
-    val bridgeName = componentName + "_Bridge"
+    val bridgeName = s"${componentName}_Bridge"
 
     Names(basePackage, aadlPackage, bridgeName, componentName, componentImplName, c)
   }
