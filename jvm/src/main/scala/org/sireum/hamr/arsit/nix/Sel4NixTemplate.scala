@@ -270,20 +270,22 @@ object Sel4NixTemplate {
     return ret
   }
 
-  def apiGet(signature: ST, 
-             apiGetMethodName: String, 
+  def apiGet(signature: ST,
+             apiGetMethodName: String,
              c_this: String,
-             typeNames: DataTypeNames): ST = {
+             typ: DataTypeNames): ST = {
     
-    val qualifiedName: String = s"${if(typeNames.isAadlType()) s"${typeNames.basePackage}." else ""}${typeNames.qualifiedReferencedTypeName}" 
+    val qualifiedName: String = s"${if(typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}" 
       
     val (optionSig, someSig, noneSig) = Sel4NamesUtil.getTypeFingerprints(qualifiedName)
-    
-    val useStruct = !typeNames.isEnum() && !typeNames.isBaseType()
-    
-    val typeAssign : String =  
-      if(useStruct) s"Type_assign(value, &t_0.${someSig}.value, sizeof(struct ${typeNames.qualifiedCTypeName}));"
-      else s"Type_assign(value, &t_0.${someSig}.value, sizeof(${typeNames.qualifiedCTypeName}));"
+        
+    val typeAssign : Option[String] =  
+      if(typ.isEmptyType()) { None[String]() }  
+      else if(typ.isBaseType()) { Some(s"*value = t_0.${someSig}.value;") } 
+      else {
+        val struct: String = if(!typ.isEnum() && !typ.isBaseType()) s"struct " else ""
+        Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));") 
+      }
     
     val ret: ST = st"""${signature}{
                       |  // ${optionSig} = Option[${qualifiedName}]

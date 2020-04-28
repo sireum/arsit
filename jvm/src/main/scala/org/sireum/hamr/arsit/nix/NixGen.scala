@@ -48,18 +48,21 @@ trait NixGen {
             val methodName = Sel4NamesUtil.apiHelperMethodName(s"get_${p.name}", names)
             val returnType = "B"
             val pointer: String = if (typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
-            params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
-
+            
+            if(!typeNames.isEmptyType()) {
+              params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
+            }
+            
             val signature = Sel4NixTemplate.methodSignature(methodName, None(), params, returnType)
             val apiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
 
             headerMethods = headerMethods :+ st"${signature};"
 
             implMethods = implMethods :+ Sel4NixTemplate.apiGet(
-              signature,
-              apiGetMethodName,
-              names.cThisApi,
-              typeNames)
+              signature = signature,
+              apiGetMethodName = apiGetMethodName,
+              c_this = names.cThisApi,
+              typ = typeNames)
 
           } else {
             val isEventPort = p.feature.category == FeatureCategory.EventPort
