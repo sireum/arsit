@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit._
+import org.sireum.hamr.codegen.common.{AadlType, AadlTypes, DataTypeNames, Dispatch_Protocol, TypeUtil}
 import org.sireum.hamr.ir.{Direction, FeatureCategory}
 
 object ArchTemplate {
@@ -13,20 +14,20 @@ object ArchTemplate {
     return st"// This file was auto-generated${_from}.  Do not edit"
   }
   
-  @pure def dispatchProtocol(dp: DispatchProtocol.Type, period: Z): ST = {
+  @pure def dispatchProtocol(dp: Dispatch_Protocol.Type, period: Z): ST = {
     val ret: ST = dp match {
-      case DispatchProtocol.Sporadic => st"Sporadic(min = $period)"
-      case DispatchProtocol.Periodic => st"Periodic(period = $period)"
+      case Dispatch_Protocol.Sporadic => st"Sporadic(min = $period)"
+      case Dispatch_Protocol.Periodic => st"Periodic(period = $period)"
     }  
     return ret
   }
   
   @pure def portType(name: String,
-                 typ: String,
-                 id: Z,
-                 identifier: String,
-                 mode: String,
-                 urgency: Option[Z]): ST = {
+                     typ: String,
+                     id: Z,
+                     identifier: String,
+                     mode: String,
+                     urgency: Option[Z]): ST = {
     val artPortType: String = if(urgency.nonEmpty) "UrgentPort" else "Port"
     val _urgency: String = if(urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
     return st"""val $name = ${artPortType}[$typ] (id = $id, name = "$identifier", mode = $mode${_urgency})"""
@@ -51,7 +52,13 @@ object ArchTemplate {
     
     val mode: String = s"${prefix}${dir}" 
 
-    return portType(port.name, port.portType.qualifiedReferencedTypeName, id, port.path, mode, port.urgency)
+    return portType(
+      port.name,
+      port.getPortTypeNames.qualifiedReferencedTypeName,
+      id,
+      port.path,
+      mode,
+      port.urgency)
   }
     
   @pure def bridge(bridgeIdentifier: String,
@@ -60,16 +67,15 @@ object ArchTemplate {
                    id: Z,
                    dispatchProtocol: ST,
                    dispatchTriggers: Option[ISZ[String]],
-                   ports: ISZ[Port]): ST = {
-    val _ports = ports.map((p : Port) => genPort(p))
-    val _args = ports.map((p : Port) => st"${p.name} = ${p.name}")
-
-    val _dispatchTriggers: ST = 
+                   ports: ISZ[ST],
+                   portArguments: ISZ[ST]
+                  ): ST = {
+    val _dispatchTriggers: ST =
       if(dispatchTriggers.isEmpty) st"None()" 
       else st"Some(ISZ(${(dispatchTriggers.get.map((f: String) => s"${f}.id"), ", ")}))"
     
     return st"""val ${bridgeIdentifier} : ${typeName} = {
-               |  ${(_ports, "\n")}
+               |  ${(ports, "\n")}
                |  
                |  ${typeName}(
                |    id = $id,
@@ -77,7 +83,7 @@ object ArchTemplate {
                |    dispatchProtocol = $dispatchProtocol,
                |    dispatchTriggers = ${_dispatchTriggers},
                |    
-               |    ${(_args, ",\n")}
+               |    ${(portArguments, ",\n")}
                |  )
                |}"""
   }

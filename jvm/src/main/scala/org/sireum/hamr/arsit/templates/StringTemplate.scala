@@ -78,7 +78,7 @@ object Base_Types {
   @datatype class Character_Payload(value: C) extends art.DataContent
   @datatype class String_Payload(value: String) extends art.DataContent
 
-  @datatype class Bits_Payload(value: Bits) extends art.DataContent
+  @datatype class Bits_Payload(value: ISZ[B]) extends art.DataContent
 
   def Boolean_empty(): Boolean = { return F }
 

@@ -3,7 +3,9 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.arsit.nix.NixTemplate
 import org.sireum.hamr.arsit.{CTranspilerOption, SlangUtil}
+import org.sireum.hamr.codegen.common.TypeUtil
 
 object TranspilerTemplate {
 
@@ -62,7 +64,7 @@ object TranspilerTemplate {
         projectName = Some("main"),  // default set in org.sireum.transpilers.cli.cTranspiler
         apps = apps,
         unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler
-        fingerprint = 3, // default set in org.sireum.transpilers.cli.cTranspiler
+        fingerprint = TypeUtil.FINGERPRINT_WIDTH, // default set in org.sireum.transpilers.cli.cTranspiler
         bitWidth = numBits,
         maxStringSize = maxStringSize,
         maxArraySize = maxSequenceSize,

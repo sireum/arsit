@@ -5,6 +5,7 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 import org.sireum.hamr.arsit.Util.reporter
 import org.sireum.hamr.arsit.templates._
+import org.sireum.hamr.codegen.common.{CommonUtil, SymbolResolver, TypeResolver, TypeUtil}
 
 object Arsit {
   def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
@@ -25,14 +26,20 @@ object Arsit {
 
     val result = ir.Transformer(Transformers.MissingTypeRewriter(Util.reporter)).transformAadl(Transformers.CTX(F, F), model)
     model = if(result.resultOpt.nonEmpty) result.resultOpt.get else model
-    
-    val typeMap = TypeResolver.processDataTypes(model.dataComponents, o.packageName)
+
+    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), reporter)
+
+    val aadlTypes = TypeResolver.processDataTypes(model, symbolTable, o.packageName)
+
+    if(!TypeUtil.verifyBitCodec(aadlTypes, symbolTable, reporter)){
+      return ArsitResult(resources, 0, 0, ISZ[CTranspilerOption]())
+    }
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val nixPhase = nix.NixGenDispatch.generate(projectDirectories, model, o, typeMap,
-      ArtStubGenerator(projectDirectories, model, o, typeMap,
-        ArtArchitectureGen(projectDirectories, model, o, typeMap)))
+    val nixPhase = nix.NixGenDispatch.generate(projectDirectories, model, o, symbolTable, aadlTypes,
+      ArtStubGenerator(projectDirectories, model, o, symbolTable, aadlTypes,
+        ArtArchitectureGen(projectDirectories, model, o, symbolTable, aadlTypes)))
 
     var artResources: ISZ[Resource] = ISZ()
     if (o.embedArt) {
@@ -40,7 +47,7 @@ object Arsit {
     }
 
     val dest = Os.path(o.outputDir) / "build.sbt"
-    val projectName = Util.getLastName(m.components(0).identifier)
+    val projectName = CommonUtil.getLastName(m.components(0).identifier)
     val buildSbt = StringTemplate.buildSbt(projectName, o.embedArt)
     artResources = artResources :+ Resource(dest.value, buildSbt, F, F)
     

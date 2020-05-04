@@ -5,19 +5,19 @@ import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
+import org.sireum.hamr.codegen.common.{AadlTypes, CommonUtil, DataTypeNames, Dispatch_Protocol, Names, PropertyUtil, SymbolTable}
 
 case class ArtNixGen(val dirs: ProjectDirectories,
                      val cExtensionDir: String,
                      val model: Aadl,
                      val arsitOptions: Cli.ArsitOption,
+                     val symbolTable: SymbolTable,
                      val types: AadlTypes,
                      val previousPhase: Result) extends NixGen {
 
   var cOutputDir : String = _
 
   val basePackage: String = arsitOptions.packageName
-
-  var componentMap : HashMap[String, Component] = HashMap.empty
 
   var resources: ISZ[Resource] = ISZ()
 
@@ -61,21 +61,8 @@ case class ArtNixGen(val dirs: ProjectDirectories,
   }
 
   def gen(model: Aadl): Unit = {
-
-    var connections: ISZ[ConnectionInstance] = ISZ()
-
     assert(model.components.size == 1)
-    assert(Util.isSystem(model.components(0)))
-
-    { // build component map
-      def r(c: Component): Unit = {
-        assert(!componentMap.contains(Util.getName(c.identifier)))
-        componentMap += (Util.getName(c.identifier) ~> c)
-        connections = connections ++ c.connectionInstances
-        for (s <- c.subComponents) r(s)
-      }
-      for (c <- model.components) r(c)
-    }
+    assert(CommonUtil.isSystem(model.components(0)))
 
     var platformPorts: ISZ[ST] = ISZ()
     var platformPayloads: ISZ[ST] = ISZ()
@@ -84,21 +71,29 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     var aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
 
-    val components = componentMap.entries.filter(p =>
-      Util.isThread(p._2) || (Util.isDevice(p._2) && arsitOptions.devicesAsThreads))
+    val components = symbolTable.airComponentMap.entries.filter(p =>
+      CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))
 
-    var extensions: ISZ[Os.Path] = ISZ()
+    var transpilerExtensions: ISZ[Os.Path] = getExistingCFiles(cExtensionDir)
     
     for ((archVarName, component) <- components) {
 
-      val names: Names = Util.getComponentNames(component, basePackage)
+      val names: Names = Names(component, basePackage)
       val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
-      
-      val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(component)
 
-      val isPeriodic: B = dispatchProtocol == DispatchProtocol.Periodic
+      val dispatchProtocol = PropertyUtil.getDispatchProtocol(component) match {
+        case Some(x) => x
+        case _ =>
+          if(CommonUtil.isDevice(component)) {
+            Dispatch_Protocol.Periodic
+          } else {
+            halt("HAMR codegen only supports Periodic or Sporadic threads")
+          }
+      }
 
-      val bridgeInstanceVarName: String = Util.getName(component.identifier)
+      val isPeriodic: B = dispatchProtocol == Dispatch_Protocol.Periodic
+
+      val bridgeInstanceVarName: String = CommonUtil.getName(component.identifier)
       val AEP_Id: String = s"${names.instanceName}_AEP"
       val App_Id: String = s"${names.instanceName}_App"
 
@@ -114,7 +109,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
-      Util.getStackSizeInBytes(component) match {
+      PropertyUtil.getStackSizeInBytes(component) match {
         case Some(bytes) => if(bytes > maxStackSize) { 
           maxStackSize = bytes
         }
@@ -122,26 +117,25 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       }
       
       val featureEnds = Util.getFeatureEnds(component.features)
-      val portSize = featureEnds.filter(f => Util.isInFeature(f) || Util.isOutFeature(f)).size
+      val portSize = featureEnds.filter(f => CommonUtil.isInFeature(f) || CommonUtil.isOutFeature(f)).size
       if(portSize > maxPortsForComponents) {
         maxPortsForComponents = portSize
       }
 
       val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
       
-      for (p <- featureEnds if Util.isInFeature(p)) {
-        assert (Util.isPort(p))
-        val _portType = Util.getFeatureEndType(p, types)     
+      for (p <- featureEnds if CommonUtil.isInFeature(p)) {
+        assert (CommonUtil.isPort(p))
 
-        val portName = Util.getLastName(p.identifier)
+        val portName = CommonUtil.getLastName(p.identifier)
         val isTrigger = if(dispatchTriggers.isEmpty) T else {
           dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
         }
-        val port = Port(p, component, _portType, basePackage, isTrigger, z"-1000")
+        val port = Util.getPort(p, component, types, basePackage, isTrigger, z"-1000")
 
         val portIdName: String = s"${port.name}PortId"
         val portOptName: String = s"${port.name}Opt"
-        val portType: String = port.portType.qualifiedReferencedTypeName
+        val portType: String = port.getPortTypeNames.qualifiedReferencedTypeName
         val archPortInstanceName: String = s"${bridgeInstanceVarName}.${port.name}"
 
         portDefs = portDefs :+ Template.portDef(portOptName, portType)
@@ -150,13 +144,13 @@ case class ArtNixGen(val dirs: ProjectDirectories,
         portIds :+= Template.portId(portIdName, archPortInstanceName)
         portIdOpts :+= Template.portOpt(portIdName, portOptName, "Art.PortId", F)
 
-        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, port.portType, Util.isDataPort(p))
+        aepPortCases = aepPortCases :+ Template.aepPortCase(portIdName, portOptName, port.getPortTypeNames, CommonUtil.isAadlDataPort(p))
 
         portOptResets = portOptResets :+ Template.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
 
-        appCases = appCases :+ Template.appCases(portOptName, portIdName, port.portType)
+        appCases = appCases :+ Template.appCases(portOptName, portIdName, port.getPortTypeNames)
 
         inPorts :+= port
       }
@@ -186,27 +180,25 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       
       val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
-      extensions = extensions ++ paths
-
-      //addResource(cExtensionDir, ISZ("ext.c"), SlangUtil.getLibraryFile("ext.c"), F)
-      //addResource(cExtensionDir, ISZ("ext.h"), SlangUtil.getLibraryFile("ext.h"), F)
+      transpilerExtensions = transpilerExtensions ++ paths
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
-    for(c <- connections) {
-      val dstComp = componentMap.get(Util.getName(c.dst.component)).get
-      val srcComp = componentMap.get(Util.getName(c.src.component)).get
+    for(c <- symbolTable.connections) {
+      val dstComp = symbolTable.airComponentMap.get(CommonUtil.getName(c.dst.component)).get
+      val srcComp = symbolTable.airComponentMap.get(CommonUtil.getName(c.src.component)).get
 
-      if((Util.isDevice(srcComp) || Util.isThread(srcComp)) & (Util.isDevice(dstComp) || Util.isThread(dstComp))) {
-        val dstPath = Util.getName(c.dst.feature.get)
-        val dstArchPortInstanceName = s"${Util.getName(dstComp.identifier)}.${Util.getLastName(c.dst.feature.get)}"
-        val name: Names = Util.getComponentNames(dstComp, basePackage)
+      if((CommonUtil.isDevice(srcComp) || CommonUtil.isThread(srcComp)) &&
+         (CommonUtil.isDevice(dstComp) || CommonUtil.isThread(dstComp))) {
+        val dstPath = CommonUtil.getName(c.dst.feature.get)
+        val dstArchPortInstanceName = s"${CommonUtil.getName(dstComp.identifier)}.${CommonUtil.getLastName(c.dst.feature.get)}"
+        val name: Names = Names(dstComp, basePackage)
 
         val srcArchPortInstanceName =
-          s"${Util.getName(srcComp.identifier)}.${Util.getLastName(c.src.feature.get)}"
+          s"${CommonUtil.getName(srcComp.identifier)}.${CommonUtil.getLastName(c.src.feature.get)}"
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
-          (Util.isThread(srcComp) || Util.isDevice(srcComp)) && (Util.isThread(dstComp) || Util.isDevice(dstComp))) {
+          (CommonUtil.isThread(srcComp) || CommonUtil.isDevice(srcComp)) && (CommonUtil.isThread(dstComp) || CommonUtil.isDevice(dstComp))) {
           val dstComp = if (arsitOptions.ipc == Cli.IpcMechanism.SharedMemory) s"${name.instanceName}_App" else s"${name.instanceName}_AEP"
           var cases: ISZ[ST] = {
             if (artNixCasesM.contains(srcArchPortInstanceName)) {
@@ -220,7 +212,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
         }
         numConnections = numConnections + 1
       } else {
-        reporter.info(None(), Util.toolName, s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${Util.getName(c.name)}")
+        reporter.info(None(), Util.toolName, s"ArtNixGen: Skipping connection between ${srcComp.category} to ${dstComp.category}. ${CommonUtil.getName(c.name)}")
       }
     }
 
@@ -243,7 +235,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
 
     val artNixCases: ISZ[ST] = artNixCasesM.entries.map(k => Template.artNixCases(k._1, k._2))
     val stArtNix = Template.artNix(basePackage, artNixCases,
-      inPorts.filter(p => Util.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
+      inPorts.filter(p => CommonUtil.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id"))
 
     addResource(dirs.nixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
 
@@ -271,7 +263,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
 
     val excludes:ISZ[String] = if(arsitOptions.excludeImpl) {
       for ((archVarName, m) <- components) yield {
-        val name: Names = Util.getComponentNames(m, basePackage)
+        val name: Names = Names(m, basePackage)
         s"${name.packageName}.${name.componentImpl}"
       }
     } else {
@@ -282,13 +274,15 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     val buildApps: B = T
     val additionalInstructions: Option[ST] = None()
 
-    extensions = extensions :+ Os.path(cExtensionDir) / "ipc.c"
+    transpilerExtensions = transpilerExtensions :+ Os.path(cExtensionDir) / "ipc.c"
 
-    val maxArraySize: Z = ops.ISZOps(ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)).foldLeft((a: Z, b: Z) => if(a > b) a else b, z"0")
+    val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
+
+    val maxArraySize: Z = CommonUtil.findMaxZ(arraySizeInfluencers)
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
     
-    val customSequenceSizes: ISZ[String] = ISZ(
+    var customSequenceSizes: ISZ[String] = ISZ(
       s"MS[Z,art.Bridge]=${numComponents}",
       s"MS[Z,MOption[art.Bridge]]=${numComponents}",      
       s"IS[Z,art.UPort]=${maxPortsForComponents}",
@@ -297,13 +291,21 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
     )
-    
+
+    if(types.rawConnections) {
+      getMaxBitsSize() match {
+        case Some(z) =>
+          customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
+        case _ => halt("Raw connections specified but couldn't determine max bit size")
+      }
+    }
+
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=${numComponents}",
       s"art.Art.maxPorts=${numPorts}"
     )
     
-    val _extensions: ISZ[String] = (Set.empty[String] ++ extensions.map(m => m.value)).elements
+    val _extensions: ISZ[String] = (Set.empty[String] ++ transpilerExtensions.map(m => m.value)).elements
     
     val transpiler = Template.transpiler(
       outputPaths,
@@ -503,14 +505,12 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       def portIdOpt(p: Port) = s"${portId(p)}Opt"
       
       val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
-      val inPorts = Util.getFeatureEnds(component.features).filter(p => Util.isPort(p) && Util.isInFeature(p)).map(f => {
-        val pType = Util.getFeatureEndType(f, types)
-
-        val portName = Util.getLastName(f.identifier)
+      val inPorts = Util.getFeatureEnds(component.features).filter(p => CommonUtil.isInPort(p)).map(f => {
+        val portName = CommonUtil.getLastName(f.identifier)
         val isTrigger = if(dispatchTriggers.isEmpty) T else {
           dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
         }
-        Port(f, component, pType, basePackage, isTrigger, z"-1000")
+        Util.getPort(f, component, types, basePackage, isTrigger, z"-1000")
       })
 
       var globals: ISZ[ST] = ISZ(st"""val entryPoints: Bridge.EntryPoints = Arch.${bridge}.entryPoints
@@ -545,10 +545,10 @@ case class ArtNixGen(val dirs: ProjectDirectories,
 
             val receiveOnInPorts =
               for(p <- inPorts) yield {
-                val dispatch = if(Util.isDataPort(p.feature)) { "F" } else { "T" }
+                val dispatch = if(CommonUtil.isAadlDataPort(p.feature)) { "F" } else { "T" }
                 st"""Platform.receiveAsync(${portIdOpt(p)}) match {
-                    |  case Some((_, v: ${p.portType.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v)${ if(!isPeriodic) s"; dispatch = ${dispatch}" else "" }
-                    |  case Some((_, v)) => halt(s"Unexpected payload on port ${p.name}.  Expecting something of type ${p.portType.qualifiedPayloadName} but received $${v}")
+                    |  case Some((_, v: ${p.getPortTypeNames.qualifiedPayloadName})) => ArtNix.updateData(${portId(p)}, v)${ if(!isPeriodic) s"; dispatch = ${dispatch}" else "" }
+                    |  case Some((_, v)) => halt(s"Unexpected payload on port ${p.name}.  Expecting something of type ${p.getPortTypeNames.qualifiedPayloadName} but received $${v}")
                     |  case None() => // do nothing
                     |}"""
               }

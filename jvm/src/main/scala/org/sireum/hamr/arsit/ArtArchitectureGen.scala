@@ -5,12 +5,14 @@ import org.sireum.hamr.ir._
 import org.sireum.ops.ISZOps
 import org.sireum.hamr.arsit.Util.reporter
 import org.sireum.hamr.arsit.templates._
+import org.sireum.hamr.codegen.common.{AadlType, AadlTypes, ArrayType, BaseType, CommonUtil, DataTypeNames, Dispatch_Protocol, EnumType, Names, PropertyUtil, RecordType, SymbolTable, TODOType, TypeUtil}
 
 import scala.language.implicitConversions
 
 class ArtArchitectureGen(directories: ProjectDirectories,
                          m: Aadl,
                          arsitOptions: Cli.ArsitOption,
+                         symbolTable: SymbolTable,
                          types: AadlTypes) {
   var componentId = 0
   var portId: Z = 0
@@ -22,8 +24,6 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
   var seenConnections: HashMap[Name, ISZ[Name]] = HashMap.empty
 
-  var componentMap : HashMap[String, Component] = HashMap.empty
-
   var resources: ISZ[Resource] = ISZ()
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -31,9 +31,12 @@ class ArtArchitectureGen(directories: ProjectDirectories,
   }
 
   def generator() : PhaseResult = {
-    for(t <- types.typeMap.values) {
-      emitType(t)
+    if(!types.rawConnections) {
+      for (t <- types.typeMap.values) {
+        emitType(t)
+      }
     }
+
     val baseTypes = StringTemplate.Base_Types(basePackage)
     addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
 
@@ -47,15 +50,6 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     assert(systems.size == 1)
 
     m.components.filter(c => c.category != ComponentCategory.System).foreach(c => assert(c.category == ComponentCategory.Data))
-
-    { // build the component map
-      def r(c: Component): Unit = {
-        assert(!componentMap.contains(Util.getName(c.identifier)))
-        componentMap += (Util.getName(c.identifier) ~> c)
-        for (s <- c.subComponents) r(s)
-      }
-      r(systems(0))
-    }
 
     gen(systems(0))
 
@@ -84,14 +78,6 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     return id
   }
 
-  /*
-  def getPortId(): Z = {
-    val id = portId
-    portId += 1
-    return id
-  }
-  */
-  
   def gen(c: Component) : Unit = {
     c.category match {
       case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
@@ -105,27 +91,27 @@ class ArtArchitectureGen(directories: ProjectDirectories,
   def genContainer(m: Component) : Unit = {
     assert (m.category == ComponentCategory.System || m.category == ComponentCategory.Process)
 
-    for(c <- m.subComponents){
+    for(c <- m.subComponents) {
       c.category match {
         case ComponentCategory.System | ComponentCategory.Process => genContainer(c)
         case ComponentCategory.ThreadGroup => genThreadGroup(c)
         case ComponentCategory.Thread | ComponentCategory.Device =>
-          if(Util.isThread(c) || arsitOptions.devicesAsThreads) {
-            val names = Util.getComponentNames(c, basePackage)
+          if(CommonUtil.isThread(c) || arsitOptions.devicesAsThreads) {
+            val names = Names(c, basePackage)
             bridges :+= genThread(c, names)
             components :+= names.instanceName
           }
         case ComponentCategory.Subprogram => // not relevant for arch
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
-          reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component ${Util.getName(m.identifier)}")
+          reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component ${CommonUtil.getName(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature.get)}",
-        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature.get)}")
+        s"${CommonUtil.getName(c.src.component)}.${CommonUtil.getLastName(c.src.feature.get)}",
+        s"${CommonUtil.getName(c.dst.component)}.${CommonUtil.getLastName(c.dst.feature.get)}")
     }
   }
 
@@ -134,27 +120,35 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
     for(c <- m.subComponents){
       assert(c.category == ComponentCategory.Thread)
-      val names = Util.getComponentNames(c, basePackage)
+      val names = Names(c, basePackage)
       bridges :+= genThread(c, names)
       components :+= names.instanceName
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
       connections :+= Template.connection(
-        s"${Util.getName(c.src.component)}.${Util.getLastName(c.src.feature.get)}",
-        s"${Util.getName(c.dst.component)}.${Util.getLastName(c.dst.feature.get)}")
+        s"${CommonUtil.getName(c.src.component)}.${CommonUtil.getLastName(c.src.feature.get)}",
+        s"${CommonUtil.getName(c.dst.component)}.${CommonUtil.getLastName(c.dst.feature.get)}")
     }
   }
 
   def genThread(m:Component, names: Names) : ST = {
-    assert(Util.isThread(m) || Util.isDevice(m))
+    assert(CommonUtil.isThread(m) || CommonUtil.isDevice(m))
     assert(m.connections.isEmpty)
-    
+
     val id = getComponentId(m)
 
     val period: Z = Util.getPeriod(m)
 
-    val dispatchProtocol = Util.getSlangEmbeddedDispatchProtocol(m)
+    val dispatchProtocol = PropertyUtil.getDispatchProtocol(m) match {
+      case Some(x) => x
+      case _ =>
+      if(CommonUtil.isDevice(m)) {
+        Dispatch_Protocol.Periodic
+      } else {
+        halt("HAMR codegen only supports Periodic or Sporadic threads")
+      }
+    }
 
     val dispatchProtocolST: ST = ArchTemplate.dispatchProtocol(dispatchProtocol, period)
 
@@ -163,7 +157,18 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, portId)
     portId = portId + ports.size
 
-    return ArchTemplate.bridge(names.instanceName, names.instanceName, names.bridgeTypeName, id, dispatchProtocolST, dispatchTriggers, ports)
+    val _ports = ports.map((p : Port) => ArchTemplate.genPort(p))
+    val _portArgs = ports.map((p : Port) => st"${p.name} = ${p.name}")
+
+    return ArchTemplate.bridge(
+      names.instanceName,
+      names.instanceName,
+      names.bridgeTypeName,
+      id,
+      dispatchProtocolST,
+      dispatchTriggers,
+      _ports,
+      _portArgs)
   }
 
   def emitType(t: AadlType): Unit = {
@@ -199,7 +204,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
         val baseTypeNames = SlangUtil.getDataTypeNames(e.baseType, basePackage)
         val baseTypeEmpty = baseTypeNames.empty()
 
-        val dims = Util.getArrayDimensions(e)
+        val dims = TypeUtil.getArrayDimensions(e)
 
         val emptyInit: String = if(dims.nonEmpty){
           assert(dims.size == 1)
@@ -237,7 +242,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
   }
 
   def allowConnection(c : ConnectionInstance, m : Component) : B = {
-    val str = s"${Util.getName(c.name)}  from  ${Util.getName(m.identifier)}"
+    val str = s"${CommonUtil.getName(c.name)}  from  ${CommonUtil.getName(m.identifier)}"
 
     if(c.src.component == c.dst.component){
       reporter.info(None(), Util.toolName, s"Skipping: Port connected to itself. $str")
@@ -253,8 +258,8 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       else Seq(ComponentCategory.Thread)
     }
     
-    val catSrc = componentMap.get(Util.getName(c.src.component)).get.category
-    val catDest = componentMap.get(Util.getName(c.dst.component)).get.category
+    val catSrc = symbolTable.airComponentMap.get(CommonUtil.getName(c.src.component)).get.category
+    val catDest = symbolTable.airComponentMap.get(CommonUtil.getName(c.dst.component)).get.category
 
     if(!allowedComponents.contains(catSrc) || !allowedComponents.contains(catDest)) {
       reporter.info(None(), Util.toolName, s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
@@ -372,6 +377,6 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 }
 
 object ArtArchitectureGen {
-  def apply(directories: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, types: AadlTypes) =
-    new ArtArchitectureGen(directories, m, o, types).generator()
+  def apply(directories: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, symbolTable: SymbolTable, types: AadlTypes) =
+    new ArtArchitectureGen(directories, m, o, symbolTable, types).generator()
 }

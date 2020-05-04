@@ -3,46 +3,20 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
-import org.sireum.hamr.arsit.{DataTypeNames, Names}
+import org.sireum.hamr.codegen.common.{BitType, DataTypeNames, Names, TypeUtil}
 
 
-object Sel4NamesUtil {
+object NixNamesUtil {
   def apiHelperMethodName(methodName: String, names: Names): String = {
     return s"api_${methodName}__${names.cComponentImplQualifiedName}"
   }
-
-  @pure def getTypeFingerprints(slangTypeName: String) : (String, String, String) = {
-
-    @pure def stableTypeSig(t: String, width: Z): String = {
-      val max: Z = if (0 < width && width <= 64) width else 64
-      val bytes = ops.ISZOps(crypto.SHA3.sum512(conversions.String.toU8is(t))).take(max)
-      var cs = ISZ[C]()
-      for (b <- bytes) {
-        val c = conversions.U32.toC(conversions.U8.toU32(b))
-        cs = cs :+ ops.COps.hex2c((c >>> '\u0004') & '\u000F')
-        cs = cs :+ ops.COps.hex2c(c & '\u000F')
-      }
-      return st"$cs".render
-    }
-    
-    val optionType = s"Option[${slangTypeName}]"
-    val someType = s"Some[${slangTypeName}]"
-    val noneType = s"None[${slangTypeName}]"
-
-    val optionSig = s"Option_${stableTypeSig(optionType, 3)}"
-    val someSig = s"Some_${stableTypeSig(someType, 3)}"
-    val noneSig = s"None_${stableTypeSig(noneType, 3)}"
-
-    return (optionSig, someSig, noneSig)
-  }
 }
 
-object Sel4NixTemplate {
-
+object NixTemplate {
   def sendOutput(entries: ST): ST = {
     val ret: ST = st"""def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
                       |  // ignore params
-                      |    
+                      |
                       |  ${entries}
                       |}"""
     return ret
@@ -53,7 +27,7 @@ object Sel4NixTemplate {
                       |  ${entries}
                       |}"""
     return ret
-    
+
   }
 
   def putValue(entries: ST): ST = {
@@ -66,8 +40,8 @@ object Sel4NixTemplate {
   def receiveInput(entries: ST): ST = {
     val ret: ST = st"""def receiveInput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
                       |  // ignore params
-                      |  
-                      |  ${entries}  
+                      |
+                      |  ${entries}
                       |}"""
     return ret
   }
@@ -78,7 +52,7 @@ object Sel4NixTemplate {
                   portType: String): ST = {
     return st"${portName}: ${dir} ${portCategory} ${portType}"
   }
-  
+
   def portVariable(bridgeIdentifier: String,
                    portVariableName: String,
                    archPortName: String,
@@ -89,7 +63,7 @@ object Sel4NixTemplate {
                       |var ${portVariableName}: Option[DataContent] = noData"""
     return ret
   }
-  
+
   def extensionObjectStub(packageName: String,
                           sel4ExtensionStubName: String,
                           entries: ST): ST = {
@@ -104,7 +78,7 @@ object Sel4NixTemplate {
                       |"""
     return ret
   }
-  
+
   def extensionObject(packageName: String,
                       sel4ExtensionName: String,
                       entries: ST): ST = {
@@ -121,7 +95,7 @@ object Sel4NixTemplate {
                       |"""
     return ret
   }
-  
+
   def dispatchStatus(body: ST): ST = {
     val ret: ST = st"""def dispatchStatus(bridgeId: Art.BridgeId): DispatchStatus = {
                       |  ${body}
@@ -132,14 +106,14 @@ object Sel4NixTemplate {
   def touchType(payloadName: String, typeName: Option[String]): ST = {
     return st"printDataContent(${payloadName}(${typeName}))"
   }
-  
+
   def touchTypes(touches: ISZ[ST]): ST = {
     return st"""// touch each payload/type in case some are only used as a field in a record
                |def printDataContent(a: art.DataContent): Unit = { println(s"$${a}") }
                |
                |${(touches, "\n")}"""
   }
-  
+
   def typeApp(packageName: String,
            instanceName: String,
            identifier: String,
@@ -154,21 +128,21 @@ object Sel4NixTemplate {
                       |
                       |object ${identifier} extends App {
                       |  def main(args: ISZ[String]): Z = {
-                      |  
+                      |
                       |    ${touchTypes(typeTouches)}
-                      |    
+                      |
                       |    return 0
                       |  }
                       |}
                       |"""
     return ret
   }
-  
+
   def app(packageName: String,
           instanceName: String,
           imports: ISZ[String],
           identifier: String,
-          bridge: ST, 
+          bridge: ST,
           bridgeIdentifier: String,
           dispatchStatus: ST,
           globals: ST,
@@ -188,38 +162,38 @@ object Sel4NixTemplate {
                    |${(imports, "\n")}
                    |
                    |object ${identifier} extends App {
-                   |  
+                   |
                    |  ${bridge}
-                   |  
+                   |
                    |  val entryPoints: Bridge.EntryPoints = ${bridgeIdentifier}.entryPoints
                    |  val noData: Option[DataContent] = None()
-                   |  
+                   |
                    |  ${globals}
                    |
                    |  ${dispatchStatus}
                    |
                    |  ${getValue}
-                   |  
+                   |
                    |  ${receiveInput}
                    |
                    |  ${putValue}
-                   |  
+                   |
                    |  ${sendOutput}
                    |
-                   |  def initialiseArchitecture(): Unit = { 
+                   |  def initialiseArchitecture(): Unit = {
                    |    val ad = ArchitectureDescription(
                    |      components = MSZ (${bridgeIdentifier}),
                    |      connections = ISZ ()
-                   |    )   
+                   |    )
                    |    Art.run(ad)
                    |  }
                    |
                    |  def initialiseEntryPoint(): Unit = { entryPoints.initialise() }
-                   |  
+                   |
                    |  def computeEntryPoint(): Unit = { entryPoints.compute() }
-                   |  
+                   |
                    |  def finaliseEntryPoint(): Unit = { entryPoints.finalise() }
-                   |  
+                   |
                    |  def main(args: ISZ[String]): Z = {
                    |
                    |    // need to touch the following for transpiler
@@ -229,7 +203,7 @@ object Sel4NixTemplate {
                    |    finaliseEntryPoint()
                    |
                    |    ${touchTypes(typeTouches)}
-                   |    
+                   |
                    |    return 0
                    |  }
                    |
@@ -250,7 +224,7 @@ object Sel4NixTemplate {
                    |    print(": ")
                    |    println(msg)
                    |  }
-                   |  
+                   |
                    |  def run(): Unit = {}
                    |
                    |}
@@ -274,10 +248,15 @@ object Sel4NixTemplate {
              apiGetMethodName: String,
              c_this: String,
              typ: DataTypeNames): ST = {
-    
-    val qualifiedName: String = s"${if(typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}" 
-      
-    val (optionSig, someSig, noneSig) = Sel4NamesUtil.getTypeFingerprints(qualifiedName)
+
+    val qualifiedName: String =
+      if(typ.isBitsTypes()) {
+        TypeUtil.BIT_SIG
+      } else {
+        s"${if(typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}"
+      }
+
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedName)
         
     val typeAssign : Option[String] =  
       if(typ.isEmptyType()) { None[String]() }  
@@ -306,18 +285,84 @@ object Sel4NixTemplate {
     return ret
   }
 
-  def apiSet(signature: ST, apiGetMethodName: String, c_this: String, isEventPort: B): ST = {
+  def apiGet_byteArrayVersion(signature: ST,
+             apiGetMethodName: String,
+             c_this: String,
+             typ: DataTypeNames): ST = {
+
+    val qualifiedName: String =
+      if(typ.isBitsTypes()) {
+        TypeUtil.BIT_SIG
+      } else {
+        s"${if(typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}"
+      }
+
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedName)
+
+    val typeAssign : Option[String] =
+      if(typ.isEmptyType()) { None[String]() }
+      else if(typ.isBaseType()) { Some(s"*value = t_0.${someSig}.value;") }
+      else {
+        val struct: String = if(!typ.isEnum() && !typ.isBaseType()) s"struct " else ""
+        Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
+      }
+
+    val ret: ST = st"""${signature}{
+                      |  // ${optionSig} = Option[${qualifiedName}]
+                      |  // ${someSig} = Some[${qualifiedName}]
+                      |  DeclNew${optionSig}(t_0);
+                      |  ${apiGetMethodName}(
+                      |    SF
+                      |    (${optionSig}) &t_0,
+                      |    ${c_this}(this));
+                      |
+                      |  if(t_0.type == T${someSig}){
+                      |    *numBits = t_0.Some_8D03B1.value.size;
+                      |    memcpy(byteArray, &t_0.Some_8D03B1.value.value, (*numBits / 8) + 1);
+                      |    return T;
+                      |  } else {
+                      |    return F;
+                      |  }
+                      |}"""
+    return ret
+  }
+
+  def apiSet(signature: ST, apiSetMethodName: String, c_this: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"${c_this}(this)")
     if(!isEventPort) { args = args :+ st"value" }
     
     val ret: ST =st"""${signature} {
                      |
-                     |  ${apiGetMethodName}(
+                     |  ${apiSetMethodName}(
                      |    ${(args, ",\n")});
                      |}"""
     return ret
   }
-  
+
+  def apiSet_byteArrayVersion(signature: ST, apiSetMethodName: String, c_this: String): ST = {
+
+    var args: ISZ[ST] = ISZ(
+      st"${c_this}(this)",
+      st"&t_0"
+    )
+
+    val ret: ST =st"""${signature} {
+                     |
+                     |  sfAssert((Z) numBits >= 0, "numBits must be non-negative for IS[Z, B].");
+                     |  sfAssert((Z) numBits <= MaxIS_C4F575, "numBits too large for IS[Z, B].");
+                     |
+                     |  DeclNewIS_C4F575(t_0);
+                     |
+                     |  t_0.size = numBits;
+                     |  if(numBits > 0) {
+                     |    memcpy(&t_0.value, byteArray, (numBits / 8) + 1);
+                     |  }
+                     |
+                     |  ${apiSetMethodName}(
+                     |    ${(args, ",\n")});
+                     |}"""
+    return ret
+  }
   def apiLog(signature: ST, apiLogMethodName: String, c_this: String): ST = {
     var args: ISZ[ST] = ISZ(st"${c_this}(this)", st"str")
     

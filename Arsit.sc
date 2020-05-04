@@ -59,7 +59,9 @@ trait Module extends CrossJvmJsJitPack {
 
   final override def ivyDeps = Agg.empty
 
-  final override def deps = Seq(airObject)
+  final override def deps = Seq(airObject, commonObject)
 
   def airObject: CrossJvmJsPublish
+
+  def commonObject: CrossJvmJsPublish
 }
