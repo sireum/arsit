@@ -12,6 +12,10 @@ object StringTemplate {
     return s"// This file was auto-generated${_from}.  Do not edit"
   }
 
+  def safeToEditComment(): String = {
+    return "// This file will not be overwritten so is safe to edit"
+  }
+
   def Base_Types(basePackage: String): ST = {
     val ret =
       st"""// #Sireum

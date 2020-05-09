@@ -2,6 +2,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
+import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.codegen.common.{AadlTypes, CommonUtil, Dispatch_Protocol, Names, PropertyUtil, StringUtil, SymbolTable, TypeUtil}
 import org.sireum.hamr.ir.{Aadl, Component, FeatureCategory}
 
@@ -38,8 +39,9 @@ trait NixGen {
       
       { // api helper methods
         
-        var headerMethods: ISZ[ST] = ISZ()
-        var implMethods: ISZ[ST] = ISZ()
+        var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
+        var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
+
         for (p <- ports) {
           val typeNames = SlangUtil.getDataTypeNames(p._portType, names.basePackage)
 
@@ -191,6 +193,8 @@ trait NixGen {
 
         val impl = st"""#include <${apiHeaderName}.h>
                        |#include <ext.h>
+                       |
+                       |${StringTemplate.safeToEditComment()}
                        |
                        |${(methods, "\n\n")}
                        |"""
