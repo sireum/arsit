@@ -109,7 +109,7 @@ object Util {
               isTrigger: B,
               counter: Z): Port = {
 
-    val pType: AadlType = if(types.rawConnections) {
+    val pType: AadlType = if(types.rawConnections && CommonUtil.isDataPort(feature)) {
       TypeUtil.SlangEmbeddedBitType
     } else {
       Util.getFeatureEndType(feature, types)

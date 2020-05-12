@@ -187,7 +187,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
       
       var portHelperFunctions = ISZ[ST]()
       
-      portHelperFunctions = portHelperFunctions ++ ports.filter(p => CommonUtil.isInFeature(p.feature)).map(p => {
+      portHelperFunctions = portHelperFunctions ++ ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map(p => {
         val (param, arg): (ST, ST) = 
           if(p.feature.category == FeatureCategory.EventPort) {
             (st"", st"Empty()")
@@ -202,7 +202,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
             |"""
       })
 
-      portHelperFunctions = portHelperFunctions ++ ports.filter(p => CommonUtil.isOutFeature(p.feature)).map(p => {
+      portHelperFunctions = portHelperFunctions ++ ports.filter((p : Port) => CommonUtil.isOutFeature(p.feature)).map(p => {
         val isEvent = p.feature.category == FeatureCategory.EventPort
         val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
         val payloadType = if(isEvent) st"Empty" else p.getPortTypeNames.qualifiedPayloadName
