@@ -3,7 +3,9 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.{AadlType, CommonUtil, DataTypeNames, OsateProperties, PropertyUtil, StringUtil, TypeUtil}
+import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 

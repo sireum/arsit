@@ -1,7 +1,10 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.{AadlType, AadlTypes, ArrayType, BaseType, CommonUtil, EnumType, Names, PropertyUtil, RecordType, SlangType, TODOType, TypeUtil}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
+import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.ir._
 import org.sireum.message.Reporter
 import org.sireum.ops._
@@ -15,43 +18,6 @@ object Util {
 
   var verbose: B = F
 
-  val Prop_Thread_Properties__Dispatch_Protocol: String = "Thread_Properties::Dispatch_Protocol"
-  val Prop_Thread_Properties__Urgency: String = "Thread_Properties::Urgency"
-  val Prop_Thread_Properties__Dispatch_Trigger: String = "Thread_Properties::Dispatch_Trigger"
-  
-  val Prop_Timing_Properties__Period: String = "Timing_Properties::Period"
-
-  val Prop_Data_Model__Base_Type: String = "Data_Model::Base_Type"
-  val Prop_Data_Model__Data_Representation: String = "Data_Model::Data_Representation"
-  val Prop_Data_Model__Dimension: String = "Data_Model::Dimension"
-  val Prop_Data_Model__Element_Names: String = "Data_Model::Element_Names"
-  val Prop_Data_Model__Enumerators: String = "Data_Model::Enumerators"
-
-  val Prop_Memory_Properties__Stack_Size = "Memory_Properties::Stack_Size"
-  
-  val Prop_HAMR__OS: String = "HAMR::OS";
-  val Prop_HAMR__HW: String = "HAMR::HW";
-  val Prop_HAMR__Default_Max_Sequence_Size: String = "HAMR::Default_Max_Sequence_Size";
-  val Prop_HAMR__Default_Bit_Width: String = "HAMR::Default_Bit_Width";
-  val Prop_HAMR__Max_String_Size: String = "HAMR::Max_String_Size";
-
-  val DEFAULT_BIT_WIDTH: Z = 64
-  val DEFAULT_MAX_STRING_SIZE: Z = 256
-
-  @pure def hasProperty(properties: ISZ[Property], propertyName: String): B = {
-    return properties.filter(p => CommonUtil.getLastName(p.name) == propertyName).nonEmpty
-  }
-  
-  @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String): Option[T] = {
-    for (p <- properties if CommonUtil.getLastName(p.name) == propertyName)
-      return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
-    return None[T]
-  }
-
-  @pure def getPropertyValues(properties: ISZ[Property], propertyName: String): ISZ[PropertyValue] = {
-    return properties.filter(p => CommonUtil.getLastName(p.name) == propertyName).flatMap(p => p.propertyValues)
-  }
-
   @pure def getPeriod(m: Component): Z = {
     PropertyUtil.getPeriod(m) match {
       case Some(z) => z
@@ -59,33 +25,12 @@ object Util {
     }
   }
 
-  @pure def getDefaultBitWidth(c: Component): Z = {
-    return PropertyUtil.getUnitPropZ(c.properties, Util.Prop_HAMR__Default_Bit_Width) match {
-      case Some(x) => x
-      case None() => Util.DEFAULT_BIT_WIDTH;
-    }
-  }
-
-  @pure def getDefaultMaxSequenceSize(c: Component, altMax: Z): Z = {
-    return PropertyUtil.getUnitPropZ(c.properties, Util.Prop_HAMR__Default_Max_Sequence_Size) match {
-      case Some(x) => x
-      case None() => altMax
-    }
-  }
-
-  @pure def getMaxStringSize(c: Component): Z = {
-    return PropertyUtil.getUnitPropZ(c.properties, Util.Prop_HAMR__Max_String_Size) match {
-      case Some(x) => x
-      case None() => Util.DEFAULT_MAX_STRING_SIZE
-    }
-  }
-
   @pure def getDispatchTriggers(c: Component): Option[ISZ[String]] = {
-    if(!hasProperty(c.properties, Prop_Thread_Properties__Dispatch_Trigger)){
+    if(!PropertyUtil.hasProperty(c.properties, OsateProperties.THREAD_PROPERTIES__DISPATCH_TRIGGER)){
       return None()
     } else {
       var ret: ISZ[String] = ISZ()
-      for (p <- getPropertyValues(c.properties, Prop_Thread_Properties__Dispatch_Trigger)) {
+      for (p <- PropertyUtil.getPropertyValues(c.properties, OsateProperties.THREAD_PROPERTIES__DISPATCH_TRIGGER)) {
         p match {
           case ReferenceProp(v) => ret = ret :+ CommonUtil.getLastName(v)
           case _ => halt(s"Unhandled ${p}")

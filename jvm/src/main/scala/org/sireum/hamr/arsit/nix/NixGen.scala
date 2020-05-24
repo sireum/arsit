@@ -3,7 +3,10 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.StringTemplate
-import org.sireum.hamr.codegen.common.{AadlTypes, CommonUtil, Dispatch_Protocol, Names, PropertyUtil, StringUtil, SymbolTable, TypeUtil}
+import org.sireum.hamr.codegen.common.properties.PropertyUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
+import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.ir.{Aadl, Component, FeatureCategory}
 
 trait NixGen {
@@ -244,17 +247,6 @@ trait NixGen {
       ISZ()
     }
     return ret
-  }
-
-  def getMaxBitsSize(): Option[Z] = {
-    var ret = z"-1"
-    for (t <- types.typeMap.values) {
-      TypeUtil.getBitCodecMaxSize(t) match {
-        case Some(z) => if(z > ret) { ret = z }
-        case _ =>
-      }
-    }
-    return if(ret == -1) None() else Some(ret)
   }
 }
 

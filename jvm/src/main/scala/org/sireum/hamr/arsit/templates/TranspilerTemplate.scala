@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.nix.NixTemplate
 import org.sireum.hamr.arsit.{CTranspilerOption, SlangUtil}
-import org.sireum.hamr.codegen.common.TypeUtil
+import org.sireum.hamr.codegen.common.types.TypeUtil
 
 object TranspilerTemplate {
 
@@ -24,12 +24,13 @@ object TranspilerTemplate {
                |"""
   }
   
-  @pure def compileLib(childDir: String): ST = {
+  @pure def compileLib(childDir: String, useARM: B): ST = {
+    val armCompiler: String = if(useARM) "-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc " else ""
     val project_home = "${PROJECT_HOME}"
     return st"""cd "${project_home}/${childDir}"
                |mkdir -p sel4-build
                |cd sel4-build
-               |cmake ..
+               |cmake ${armCompiler}..
                |make $$MAKE_ARGS
                |"""
   }

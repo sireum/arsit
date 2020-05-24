@@ -5,7 +5,10 @@ import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
-import org.sireum.hamr.codegen.common.{AadlTypes, CommonUtil, DataTypeNames, Dispatch_Protocol, Names, PropertyUtil, SymbolTable}
+import org.sireum.hamr.codegen.common.properties.PropertyUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.symbols.{Dispatch_Protocol, SymbolTable}
+import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames, TypeUtil}
 
 case class ArtNixGen(val dirs: ProjectDirectories,
                      val cExtensionDir: String,
@@ -279,6 +282,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
 
     val maxArraySize: Z = CommonUtil.findMaxZ(arraySizeInfluencers)
+
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
     
@@ -293,7 +297,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     )
 
     if(types.rawConnections) {
-      getMaxBitsSize() match {
+      TypeUtil.getMaxBitsSize(types) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
         case _ => halt("Raw connections specified but couldn't determine max bit size")

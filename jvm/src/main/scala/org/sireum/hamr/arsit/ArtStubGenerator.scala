@@ -3,7 +3,10 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit.Util.reporter
-import org.sireum.hamr.codegen.common.{AadlTypes, CommonUtil, Dispatch_Protocol, Names, PropertyUtil, SymbolTable, TypeUtil}
+import org.sireum.hamr.codegen.common.properties.PropertyUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.types.AadlTypes
 
 class ArtStubGenerator(dirs: ProjectDirectories,
                        m: Aadl,
@@ -56,7 +59,7 @@ class ArtStubGenerator(dirs: ProjectDirectories,
             genThread(c)
           }
         case ComponentCategory.Subprogram => // ignore
-        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor=>
+        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor | ComponentCategory.VirtualProcessor =>
           reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component: ${CommonUtil.getName(c.identifier)}")
         case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }

@@ -5,7 +5,9 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 import org.sireum.hamr.arsit.Util.reporter
 import org.sireum.hamr.arsit.templates._
-import org.sireum.hamr.codegen.common.{CommonUtil, SymbolResolver, TypeResolver, TypeUtil}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.symbols.SymbolResolver
+import org.sireum.hamr.codegen.common.types.{TypeResolver, TypeUtil}
 
 object Arsit {
   def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {

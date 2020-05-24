@@ -3,7 +3,8 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.{BitType, DataTypeNames, Names, TypeUtil}
+import org.sireum.hamr.codegen.common.Names
+import org.sireum.hamr.codegen.common.types.{DataTypeNames, TypeUtil}
 
 
 object NixNamesUtil {

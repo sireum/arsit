@@ -5,7 +5,10 @@ import org.sireum.hamr.ir._
 import org.sireum.ops.ISZOps
 import org.sireum.hamr.arsit.Util.reporter
 import org.sireum.hamr.arsit.templates._
-import org.sireum.hamr.codegen.common.{AadlType, AadlTypes, ArrayType, BaseType, CommonUtil, DataTypeNames, Dispatch_Protocol, EnumType, Names, PropertyUtil, RecordType, SymbolTable, TODOType, TypeUtil}
+import org.sireum.hamr.codegen.common.properties.PropertyUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.types._
 
 import scala.language.implicitConversions
 
@@ -102,7 +105,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
             components :+= names.instanceName
           }
         case ComponentCategory.Subprogram => // not relevant for arch
-        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor =>
+        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor | ComponentCategory.VirtualProcessor=>
           reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component ${CommonUtil.getName(m.identifier)}")
         case _ => throw new RuntimeException("Unexpected " + c)
       }

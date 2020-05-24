@@ -5,7 +5,10 @@ import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
-import org.sireum.hamr.codegen.common.{AadlType, AadlTypes, CommonUtil, DataTypeNames, Dispatch_Protocol, Names, PropertyUtil, StringUtil, SymbolTable, TypeUtil}
+import org.sireum.hamr.codegen.common.properties.PropertyUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
+import org.sireum.hamr.codegen.common.symbols.{Dispatch_Protocol, SymbolTable}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
 
 case class SeL4NixGen(val dirs: ProjectDirectories,
                       val cExtensionDir: String,
@@ -24,6 +27,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
   val maxStackSize: Z = z"16" * z"1024" * z"1024"
   
   var maxSequenceSize: Z = 1
+
+  val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine())
 
   def generate(): ArsitResult = {
     assert(arsitOptions.platform == Cli.ArsitPlatform.SeL4)
@@ -144,7 +149,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       val cOutputDir: Os.Path = rootCOutputDir / instanceName
 
       val relPath = s"${cOutputDir.up.name}/${instanceName}"
-      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath)
+      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath, useArm)
 
       val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
@@ -179,12 +184,12 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         typeApp,
         T
       )
-      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath)
+      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath, useArm)
 
       var customSequenceSizes: ISZ[String] = ISZ()
       if(types.rawConnections) {
         // TODO is this necessary?
-        getMaxBitsSize() match {
+        TypeUtil.getMaxBitsSize(types) match {
           case Some(z) =>
             customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
           case _ => halt("Raw connections specified but couldn't determine max bit size")
@@ -416,7 +421,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     )
 
     if(types.rawConnections) {
-      getMaxBitsSize() match {
+      TypeUtil.getMaxBitsSize(types) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
         case _ => halt("Raw connections specified but couldn't determine max bit size")
