@@ -310,6 +310,8 @@ object Transformers {
 
 // effectively just a copy of org.sireum.Cli.CTranspilerOption
 @datatype class CTranspilerOption(
+                                   help: String,
+                                   args: ISZ[String],
                                    sourcepath: ISZ[String],
                                    output: Option[String],
                                    verbose: B,
@@ -330,7 +332,8 @@ object Transformers {
                                    libOnly: B,
                                    stableTypeId: B,
                                    save: Option[String],
-                                   load: Option[String]
+                                   load: Option[String],
+                                   cmakeIncludes: ISZ[String]
                                  )
 
 @sig trait Result {

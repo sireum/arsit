@@ -59,6 +59,8 @@ object TranspilerTemplate {
 
     val transpilerOptions =
       CTranspilerOption(
+        help = "",
+        args = ISZ(),
         sourcepath = sourcepaths,
         output = Some(outputDir.value),
         verbose = T,
@@ -79,7 +81,8 @@ object TranspilerTemplate {
         libOnly = !buildApps,
         stableTypeId = T,
         save = None(),
-        load = None()
+        load = None(),
+        cmakeIncludes = ISZ()
       )
     val st = transpilerX(transpilerOptions, binDir, additionalInstructions)
 

@@ -1233,27 +1233,30 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       }
       
       val ops = CTranspilerOption(
-          sourcepath = ISZ(dirs.srcMainDir),
-          output = Some(cOutputDir),
-          verbose = T,
-          projectName = Some("main"),  // default set in org.sireum.transpilers.cli.cTranspiler
-          apps = apps,
-          unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler
-          fingerprint = 3, // default set in org.sireum.transpilers.cli.cTranspiler
-          bitWidth = numBits,
-          maxStringSize = maxStringSize,
-          maxArraySize = maxSequenceSize,
-          customArraySizes = customArraySizes,
-          customConstants = customConstants,
-          plugins = ISZ(),
-          exts = extensions,
-          forwarding = forwards,
-          stackSize = Some(_stackSizeInBytes),
-          excludeBuild = excludes,
-          libOnly = !buildApps,
-          stableTypeId = T,
-          save = None(),
-          load = None()
+        help = "",
+        args = ISZ(),
+        sourcepath = ISZ(dirs.srcMainDir),
+        output = Some(cOutputDir),
+        verbose = T,
+        projectName = Some("main"),  // default set in org.sireum.transpilers.cli.cTranspiler
+        apps = apps,
+        unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler
+        fingerprint = 3, // default set in org.sireum.transpilers.cli.cTranspiler
+        bitWidth = numBits,
+        maxStringSize = maxStringSize,
+        maxArraySize = maxSequenceSize,
+        customArraySizes = customArraySizes,
+        customConstants = customConstants,
+        plugins = ISZ(),
+        exts = extensions,
+        forwarding = forwards,
+        stackSize = Some(_stackSizeInBytes),
+        excludeBuild = excludes,
+        libOnly = !buildApps,
+        stableTypeId = T,
+        save = None(),
+        load = None(),
+        cmakeIncludes = ISZ()
       )
 
       transpilerOptions = ISZ(ops)
