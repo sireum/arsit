@@ -12,11 +12,11 @@ import org.sireum.hamr.codegen.common.types._
 
 import scala.language.implicitConversions
 
-class ArtArchitectureGen(directories: ProjectDirectories,
-                         m: Aadl,
-                         arsitOptions: Cli.ArsitOption,
-                         symbolTable: SymbolTable,
-                         types: AadlTypes) {
+class ArchitectureGenerator(directories: ProjectDirectories,
+                            m: Aadl,
+                            arsitOptions: Cli.ArsitOption,
+                            symbolTable: SymbolTable,
+                            types: AadlTypes) {
   var componentId = 0
   var portId: Z = 0
 
@@ -59,7 +59,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
 
-    val arch = ArchTemplate.architectureDescription(
+    val arch = ArchitectureTemplate.architectureDescription(
       basePackage,
       ISZ(),
       architectureName,
@@ -71,7 +71,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
     addResource(directories.architectureDir, ISZ(basePackage, "Arch.scala"), arch, T)
 
-    val demo = Template.demo(basePackage, architectureName, architectureDescriptionName)
+    val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
     addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
   }
 
@@ -112,7 +112,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
-      connections :+= Template.connection(
+      connections :+= ArchitectureTemplate.connection(
         s"${CommonUtil.getName(c.src.component)}.${CommonUtil.getLastName(c.src.feature.get)}",
         s"${CommonUtil.getName(c.dst.component)}.${CommonUtil.getLastName(c.dst.feature.get)}")
     }
@@ -129,7 +129,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     }
 
     for(c <- m.connectionInstances if allowConnection(c, m)) {
-      connections :+= Template.connection(
+      connections :+= ArchitectureTemplate.connection(
         s"${CommonUtil.getName(c.src.component)}.${CommonUtil.getLastName(c.src.feature.get)}",
         s"${CommonUtil.getName(c.dst.component)}.${CommonUtil.getLastName(c.dst.feature.get)}")
     }
@@ -153,17 +153,17 @@ class ArtArchitectureGen(directories: ProjectDirectories,
       }
     }
 
-    val dispatchProtocolST: ST = ArchTemplate.dispatchProtocol(dispatchProtocol, period)
+    val dispatchProtocolST: ST = ArchitectureTemplate.dispatchProtocol(dispatchProtocol, period)
 
-    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+    val dispatchTriggers: Option[ISZ[String]] = SlangUtil.getDispatchTriggers(m)
 
-    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, portId)
+    val ports: ISZ[Port] = SlangUtil.getPorts(m, types, basePackage, portId)
     portId = portId + ports.size
 
-    val _ports = ports.map((p : Port) => ArchTemplate.genPort(p))
+    val _ports = ports.map((p : Port) => ArchitectureTemplate.genPort(p))
     val _portArgs = ports.map((p : Port) => st"${p.name} = ${p.name}")
 
-    return ArchTemplate.bridge(
+    return ArchitectureTemplate.bridge(
       names.instanceName,
       names.instanceName,
       names.bridgeTypeName,
@@ -186,7 +186,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
     var canOverwrite: B = T
 
     val body: ST = t match {
-      case e: EnumType => Template.enumType(typeNames, e.values)
+      case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
 
       case e: RecordType =>
         var fldInits: ISZ[String] = ISZ()
@@ -201,7 +201,7 @@ class ArtArchitectureGen(directories: ProjectDirectories,
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedTypeName}"
         }
 
-        Template.dataType(typeNames, flds, fldInits, None[ST]())
+        TypeTemplate.dataType(typeNames, flds, fldInits, None[ST]())
 
       case e: ArrayType =>
         val baseTypeNames = SlangUtil.getDataTypeNames(e.baseType, basePackage)
@@ -224,21 +224,21 @@ class ArtArchitectureGen(directories: ProjectDirectories,
           None[ST]()
         }
 
-        Template.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
+        TypeTemplate.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
 
       case e: TODOType =>
         reporter.warn(None(), Util.toolName, s"Don't know how to handle ${e}")
         canOverwrite = F
-        Template.typeSkeleton(typeNames)
+        TypeTemplate.typeSkeleton(typeNames)
         
       case _ => halt(s"${t}")
     }
 
-    val ts = Template.typeS(
+    val ts = TypeTemplate.typeS(
       basePackage,
       typeNames.qualifiedPackageName,
       body,
-      Template.payloadType(typeNames),
+      TypeTemplate.payloadType(typeNames),
       canOverwrite)
 
     addResource(directories.dataDir, ISZ(typeNames.filePath), ts, canOverwrite)
@@ -283,103 +283,9 @@ class ArtArchitectureGen(directories: ProjectDirectories,
 
     return T
   }
-
-  object Template {
-
-    @pure def connection(from: String, to: String) : ST = return st"""Connection(from = $from, to = $to)"""
-
-    @pure def demo(packageName: String,
-                   architectureName: String,
-                   architectureDescriptionName: String) : ST = {
-      return st"""${Util.doNotEditComment()}
-                 |package $packageName
-                 |
-                 |object Demo extends App {
-                 |  art.Art.run(${architectureName}.${architectureDescriptionName})
-                 |}"""
-    }
-
-    @pure def enumType(typeNames: DataTypeNames,
-                       values: ISZ[String]): ST = {
-      val vals = values.map(m => st"'$m")
-      return st"""@enum object ${typeNames.typeName} {
-                 |  ${(vals, "\n")}
-                 |}
-                 |"""
-    }
-
-    @pure def dataType(typeNames: DataTypeNames,
-                       fields: ISZ[ST],
-                       paramInits: ISZ[String],
-                       optChecks: Option[ST]): ST = {
-      return st"""object ${typeNames.typeName} {
-                 |  def empty(): ${typeNames.qualifiedTypeName} = {
-                 |    return ${typeNames.qualifiedTypeName}(${(paramInits, ", ")})
-                 |  }
-                 |}
-                 |
-                 |@datatype class ${typeNames.typeName}(
-                 |  ${(fields, ",\n")}) {
-                 |  $optChecks
-                 |}
-                 |"""
-    }
-
-    @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
-      val typeName = typeNames.qualifiedReferencedTypeName
-      val payloadTypeName = typeNames.payloadName
-      val emptyPayload = typeNames.empty()
-
-      return st"""object ${typeNames.typeName} {
-                 |  def empty(): ${typeNames.qualifiedTypeName} = {
-                 |    return ${typeNames.qualifiedTypeName}()
-                 |  }
-                 |}
-                 |
-                 |@datatype class ${typeNames.typeName}() // type skeleton
-                 |"""
-    }
-
-    @pure def payloadType(typeNames: DataTypeNames) : ST = {
-      val typeName = typeNames.qualifiedReferencedTypeName
-      val payloadTypeName = typeNames.payloadName
-      val emptyPayload = typeNames.empty()
-
-      return st"""object $payloadTypeName {
-                 |  def empty(): $payloadTypeName = {
-                 |    return $payloadTypeName($emptyPayload)
-                 |  }
-                 |}
-                 |
-                 |@datatype class $payloadTypeName(value: $typeName) extends art.DataContent"""
-    }
-
-    @pure def typeS(topLevelPackageName: String,
-                    packageName: String,
-                    body: ST,
-                    payload: ST,
-                    canOverwrite: B): ST = {
-      val overwrite = if(canOverwrite) {
-        st"""
-            |${Util.doNotEditComment() }
-            |"""
-      } else { st"" }
-
-      return st"""// #Sireum
-                 |
-                 |package $packageName
-                 |
-                 |import org.sireum._
-                 |import $topLevelPackageName._
-                 |$overwrite
-                 |$body
-                 |$payload
-                 |"""
-    }
-  }
 }
 
-object ArtArchitectureGen {
+object ArchitectureGenerator {
   def apply(directories: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, symbolTable: SymbolTable, types: AadlTypes) =
-    new ArtArchitectureGen(directories, m, o, symbolTable, types).generator()
+    new ArchitectureGenerator(directories, m, o, symbolTable, types).generator()
 }

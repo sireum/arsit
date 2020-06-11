@@ -53,7 +53,7 @@ Z PACKAGE_NAME_SharedMemory_create(STACK_FRAME Z id) {
     return (Z) shmid;
 }
 
-void PACKAGE_NAME_SharedMemory_receive(STACK_FRAME art_DataContent result, Z port) {
+Unit PACKAGE_NAME_SharedMemory_receive(STACK_FRAME Z port, MBox2_1CBFC4 out) {
     int sid = semget((key_t) port, 1, 0666);
 
     lock(sid);
@@ -69,14 +69,14 @@ void PACKAGE_NAME_SharedMemory_receive(STACK_FRAME art_DataContent result, Z por
     }
 
     art_DataContent d = &p->Some_D29615.value;
-    Type_assign(result, d, sizeOf((Type) d));
+    Type_assign(&(out->value2), d, sizeOf((Type) d));
     memset(p, 0, sizeof(union Option_8E9F45));
     shmdt(p);
 
     unlock(sid);
 }
 
-void PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Option_8E9F45 result, Z port) {
+Unit PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Z port, MBox2_1029D1 out) {
     int sid = semget((key_t) port, 1, 0666);
 
     lock(sid);
@@ -86,10 +86,10 @@ void PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Option_8E9F45 result, Z 
     Option_8E9F45 p = (Option_8E9F45) shmat(shmid, (void *) 0, 0);
 
     if (p->type == TSome_D29615) {
-        Type_assign(result, p, sizeOf((Type) p));
+        Type_assign(&(out->value2), p, sizeOf((Type) p));
         memset(p, 0, sizeof(union Option_8E9F45));
     } else {
-        result->type = TNone_964667;
+        out->value2.type = TNone_964667;
     }
 
     shmdt(p);

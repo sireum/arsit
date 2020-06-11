@@ -3,8 +3,8 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.Util.reporter
+import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 import org.sireum.hamr.codegen.common.symbols.{Dispatch_Protocol, SymbolTable}
@@ -67,14 +67,13 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     }
     
     var transpilerScripts: Map[String, (ST, CTranspilerOption)] = Map.empty
-    var sel4CompileScripts: ISZ[ST] = ISZ()
     val typeTouches: ISZ[ST] = genTypeTouches(types)
-    
+
     for (component <- components) {
 
       val names: Names = Names(component, basePackage)
 
-      val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
+      val ports: ISZ[Port] = SlangUtil.getPorts(component, types, basePackage, z"0")
 
       val instanceName: String = names.instanceName
 
@@ -93,20 +92,20 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(component).get
       val dispatchStatus = genDispatchStatus(names, ports, dispatchProtocol)
 
-      val _ports = ports.map((p : Port) => ArchTemplate.genPort(p))
+      val _ports = ports.map((p : Port) => ArchitectureTemplate.genPort(p))
       val _portArgs = ports.map((p : Port) => st"${p.name} = ${p.name}")
 
-      val bridge = ArchTemplate.bridge(
+      val bridge = ArchitectureTemplate.bridge(
         names.bridgeIdentifier,
         names.instanceName,
         names.bridgeTypeName,
         z"0",
-        ArchTemplate.dispatchProtocol(dispatchProtocol, period),
-        Util.getDispatchTriggers(component),
+        ArchitectureTemplate.dispatchProtocol(dispatchProtocol, period),
+        SlangUtil.getDispatchTriggers(component),
         _ports,
         _portArgs)
 
-      val app = NixTemplate.app(
+      val app = SeL4NixTemplate.app(
         basePackage,
         instanceName,
         ISZ(s"import ${names.basePackage}._", s"import ${names.packageName}.${names.sel4SlangExtensionName}"),
@@ -148,9 +147,6 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       
       val cOutputDir: Os.Path = rootCOutputDir / instanceName
 
-      val relPath = s"${cOutputDir.up.name}/${instanceName}"
-      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath, useArm)
-
       val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
       val transpilerExtensions: ISZ[Os.Path] = paths ++ genSel4Adapters(names) ++ getExistingCFiles(cExtensionDir)
@@ -159,14 +155,19 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         case Some(size) => size
         case _ => maxStackSize
       }
-      
+
+      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceName)}"
+      addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(instanceName), F)
+
       val trans = genTranspiler(
         basePackage = basePackage,
         names = names, 
         maxStackSize = stackSize,
         numComponentPorts = ports.size,
         cOutputDir = cOutputDir,
-        cExtensions = transpilerExtensions)
+        cExtensions = transpilerExtensions,
+        cmakeIncludes = ISZ(settingsFilename)
+      )
       
       transpilerScripts = transpilerScripts + (instanceName ~> trans)
     }
@@ -177,14 +178,13 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       val cOutputDir: Os.Path = rootCOutputDir / id
       val relPath = s"${cOutputDir.up.name}/${id}"
       
-      val typeApp = NixTemplate.typeApp(basePackage, id, id, typeTouches)
+      val typeApp = SeL4NixTemplate.typeApp(basePackage, id, id, typeTouches)
 
       addResource(dirs.seL4NixDir,
         ISZ(basePackage, id, s"${id}.scala"),
         typeApp,
         T
       )
-      sel4CompileScripts = sel4CompileScripts :+ TranspilerTemplate.compileLib(relPath, useArm)
 
       var customSequenceSizes: ISZ[String] = ISZ()
       if(types.rawConnections) {
@@ -208,14 +208,14 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         maxStackSize = maxStackSize,
         
         extensions = ISZ(),        
-        excludes = ISZ())
+        excludes = ISZ(),
+
+        cmakeIncludes = ISZ())
       
       transpilerScripts = transpilerScripts + (id ~> trans)
-    }
-    
-    val sel4CompileScript = TranspilerTemplate.compileLibPreamble(sel4CompileScripts)
-    addExeResource(rootCOutputDir.value, ISZ("..", "bin", "compile-hamr-lib.sh"), sel4CompileScript, T)
-    
+
+    } // end slang type library
+
     val scripts = transpilerScripts.values.map(m => m._1)
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map(m => m._2)
     
@@ -227,8 +227,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
   def genGlobals(ports: ISZ[Port],
                  names: Names): ST = {
     val _ports: ISZ[ST] = ports.map(p => {
-      val portComment = NixTemplate.portComment(p.name, p.feature.direction.string, p.feature.category.string, p.getPortTypeNames.qualifiedTypeName)
-      NixTemplate.portVariable(names.bridgeIdentifier, p.sel4PortVarable, p.name, p.nameId, portComment)
+      val portComment = SeL4NixTemplate.portComment(p.name, p.feature.direction.string, p.feature.category.string, p.getPortTypeNames.qualifiedTypeName)
+      SeL4NixTemplate.portVariable(names.bridgeIdentifier, p.sel4PortVarable, p.name, p.nameId, portComment)
     })
     return st"${(_ports, "\n\n")}"
   }
@@ -252,7 +252,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       }
     }
     
-    return NixTemplate.dispatchStatus(body)
+    return SeL4NixTemplate.dispatchStatus(body)
   }
 
   def genReceiveInput(ports: ISZ[Port],
@@ -261,7 +261,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     val entries: ISZ[ST] = inPorts.map(p => 
       st"${p.sel4PortVarable} = ${names.sel4SlangExtensionName}.${genExtensionMethodName(p, "Receive")}()")
     
-    return NixTemplate.receiveInput(st"${(entries, "\n\n")}")
+    return SeL4NixTemplate.receiveInput(st"${(entries, "\n\n")}")
   }
   
   def genPutValue(ports: ISZ[Port],
@@ -274,9 +274,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       (test, assign)
     })
     val optEls: ST = st"""halt(s"Unexpected: ${instanceName}.putValue called with: $${portId}")"""
-    val ifelses = NixTemplate.ifEsleHelper(options, Some(optEls))
+    val ifelses = SeL4NixTemplate.ifEsleHelper(options, Some(optEls))
     
-    return NixTemplate.putValue(ifelses)
+    return SeL4NixTemplate.putValue(ifelses)
   }
   
   def genGetValue(ports: ISZ[Port],
@@ -289,9 +289,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       (test, assign)
     })
     val optEls: ST = st"""halt(s"Unexpected: ${instanceName}.getValue called with: $${portId}")"""
-    val ifelses = NixTemplate.ifEsleHelper(options, Some(optEls))
+    val ifelses = SeL4NixTemplate.ifEsleHelper(options, Some(optEls))
 
-    return NixTemplate.getValue(ifelses)
+    return SeL4NixTemplate.getValue(ifelses)
   }
   
   def genSendOutput(ports: ISZ[Port],
@@ -303,7 +303,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
           |  ${p.sel4PortVarable} = noData
           |}"""
     })
-    return NixTemplate.sendOutput(st"${(entries, "\n\n")}")
+    return SeL4NixTemplate.sendOutput(st"${(entries, "\n\n")}")
   }
 
   def genExtensionMethodName(p: Port, methodName: String): String = { return s"${p.name}_${methodName}" }
@@ -321,7 +321,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
             |def ${genExtensionMethodName(p, "Send")}(d: DataContent): Unit = $$"""
       }
     })
-    return NixTemplate.extensionObject(names.packageName, names.sel4SlangExtensionName, st"${(entries, "\n\n")}")
+    return SeL4NixTemplate.extensionObject(names.packageName, names.sel4SlangExtensionName, st"${(entries, "\n\n")}")
   }
   
   def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], packageName: String, names: Names): ST = {
@@ -334,7 +334,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         st"""def ${genExtensionMethodName(p, "Send")}(d: DataContent): Unit = halt("stub")"""
       }
     })
-    return NixTemplate.extensionObjectStub(
+    return SeL4NixTemplate.extensionObjectStub(
       names.packageName, names.sel4SlangExtensionStubName, st"${(entries, "\n\n")}")
   }
 
@@ -349,7 +349,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
                         maxStackSize: Z,
 
                         extensions: ISZ[Os.Path],
-                        excludes: ISZ[String]): (ST, CTranspilerOption) = {
+                        excludes: ISZ[String],
+
+                        cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
     val packageName = s"${basePackage}/${instanceName}"
     val appName = s"${basePackage}.${instanceName}.${identifier}"
     
@@ -368,6 +370,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     val _extensions: Set[String] = Set.empty ++ extensions.map(m => m.value)
 
     return TranspilerTemplate.transpiler(
+      libraryName = instanceName,
       sourcepaths = _sourcePaths,
       outputDir = cOutputDir,
       binDir = dirs.binDir,
@@ -382,7 +385,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       extensions = _extensions.elements,
       excludes = excludes,
       buildApps = buildApps,
-      additionalInstructions = additionalInstructions
+      additionalInstructions = additionalInstructions,
+      cmakeIncludes = cmakeIncludes
     )
   }
 
@@ -391,7 +395,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
                     maxStackSize: Z,
                     numComponentPorts: Z,
                     cOutputDir: Os.Path,
-                    cExtensions: ISZ[Os.Path]): (ST, CTranspilerOption) = {
+                    cExtensions: ISZ[Os.Path],
+                    cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
      
     val components = symbolTable.airComponentMap.entries.filter(p =>
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))
@@ -432,7 +437,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       s"art.Art.maxComponents=1",
       s"art.Art.maxPorts=${numComponentPorts}"
     )
-    
+
     return genTranspilerBase(
       basePackage = basePackage,
       instanceName = names.instanceName,
@@ -445,7 +450,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       maxStackSize = maxStackSize,
 
       extensions = cExtensions,
-      excludes = excludes)
+      excludes = excludes,
+
+      cmakeIncludes = cmakeIncludes)
   }
 
 
@@ -461,10 +468,10 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     for(typ <- _types) {
       //val typ = t._2
       val typeNames: DataTypeNames = SlangUtil.getDataTypeNames(typ, basePackage)
-      a = a :+ NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
+      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
       counter = counter + z"1"
     }
-    a = a :+ NixTemplate.touchType("art.Empty", None())
+    a = a :+ SeL4NixTemplate.touchType("art.Empty", None())
     return a
   }
 
@@ -486,7 +493,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     for(m <- methods) {
       val methodName = s"${names.cEntryPointAdapterQualifiedName}_${m}"
 
-      val signature = NixTemplate.methodSignature(methodName, None(), ISZ(), "Unit")
+      val signature = SeL4NixTemplate.methodSignature(methodName, None(), ISZ(), "Unit")
 
       val route = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${m}"
 
@@ -497,8 +504,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       headerMethods = headerMethods :+ st"${signature};"
     }
 
-    val impl = NixTemplate.cImplFile(fileName, implMethods)
-    val header = NixTemplate.cHeaderFile(macroName, headerMethods)
+    val impl = SeL4NixTemplate.cImplFile(fileName, implMethods)
+    val header = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
     addResource(implFile.up.value, ISZ(implFile.name), impl, T)
     addResource(headerFile.up.value, ISZ(headerFile.name), header, T)
@@ -512,7 +519,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     var max:Z = z"0"
 
     for(c <- components) {
-      val numPorts = Util.getPorts(c, types, basePackage, z"0").size
+      val numPorts = SlangUtil.getPorts(c, types, basePackage, z"0").size
       if(numPorts > max) {
         max = numPorts
       }

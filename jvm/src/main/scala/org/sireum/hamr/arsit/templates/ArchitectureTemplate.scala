@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
 import org.sireum.hamr.ir.{Direction, FeatureCategory}
 
-object ArchTemplate {
+object ArchitectureTemplate {
 
   @pure def doNotEditComment(from: Option[String]): ST = {
     val _from: String = if (from.nonEmpty) s" from ${from.get}" else ""
@@ -21,7 +21,21 @@ object ArchTemplate {
     }  
     return ret
   }
-  
+
+
+  @pure def connection(from: String, to: String) : ST = { return st"""Connection(from = $from, to = $to)""" }
+
+  @pure def demo(packageName: String,
+                 architectureName: String,
+                 architectureDescriptionName: String) : ST = {
+    return st"""${StringTemplate.doNotEditComment(None())}
+               |package $packageName
+               |
+               |object Demo extends App {
+               |  art.Art.run(${architectureName}.${architectureDescriptionName})
+               |}"""
+  }
+
   @pure def portType(name: String,
                      typ: String,
                      id: Z,

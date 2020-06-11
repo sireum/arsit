@@ -3,7 +3,6 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.nix.NixTemplate
 import org.sireum.hamr.arsit.{CTranspilerOption, SlangUtil}
 import org.sireum.hamr.codegen.common.types.TypeUtil
 
@@ -35,7 +34,8 @@ object TranspilerTemplate {
                |"""
   }
 
-  @pure def transpiler(sourcepaths: ISZ[String],
+  @pure def transpiler(libraryName: String,
+                       sourcepaths: ISZ[String],
                        outputDir: Os.Path,
                        binDir: String,
                        apps: ISZ[String],
@@ -49,6 +49,7 @@ object TranspilerTemplate {
                        extensions: ISZ[String],
                        excludes: ISZ[String],
                        buildApps: B,
+                       cmakeIncludes: ISZ[String],
                        additionalInstructions: Option[ST]): (ST, CTranspilerOption) = {
 
     val _stackSizeInBytes: String = if(stackSizeInBytes < 0) {
@@ -64,7 +65,7 @@ object TranspilerTemplate {
         sourcepath = sourcepaths,
         output = Some(outputDir.value),
         verbose = T,
-        projectName = Some("main"),  // default set in org.sireum.transpilers.cli.cTranspiler
+        projectName = Some(libraryName),  // default set in org.sireum.transpilers.cli.cTranspiler
         apps = apps,
         unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler
         fingerprint = TypeUtil.FINGERPRINT_WIDTH, // default set in org.sireum.transpilers.cli.cTranspiler
@@ -82,7 +83,7 @@ object TranspilerTemplate {
         stableTypeId = T,
         save = None(),
         load = None(),
-        cmakeIncludes = ISZ()
+        cmakeIncludes = cmakeIncludes
       )
     val st = transpilerX(transpilerOptions, binDir, additionalInstructions)
 
@@ -97,6 +98,7 @@ object TranspilerTemplate {
 
     val projHomesRel = opts.sourcepath.map((s: String) => SlangUtil.relativizePaths(binDir, s, script_home))
     val cOutputDirRel = SlangUtil.relativizePaths(binDir, opts.output.get, script_home)
+    val cmakeIncludesRel = opts.cmakeIncludes.map((s: String) => { SlangUtil.relativizePaths2(binDir, s, script_home) })
 
     val path_sep = s"$${PATH_SEP}"
 
@@ -118,6 +120,7 @@ object TranspilerTemplate {
                   |  --sequence-size ${opts.maxArraySize} \
                   |  ${expand("sequence", opts.customArraySizes)}
                   |  ${expand("constants", opts.customConstants)}
+                  |  ${expand("cmake-includes", cmakeIncludesRel)}
                   |  --forward "${(opts.forwarding, ",")}" \
                   |  --stack-size "${opts.stackSize.get}" \
                   |  --stable-type-id"""

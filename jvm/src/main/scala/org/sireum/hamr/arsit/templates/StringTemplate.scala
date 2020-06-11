@@ -139,7 +139,7 @@ val scalaVer = "${scalaVersion}"
 
 val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
 
-val runtimeVersion = "${runtimeVersion}" // https://github.com/sireum/runtime/tree/${runtimeVersion}
+val runtimeVersion = "${runtimeVersion}" // https://github.com/sireum/kekinian/tree/${runtimeVersion}
 
 val scalaTestVersion = "${scalaTestVersion}"
 
@@ -156,7 +156,7 @@ val commonSettings = Seq(
   addCompilerPlugin("org.sireum" %% "scalac-plugin" % sireumScalacVersion),
   libraryDependencies ++= Seq(
     ${embeddedArt._2}
-    "org.sireum.runtime" %% "library" % runtimeVersion withSources() withJavadoc()
+    "org.sireum.kekinian" %% "library" % runtimeVersion withSources() withJavadoc()
   )
 )
 

@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
-import org.sireum.hamr.codegen.common.types.{AadlType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 
@@ -13,6 +13,8 @@ object SlangUtil {
   var pathSep: C = '/'
 
   val toolName: String = "Arsit"
+
+  val SCRIPT_HOME: String = "SCRIPT_HOME"
 
   def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B) : Resource = {
     return Resource(pathAppend(rootDir, path), content, overwrite, T)
@@ -38,6 +40,13 @@ object SlangUtil {
     } else {
       return s.substring(pos + 1, s.size)
     }
+  }
+
+  def relativizePaths2(anchorDir: String, toRel: String, anchorResource: String) : String = {
+    val o1 = Os.path(anchorDir)
+    val o2 = Os.path(toRel)
+    val rel = o1.relativize(o2)
+    return s"${anchorResource}/${rel}"
   }
 
   def relativizePaths(anchorDir: String, toRel: String, anchorResource: String) : String = {
@@ -106,11 +115,73 @@ object SlangUtil {
     }
     return DataTypeNames(typ, topPackage, packageName, StringUtil.sanitizeName(typeName))
   }
+
+  @pure def getDispatchTriggers(c: ir.Component): Option[ISZ[String]] = {
+    if(!PropertyUtil.hasProperty(c.properties, OsateProperties.THREAD_PROPERTIES__DISPATCH_TRIGGER)){
+      return None()
+    } else {
+      var ret: ISZ[String] = ISZ()
+      for (p <- PropertyUtil.getPropertyValues(c.properties, OsateProperties.THREAD_PROPERTIES__DISPATCH_TRIGGER)) {
+        p match {
+          case ir.ReferenceProp(v) => ret = ret :+ CommonUtil.getLastName(v)
+          case _ => halt(s"Unhandled ${p}")
+        }
+      }
+      return Some(ret)
+    }
+  }
+
+  @pure def getFeatureEnds(is: ISZ[ir.Feature]): ISZ[ir.FeatureEnd] = {
+    return is.filter(f => f.isInstanceOf[ir.FeatureEnd]).map(m => m.asInstanceOf[ir.FeatureEnd])
+  }
+
+  @pure def getFeatureEndType(f: ir.FeatureEnd, types: AadlTypes): AadlType = {
+    val ret: AadlType = f.classifier match {
+      case Some(c) => types.typeMap.get(c.name).get
+      case _ => TypeUtil.EmptyType
+    }
+    return ret
+  }
+
+
+  def getPort(feature: ir.FeatureEnd,
+              parent: ir.Component,
+              types: AadlTypes,
+              basePackage: String,
+              isTrigger: B,
+              counter: Z): Port = {
+
+    val pType: AadlType = if(types.rawConnections && CommonUtil.isDataPort(feature)) {
+      TypeUtil.SlangEmbeddedBitType
+    } else {
+      getFeatureEndType(feature, types)
+    }
+
+    return Port(feature, parent, pType, basePackage, isTrigger, counter)
+  }
+
+  def getPorts(m: ir.Component, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
+    var _counter = counter
+
+    val dispatchTriggers: Option[ISZ[String]] = SlangUtil.getDispatchTriggers(m)
+
+    var ports: ISZ[Port] = ISZ()
+    for (f <- SlangUtil.getFeatureEnds(m.features) if CommonUtil.isPort(f)) {
+      val portName = CommonUtil.getLastName(f.identifier)
+      val isTrigger: B =
+        if (dispatchTriggers.isEmpty) T
+        else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
+
+      ports = ports :+ getPort(f, m, types, basePackage, isTrigger, _counter)
+
+      _counter = _counter + 1
+    }
+    return ports
+  }
 }
 
 object Cli {
   @enum object IpcMechanism {
-    'MessageQueue
     'SharedMemory
   }
 
