@@ -37,20 +37,6 @@ object ArtNixTemplate {
     return st"""$portOptName = None[$portType]()"""
   }
 
-  @pure def aepPortCase(portIdName: String,
-                        portOptName: String,
-                        payloadType: DataTypeNames,
-                        isData: B): ST = {
-    return st"""case `$portIdName` =>
-               |  $portOptName = Some(d.asInstanceOf[${payloadType.qualifiedPayloadName}]${if(!payloadType.isEmptyType()) ".value" else ""})
-               |  ${if(!isData) "eventArrived()" else ""}"""
-  }
-
-  @pure def AEPPayload(AEPPayloadTypeName: String,
-                       portOptNames: ISZ[String]): ST = {
-    return st"""${AEPPayloadTypeName}(${(portOptNames, ", ")})"""
-  }
-
   @pure def appCases(portOptName: String,
                      portId: String,
                      payloadType: DataTypeNames): ST = {
@@ -79,109 +65,18 @@ object ArtNixTemplate {
                |)"""
   }
 
-  @pure def artNixCase(aepPortId: String,
+  @pure def artNixCase(portId: String,
                        dstArchPortId: String): ST = {
-    return st"(IPCPorts.$aepPortId, Arch.$dstArchPortId.id)"
+    return st"(IPCPorts.$portId, Arch.$dstArchPortId.id)"
   }
 
   @pure def mainSend(portId: String): ST = {
     return st"""Platform.sendAsync(IPCPorts.${portId}, IPCPorts.${s"$portId"}, empty)"""
   }
 
-  @pure def aep(packageName: String,
-                objectName: String,
-                portOpts: ISZ[ST],
-                portIds: ISZ[ST],
-                portOptResets: ISZ[ST],
-                portCases: ISZ[ST],
-                AEP_Id: String,
-                IPCPort_Id: String,
-                AEP_payload: ST,
-                isPeriodic: B): ST = {
-    return st"""// #Sireum
-               |
-               |package $packageName
-               |
-               |import org.sireum._
-               |
-               |${StringTemplate.doNotEditComment(None())}
-               |
-               |object ${objectName} extends App {
-               |
-               |  ${if(!isPeriodic) "var state: AEPState.Type = AEPState.Start" else ""}
-               |  ${(portOpts, "\n")}
-               |
-               |  def main(args: ISZ[String]): Z = {
-               |
-               |    val seed: Z = if (args.size == z"1") {
-               |      val n = Z(args(0)).get
-               |      if (n == z"0") 1 else n
-               |    } else {
-               |      1
-               |    }
-               |
-               |    Platform.initialise(seed, Some(IPCPorts.${AEP_Id}))
-               |
-               |    val anyPortOpt: Option[art.Art.PortId] = None()
-               |    ${(portIds, "\n")}
-               |
-               |    // wait for first ping which should indicate all apps are past
-               |    // their IPC init phase
-               |    Platform.receive(Some(IPCPorts.Main))
-               |
-               |    // wait for second ping which should indicate all apps have completed
-               |    // their initialise entrypoint
-               |    Platform.receive(Some(IPCPorts.Main))
-               |
-               |    while (true) {
-               |      val (port, d) = Platform.receive(anyPortOpt)
-               |      port match {
-               |        ${(portCases, "\n")}
-               |        case IPCPorts.${IPCPort_Id} =>
-               |          ${if(isPeriodic) "sendEvent()" else "requested()"}
-               |        case _ => halt(s"Infeasible: ${"$port"}")
-               |      }
-               |    }
-               |
-               |    return 0
-               |  }
-               |  ${if(!isPeriodic)
-                      st"""
-                          |def eventArrived(): Unit = {
-                          |  if (state == AEPState.EventRequested) {
-                          |    sendEvent()
-                          |  } else {
-                          |    state = AEPState.EventArrived
-                          |  }
-                          |}
-                          |
-                          |def requested(): Unit = {
-                          |  if (state == AEPState.EventArrived) {
-                          |    sendEvent()
-                          |  } else {
-                          |    state = AEPState.EventRequested
-                          |  }
-                          |}
-                          |""".render
-                     else ""}
-               |  def sendEvent(): Unit = {
-               |    Platform.send(IPCPorts.${IPCPort_Id}, IPCPorts.${AEP_Id},
-               |                  ${AEP_payload})
-               |
-               |    ${(portOptResets, "\n")}
-               |    ${if(!isPeriodic) "state = AEPState.Start" else ""}
-               |  }
-               |
-               |  override def atExit(): Unit = {
-               |    Platform.finalise()
-               |  }
-               |}"""
-  }
-
-    @pure def app(packageName: String,
+  @pure def app(packageName: String,
                   objectName: String,
                   IPCPort_Id: String,
-                  AEP_Id: String,
                   period: Z,
                   bridge: String,
                   portIds: ISZ[ST],
@@ -211,12 +106,6 @@ object ArtNixTemplate {
                                      |val appPortIdOpt: Option[Art.PortId] = Some(appPortId)""")
 
       var inits: ISZ[ST] = ISZ(st"Platform.initialise(seed, appPortIdOpt)")
-
-      if(portIds.nonEmpty) {
-        globals = globals :+ st"""val empty: art.Empty = art.Empty()
-                                 |val aepPortId: Art.PortId = IPCPorts.${AEP_Id}
-                                 |val aepPortIdOpt: Option[Art.PortId] = Some(aepPortId)"""
-      }
 
       for(p <- inPorts) {
         globals = globals :+ st"val ${localPortId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id"
@@ -751,7 +640,6 @@ object ArtNixTemplate {
 
       val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
       val ext: String = if(arch == Cli.ArsitPlatform.Cygwin) ".exe" else ""
-      val staep: ISZ[ST] = ISZ()
       val stapp: ISZ[ST] = apps.map(st => {
         val prefix: String = arch match {
           case Cli.ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
@@ -767,7 +655,6 @@ object ArtNixTemplate {
                  |set -e
                  |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
                  |cd $$SCRIPT_HOME
-                 |${(staep, "\n")}
                  |${(stapp, "\n")}
                  |read -p "Press enter to initialise components ..."
                  |${buildDir}/Main$ext

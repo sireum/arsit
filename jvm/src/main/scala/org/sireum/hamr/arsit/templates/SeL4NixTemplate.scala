@@ -277,9 +277,9 @@ object SeL4NixTemplate {
                       |    
                       |  if(t_0.type == T${someSig}){
                       |    ${typeAssign}
-                      |    return T;
+                      |    return true;
                       |  } else {
-                      |    return F;
+                      |    return false;
                       |  }
                       |}"""
     return ret
@@ -319,9 +319,9 @@ object SeL4NixTemplate {
                       |  if(t_0.type == T${someSig}){
                       |    *numBits = t_0.Some_8D03B1.value.size;
                       |    memcpy(byteArray, &t_0.Some_8D03B1.value.value, (*numBits / 8) + 1);
-                      |    return T;
+                      |    return true;
                       |  } else {
-                      |    return F;
+                      |    return false;
                       |  }
                       |}"""
     return ret
@@ -363,6 +363,7 @@ object SeL4NixTemplate {
                      |}"""
     return ret
   }
+
   def apiLog(signature: ST, apiLogMethodName: String, c_this: String): ST = {
     var args: ISZ[ST] = ISZ(st"${c_this}(this)", st"str")
     

@@ -97,8 +97,19 @@ object TranspilerTemplate {
     val script_home = s"$${${SCRIPT_HOME}}"
 
     val projHomesRel = opts.sourcepath.map((s: String) => SlangUtil.relativizePaths(binDir, s, script_home))
+
     val cOutputDirRel = SlangUtil.relativizePaths(binDir, opts.output.get, script_home)
-    val cmakeIncludesRel = opts.cmakeIncludes.map((s: String) => { SlangUtil.relativizePaths2(binDir, s, script_home) })
+
+    val cmakeIncludesRel = opts.cmakeIncludes.map((s: String) => {
+      val opss = ops.StringOps(s)
+      val (prefix, nonplussed) : (String, String) = if(ops.StringOps(s).startsWith("+")) {
+        ("+", opss.substring(1, opss.size))
+      } else {
+        ("", s)
+      }
+
+      s"${prefix}${SlangUtil.relativizePaths(binDir, nonplussed, script_home)}"
+    })
 
     val path_sep = s"$${PATH_SEP}"
 

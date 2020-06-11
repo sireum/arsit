@@ -42,46 +42,11 @@ object SlangUtil {
     }
   }
 
-  def relativizePaths2(anchorDir: String, toRel: String, anchorResource: String) : String = {
+  def relativizePaths(anchorDir: String, toRel: String, anchorResource: String) : String = {
     val o1 = Os.path(anchorDir)
     val o2 = Os.path(toRel)
     val rel = o1.relativize(o2)
     return s"${anchorResource}/${rel}"
-  }
-
-  def relativizePaths(anchorDir: String, toRel: String, anchorResource: String) : String = {
-    val ais = conversions.String.toCis(anchorDir)
-    val tis = conversions.String.toCis(toRel)
-
-    var commonPrefix = 0
-    var stop = F
-    while(commonPrefix < ais.size && commonPrefix < tis.size && !stop) {
-      if(ais(commonPrefix) == tis(commonPrefix)){
-        commonPrefix = commonPrefix + 1;
-      } else {
-        stop = T
-      }
-    }
-
-    if(commonPrefix > 0) {
-      var seps = s""
-      for(i <- commonPrefix - 1 until ais.size) {
-        if(ais(i) == pathSep) {
-          seps = s"${pathSep}..${seps}"
-        }
-      }
-      val r = StringOps(toRel)
-      val ret = s"${anchorResource}${seps}${r.substring(commonPrefix - 1, r.size)}"
-
-      /*
-      println(st"""anchorDir = ${anchorDir}
-                  |toRel =     ${toRel}
-                  |ret =       ${ret}""".render)
-      */
-      return ret
-    } else {
-      return toRel
-    }
   }
 
   def isNix(platform: Cli.ArsitPlatform.Type): B = {

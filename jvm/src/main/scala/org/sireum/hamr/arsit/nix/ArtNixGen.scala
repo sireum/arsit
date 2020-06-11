@@ -69,10 +69,8 @@ case class ArtNixGen(val dirs: ProjectDirectories,
     assert(CommonUtil.isSystem(model.components(0)))
 
     var platformPorts: ISZ[ST] = ISZ()
-    var platformPayloads: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
     var inPorts: ISZ[Port] = ISZ()
-    //val aepNames: ISZ[String] = ISZ()
     var appNames: ISZ[String] = ISZ()
 
     val components = symbolTable.airComponentMap.entries.filter(p =>
@@ -98,10 +96,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       val isPeriodic: B = dispatchProtocol == Dispatch_Protocol.Periodic
 
       val bridgeInstanceVarName: String = CommonUtil.getName(component.identifier)
-      val AEP_Id: String = s"${names.instanceName}_AEP"
       val App_Id: String = s"${names.instanceName}_App"
-
-      //val AEPPayloadTypeName: String = s"${AEP_Id}_Payload"
 
       var portDefs: ISZ[ST] = ISZ()
       var portOpts: ISZ[ST] = ISZ()
@@ -109,7 +104,6 @@ case class ArtNixGen(val dirs: ProjectDirectories,
       var portIdOpts: ISZ[ST] = ISZ()
 
       var portOptResets: ISZ[ST] = ISZ()
-      //var aepPortCases: ISZ[ST] = ISZ()
       var portOptNames: ISZ[String] = ISZ()
       var appCases: ISZ[ST] = ISZ()
 
@@ -148,8 +142,6 @@ case class ArtNixGen(val dirs: ProjectDirectories,
         portIds :+= ArtNixTemplate.portId(portIdName, archPortInstanceName)
         portIdOpts :+= ArtNixTemplate.portOpt(portIdName, portOptName, "Art.PortId", F)
 
-        //aepPortCases = aepPortCases :+ ArtNixTemplate.aepPortCase(portIdName, portOptName, port.getPortTypeNames, CommonUtil.isAadlDataPort(p))
-
         portOptResets = portOptResets :+ ArtNixTemplate.portOptReset(portOptName, portType)
 
         portOptNames = portOptNames :+ portOptName
@@ -167,7 +159,6 @@ case class ArtNixGen(val dirs: ProjectDirectories,
         packageName = basePackage,
         objectName = App_Id,
         IPCPort_Id = App_Id,
-        AEP_Id = AEP_Id,
         period = Util.getPeriod(component),
         bridge = bridgeInstanceVarName,
         portIds = portIds,
@@ -201,7 +192,7 @@ case class ArtNixGen(val dirs: ProjectDirectories,
 
         if (inPorts.map(_.path).elements.contains(dstPath) &&
           (CommonUtil.isThread(srcComp) || CommonUtil.isDevice(srcComp)) && (CommonUtil.isThread(dstComp) || CommonUtil.isDevice(dstComp))) {
-          val dstComp = if (arsitOptions.ipc == Cli.IpcMechanism.SharedMemory) s"${name.instanceName}_App" else s"${name.instanceName}_AEP"
+          val dstComp = s"${name.instanceName}_App"
           var cases: ISZ[ST] = {
             if (artNixCasesM.contains(srcArchPortInstanceName)) {
               artNixCasesM.get(srcArchPortInstanceName).get

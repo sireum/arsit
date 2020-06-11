@@ -104,7 +104,7 @@ trait NixGen {
                 st"size_t numBits",
                 st"uint8_t *byteArray"
               )
-              val altSignature = SeL4NixTemplate.methodSignature(slangApiSetMethodName, None(), altParams, returnType)
+              val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, None(), altParams, returnType)
               headerMethods = headerMethods :+ st"${altSignature};"
               implMethods = implMethods :+ SeL4NixTemplate.apiSet_byteArrayVersion(
                 altSignature,
@@ -137,7 +137,7 @@ trait NixGen {
             val methodName = SeL4NixNamesUtil.apiHelperMethodName(l, names)
             val params = ISZ(st"${componentName} this", st"String str")
 
-            val signature = SeL4NixTemplate.methodSignature(methodName, None(), params, "Unit")
+            val signature = SeL4NixTemplate.methodSignature(methodName, None(), params, "void")
 
             val apiLogMethodName = s"${names.cBridgeApi}_${l}_"
 
@@ -160,7 +160,7 @@ trait NixGen {
 
         resources = resources :+ SlangUtil.createResource(headerApiFile.up.value, ISZ(headerApiFile.name), headerContents, T)
         resources = resources :+ SlangUtil.createResource(implApiFile.up.value, ISZ(implApiFile.name), implContents, T)
-      }
+      } // end helper api methods
       
 
       { // add entrypoint stubs
@@ -190,12 +190,33 @@ trait NixGen {
               }
               val handler = SeL4NixTemplate.methodSignature(s"${handlerName}_", preParams, eventDataParams, "Unit")
               val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names);
-              methods = methods :+ st"""${handler} {
-                                       |  
-                                       |  DeclNewString(${p.name}String);
-                                       |  String__append((String) &${p.name}String, string("${handlerName} called"));
-                                       |  ${logInfo} (this, (String) &${p.name}String);
-                                       |}"""
+
+              if(types.rawConnections && p.feature.category == FeatureCategory.EventDataPort) {
+                val rawHandlerMethodName = s"${handlerName}_raw"
+
+                val rawParams: ISZ[ST] = params :+ st"size_t numBits" :+ st"uint8_t *byteArray"
+
+                val rawHandler = SeL4NixTemplate.methodSignature(rawHandlerMethodName, preParams, rawParams, "Unit")
+
+                methods = methods :+ st"""${rawHandler} {
+                                         |
+                                         |  DeclNewString(${p.name}String);
+                                         |  String__append((String) &${p.name}String, string("${rawHandlerMethodName} called"));
+                                         |  ${logInfo} (this, (String) &${p.name}String);
+                                         |}"""
+
+                methods = methods :+ st"""${handler} {
+                                         |  ${rawHandlerMethodName}(SF this, value->size, value->value);
+                                         |}"""
+              }
+              else {
+                methods = methods :+ st"""${handler} {
+                                         |
+                                         |  DeclNewString(${p.name}String);
+                                         |  String__append((String) &${p.name}String, string("${handlerName} called"));
+                                         |  ${logInfo} (this, (String) &${p.name}String);
+                                         |}"""
+              }
             }
           case x => halt(s"Unexpected dispatch protocol ${x}")
         }

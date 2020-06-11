@@ -159,6 +159,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceName)}"
       addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(instanceName), F)
 
+      // prefix with '+' to indicate settings should come after library definitions
+      val plusSettingsFilename = s"+${settingsFilename}"
+
       val trans = genTranspiler(
         basePackage = basePackage,
         names = names, 
@@ -166,7 +169,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         numComponentPorts = ports.size,
         cOutputDir = cOutputDir,
         cExtensions = transpilerExtensions,
-        cmakeIncludes = ISZ(settingsFilename)
+        cmakeIncludes = ISZ(plusSettingsFilename)
       )
       
       transpilerScripts = transpilerScripts + (instanceName ~> trans)
@@ -196,6 +199,13 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         }
       }
 
+
+      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(id)}"
+      addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(id), F)
+
+      // prefix with '+' to indicate settings should come after library definitions
+      val plusSettingsFilename = s"+${settingsFilename}"
+
       val trans = genTranspilerBase(
         basePackage = basePackage,
         instanceName = id,
@@ -210,7 +220,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         extensions = ISZ(),        
         excludes = ISZ(),
 
-        cmakeIncludes = ISZ())
+        cmakeIncludes = ISZ(plusSettingsFilename))
       
       transpilerScripts = transpilerScripts + (id ~> trans)
 
