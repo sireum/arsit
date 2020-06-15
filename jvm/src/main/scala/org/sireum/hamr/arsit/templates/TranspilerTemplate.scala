@@ -100,7 +100,7 @@ object TranspilerTemplate {
 
     val cOutputDirRel = SlangUtil.relativizePaths(binDir, opts.output.get, script_home)
 
-    val cmakeIncludesRel = opts.cmakeIncludes.map((s: String) => {
+    val cmakeIncludesRel: ISZ[String] = opts.cmakeIncludes.map((s: String) => {
       val opss = ops.StringOps(s)
       val (prefix, nonplussed) : (String, String) = if(ops.StringOps(s).startsWith("+")) {
         ("+", opss.substring(1, opss.size))
