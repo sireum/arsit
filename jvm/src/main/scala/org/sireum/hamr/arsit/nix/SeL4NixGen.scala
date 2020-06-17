@@ -24,9 +24,7 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
 
   var transpilerOptions: ISZ[CTranspilerOption] = ISZ()
 
-  val maxStackSize: Z = z"16" * z"1024" * z"1024"
-  
-  var maxSequenceSize: Z = 1
+  val defaultMaxStackSizeInBytes: Z = z"16" * z"1024" * z"1024"
 
   val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine())
 
@@ -37,8 +35,8 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
 
     return ArsitResult(
       previousPhase.resources() ++ resources,
-      previousPhase.maxPort, 
-      previousPhase.maxComponent, 
+      previousPhase.maxPort,
+      previousPhase.maxComponent,
       transpilerOptions)
   }
 
@@ -58,14 +56,12 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     val components: ISZ[Component] = symbolTable.airComponentMap.values.filter(p =>
       CommonUtil.isThread(p) || (CommonUtil.isDevice(p) && arsitOptions.devicesAsThreads))
 
-    maxSequenceSize = getMaxSequenceSize(components, types)
-    
     val rootCOutputDir: Os.Path = if(arsitOptions.outputCDir.nonEmpty) {
       Os.path(arsitOptions.outputCDir.get)
     } else {
       Os.path(dirs.srcDir) / "c/sel4"
     }
-    
+
     var transpilerScripts: Map[String, (ST, CTranspilerOption)] = Map.empty
     val typeTouches: ISZ[ST] = genTypeTouches(types)
 
@@ -125,9 +121,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         ISZ(basePackage, instanceName, s"${names.identifier}.scala"),
         app,
         T)
-      
+
       { // extension objects
-        
+
         val slangExtensionObject: ST = genSlangSel4ExtensionObject(ports, names)
 
         addResource(
@@ -144,16 +140,16 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
           slangExtensionObjectStub,
           T)
       }
-      
+
       val cOutputDir: Os.Path = rootCOutputDir / instanceName
 
       val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
       val transpilerExtensions: ISZ[Os.Path] = paths ++ genSel4Adapters(names) ++ getExistingCFiles(cExtensionDir)
 
-      val stackSize: Z = PropertyUtil.getStackSizeInBytes(component) match {
+      val stackSizeInBytes: Z = PropertyUtil.getStackSizeInBytes(component) match {
         case Some(size) => size
-        case _ => maxStackSize
+        case _ => defaultMaxStackSizeInBytes
       }
 
       val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceName)}"
@@ -165,8 +161,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       val trans = genTranspiler(
         basePackage = basePackage,
         names = names, 
-        maxStackSize = stackSize,
-        numComponentPorts = ports.size,
+        maxStackSizeInBytes = stackSizeInBytes,
+        numComponentInPorts = ports.filter(p => CommonUtil.isInPort(p.feature)).size,
+        numComponentOutPorts = ports.filter(p => CommonUtil.isOutPort(p.feature)).size,
         cOutputDir = cOutputDir,
         cExtensions = transpilerExtensions,
         cmakeIncludes = ISZ(plusSettingsFilename)
@@ -212,10 +209,12 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
         identifier = id,
         sourcePaths = ISZ(),
         cOutputDir = cOutputDir,
-          
+
+        maxSequenceSize = 1,
+
         customSequenceSizes = customSequenceSizes,
         customConstants = ISZ(),
-        maxStackSize = maxStackSize,
+        maxStackSizeInBytes = defaultMaxStackSizeInBytes,
         
         extensions = ISZ(),        
         excludes = ISZ(),
@@ -354,9 +353,11 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
                         sourcePaths: ISZ[String],
                         cOutputDir: Os.Path,
 
+                        maxSequenceSize: Z,
+
                         customSequenceSizes: ISZ[String],
                         customConstants: ISZ[String],
-                        maxStackSize: Z,
+                        maxStackSizeInBytes: Z,
 
                         extensions: ISZ[Os.Path],
                         excludes: ISZ[String],
@@ -369,8 +370,6 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     val forwards: ISZ[String] = ISZ(s"art.ArtNative=${appName}")
 
     val buildApps = F
-    val additionalInstructions: Option[ST] = Some(st"""FILE=$${OUTPUT_DIR}/CMakeLists.txt
-                                                      |echo -e "\n\nadd_definitions(-DCAMKES)" >> $$FILE""")
       
     val _sourcePaths = sourcePaths ++ ISZ(
       SlangUtil.pathAppend(dirs.srcMainDir, ISZ("art")),
@@ -391,19 +390,19 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       maxStringSize = arsitOptions.maxStringSize,
       customArraySizes = customSequenceSizes,
       customConstants = customConstants,
-      stackSizeInBytes = maxStackSize,
+      stackSizeInBytes = maxStackSizeInBytes,
       extensions = _extensions.elements,
       excludes = excludes,
       buildApps = buildApps,
-      additionalInstructions = additionalInstructions,
       cmakeIncludes = cmakeIncludes
     )
   }
 
   def genTranspiler(basePackage: String,
                     names: Names,
-                    maxStackSize: Z,
-                    numComponentPorts: Z,
+                    maxStackSizeInBytes: Z,
+                    numComponentInPorts: Z,
+                    numComponentOutPorts: Z,
                     cOutputDir: Os.Path,
                     cExtensions: ISZ[Os.Path],
                     cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
@@ -424,7 +423,9 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     } else {
       ISZ()
     }
-    
+
+    val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
+
     var customSequenceSizes: ISZ[String] = ISZ(
       s"MS[Z,art.Bridge]=1",
       s"MS[Z,MOption[art.Bridge]]=1",
@@ -448,16 +449,25 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       s"art.Art.maxPorts=${numComponentPorts}"
     )
 
+    val maxPorts: Z = if(numComponentInPorts > numComponentOutPorts) numComponentInPorts else numComponentOutPorts
+
+    // NOTE: the bridge entrypoints port sequences are dependent on the max
+    // number of incoming or outgoing ports, so for now overestimate and just
+    // use the total number of ports, or max array size if not cooked connections
+    val maxSequenceSize: Z = getMaxSequenceSize(maxPorts, types)
+
     return genTranspilerBase(
       basePackage = basePackage,
       instanceName = names.instanceName,
       identifier = names.identifier,
       sourcePaths = sourcePaths,
       cOutputDir = cOutputDir,
-      
+
+      maxSequenceSize = maxSequenceSize,
+
       customSequenceSizes = customSequenceSizes,
       customConstants = customConstants,
-      maxStackSize = maxStackSize,
+      maxStackSizeInBytes = maxStackSizeInBytes,
 
       extensions = cExtensions,
       excludes = excludes,
@@ -525,21 +535,13 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     return extensionFiles
   } 
 
-  def getMaxSequenceSize(components: ISZ[Component], types: AadlTypes): Z = {
-    var max:Z = z"0"
+  def getMaxSequenceSize(numPorts: Z, types: AadlTypes): Z = {
 
-    for(c <- components) {
-      val numPorts = SlangUtil.getPorts(c, types, basePackage, z"0").size
-      if(numPorts > max) {
-        max = numPorts
-      }
-    }
+    val aadlArraySize: Z =
+      if(!types.rawConnections)
+        TypeUtil.findMaxAadlArraySize(types)
+      else 0
 
-    val aadlArraySize = TypeUtil.findMaxAadlArraySize(types)
-    if(aadlArraySize > max) {
-      max = aadlArraySize
-    }
-
-    return CommonUtil.findMaxZ(ISZ(max, aadlArraySize, arsitOptions.maxArraySize))
+    return CommonUtil.findMaxZ(ISZ(numPorts, aadlArraySize, arsitOptions.maxArraySize))
   }
 }

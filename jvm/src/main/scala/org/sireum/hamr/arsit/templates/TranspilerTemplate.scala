@@ -49,8 +49,7 @@ object TranspilerTemplate {
                        extensions: ISZ[String],
                        excludes: ISZ[String],
                        buildApps: B,
-                       cmakeIncludes: ISZ[String],
-                       additionalInstructions: Option[ST]): (ST, CTranspilerOption) = {
+                       cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
 
     val _stackSizeInBytes: String = if(stackSizeInBytes < 0) {
       "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
@@ -85,14 +84,13 @@ object TranspilerTemplate {
         load = None(),
         cmakeIncludes = cmakeIncludes
       )
-    val st = transpilerX(transpilerOptions, binDir, additionalInstructions)
+    val st = transpilerX(transpilerOptions, binDir)
 
     return (st, transpilerOptions)
   }
 
   @pure def transpilerX(opts: CTranspilerOption,
-                        binDir: String,
-                        additionalInstructions: Option[ST]): ST = {
+                        binDir: String): ST = {
 
     val script_home = s"$${${SCRIPT_HOME}}"
 
@@ -157,12 +155,6 @@ object TranspilerTemplate {
     if(opts.verbose) {
       extras = extras :+ st""" \
                              |  --verbose"""
-    }
-
-    if(additionalInstructions.nonEmpty) {
-      extras = extras :+ st"""
-                             |
-                             |${additionalInstructions}"""
     }
 
     return st"""${ret}${(extras, "")}"""
