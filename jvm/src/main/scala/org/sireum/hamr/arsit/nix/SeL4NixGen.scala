@@ -509,16 +509,24 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
     var implMethods: ISZ[ST] = ISZ()
     var headerMethods: ISZ[ST] = ISZ()
 
-    val methods: ISZ[String] = ISZ("initialiseArchitecture", "initialiseEntryPoint", "computeEntryPoint")
-    for(m <- methods) {
-      val methodName = s"${names.cEntryPointAdapterQualifiedName}_${m}"
+    val methods: ISZ[(String, String)] = ISZ(
+      ("initialiseArchitecture", "Unit"),
+      ("initialiseEntryPoint", "Unit"),
+      ("computeEntryPoint", "Unit"),
+      ("entryPoints", "art_Bridge_EntryPoints")
+    )
 
-      val signature = SeL4NixTemplate.methodSignature(methodName, None(), ISZ(), "Unit")
+    for((methodName, returnType) <- methods) {
+      val fullyQualifiedMethodName = s"${names.cEntryPointAdapterQualifiedName}_${methodName}"
 
-      val route = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${m}"
+      val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, None(), ISZ(), returnType)
+
+      val routeToInstance = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${methodName}"
+
+      val returnOpt: Option[String] = if(returnType == String("Unit")) None() else Some("return ")
 
       implMethods = implMethods :+ st"""${signature} {
-                                       |  ${route}(SF_LAST);
+                                       |  ${returnOpt}${routeToInstance}(SF_LAST);
                                        |}"""
 
       headerMethods = headerMethods :+ st"${signature};"

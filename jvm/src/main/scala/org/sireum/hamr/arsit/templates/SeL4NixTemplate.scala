@@ -6,12 +6,6 @@ import org.sireum._
 import org.sireum.hamr.codegen.common.Names
 import org.sireum.hamr.codegen.common.types.{DataTypeNames, TypeUtil}
 
-object SeL4NixNamesUtil {
-  def apiHelperMethodName(methodName: String, names: Names): String = {
-    return s"api_${methodName}__${names.cComponentImplQualifiedName}"
-  }
-}
-
 object SeL4NixTemplate {
   def sendOutput(entries: ST): ST = {
     val ret: ST = st"""def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {

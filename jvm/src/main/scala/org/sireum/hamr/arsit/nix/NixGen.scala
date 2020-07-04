@@ -2,9 +2,9 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.{SeL4NixNamesUtil, SeL4NixTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, StringUtil}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.ir.{Aadl, Component, FeatureCategory}
@@ -36,9 +36,9 @@ trait NixGen {
 
     if(arsitOptions.excludeImpl) {
 
-      val componentName = names.cComponentImplQualifiedName
+      val componentName = names.cComponentImpl
       val extRoot = rootExtDir / names.componentImpl
-      val apiHeaderName = s"${names.componentImpl}_api"
+      val apiFilename = SeL4NixNamesUtil.apiHelperFilename(names)
       
       { // api helper methods
         
@@ -50,7 +50,7 @@ trait NixGen {
 
           if (CommonUtil.isInFeature(p.feature)) {
 
-            val cApiMethodName = SeL4NixNamesUtil.apiHelperMethodName(s"get_${p.name}", names)
+            val cApiMethodName = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
             val returnType = "bool"
             val slangApiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
 
@@ -92,7 +92,7 @@ trait NixGen {
           } else {
             val isEventPort = p.feature.category == FeatureCategory.EventPort
 
-            val cApiMethodName = SeL4NixNamesUtil.apiHelperMethodName(s"send_${p.name}", names)
+            val cApiMethodName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
             val returnType = "void"
             val sendSet: String = if (CommonUtil.isAadlDataPort(p.feature)) "set" else "send"
             val slangApiSetMethodName = s"${names.cBridgeApi}_${sendSet}${p.name}_"
@@ -146,14 +146,14 @@ trait NixGen {
           }
         }
 
-        val headerApiFile = extRoot / s"${apiHeaderName}.h"
-        val implApiFile = extRoot / s"${apiHeaderName}.c"
+        val headerApiFile = extRoot / s"${apiFilename}.h"
+        val implApiFile = extRoot / s"${apiFilename}.c"
 
-        val macroName = StringUtil.toUpperCase(s"${apiHeaderName}_h")
+        val macroName = StringUtil.toUpperCase(s"${apiFilename}_h")
 
         val headerContents = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
-        val implContents = SeL4NixTemplate.cImplFile(apiHeaderName, implMethods)
+        val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods)
 
         extensionFiles = extensionFiles :+ headerApiFile
         extensionFiles = extensionFiles :+ implApiFile
@@ -221,7 +221,7 @@ trait NixGen {
           case x => halt(s"Unexpected dispatch protocol ${x}")
         }
 
-        val impl = st"""#include <${apiHeaderName}.h>
+        val impl = st"""#include <${apiFilename}.h>
                        |#include <ext.h>
                        |
                        |${StringTemplate.safeToEditComment()}
@@ -240,8 +240,8 @@ trait NixGen {
 
   def genStubInitializeMethod(names: Names, ports: ISZ[Port]): ST = {
     val preParams = Some(st"STACK_FRAME")
-    val params: ISZ[ST] = ISZ(st"${names.cComponentImplQualifiedName} this")
-    val initialiseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImplQualifiedName}_initialise_", preParams, params, "Unit")
+    val params: ISZ[ST] = ISZ(st"${names.cComponentImpl} this")
+    val initialiseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImpl}_initialise_", preParams, params, "Unit")
 
     val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
     val statements = loggers.map(l => {
@@ -258,8 +258,8 @@ trait NixGen {
 
   def genStubFinaliseMethod(names: Names): ST = {
     val preParams = Some(st"STACK_FRAME")
-    val params: ISZ[ST] = ISZ(st"${names.cComponentImplQualifiedName} this")
-    val finaliseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImplQualifiedName}_finalise_", preParams, params, "Unit")
+    val params: ISZ[ST] = ISZ(st"${names.cComponentImpl} this")
+    val finaliseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImpl}_finalise_", preParams, params, "Unit")
     val ret: ST = st"""${finaliseMethod} {
                       |  // example finalise method
                       |}"""

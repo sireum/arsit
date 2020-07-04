@@ -120,7 +120,7 @@ class StubGenerator(dirs: ProjectDirectories,
       names.bridge,
       dispatchProtocol,
       componentName,
-      names.component,
+      names.componentType,
       names.componentImpl,
       ports,
       dispatchTriggers,
@@ -134,14 +134,14 @@ class StubGenerator(dirs: ProjectDirectories,
         basePackage,
         names.packageName,
         dispatchProtocol,
-        names.component,
+        names.componentType,
         names.bridge,
         ports)
-      addResource(dirs.componentDir, ISZ(names.packagePath, s"${names.component}.scala"), component, T)
+      addResource(dirs.componentDir, ISZ(names.packagePath, s"${names.componentType}.scala"), component, T)
     }
 
     val block = StubTemplate.componentImplBlock(
-      names.component,
+      names.componentType,
       names.bridge,
       names.componentImpl,
       dispatchProtocol,
@@ -185,7 +185,7 @@ class StubGenerator(dirs: ProjectDirectories,
 
     if (subprograms.nonEmpty) {
       val names = Names(m, basePackage)
-      val objectName = s"${names.component}_subprograms"
+      val objectName = s"${names.componentType}_subprograms"
 
       val body = StubTemplate.slangBody("@ext ", objectName, subprograms.map(_._1))
 
