@@ -63,6 +63,8 @@ class StubGenerator(dirs: ProjectDirectories,
         case ComponentCategory.Thread => genThread(c)
         case ComponentCategory.Device if arsitOptions.devicesAsThreads => genThread(c)
 
+        case ComponentCategory.Device if !arsitOptions.devicesAsThreads => // ignore
+
         case ComponentCategory.Subprogram => // ignore
 
         case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor | ComponentCategory.VirtualProcessor =>
