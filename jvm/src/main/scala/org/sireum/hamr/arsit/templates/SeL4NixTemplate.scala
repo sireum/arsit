@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.codegen.common.Names
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{DataTypeNames, TypeUtil}
 
 object SeL4NixTemplate {
@@ -239,6 +240,7 @@ object SeL4NixTemplate {
   }
 
   def apiGet(signature: ST,
+             declNewStackFrame: ST,
              apiGetMethodName: String,
              c_this: String,
              typ: DataTypeNames): ST = {
@@ -261,6 +263,8 @@ object SeL4NixTemplate {
       }
     
     val ret: ST = st"""${signature}{
+                      |  ${declNewStackFrame};
+                      |
                       |  // ${optionSig} = Option[${qualifiedName}]
                       |  // ${someSig} = Some[${qualifiedName}]
                       |  DeclNew${optionSig}(t_0);
@@ -280,9 +284,10 @@ object SeL4NixTemplate {
   }
 
   def apiGet_byteArrayVersion(signature: ST,
-             apiGetMethodName: String,
-             c_this: String,
-             typ: DataTypeNames): ST = {
+                              declNewStackFrame: ST,
+                              apiGetMethodName: String,
+                              c_this: String,
+                              typ: DataTypeNames): ST = {
 
     val qualifiedName: String =
       if(typ.isBitsTypes()) {
@@ -302,11 +307,14 @@ object SeL4NixTemplate {
       }
 
     val ret: ST = st"""${signature}{
+                      |  ${declNewStackFrame};
+                      |
                       |  // ${optionSig} = Option[${qualifiedName}]
                       |  // ${someSig} = Some[${qualifiedName}]
                       |  DeclNew${optionSig}(t_0);
+                      |
                       |  ${apiGetMethodName}(
-                      |    SF
+                      |    ${StackFrameTemplate.SF}
                       |    (${optionSig}) &t_0,
                       |    ${c_this}(this));
                       |
@@ -321,19 +329,21 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(signature: ST, apiSetMethodName: String, c_this: String, isEventPort: B): ST = {
+  def apiSet(signature: ST, declNewStackFrame: ST, apiSetMethodName: String, c_this: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"${c_this}(this)")
     if(!isEventPort) { args = args :+ st"value" }
     
     val ret: ST =st"""${signature} {
+                     |  ${declNewStackFrame};
                      |
                      |  ${apiSetMethodName}(
+                     |    ${StackFrameTemplate.SF}
                      |    ${(args, ",\n")});
                      |}"""
     return ret
   }
 
-  def apiSet_byteArrayVersion(signature: ST, apiSetMethodName: String, c_this: String): ST = {
+  def apiSet_byteArrayVersion(signature: ST, declStackFrame: ST, apiSetMethodName: String, c_this: String): ST = {
 
     var args: ISZ[ST] = ISZ(
       st"${c_this}(this)",
@@ -341,9 +351,10 @@ object SeL4NixTemplate {
     )
 
     val ret: ST =st"""${signature} {
+                     |  ${declStackFrame};
                      |
-                     |  sfAssert((Z) numBits >= 0, "numBits must be non-negative for IS[Z, B].");
-                     |  sfAssert((Z) numBits <= MaxIS_C4F575, "numBits too large for IS[Z, B].");
+                     |  sfAssert(${StackFrameTemplate.SF} (Z) numBits >= 0, "numBits must be non-negative for IS[Z, B].");
+                     |  sfAssert(${StackFrameTemplate.SF} (Z) numBits <= MaxIS_C4F575, "numBits too large for IS[Z, B].");
                      |
                      |  DeclNewIS_C4F575(t_0);
                      |
@@ -353,17 +364,20 @@ object SeL4NixTemplate {
                      |  }
                      |
                      |  ${apiSetMethodName}(
+                     |    ${StackFrameTemplate.SF}
                      |    ${(args, ",\n")});
                      |}"""
     return ret
   }
 
-  def apiLog(signature: ST, apiLogMethodName: String, c_this: String): ST = {
+  def apiLog(signature: ST, declNewStackFrame: ST, apiLogMethodName: String, c_this: String): ST = {
     var args: ISZ[ST] = ISZ(st"${c_this}(this)", st"str")
     
     val ret: ST = st"""${signature} {
+                      |  ${declNewStackFrame};
+                      |
                       |  ${apiLogMethodName}(
-                      |    SF
+                      |    ${StackFrameTemplate.SF}
                       |    ${(args, ",\n")});
                       |}"""
     return ret

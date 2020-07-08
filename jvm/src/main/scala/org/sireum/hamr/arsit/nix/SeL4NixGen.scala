@@ -8,6 +8,7 @@ import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 import org.sireum.hamr.codegen.common.symbols.{Dispatch_Protocol, SymbolTable}
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
 
 case class SeL4NixGen(val dirs: ProjectDirectories,
@@ -449,12 +450,10 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
       s"art.Art.maxPorts=${numComponentPorts}"
     )
 
-    val maxPorts: Z = if(numComponentInPorts > numComponentOutPorts) numComponentInPorts else numComponentOutPorts
-
     // NOTE: the bridge entrypoints port sequences are dependent on the max
-    // number of incoming or outgoing ports, so for now overestimate and just
+    // number of incoming and outgoing ports, so for now overestimate and just
     // use the total number of ports, or max array size if not cooked connections
-    val maxSequenceSize: Z = getMaxSequenceSize(maxPorts, types)
+    val maxSequenceSize: Z = getMaxSequenceSize(numComponentPorts, types)
 
     return genTranspilerBase(
       basePackage = basePackage,
@@ -525,7 +524,16 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
 
       val returnOpt: Option[String] = if(returnType == String("Unit")) None() else Some("return ")
 
+      val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+        caller = F,
+        uri = implFile.name,
+        owner = "",
+        name = fullyQualifiedMethodName,
+        line = 0)
+
       implMethods = implMethods :+ st"""${signature} {
+                                       |  ${declNewStackFrame};
+                                       |
                                        |  ${returnOpt}${routeToInstance}(SF_LAST);
                                        |}"""
 

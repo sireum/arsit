@@ -6,13 +6,14 @@ import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, StringUtil}
 import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
-import org.sireum.hamr.ir.{Aadl, Component, FeatureCategory}
+import org.sireum.hamr.ir
 
 trait NixGen {
   def dirs: ProjectDirectories
   def cExtensionDir: String
-  def model : Aadl
+  def model : ir.Aadl
   def arsitOptions: Cli.ArsitOption
   def symbolTable: SymbolTable
   def types: AadlTypes
@@ -20,7 +21,7 @@ trait NixGen {
   
   def generate(): ArsitResult
 
-  def genExtensionFiles(c: Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
+  def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
     
     val rootExtDir = Os.path(cExtensionDir)
     
@@ -39,93 +40,117 @@ trait NixGen {
       val componentName = names.cComponentImpl
       val extRoot = rootExtDir / names.componentImpl
       val apiFilename = SeL4NixNamesUtil.apiHelperFilename(names)
-      
+      val apiHeaderFile = extRoot / s"${apiFilename}.h"
+      val apiImplFile = extRoot / s"${apiFilename}.c"
+      val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ST)
+
       { // api helper methods
-        
         var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
 
         for (p <- ports) {
           val typeNames = SlangUtil.getDataTypeNames(p._portType, names.basePackage)
 
-          if (CommonUtil.isInFeature(p.feature)) {
+          p.feature.direction match {
+            case ir.Direction.In => {
 
-            val cApiMethodName = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
-            val returnType = "bool"
-            val slangApiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
+              val cApiMethodName = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
+              val returnType = "bool"
+              val slangApiGetMethodName = s"${names.cBridgeApi}_get${p.name}_"
+              val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+                caller = T,
+                uri = apiImplFile.name,
+                owner = "",
+                name = cApiMethodName,
+                line = 0)
 
-            if(types.rawConnections && CommonUtil.isDataPort(p.feature)) {
-              // provide alt byte array version
+              if (types.rawConnections && CommonUtil.isDataPort(p.feature)) {
+                // provide alt byte array version
 
-              val altParams = ISZ(
-                st"${componentName} this",
-                st"size_t *numBits",
-                st"uint8_t *byteArray")
+                val altParams = ISZ(
+                  st"${componentName} this",
+                  st"size_t *numBits",
+                  st"uint8_t *byteArray")
 
-              val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, None(), altParams, returnType)
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, altParams, returnType)
 
-              headerMethods = headerMethods :+ st"${altSignature};"
+                headerMethods = headerMethods :+ st"${altSignature};"
 
-              implMethods = implMethods :+ SeL4NixTemplate.apiGet_byteArrayVersion(
-                signature = altSignature,
-                apiGetMethodName = slangApiGetMethodName,
-                c_this = names.cThisApi,
-                typ = typeNames)
-            } else {
-              val pointer: String = if (typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
+                implMethods = implMethods :+ SeL4NixTemplate.apiGet_byteArrayVersion(
+                  signature = altSignature,
+                  declNewStackFrame,
+                  apiGetMethodName = slangApiGetMethodName,
+                  c_this = names.cThisApi,
+                  typ = typeNames)
+              } else {
+                val pointer: String = if (typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
 
-              var params = ISZ(st"${componentName} this")
-              if(!typeNames.isEmptyType()) {
-                params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
+                var params = ISZ(st"${componentName} this")
+                if (!typeNames.isEmptyType()) {
+                  params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
+                }
+
+                val signature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, params, returnType)
+
+                headerMethods = headerMethods :+ st"${signature};"
+
+                implMethods = implMethods :+ SeL4NixTemplate.apiGet(
+                  signature = signature,
+                  declNewStackFrame = declNewStackFrame,
+                  apiGetMethodName = slangApiGetMethodName,
+                  c_this = names.cThisApi,
+                  typ = typeNames)
               }
-
-              val signature = SeL4NixTemplate.methodSignature(cApiMethodName, None(), params, returnType)
-
-              headerMethods = headerMethods :+ st"${signature};"
-
-              implMethods = implMethods :+ SeL4NixTemplate.apiGet(
-                signature = signature,
-                apiGetMethodName = slangApiGetMethodName,
-                c_this = names.cThisApi,
-                typ = typeNames)
             }
-          } else {
-            val isEventPort = p.feature.category == FeatureCategory.EventPort
+            case ir.Direction.Out => {
+              val isEventPort = p.feature.category == ir.FeatureCategory.EventPort
 
-            val cApiMethodName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
-            val returnType = "void"
-            val sendSet: String = if (CommonUtil.isAadlDataPort(p.feature)) "set" else "send"
-            val slangApiSetMethodName = s"${names.cBridgeApi}_${sendSet}${p.name}_"
+              val cApiMethodName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
+              val returnType = "void"
+              val sendSet: String = if (CommonUtil.isAadlDataPort(p.feature)) "set" else "send"
+              val slangApiSetMethodName = s"${names.cBridgeApi}_${sendSet}${p.name}_"
+              val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+                caller = T,
+                uri = apiImplFile.name,
+                owner = "",
+                name = cApiMethodName,
+                line = 0)
 
-            if(types.rawConnections && CommonUtil.isDataPort(p.feature)) {
-              // provide alt byte array version
-              val altParams = ISZ(
-                st"${componentName} this",
-                st"size_t numBits",
-                st"uint8_t *byteArray"
-              )
-              val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, None(), altParams, returnType)
-              headerMethods = headerMethods :+ st"${altSignature};"
-              implMethods = implMethods :+ SeL4NixTemplate.apiSet_byteArrayVersion(
-                altSignature,
-                slangApiSetMethodName,
-                names.cThisApi)
-            } else {
+              if (types.rawConnections && CommonUtil.isDataPort(p.feature)) {
+                // provide alt byte array version
 
-              var params = ISZ(st"${componentName} this")
-              if (!isEventPort) {
-                params = params :+ st"${typeNames.qualifiedCTypeName} value"
+                val altParams = ISZ(
+                  st"${componentName} this",
+                  st"size_t numBits",
+                  st"uint8_t *byteArray"
+                )
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, altParams, returnType)
+
+                headerMethods = headerMethods :+ st"${altSignature};"
+                implMethods = implMethods :+ SeL4NixTemplate.apiSet_byteArrayVersion(
+                  altSignature,
+                  declNewStackFrame,
+                  slangApiSetMethodName,
+                  names.cThisApi)
+              } else {
+
+                var params = ISZ(st"${componentName} this")
+                if (!isEventPort) {
+                  params = params :+ st"${typeNames.qualifiedCTypeName} value"
+                }
+
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, params, returnType)
+
+                headerMethods = headerMethods :+ st"${altSignature};"
+                implMethods = implMethods :+ SeL4NixTemplate.apiSet(
+                  altSignature,
+                  declNewStackFrame,
+                  slangApiSetMethodName,
+                  names.cThisApi,
+                  isEventPort)
               }
-
-              val signature = SeL4NixTemplate.methodSignature(cApiMethodName, None(), params, returnType)
-
-              headerMethods = headerMethods :+ st"${signature};"
-              implMethods = implMethods :+ SeL4NixTemplate.apiSet(
-                signature,
-                slangApiSetMethodName,
-                names.cThisApi,
-                isEventPort)
             }
+            case x => halt(s"Unexpected direction ${x}")
           }
         }
 
@@ -137,17 +162,21 @@ trait NixGen {
             val methodName = SeL4NixNamesUtil.apiHelperMethodName(l, names)
             val params = ISZ(st"${componentName} this", st"String str")
 
-            val signature = SeL4NixTemplate.methodSignature(methodName, None(), params, "void")
+            val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+              caller = T,
+              uri = apiImplFile.name,
+              owner = "",
+              name = methodName,
+              line = 0)
+
+            val signature = SeL4NixTemplate.methodSignature(methodName, preParams, params, "void")
 
             val apiLogMethodName = s"${names.cBridgeApi}_${l}_"
 
             headerMethods = headerMethods :+ st"${signature};"
-            implMethods = implMethods :+ SeL4NixTemplate.apiLog(signature, apiLogMethodName, names.cThisApi)
+            implMethods = implMethods :+ SeL4NixTemplate.apiLog(signature, declNewStackFrame, apiLogMethodName, names.cThisApi)
           }
         }
-
-        val headerApiFile = extRoot / s"${apiFilename}.h"
-        val implApiFile = extRoot / s"${apiFilename}.c"
 
         val macroName = StringUtil.toUpperCase(s"${apiFilename}_h")
 
@@ -155,11 +184,11 @@ trait NixGen {
 
         val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods)
 
-        extensionFiles = extensionFiles :+ headerApiFile
-        extensionFiles = extensionFiles :+ implApiFile
+        extensionFiles = extensionFiles :+ apiHeaderFile
+        extensionFiles = extensionFiles :+ apiImplFile
 
-        resources = resources :+ SlangUtil.createResource(headerApiFile.up.value, ISZ(headerApiFile.name), headerContents, T)
-        resources = resources :+ SlangUtil.createResource(implApiFile.up.value, ISZ(implApiFile.name), implContents, T)
+        resources = resources :+ SlangUtil.createResource(apiHeaderFile.up.value, ISZ(apiHeaderFile.name), headerContents, T)
+        resources = resources :+ SlangUtil.createResource(apiImplFile.up.value, ISZ(apiImplFile.name), implContents, T)
       } // end helper api methods
       
 
@@ -169,59 +198,86 @@ trait NixGen {
         val params: ISZ[ST] = ISZ(st"${componentName} this")
 
         var methods : ISZ[ST] = ISZ(
-          genStubInitializeMethod(names, ports), 
-          genStubFinaliseMethod(names))
+          genStubInitializeMethod(names, ports, apiImplFile.name),
+          genStubFinaliseMethod(names, apiImplFile.name))
 
         PropertyUtil.getDispatchProtocol(c) match {
           case Some(Dispatch_Protocol.Periodic) =>
             // timetriggered
-            val timeTriggered = SeL4NixTemplate.methodSignature(s"${componentName}_timeTriggered_", preParams, params, "Unit")
-            methods = methods :+ st"${timeTriggered} {}"
-
+            val methodName = s"${componentName}_timeTriggered_"
+            val timeTriggered = SeL4NixTemplate.methodSignature(methodName, preParams, params, "Unit")
+            val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+              caller = T,
+              uri = apiImplFile.name,
+              owner = "",
+              name = methodName,
+              line = 0)
+            methods = methods :+ st"""${timeTriggered} {
+                                     |  ${declNewStackFrame};
+                                     |}"""
           case Some(Dispatch_Protocol.Sporadic) =>
             val inEventPorts = ports.filter(f => CommonUtil.isEventPort(f.feature) && CommonUtil.isInFeature(f.feature))
 
             for(p <- inEventPorts) {
               val handlerName = s"${componentName}_handle${p.name}"
+              val handlerMethodName = s"${handlerName}_"
               var eventDataParams = params
-              if(p.feature.category == FeatureCategory.EventDataPort) {
+              if(p.feature.category == ir.FeatureCategory.EventDataPort) {
                 val typeNames = SlangUtil.getDataTypeNames(p._portType, names.basePackage)
                 eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
               }
-              val handler = SeL4NixTemplate.methodSignature(s"${handlerName}_", preParams, eventDataParams, "Unit")
+              val handler = SeL4NixTemplate.methodSignature(handlerMethodName, preParams, eventDataParams, "Unit")
               val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names);
 
-              if(types.rawConnections && p.feature.category == FeatureCategory.EventDataPort) {
+              val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+                caller = T,
+                uri = apiImplFile.name,
+                owner = "",
+                name = handlerMethodName,
+                line = 0)
+
+              if(types.rawConnections && p.feature.category == ir.FeatureCategory.EventDataPort) {
                 val rawHandlerMethodName = s"${handlerName}_raw"
 
                 val rawParams: ISZ[ST] = params :+ st"size_t numBits" :+ st"uint8_t *byteArray"
 
                 val rawHandler = SeL4NixTemplate.methodSignature(rawHandlerMethodName, preParams, rawParams, "Unit")
 
+                val declNewStackFrameRaw: ST = StackFrameTemplate.DeclNewStackFrame(
+                  caller = T,
+                  uri = apiImplFile.name,
+                  owner = "",
+                  name = rawHandlerMethodName,
+                  line = 0)
+
                 methods = methods :+ st"""${rawHandler} {
+                                         |  ${declNewStackFrameRaw};
                                          |
                                          |  DeclNewString(${p.name}String);
                                          |  String__append((String) &${p.name}String, string("${rawHandlerMethodName} called"));
-                                         |  ${logInfo} (this, (String) &${p.name}String);
+                                         |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
                                          |}"""
 
                 methods = methods :+ st"""${handler} {
-                                         |  ${rawHandlerMethodName}(SF this, value->size, value->value);
+                                         |  ${declNewStackFrame};
+                                         |
+                                         |  ${rawHandlerMethodName}(${StackFrameTemplate.SF} this, value->size, value->value);
                                          |}"""
               }
               else {
                 methods = methods :+ st"""${handler} {
+                                         |  ${declNewStackFrame};
                                          |
                                          |  DeclNewString(${p.name}String);
                                          |  String__append((String) &${p.name}String, string("${handlerName} called"));
-                                         |  ${logInfo} (this, (String) &${p.name}String);
+                                         |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
                                          |}"""
               }
             }
           case x => halt(s"Unexpected dispatch protocol ${x}")
         }
 
-        val impl = st"""#include <${apiFilename}.h>
+        val impl = st"""#include <${apiHeaderFile.name}>
                        |#include <ext.h>
                        |
                        |${StringTemplate.safeToEditComment()}
@@ -238,17 +294,27 @@ trait NixGen {
     return (extensionFiles, resources)
   }
 
-  def genStubInitializeMethod(names: Names, ports: ISZ[Port]): ST = {
-    val preParams = Some(st"STACK_FRAME")
+  def genStubInitializeMethod(names: Names, ports: ISZ[Port], fileUri: String): ST = {
+    val preParams = Some(StackFrameTemplate.STACK_FRAME_ST)
     val params: ISZ[ST] = ISZ(st"${names.cComponentImpl} this")
-    val initialiseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImpl}_initialise_", preParams, params, "Unit")
+    val methodName = s"${names.cComponentImpl}_initialise_"
+    val initialiseMethod = SeL4NixTemplate.methodSignature(methodName, preParams, params, "Unit")
 
     val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
     val statements = loggers.map(l => {
       val mname = SeL4NixNamesUtil.apiHelperMethodName(l, names)
-      st"""${mname}(this, string("Example ${l}"));"""
+      st"""${mname}(${StackFrameTemplate.SF} this, string("Example ${l}"));"""
     })
+    val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+      caller = T,
+      uri = fileUri,
+      owner = "",
+      name = methodName,
+      line = 0)
+
     val ret: ST = st"""${initialiseMethod} {
+                      | ${declNewStackFrame};
+                      |
                       | // example api usage
                       |  
                       | ${(statements, "\n")}
@@ -256,11 +322,22 @@ trait NixGen {
     return ret
   }
 
-  def genStubFinaliseMethod(names: Names): ST = {
-    val preParams = Some(st"STACK_FRAME")
+  def genStubFinaliseMethod(names: Names, fileUri: String): ST = {
+    val preParams = Some(StackFrameTemplate.STACK_FRAME_ST)
     val params: ISZ[ST] = ISZ(st"${names.cComponentImpl} this")
-    val finaliseMethod = SeL4NixTemplate.methodSignature(s"${names.cComponentImpl}_finalise_", preParams, params, "Unit")
+    val methodName = s"${names.cComponentImpl}_finalise_"
+    val finaliseMethod = SeL4NixTemplate.methodSignature(methodName, preParams, params, "Unit")
+
+    val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
+      caller = T,
+      uri = fileUri,
+      owner = "",
+      name = methodName,
+      line = 0)
+
     val ret: ST = st"""${finaliseMethod} {
+                      |  ${declNewStackFrame};
+                      |
                       |  // example finalise method
                       |}"""
     return ret
@@ -280,7 +357,7 @@ trait NixGen {
 object NixGenDispatch {
 
   def generate(dirs: ProjectDirectories,
-               model: Aadl,
+               model: ir.Aadl,
                arsitOptions: Cli.ArsitOption,
                symbolTable: SymbolTable,
                types: AadlTypes,
