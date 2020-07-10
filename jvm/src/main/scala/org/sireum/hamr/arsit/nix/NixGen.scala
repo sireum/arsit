@@ -254,7 +254,7 @@ trait NixGen {
                                          |  ${declNewStackFrameRaw};
                                          |
                                          |  DeclNewString(${p.name}String);
-                                         |  String__append((String) &${p.name}String, string("${rawHandlerMethodName} called"));
+                                         |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${rawHandlerMethodName} called"));
                                          |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
                                          |}"""
 
@@ -269,7 +269,7 @@ trait NixGen {
                                          |  ${declNewStackFrame};
                                          |
                                          |  DeclNewString(${p.name}String);
-                                         |  String__append((String) &${p.name}String, string("${handlerName} called"));
+                                         |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${handlerName} called"));
                                          |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
                                          |}"""
               }

@@ -228,14 +228,14 @@ object SeL4NixTemplate {
   }
 
   def methodSignature(methodName: String, preParams: Option[ST], params: ISZ[ST], returnType: String): ST = {
-    val ret: ST = if(preParams.isEmpty && params.isEmpty) {
-      st"${returnType} ${methodName}()"
-    }
-    else {
+    val ret: ST = if(params.isEmpty) {
+      st"${returnType} ${methodName}(${preParams})"
+    } else {
       st"""${returnType} ${methodName}(
           |  ${preParams}
           |  ${(params, ",\n")})"""
     }
+
     return ret
   }
 

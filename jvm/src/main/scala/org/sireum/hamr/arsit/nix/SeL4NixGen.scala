@@ -517,19 +517,15 @@ case class SeL4NixGen(val dirs: ProjectDirectories,
 
     for((methodName, returnType) <- methods) {
       val fullyQualifiedMethodName = s"${names.cEntryPointAdapterQualifiedName}_${methodName}"
+      val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
 
-      val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, None(), ISZ(), returnType)
+      val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, preParams, ISZ(), returnType)
 
       val routeToInstance = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${methodName}"
 
       val returnOpt: Option[String] = if(returnType == String("Unit")) None() else Some("return ")
 
-      val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
-        caller = F,
-        uri = implFile.name,
-        owner = "",
-        name = fullyQualifiedMethodName,
-        line = 0)
+      val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, implFile.name, "", fullyQualifiedMethodName, 0)
 
       implMethods = implMethods :+ st"""${signature} {
                                        |  ${declNewStackFrame};
