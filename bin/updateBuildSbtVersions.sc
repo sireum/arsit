@@ -40,7 +40,7 @@ var props: Map[String, String] = buildSbtProps.properties
 
 //val runtimeVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "runtime")
 val runtimeVersion = {
-  val longid = runGit(ISZ("git", "log", "--author", "robby@k-state.edu", "-n", "1", "--pretty=format:%H"), SIREUM_HOME)
+  val longid = runGit(ISZ("git", "log", "--author", "robby", "-n", "1", "--pretty=format:%H"), SIREUM_HOME)
   ops.StringOps(longid).substring(0, 10)
 }
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
