@@ -39,10 +39,18 @@ println(s"Updating $buildSbtProps")
 var props: Map[String, String] = buildSbtProps.properties
 
 //val runtimeVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "runtime")
+//val runtimeVersion = {
+//  val longid = runGit(ISZ("git", "log", "--author", "robby", "-n", "1", "--pretty=format:%H"), SIREUM_HOME)
+//  ops.StringOps(longid).substring(0, 10)
+//}
 val runtimeVersion = {
-  val longid = runGit(ISZ("git", "log", "--author", "robby", "-n", "1", "--pretty=format:%H"), SIREUM_HOME)
-  ops.StringOps(longid).substring(0, 10)
+  for(i <- 0 to 100) {
+    println("FIX RUNTIME VERSION")
+
+  }
+  "7e7d04e038"
 }
+
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
 val artEmbeddedVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/arsit/resources/art")
 val scalaVersion = sireumProps.get("org.sireum.version.scala").get
