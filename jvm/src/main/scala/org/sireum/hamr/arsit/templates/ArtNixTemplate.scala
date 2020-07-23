@@ -4,10 +4,10 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.StringTemplate
-import org.sireum.hamr.ir
-import org.sireum.hamr.arsit.{CTranspilerOption, Cli, Port, ProjectDirectories, SlangUtil, Util}
+import org.sireum.hamr.arsit._
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
+import org.sireum.hamr.ir
 
 object ArtNixTemplate {
   // @formatter:off

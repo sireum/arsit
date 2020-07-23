@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.{ArsitLibrary, CTranspilerOption, SlangUtil, Util}
+import org.sireum.hamr.arsit.ArsitLibrary
 
 object StringTemplate {
 
