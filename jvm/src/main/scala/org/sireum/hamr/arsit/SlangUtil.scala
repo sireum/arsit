@@ -250,17 +250,18 @@ object Transformers {
   @datatype class MissingTypeRewriter(reporter : org.sireum.message.Reporter) extends ir.Transformer.PrePost[CTX] {
 
     val missingType: ir.Component = ir.Component(
-      ir.Name(ISZ(), None()), // identifier
-      ir.ComponentCategory.Data, // category
-      Some(ir.Classifier(TypeUtil.MISSING_AADL_TYPE)), // classifier
-      ISZ(), // features
-      ISZ(), // subComponents
-      ISZ(), // connections
-      ISZ(), // connectionInstances
-      ISZ(), // properties
-      ISZ(), // flows
-      ISZ(), // modes
-      ISZ() // annexes
+      identifier = ir.Name(ISZ(), None()),
+      category = ir.ComponentCategory.Data,
+      classifier = Some(ir.Classifier(TypeUtil.MISSING_AADL_TYPE)),
+      features = ISZ(),
+      subComponents = ISZ(),
+      connections = ISZ(),
+      connectionInstances = ISZ(),
+      properties = ISZ(),
+      flows = ISZ(),
+      modes = ISZ(),
+      annexes = ISZ(),
+      uriFrag = ""
     )
 
     val missingArrayBaseType: ir.Property = ir.Property(
