@@ -173,7 +173,8 @@ object Cli {
                                bitWidth: Z,
                                maxStringSize: Z,
                                maxArraySize: Z,
-                               pathSeparator: C
+                               pathSeparator: C,
+                               experimentalOptions: ISZ[String]
                              )
 }
 

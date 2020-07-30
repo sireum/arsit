@@ -8,6 +8,7 @@ import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.SymbolResolver
 import org.sireum.hamr.codegen.common.types.{TypeResolver, TypeUtil}
+import org.sireum.hamr.codegen.common.util.ExperimentalOptions
 
 object Arsit {
   def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter) : ArsitResult = {
@@ -29,7 +30,8 @@ object Arsit {
     val result = ir.Transformer(Transformers.MissingTypeRewriter(Util.reporter)).transformAadl(Transformers.CTX(F, F), model)
     model = if(result.resultOpt.nonEmpty) result.resultOpt.get else model
 
-    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), reporter)
+    val useCaseConnectors: B = ExperimentalOptions.useCaseConnectors(o.experimentalOptions)
+    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, reporter)
 
     val aadlTypes = TypeResolver.processDataTypes(model, symbolTable, o.packageName)
 
