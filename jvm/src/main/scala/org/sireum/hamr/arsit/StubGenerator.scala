@@ -1,29 +1,32 @@
+// #Sireum
+
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.ir._
-import org.sireum.hamr.arsit.Util.reporter
-import org.sireum.hamr.arsit.templates.{StubTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.StubTemplate
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.ir._
+import org.sireum.message.Reporter
 
-class StubGenerator(dirs: ProjectDirectories,
-                    m: Aadl,
-                    arsitOptions: Cli.ArsitOption,
-                    symbolTable: SymbolTable,
-                    types: AadlTypes,
-                    previousPhase: Result)  {
+@record class StubGenerator(dirs: ProjectDirectories,
+                            m: Aadl,
+                            arsitOptions: Cli.ArsitOption,
+                            symbolTable: SymbolTable,
+                            types: AadlTypes,
+                            reporter: Reporter,
+                            previousPhase: Result) {
 
-  var toImpl : ISZ[(ST, ST)] = ISZ()
+  var toImpl: ISZ[(ST, ST)] = ISZ()
   val basePackage: String = arsitOptions.packageName
-  var seenComponents : HashSet[String] = HashSet.empty
+  var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
 
-  def generator() : Result = {
+  def generator(): Result = {
 
-    for(c <- m.components) {
+    for (c <- m.components) {
       gen(c)
     }
 
@@ -32,7 +35,7 @@ class StubGenerator(dirs: ProjectDirectories,
       previousPhase.maxComponent)
   }
 
-  def gen(m: Component) : Unit = {
+  def gen(m: Component): Unit = {
     m.category match {
       case ComponentCategory.System => genContainer(m)
       case ComponentCategory.Process => genContainer(m)
@@ -46,14 +49,14 @@ class StubGenerator(dirs: ProjectDirectories,
     }
   }
 
-  def genContainer(m: Component) : Unit = {
+  def genContainer(m: Component): Unit = {
     assert(m.category == ComponentCategory.Process || m.category == ComponentCategory.System)
 
-    if(!CommonUtil.isThread(m)) {
+    if (!CommonUtil.isThread(m)) {
       genSubprograms(m)
     }
 
-    for(c <- m.subComponents) {
+    for (c <- m.subComponents) {
       c.category match {
         case ComponentCategory.System => genContainer(c)
         case ComponentCategory.Process => genContainer(c)
@@ -67,15 +70,13 @@ class StubGenerator(dirs: ProjectDirectories,
 
         case ComponentCategory.Subprogram => // ignore
 
-        case ComponentCategory.Bus | ComponentCategory.Memory | ComponentCategory.Processor | ComponentCategory.VirtualProcessor =>
+        case _ =>
           reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component: ${CommonUtil.getName(c.identifier)}")
-
-        case _ => throw new RuntimeException(s"Not handling ${c.category}: ${m}")
       }
     }
   }
 
-  def genThreadGroup(m: Component) : Unit = {
+  def genThreadGroup(m: Component): Unit = {
     assert(m.category == ComponentCategory.ThreadGroup)
 
     for (c <- m.subComponents) {
@@ -85,31 +86,31 @@ class StubGenerator(dirs: ProjectDirectories,
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ SlangUtil.createResource(baseDir, paths, content, overwrite)
+    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
   }
 
-  def genThread(m: Component) : Unit = {
+  def genThread(m: Component): Unit = {
     assert(CommonUtil.isDevice(m) || CommonUtil.isThread(m))
 
     val names = Names(m, basePackage)
-    val filename: String = SlangUtil.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
+    val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
 
-    val dispatchTriggers: Option[ISZ[String]] = SlangUtil.getDispatchTriggers(m)
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
 
     val componentName = "component"
-    val ports: ISZ[Port] = SlangUtil.getPorts(m, types, basePackage, z"-1000")
+    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
     val bridgeTestSuite: ST = StubTemplate.bridgeTestSuite(basePackage, names, ports)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
 
-    if(seenComponents.contains(filename)) {
+    if (seenComponents.contains(filename)) {
       return
     }
 
-    val dispatchProtocol = PropertyUtil.getDispatchProtocol(m) match {
+    val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(m) match {
       case Some(x) => x
       case x =>
-        if(CommonUtil.isDevice(m)) {
+        if (CommonUtil.isDevice(m)) {
           Dispatch_Protocol.Periodic
         } else {
           halt(s"HAMR codegen only supports Periodic or Sporadic threads: ${x}")
@@ -131,7 +132,7 @@ class StubGenerator(dirs: ProjectDirectories,
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
-    if(!arsitOptions.bless) {
+    if (!arsitOptions.bless) {
       val component = StubTemplate.componentTrait(
         basePackage,
         names.packageName,
@@ -150,15 +151,20 @@ class StubGenerator(dirs: ProjectDirectories,
       ports,
       arsitOptions.bless)
 
-    val componentImpl = StubTemplate.slangPreamble(T, names.packageName, basePackage,
-      genSubprograms(m) match {
-        case Some(x) => ISZ(block, x)
-        case _ => ISZ(block)
-      })
+    val blocks: ISZ[ST] = genSubprograms(m) match {
+      case Some(x) => ISZ(block, x)
+      case _ => ISZ(block)
+    }
+
+    val componentImpl = StubTemplate.slangPreamble(
+      inSlang = T,
+      packageName = names.packageName,
+      topLevelPackageName = basePackage,
+      blocks = blocks)
 
     addResource(filename, ISZ(), componentImpl, F)
 
-    var testSuite = SlangUtil.getLibraryFile("BridgeTestSuite.scala").render
+    var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__PACKAGE_NAME__", names.packageName)
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, "BridgeTestSuite.scala"), st"${testSuite}", T)
@@ -166,21 +172,22 @@ class StubGenerator(dirs: ProjectDirectories,
     seenComponents = seenComponents + filename
   }
 
-  def genSubprograms(m: Component) : Option[ST] = {
+  def genSubprograms(m: Component): Option[ST] = {
     val subprograms: ISZ[(ST, ST)] = m.subComponents.filter(p => p.category == ComponentCategory.Subprogram).map(p => {
       // only expecting in or out parameters
-      SlangUtil.getFeatureEnds(p.features).elements.forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut)
+      assert(ops.ISZOps(Util.getFeatureEnds(p.features))
+        .forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut))
 
       val methodName = CommonUtil.getLastName(p.identifier)
-      val params: ISZ[String] = SlangUtil.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
+      val params: ISZ[String] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
         .map(param => {
-          val pType = SlangUtil.getFeatureEndType(param, types)
-          s"${CommonUtil.getLastName(param.identifier)} : ${SlangUtil.getDataTypeNames(pType, basePackage).referencedTypeName}"
+          val pType = Util.getFeatureEndType(param, types)
+          s"${CommonUtil.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).referencedTypeName}"
         })
-      val rets: ISZ[FeatureEnd] = SlangUtil.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
+      val rets: ISZ[FeatureEnd] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
       assert(rets.size == 1)
-      val rType = SlangUtil.getFeatureEndType(rets(0), types)
-      val returnType = SlangUtil.getDataTypeNames(rType, basePackage).referencedTypeName
+      val rType = Util.getFeatureEndType(rets(0), types)
+      val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
 
       StubTemplate.subprogram(methodName, params, returnType)
     })
@@ -189,9 +196,12 @@ class StubGenerator(dirs: ProjectDirectories,
       val names = Names(m, basePackage)
       val objectName = s"${names.componentType}_subprograms"
 
-      val body = StubTemplate.slangBody("@ext ", objectName, subprograms.map(_._1))
+      val body = StubTemplate.slangBody(
+        slangAnnotation = "@ext ",
+        objectName = objectName,
+        body = subprograms.map(m => m._1))
 
-      if(!CommonUtil.isThread(m)) {
+      if (!CommonUtil.isThread(m)) {
         val a = StubTemplate.slangPreamble(T, basePackage, names.packageName, ISZ(body))
         addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}.scala"), a, T)
       }
@@ -200,7 +210,10 @@ class StubGenerator(dirs: ProjectDirectories,
         F,
         basePackage,
         names.packageName,
-        ISZ(StubTemplate.slangBody("", s"${objectName}_Ext", subprograms.map(_._2))))
+        ISZ(StubTemplate.slangBody(
+          slangAnnotation = "",
+          objectName = s"${objectName}_Ext",
+          body = subprograms.map(m => m._2))))
       addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}_Ext.scala"), b, F)
 
       return Some(body)
@@ -208,9 +221,4 @@ class StubGenerator(dirs: ProjectDirectories,
       return None[ST]()
     }
   }
-}
-
-object StubGenerator {
-  def apply(dirs: ProjectDirectories, m: Aadl, o: Cli.ArsitOption, symbolTable: SymbolTable, types: AadlTypes, previousPhase: Result) =
-    new StubGenerator(dirs, m, o, symbolTable, types, previousPhase).generator()
 }

@@ -13,27 +13,31 @@ object ArchitectureTemplate {
     val _from: String = if (from.nonEmpty) s" from ${from.get}" else ""
     return st"// This file was auto-generated${_from}.  Do not edit"
   }
-  
+
   @pure def dispatchProtocol(dp: Dispatch_Protocol.Type, period: Z): ST = {
     val ret: ST = dp match {
       case Dispatch_Protocol.Sporadic => st"Sporadic(min = $period)"
       case Dispatch_Protocol.Periodic => st"Periodic(period = $period)"
-    }  
+    }
     return ret
   }
 
 
-  @pure def connection(from: String, to: String) : ST = { return st"""Connection(from = $from, to = $to)""" }
+  @pure def connection(from: String, to: String): ST = {
+    return st"""Connection(from = $from, to = $to)"""
+  }
 
   @pure def demo(packageName: String,
                  architectureName: String,
-                 architectureDescriptionName: String) : ST = {
-    return st"""${StringTemplate.doNotEditComment(None())}
-               |package $packageName
-               |
-               |object Demo extends App {
-               |  art.Art.run(${architectureName}.${architectureDescriptionName})
-               |}"""
+                 architectureDescriptionName: String): ST = {
+    val ret: ST =
+      st"""${StringTemplate.doNotEditComment(None())}
+          |package $packageName
+          |
+          |object Demo extends App {
+          |  art.Art.run(${architectureName}.${architectureDescriptionName})
+          |}"""
+    return ret
   }
 
   @pure def portType(name: String,
@@ -42,15 +46,13 @@ object ArchitectureTemplate {
                      identifier: String,
                      mode: String,
                      urgency: Option[Z]): ST = {
-    val artPortType: String = if(urgency.nonEmpty) "UrgentPort" else "Port"
-    val _urgency: String = if(urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
+    val artPortType: String = if (urgency.nonEmpty) "UrgentPort" else "Port"
+    val _urgency: String = if (urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
     return st"""val $name = ${artPortType}[$typ] (id = $id, name = "$identifier", mode = $mode${_urgency})"""
   }
-  
-  def genPort(port: Port) : ST = {
-    val id = port.portId
 
-    import FeatureCategory._
+  def genPort(port: Port): ST = {
+    val id = port.portId
     val prefix: String = port.feature.category match {
       case FeatureCategory.EventPort => "Event"
       case FeatureCategory.EventDataPort => "Event"
@@ -63,8 +65,8 @@ object ArchitectureTemplate {
       case Direction.Out => "Out"
       case _ => "???"
     }
-    
-    val mode: String = s"${prefix}${dir}" 
+
+    val mode: String = s"${prefix}${dir}"
 
     return portType(
       port.name,
@@ -74,7 +76,7 @@ object ArchitectureTemplate {
       mode,
       port.urgency)
   }
-    
+
   @pure def bridge(bridgeIdentifier: String,
                    instanceName: String,
                    typeName: String,
@@ -85,55 +87,59 @@ object ArchitectureTemplate {
                    portArguments: ISZ[ST]
                   ): ST = {
     val _dispatchTriggers: ST =
-      if(dispatchTriggers.isEmpty) st"None()" 
+      if (dispatchTriggers.isEmpty) st"None()"
       else st"Some(ISZ(${(dispatchTriggers.get.map((f: String) => s"${f}.id"), ", ")}))"
-    
-    return st"""val ${bridgeIdentifier} : ${typeName} = {
-               |  ${(ports, "\n")}
-               |  
-               |  ${typeName}(
-               |    id = $id,
-               |    name = "$instanceName",
-               |    dispatchProtocol = $dispatchProtocol,
-               |    dispatchTriggers = ${_dispatchTriggers},
-               |    
-               |    ${(portArguments, ",\n")}
-               |  )
-               |}"""
+
+    val ret: ST =
+      st"""val ${bridgeIdentifier} : ${typeName} = {
+          |  ${(ports, "\n")}
+          |
+          |  ${typeName}(
+          |    id = $id,
+          |    name = "$instanceName",
+          |    dispatchProtocol = $dispatchProtocol,
+          |    dispatchTriggers = ${_dispatchTriggers},
+          |
+          |    ${(portArguments, ",\n")}
+          |  )
+          |}"""
+    return ret
   }
-  
+
   @pure def architectureDescription(packageName: String,
                                     imports: ISZ[String],
                                     architectureName: String,
                                     architectureDescriptionName: String,
-                                    bridges : ISZ[ST],
-                                    components : ISZ[String],
+                                    bridges: ISZ[ST],
+                                    components: ISZ[String],
                                     connections: ISZ[ST]): ST = {
     val _imports = imports.map((m: String) => st"import ${m}")
-    
-    return st"""// #Sireum
-               |
-               |package $packageName
-               |
-               |import org.sireum._
-               |import art._
-               |import art.PortMode._
-               |import art.DispatchPropertyProtocol._
-               |${(_imports, "\n")}
-               |
-               |${doNotEditComment(None())}
-               |
-               |object $architectureName {
-               |  ${(bridges, "\n")}
-               |
-               |  val $architectureDescriptionName : ArchitectureDescription = {
-               |
-               |    ArchitectureDescription(
-               |      components = MSZ (${(components, ", ")}),
-               |
-               |      connections = ISZ (${(connections, ",\n")})
-               |    )
-               |  }
-               |}"""
+
+    val ret: ST =
+      st"""// #Sireum
+          |
+          |package $packageName
+          |
+          |import org.sireum._
+          |import art._
+          |import art.PortMode._
+          |import art.DispatchPropertyProtocol._
+          |${(_imports, "\n")}
+          |
+          |${doNotEditComment(None())}
+          |
+          |object $architectureName {
+          |  ${(bridges, "\n")}
+          |
+          |  val $architectureDescriptionName : ArchitectureDescription = {
+          |
+          |    ArchitectureDescription(
+          |      components = MSZ (${(components, ", ")}),
+          |
+          |      connections = ISZ (${(connections, ",\n")})
+          |    )
+          |  }
+          |}"""
+    return ret
   }
 }

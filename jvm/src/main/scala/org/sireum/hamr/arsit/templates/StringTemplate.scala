@@ -109,8 +109,8 @@ object Base_Types {
 }"""
     return ret
   }
-  
-  def buildSbt(projectName: String, 
+
+  def buildSbt(projectName: String,
                embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
     val runtimeVersion = ArsitLibrary.getRuntimeVersion()
@@ -118,12 +118,14 @@ object Base_Types {
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
     val scalaVersion = ArsitLibrary.getScalaVersion()
 
-    val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if(!embedArt) {
+    val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if (!embedArt) {
       (Some(st"""val artVersion = "${artVersion}" // https://github.com/sireum/slang-embedded-art/tree/${artVersion}"""),
         Some(st""""org.sireum.slang-embedded-art" %% "slang-embedded-art" % artVersion withSources() withJavadoc(),"""),
         None())
-    } else { (None(), None(), Some(st"""Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/art",""")) }
-    
+    } else {
+      (None(), None(), Some(st"""Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/art","""))
+    }
+
     val ret: ST =
       st"""
 // Example sbt build definitions -- the contents of this file will not be overwritten
@@ -187,10 +189,12 @@ def slangEmbeddedTestProject(projId: String, projectDirectory: String) =
 """
     return ret
   }
-  
+
   def sbtProject(): ST = {
     val sbtVersion: String = ArsitLibrary.getSBTVersion()
-    return st"""sbt.version=${sbtVersion}
-               |"""
+    val ret: ST =
+      st"""sbt.version=${sbtVersion}
+          |"""
+    return ret
   }
 }

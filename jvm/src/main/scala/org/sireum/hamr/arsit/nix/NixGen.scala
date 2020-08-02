@@ -1,41 +1,52 @@
+// #Sireum
+
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, StringUtil}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, StringUtil}
 import org.sireum.hamr.ir
+import org.sireum.message.Reporter
 
-trait NixGen {
+@msig trait NixGen {
   def dirs: ProjectDirectories
+
   def cExtensionDir: String
-  def model : ir.Aadl
+
+  def root: AadlSystem
+
   def arsitOptions: Cli.ArsitOption
+
   def symbolTable: SymbolTable
+
   def types: AadlTypes
+
   def previousPhase: Result
-  
+
+  def reporter: Reporter
+
   def generate(): ArsitResult
 
   def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
-    
+
     val rootExtDir = Os.path(cExtensionDir)
-    
+
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()
 
     val extC = rootExtDir / "ext.c"
     val extH = rootExtDir / "ext.h"
-    resources = resources :+ SlangUtil.createResource(extC.up.value, ISZ(extC.name), SlangUtil.getLibraryFile("ext.c"), F)
-    resources = resources :+ SlangUtil.createResource(extH.up.value, ISZ(extH.name), SlangUtil.getLibraryFile("ext.h"), F)
+    resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), Util.getLibraryFile("ext.c"), F)
+    resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), Util.getLibraryFile("ext.h"), F)
 
     extensionFiles = (extensionFiles :+ extC) :+ extH
 
-    if(arsitOptions.excludeImpl) {
+    if (arsitOptions.excludeImpl) {
 
       val componentName = names.cComponentImpl
       val extRoot = rootExtDir / names.componentImpl
@@ -49,7 +60,7 @@ trait NixGen {
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
 
         for (p <- ports) {
-          val typeNames = SlangUtil.getDataTypeNames(p._portType, names.basePackage)
+          val typeNames = Util.getDataTypeNames(p._portType, names.basePackage)
 
           p.feature.direction match {
             case ir.Direction.In => {
@@ -78,7 +89,7 @@ trait NixGen {
 
                 implMethods = implMethods :+ SeL4NixTemplate.apiGet_byteArrayVersion(
                   signature = altSignature,
-                  declNewStackFrame,
+                  declNewStackFrame = declNewStackFrame,
                   apiGetMethodName = slangApiGetMethodName,
                   c_this = names.cThisApi,
                   typ = typeNames)
@@ -187,17 +198,16 @@ trait NixGen {
         extensionFiles = extensionFiles :+ apiHeaderFile
         extensionFiles = extensionFiles :+ apiImplFile
 
-        resources = resources :+ SlangUtil.createResource(apiHeaderFile.up.value, ISZ(apiHeaderFile.name), headerContents, T)
-        resources = resources :+ SlangUtil.createResource(apiImplFile.up.value, ISZ(apiImplFile.name), implContents, T)
+        resources = resources :+ Util.createResource(apiHeaderFile.up.value, ISZ(apiHeaderFile.name), headerContents, T)
+        resources = resources :+ Util.createResource(apiImplFile.up.value, ISZ(apiImplFile.name), implContents, T)
       } // end helper api methods
-      
+
 
       { // add entrypoint stubs
 
-        val preParams: Option[ST] = Some(st"STACK_FRAME")
         val params: ISZ[ST] = ISZ(st"${componentName} this")
 
-        var methods : ISZ[ST] = ISZ(
+        var methods: ISZ[ST] = ISZ(
           genStubInitializeMethod(names, ports, apiImplFile.name),
           genStubFinaliseMethod(names, apiImplFile.name))
 
@@ -212,18 +222,19 @@ trait NixGen {
               owner = "",
               name = methodName,
               line = 0)
-            methods = methods :+ st"""${timeTriggered} {
-                                     |  ${declNewStackFrame};
-                                     |}"""
+            methods = methods :+
+              st"""${timeTriggered} {
+                  |  ${declNewStackFrame};
+                  |}"""
           case Some(Dispatch_Protocol.Sporadic) =>
             val inEventPorts = ports.filter(f => CommonUtil.isEventPort(f.feature) && CommonUtil.isInFeature(f.feature))
 
-            for(p <- inEventPorts) {
+            for (p <- inEventPorts) {
               val handlerName = s"${componentName}_handle${p.name}"
               val handlerMethodName = s"${handlerName}_"
               var eventDataParams = params
-              if(p.feature.category == ir.FeatureCategory.EventDataPort) {
-                val typeNames = SlangUtil.getDataTypeNames(p._portType, names.basePackage)
+              if (p.feature.category == ir.FeatureCategory.EventDataPort) {
+                val typeNames = Util.getDataTypeNames(p._portType, names.basePackage)
                 eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
               }
               val handler = SeL4NixTemplate.methodSignature(handlerMethodName, preParams, eventDataParams, "Unit")
@@ -236,7 +247,7 @@ trait NixGen {
                 name = handlerMethodName,
                 line = 0)
 
-              if(types.rawConnections && p.feature.category == ir.FeatureCategory.EventDataPort) {
+              if (types.rawConnections && p.feature.category == ir.FeatureCategory.EventDataPort) {
                 val rawHandlerMethodName = s"${handlerName}_raw"
 
                 val rawParams: ISZ[ST] = params :+ st"size_t numBits" :+ st"uint8_t *byteArray"
@@ -250,47 +261,51 @@ trait NixGen {
                   name = rawHandlerMethodName,
                   line = 0)
 
-                methods = methods :+ st"""${rawHandler} {
-                                         |  ${declNewStackFrameRaw};
-                                         |
-                                         |  DeclNewString(${p.name}String);
-                                         |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${rawHandlerMethodName} called"));
-                                         |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
-                                         |}"""
+                methods = methods :+
+                  st"""${rawHandler} {
+                      |  ${declNewStackFrameRaw};
+                      |
+                      |  DeclNewString(${p.name}String);
+                      |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${rawHandlerMethodName} called"));
+                      |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
+                      |}"""
 
-                methods = methods :+ st"""${handler} {
-                                         |  ${declNewStackFrame};
-                                         |
-                                         |  ${rawHandlerMethodName}(${StackFrameTemplate.SF} this, value->size, value->value);
-                                         |}"""
+                methods = methods :+
+                  st"""${handler} {
+                      |  ${declNewStackFrame};
+                      |
+                      |  ${rawHandlerMethodName}(${StackFrameTemplate.SF} this, value->size, value->value);
+                      |}"""
               }
               else {
-                methods = methods :+ st"""${handler} {
-                                         |  ${declNewStackFrame};
-                                         |
-                                         |  DeclNewString(${p.name}String);
-                                         |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${handlerName} called"));
-                                         |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
-                                         |}"""
+                methods = methods :+
+                  st"""${handler} {
+                      |  ${declNewStackFrame};
+                      |
+                      |  DeclNewString(${p.name}String);
+                      |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${handlerName} called"));
+                      |  ${logInfo} (${StackFrameTemplate.SF} this, (String) &${p.name}String);
+                      |}"""
               }
             }
           case x => halt(s"Unexpected dispatch protocol ${x}")
         }
 
-        val impl = st"""#include <${apiHeaderFile.name}>
-                       |#include <ext.h>
-                       |
-                       |${StringTemplate.safeToEditComment()}
-                       |
-                       |${(methods, "\n\n")}
-                       |"""
+        val impl =
+          st"""#include <${apiHeaderFile.name}>
+              |#include <ext.h>
+              |
+              |${StringTemplate.safeToEditComment()}
+              |
+              |${(methods, "\n\n")}
+              |"""
 
         val implFile = extRoot / s"${names.componentImpl}.c"
         extensionFiles = extensionFiles :+ implFile
-        resources = resources :+ SlangUtil.createResource(implFile.up.value, ISZ(implFile.name), impl, F)
+        resources = resources :+ Util.createResource(implFile.up.value, ISZ(implFile.name), impl, F)
       }
     }
-    
+
     return (extensionFiles, resources)
   }
 
@@ -301,7 +316,7 @@ trait NixGen {
     val initialiseMethod = SeL4NixTemplate.methodSignature(methodName, preParams, params, "Unit")
 
     val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
-    val statements = loggers.map(l => {
+    val statements: ISZ[ST] = loggers.map((l: String) => {
       val mname = SeL4NixNamesUtil.apiHelperMethodName(l, names)
       st"""${mname}(${StackFrameTemplate.SF} this, string("Example ${l}"));"""
     })
@@ -312,13 +327,14 @@ trait NixGen {
       name = methodName,
       line = 0)
 
-    val ret: ST = st"""${initialiseMethod} {
-                      | ${declNewStackFrame};
-                      |
-                      | // example api usage
-                      |  
-                      | ${(statements, "\n")}
-                      |}"""
+    val ret: ST =
+      st"""${initialiseMethod} {
+          | ${declNewStackFrame};
+          |
+          | // example api usage
+          |
+          | ${(statements, "\n")}
+          |}"""
     return ret
   }
 
@@ -335,18 +351,19 @@ trait NixGen {
       name = methodName,
       line = 0)
 
-    val ret: ST = st"""${finaliseMethod} {
-                      |  ${declNewStackFrame};
-                      |
-                      |  // example finalise method
-                      |}"""
+    val ret: ST =
+      st"""${finaliseMethod} {
+          |  ${declNewStackFrame};
+          |
+          |  // example finalise method
+          |}"""
     return ret
   }
 
   def getExistingCFiles(cExtensionDir: String): ISZ[Os.Path] = {
     val p = Os.path(cExtensionDir)
-    val ret: ISZ[Os.Path] = if(p.exists && p.isDir) {
-      p.list.filter(f => f.ext.native == "c" || f.ext.native == "h")
+    val ret: ISZ[Os.Path] = if (p.exists && p.isDir) {
+      p.list.filter(f => f.ext == "c" || f.ext == "h")
     } else {
       ISZ()
     }
@@ -357,28 +374,29 @@ trait NixGen {
 object NixGenDispatch {
 
   def generate(dirs: ProjectDirectories,
-               model: ir.Aadl,
+               root: AadlSystem,
                arsitOptions: Cli.ArsitOption,
                symbolTable: SymbolTable,
                types: AadlTypes,
+               reporter: Reporter,
                previousPhase: Result): ArsitResult = {
 
     val cExtensionDir: String = if (arsitOptions.auxCodeDir.nonEmpty) {
       assert(arsitOptions.auxCodeDir.size == 1)
       arsitOptions.auxCodeDir(0)
     } else {
-      SlangUtil.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
+      Util.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
     }
-    
-    return arsitOptions.platform match {
+
+    val ret: ArsitResult = arsitOptions.platform match {
       case Cli.ArsitPlatform.Linux =>
-        ArtNixGen(dirs, cExtensionDir, model, arsitOptions, symbolTable, types, previousPhase).generate()
+        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case Cli.ArsitPlatform.Cygwin =>
-        ArtNixGen(dirs, cExtensionDir, model, arsitOptions, symbolTable, types, previousPhase).generate()
+        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case Cli.ArsitPlatform.MacOS =>
-        ArtNixGen(dirs, cExtensionDir, model, arsitOptions, symbolTable, types, previousPhase).generate()
+        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case Cli.ArsitPlatform.SeL4 =>
-        SeL4NixGen(dirs, cExtensionDir, model, arsitOptions, symbolTable, types, previousPhase).generate()
+        SeL4NixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case _ =>
         ArsitResult(
           previousPhase.resources,
@@ -387,5 +405,6 @@ object NixGenDispatch {
           ISZ()
         )
     }
+    return ret
   }
 }
