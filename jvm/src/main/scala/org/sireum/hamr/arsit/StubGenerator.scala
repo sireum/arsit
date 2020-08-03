@@ -12,7 +12,7 @@ import org.sireum.hamr.ir._
 import org.sireum.message.Reporter
 
 @record class StubGenerator(dirs: ProjectDirectories,
-                            m: Aadl,
+                            rootSystem: AadlSystem,
                             arsitOptions: Cli.ArsitOption,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
@@ -24,23 +24,21 @@ import org.sireum.message.Reporter
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
 
-  def generator(): Result = {
+  def generate(): Result = {
 
-    for (c <- m.components) {
-      gen(c)
-    }
+    gen(rootSystem)
 
     return PhaseResult(previousPhase.resources() ++ resources,
       previousPhase.maxPort,
       previousPhase.maxComponent)
   }
 
-  def gen(m: Component): Unit = {
-    m.category match {
-      case ComponentCategory.System => genContainer(m)
-      case ComponentCategory.Process => genContainer(m)
+  def gen(m: AadlComponent): Unit = {
+    m match {
+      case s: AadlSystem => genContainer(s)
+      case s: AadlProcess => genContainer(s)
 
-      case ComponentCategory.ThreadGroup => genThreadGroup(m)
+      case s: AadlThreadGroup => genThreadGroup(s)
 
       case _ =>
         for (_c <- m.subComponents) {
@@ -49,56 +47,56 @@ import org.sireum.message.Reporter
     }
   }
 
-  def genContainer(m: Component): Unit = {
-    assert(m.category == ComponentCategory.Process || m.category == ComponentCategory.System)
+  def genContainer(m: AadlComponent): Unit = {
+    assert(m.isInstanceOf[AadlSystem] || m.isInstanceOf[AadlProcess])
 
-    if (!CommonUtil.isThread(m)) {
+    if (!m.isInstanceOf[AadlThread]) {
       genSubprograms(m)
     }
 
     for (c <- m.subComponents) {
-      c.category match {
-        case ComponentCategory.System => genContainer(c)
-        case ComponentCategory.Process => genContainer(c)
+      c match {
+        case s: AadlSystem => genContainer(s)
+        case s: AadlProcess => genContainer(s)
 
-        case ComponentCategory.ThreadGroup => genThreadGroup(c)
+        case s: AadlThreadGroup => genThreadGroup(s)
 
-        case ComponentCategory.Thread => genThread(c)
-        case ComponentCategory.Device if arsitOptions.devicesAsThreads => genThread(c)
+        case s: AadlThread => genThread(s)
 
-        case ComponentCategory.Device if !arsitOptions.devicesAsThreads => // ignore
+        case s: AadlDevice =>
+          if (arsitOptions.devicesAsThreads) {
+            genThread(s)
+          }
 
-        case ComponentCategory.Subprogram => // ignore
+        case s: AadlSubprogram => // ignore
 
         case _ =>
-          reporter.info(None(), Util.toolName, s"Skipping: ${c.category} component: ${CommonUtil.getName(c.identifier)}")
+          reporter.info(None(), Util.toolName, s"Skipping: ${c.component.category} component: ${c.path}")
       }
     }
   }
 
-  def genThreadGroup(m: Component): Unit = {
-    assert(m.category == ComponentCategory.ThreadGroup)
+  def genThreadGroup(m: AadlThreadGroup): Unit = {
 
     for (c <- m.subComponents) {
-      assert(c.category == ComponentCategory.Thread)
-      genThread(c)
+      c match {
+        case s: AadlThread => genThread(s)
+
+        case x => halt(s"Unexpected Thread Group subcomponent: ${x}")
+      }
     }
   }
 
-  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
-  }
+  def genThread(m: AadlThreadOrDevice): Unit = {
+    assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
-  def genThread(m: Component): Unit = {
-    assert(CommonUtil.isDevice(m) || CommonUtil.isThread(m))
-
-    val names = Names(m, basePackage)
+    val names = Names(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
 
-    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
 
     val componentName = "component"
-    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
+    val ports: ISZ[Port] = Util.getPorts(m.component, types, basePackage, z"-1000")
 
     val bridgeTestSuite: ST = StubTemplate.bridgeTestSuite(basePackage, names, ports)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
@@ -107,10 +105,10 @@ import org.sireum.message.Reporter
       return
     }
 
-    val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(m) match {
+    val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(m.component) match {
       case Some(x) => x
       case x =>
-        if (CommonUtil.isDevice(m)) {
+        if (CommonUtil.isDevice(m.component)) {
           Dispatch_Protocol.Periodic
         } else {
           halt(s"HAMR codegen only supports Periodic or Sporadic threads: ${x}")
@@ -172,7 +170,8 @@ import org.sireum.message.Reporter
     seenComponents = seenComponents + filename
   }
 
-  def genSubprograms(m: Component): Option[ST] = {
+  def genSubprograms(s: AadlComponent): Option[ST] = {
+    val m = s.component
     val subprograms: ISZ[(ST, ST)] = m.subComponents.filter(p => p.category == ComponentCategory.Subprogram).map(p => {
       // only expecting in or out parameters
       assert(ops.ISZOps(Util.getFeatureEnds(p.features))
@@ -220,5 +219,9 @@ import org.sireum.message.Reporter
     } else {
       return None[ST]()
     }
+  }
+
+  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
   }
 }

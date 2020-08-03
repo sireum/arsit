@@ -40,16 +40,11 @@ object Arsit {
 
     val projectDirectories = ProjectDirectories(o.outputDir)
 
-    val nixPhase = nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
-      StubGenerator(projectDirectories, model, o, symbolTable, aadlTypes, reporter,
-        ArchitectureGenerator(
-          directories = projectDirectories,
-          m = model,
-          arsitOptions = o,
-          symbolTable = symbolTable,
-          types = aadlTypes,
-          reporter = reporter).generator()
-      ).generator())
+    val nixPhase =
+      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
+        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
+          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter).generate()
+        ).generate())
 
     var artResources: ISZ[Resource] = ISZ()
     if (o.embedArt) {

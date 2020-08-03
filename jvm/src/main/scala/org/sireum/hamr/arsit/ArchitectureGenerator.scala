@@ -14,7 +14,7 @@ import org.sireum.message.Reporter
 import org.sireum.ops.ISZOps
 
 @record class ArchitectureGenerator(directories: ProjectDirectories,
-                                    m: ir.Aadl,
+                                    rootSystem: AadlSystem,
                                     arsitOptions: Cli.ArsitOption,
                                     symbolTable: SymbolTable,
                                     types: AadlTypes,
@@ -35,7 +35,7 @@ import org.sireum.ops.ISZOps
     resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
   }
 
-  def generator(): PhaseResult = {
+  def generate(): PhaseResult = {
     if (!types.rawConnections) {
       for (t <- types.typeMap.values) {
         emitType(t)
@@ -45,13 +45,13 @@ import org.sireum.ops.ISZOps
     val baseTypes = StringTemplate.Base_Types(basePackage)
     addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
 
-    generatorInternal(m)
+    generateInternal()
 
     return PhaseResult(resources, portId, componentId)
   }
 
-  def generatorInternal(m: ir.Aadl): Unit = {
-    gen(symbolTable.rootSystem)
+  def generateInternal(): Unit = {
+    gen(rootSystem)
 
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
