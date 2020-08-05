@@ -59,8 +59,12 @@ object air extends Air.Module with runtime.testProvider {
   final override def testObject = runtime.test
 }
 
-object common extends Codegen.Module.Common {
-  final override def airObject = air
+object hamr_codegen extends Module {
+
+  object common extends Codegen.Module.Common {
+    final override def airObject = air
+  }
+
 }
 
 object arsit extends Arsit.Module {
@@ -69,7 +73,7 @@ object arsit extends Arsit.Module {
 
   final override def airObject = air
 
-  final override def commonObject = common
+  final override def commonObject = hamr_codegen.common
 }
 
 def refresh() = T.command {
