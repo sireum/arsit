@@ -25,10 +25,10 @@
 
 import mill._
 import ammonite.ops._
-import $file.runtime.Runtime
 import $file.air.Air
 import $file.Arsit
-import $file.cli.Cli
+import $file.hamr_codegen.Codegen
+import $file.runtime.Runtime
 import mill.scalalib.ScalaModule
 import org.sireum.mill.SireumModule
 
@@ -59,35 +59,17 @@ object air extends Air.Module with runtime.testProvider {
   final override def testObject = runtime.test
 }
 
+object common extends Codegen.Module.Common {
+  final override def airObject = air
+}
 
 object arsit extends Arsit.Module {
-  final override def airObject = air
 
   final override def millSourcePath = super.millSourcePath / up
 
-  object bin extends ScalaModule {
-    final override def scalaVersion = SireumModule.scalaVersion
-    final override def moduleDeps = Seq(runtime.library.jvm)
-  }
-}
+  final override def airObject = air
 
-
-object cli extends Cli.Module {
-  final override def arsitObject = arsit
-}
-
-
-def regenCli() = T.command {
-  val out = pwd / 'bin / "sireum"
-  val sireumPackagePath = pwd / 'cli / 'jvm / 'src / 'main / 'scala / 'org / 'sireum
-  log(%%(out, 'tools, 'cligen, "-p", "org.sireum", "-l", pwd / "license.txt",
-    sireumPackagePath / "cli.sc")(sireumPackagePath))
-}
-
-def tipe() = T.command {
-  val out = pwd/ 'bin / "sireum"
-  val paths = s"${pwd / 'jvm}:${pwd / 'cli}:${pwd / 'air}"
-  log(%%(out, 'slang, 'tipe, "-s", paths)(pwd))
+  final override def commonObject = common
 }
 
 def refresh() = T.command {
