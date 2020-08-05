@@ -1,6 +1,6 @@
 # Arsit: AADL to Slang-Embedded Translator
 
-* **master** branch: ![Shippable](https://api.shippable.com/projects/5a906a7dfbd2be0600a89601/badge?branch=master)
+* **master** branch: [![Shippable](https://api.shippable.com/projects/5a906a7dfbd2be0600a89601/badge?branch=master)](https://app.shippable.com/github/sireum/arsit/dashboard)
 
 Arsit generates [Slang-Embedded](https://github.com/santoslab/slang-embedded) projects from AADL instance models 
 represented in [AIR](https://github.com/sireum/air).
