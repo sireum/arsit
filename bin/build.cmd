@@ -95,7 +95,8 @@ def tipe(): Unit = {
   if (!didTipe) {
     didTipe = T
     println("Slang type checking ...")
-    Os.proc(ISZ("java", "-jar", sireumJar.string, "slang", "tipe", "--verbose", "-r", "-s", home.string)).
+    val excludes = "jvm/src/test/results"
+    Os.proc(ISZ("java", "-jar", sireumJar.string, "slang", "tipe", "--verbose", "-r", "-x", excludes, "-s", home.string)).
       at(home).console.runCheck()
     println()
   }
