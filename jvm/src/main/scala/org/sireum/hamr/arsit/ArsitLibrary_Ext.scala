@@ -26,6 +26,10 @@ object ArsitLibrary_Ext {
     return getBuildSbtProperties().getProperty("art.version")
   }
 
+  def getKekinianVersion(): String = {
+    return getBuildSbtProperties().getProperty("org.sireum.kekinian.version")
+  }
+
   def getRuntimeVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.runtime.version")
   }

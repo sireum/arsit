@@ -113,6 +113,7 @@ object Base_Types {
   def buildSbt(projectName: String,
                embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
+    val kekinianVersion = ArsitLibrary.getKekinianVersion()
     val runtimeVersion = ArsitLibrary.getRuntimeVersion()
     val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
@@ -141,7 +142,8 @@ val scalaVer = "${scalaVersion}"
 
 val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
 
-val runtimeVersion = "${runtimeVersion}" // https://github.com/sireum/kekinian/tree/${runtimeVersion}
+// kekinian commit corresponding to runtime https://github.com/sireum/runtime/tree/${runtimeVersion}
+val kekinianVersion = "${kekinianVersion}" // https://github.com/sireum/kekinian/tree/${kekinianVersion}
 
 val scalaTestVersion = "${scalaTestVersion}"
 
@@ -158,7 +160,7 @@ val commonSettings = Seq(
   addCompilerPlugin("org.sireum" %% "scalac-plugin" % sireumScalacVersion),
   libraryDependencies ++= Seq(
     ${embeddedArt._2}
-    "org.sireum.kekinian" %% "library" % runtimeVersion withSources() withJavadoc()
+    "org.sireum.kekinian" %% "library" % kekinianVersion withSources() withJavadoc()
   )
 )
 

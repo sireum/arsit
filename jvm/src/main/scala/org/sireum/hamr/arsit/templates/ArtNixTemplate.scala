@@ -6,6 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.containers.TranspilerConfig
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
 import org.sireum.hamr.ir
 
@@ -756,7 +757,7 @@ object ArtNixTemplate {
                        buildApps: B,
                        additionalInstructions: Option[ST],
                        dirs: ProjectDirectories,
-                       cOutputDir: String): (ST, CTranspilerOption) = {
+                       cOutputDir: String): (ST, TranspilerConfig) = {
 
     val _stackSizeInBytes: String = if (stackSizeInBytes < 0) {
       "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
@@ -764,7 +765,7 @@ object ArtNixTemplate {
       stackSizeInBytes.string
     }
 
-    val ops = CTranspilerOption(
+    val ops = TranspilerConfig(
       help = "",
       args = ISZ(),
       sourcepath = ISZ(dirs.srcMainDir),
@@ -794,7 +795,7 @@ object ArtNixTemplate {
     return (transpilerX(ops, additionalInstructions, dirs), ops)
   }
 
-  @pure def transpilerX(opts: CTranspilerOption,
+  @pure def transpilerX(opts: TranspilerConfig,
                         additionalInstructions: Option[ST],
                         dirs: ProjectDirectories): ST = {
 

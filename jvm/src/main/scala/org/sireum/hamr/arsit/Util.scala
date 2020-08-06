@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -197,6 +198,8 @@ object Cli {
 
   def getArtVersion(): String = $
 
+  def getKekinianVersion(): String = $
+
   def getRuntimeVersion(): String = $
 
   def getSireumScalacVersionVersion(): String = $
@@ -379,40 +382,6 @@ object Transformers {
   val seL4CDir: String = Util.pathAppend(srcDir, ISZ("c", "CAmkES_seL4"))
 }
 
-
-@datatype class Resource(path: String,
-                         content: ST,
-                         overwrite: B,
-                         makeExecutable: B)
-
-// effectively just a copy of org.sireum.Cli.CTranspilerOption
-@datatype class CTranspilerOption(
-                                   help: String,
-                                   args: ISZ[String],
-                                   sourcepath: ISZ[String],
-                                   output: Option[String],
-                                   verbose: B,
-                                   projectName: Option[String],
-                                   apps: ISZ[String],
-                                   unroll: B,
-                                   fingerprint: Z,
-                                   bitWidth: Z,
-                                   maxStringSize: Z,
-                                   maxArraySize: Z,
-                                   customArraySizes: ISZ[String],
-                                   customConstants: ISZ[String],
-                                   plugins: ISZ[String],
-                                   exts: ISZ[String],
-                                   forwarding: ISZ[String],
-                                   stackSize: Option[String],
-                                   excludeBuild: ISZ[String],
-                                   libOnly: B,
-                                   stableTypeId: B,
-                                   save: Option[String],
-                                   load: Option[String],
-                                   cmakeIncludes: ISZ[String]
-                                 )
-
 @sig trait Result {
   def resources: ISZ[Resource]
 
@@ -428,4 +397,4 @@ object Transformers {
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
-                            val transpilerOptions: ISZ[CTranspilerOption]) extends Result
+                            val transpilerOptions: ISZ[TranspilerConfig]) extends Result

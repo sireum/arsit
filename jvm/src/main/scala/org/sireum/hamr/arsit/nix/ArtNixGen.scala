@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
@@ -25,7 +26,7 @@ import org.sireum.message.Reporter
 
   var resources: ISZ[Resource] = ISZ()
 
-  var transpilerOptions: ISZ[CTranspilerOption] = ISZ()
+  var transpilerOptions: ISZ[TranspilerConfig] = ISZ()
 
   var maxPortsForComponents: Z = 0
   var numConnections: Z = 0

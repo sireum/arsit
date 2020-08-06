@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
@@ -25,7 +26,7 @@ import org.sireum.message.Reporter
 
   var resources: ISZ[Resource] = ISZ()
 
-  var transpilerOptions: ISZ[CTranspilerOption] = ISZ()
+  var transpilerOptions: ISZ[TranspilerConfig] = ISZ()
 
   val defaultMaxStackSizeInBytes: Z = z"16" * z"1024" * z"1024"
 
@@ -63,7 +64,7 @@ import org.sireum.message.Reporter
       Os.path(dirs.srcDir) / "c/sel4"
     }
 
-    var transpilerScripts: Map[String, (ST, CTranspilerOption)] = Map.empty
+    var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
     val typeTouches: ISZ[ST] = genTypeTouches(types)
 
     for (component <- components) {
@@ -226,8 +227,8 @@ import org.sireum.message.Reporter
 
     } // end slang type library
 
-    val scripts = transpilerScripts.values.map((m: (ST, CTranspilerOption)) => m._1)
-    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, CTranspilerOption)) => m._2)
+    val scripts = transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._1)
+    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
     val transpileScript = TranspilerTemplate.transpilerScriptPreamble(scripts)
 
@@ -365,7 +366,7 @@ import org.sireum.message.Reporter
                         extensions: ISZ[Os.Path],
                         excludes: ISZ[String],
 
-                        cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
+                        cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
     val packageName = s"${basePackage}/${instanceName}"
     val appName = s"${basePackage}.${instanceName}.${identifier}"
 
@@ -408,7 +409,7 @@ import org.sireum.message.Reporter
                     numComponentOutPorts: Z,
                     cOutputDir: Os.Path,
                     cExtensions: ISZ[Os.Path],
-                    cmakeIncludes: ISZ[String]): (ST, CTranspilerOption) = {
+                    cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
 
     val components = symbolTable.airComponentMap.entries.filter(p =>
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))

@@ -3,6 +3,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols.SymbolResolver
 import org.sireum.hamr.codegen.common.types.{TypeResolver, TypeUtil}
@@ -20,7 +21,7 @@ object Arsit {
 
     if (model.components.isEmpty) {
       reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(ISZ(), 0, 0, ISZ[CTranspilerOption]())
+      return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
@@ -35,7 +36,7 @@ object Arsit {
     val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, aadlTypes, reporter)
 
     if (!TypeUtil.verifyBitCodec(aadlTypes, symbolTable, reporter)) {
-      return ArsitResult(ISZ(), 0, 0, ISZ[CTranspilerOption]())
+      return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
     val projectDirectories = ProjectDirectories(o.outputDir)
