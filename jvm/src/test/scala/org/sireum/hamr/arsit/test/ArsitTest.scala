@@ -1,14 +1,14 @@
 package org.sireum.hamr.arsit.test
 
-import org.sireum._
-import org.sireum.test.TestSuite
 import org.sireum.$internal.RC
-import org.sireum.hamr.arsit.Cli.{ArsitOption, ArsitPlatform, IpcMechanism}
-import ArsitTest._
+import org.sireum._
+import org.sireum.hamr.arsit.test.ArsitTest._
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
 import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestResource, TestResult}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
+import org.sireum.test.TestSuite
 
 trait ArsitTest extends TestSuite {
 
@@ -21,11 +21,11 @@ trait ArsitTest extends TestSuite {
 
   def ignores: ISZ[String] = ISZ("prefix_of_testname_to_ignore")
 
-  def test(testName: String, airFile: Os.Path, ops: ArsitOption)(implicit position: org.scalactic.source.Position) : Unit = {
+  def test(testName: String, airFile: Os.Path, ops: ArsitOptions)(implicit position: org.scalactic.source.Position) : Unit = {
     test(testName, airFile, ops, None())
   }
 
-  def test(testName: String, airFile: Os.Path, ops: ArsitOption, resultDir:Option[String])(implicit position: org.scalactic.source.Position) : Unit = {
+  def test(testName: String, airFile: Os.Path, ops: ArsitOptions, resultDir:Option[String])(implicit position: org.scalactic.source.Position) : Unit = {
     var tags: ISZ[org.scalatest.Tag] = ISZ()
 
     if(ignores.elements.exists(elem => org.sireum.ops.StringOps(testName).startsWith(elem))){
@@ -38,7 +38,7 @@ trait ArsitTest extends TestSuite {
     }
   }
 
-  def testAir(testName: String, airFile: Os.Path, ops: ArsitOption, resultDir: Option[String]): Unit = {
+  def testAir(testName: String, airFile: Os.Path, ops: ArsitOptions, resultDir: Option[String]): Unit = {
 
     val expectedJson = expectedJsonDir / s"${testName}.json"
 
@@ -106,7 +106,7 @@ trait ArsitTest extends TestSuite {
 
 object ArsitTest {
 
-  val baseOptions = ArsitOption(
+  val baseOptions = ArsitOptions(
     outputDir = "",
     packageName = "",
     embedArt = T,

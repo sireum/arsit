@@ -23,7 +23,7 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.sireum.hamr.arsit
+package org.sireum.hamr.arsit.util
 
 import org.sireum._
 import org.sireum.cli.CliOpt._

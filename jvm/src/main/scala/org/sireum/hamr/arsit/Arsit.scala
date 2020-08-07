@@ -2,6 +2,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -12,11 +13,11 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 
 object Arsit {
-  def run(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter): ArsitResult = {
+  def run(m: ir.Aadl, o: ArsitOptions, reporter: Reporter): ArsitResult = {
     return runInternal(m, o, reporter)
   }
 
-  private def runInternal(m: ir.Aadl, o: Cli.ArsitOption, reporter: Reporter): ArsitResult = {
+  private def runInternal(m: ir.Aadl, o: ArsitOptions, reporter: Reporter): ArsitResult = {
     var model = m
 
     if (model.components.isEmpty) {
@@ -52,14 +53,16 @@ object Arsit {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
-    val dest = Os.path(o.outputDir) / "build.sbt"
+    val buildSbtDest = Os.path(o.outputDir) / "build.sbt"
     val projectName = CommonUtil.getLastName(m.components(0).identifier)
-    val buildSbt = StringTemplate.buildSbt(projectName, o.embedArt)
-    artResources = artResources :+ Resource(dest.value, buildSbt, F, F)
+    val buildSbtContent = StringTemplate.buildSbt(projectName, o.packageName, o.embedArt)
+    artResources = artResources :+ Resource(buildSbtDest.value, buildSbtContent, F, F)
 
-    val projectFile = StringTemplate.sbtProject()
-    val projectFileDest = Os.path(o.outputDir) / "project/build.properties"
-    artResources = artResources :+ Resource(projectFileDest.value, projectFile, F, F)
+    val buildPropertiesDest = Os.path(o.outputDir) / "project/build.properties"
+    artResources = artResources :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
+
+    val pluginsSbtDest = Os.path(o.outputDir) / "project" / "plugins.sbt"
+    artResources = artResources :+ Resource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F, F)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,

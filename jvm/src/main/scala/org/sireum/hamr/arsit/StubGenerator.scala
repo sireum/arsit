@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.StubTemplate
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -14,7 +15,7 @@ import org.sireum.message.Reporter
 
 @record class StubGenerator(dirs: ProjectDirectories,
                             rootSystem: AadlSystem,
-                            arsitOptions: Cli.ArsitOption,
+                            arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
                             reporter: Reporter,

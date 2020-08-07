@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.StringTemplate
+import org.sireum.hamr.arsit.util.ArsitPlatform
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.TranspilerConfig
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
@@ -648,7 +649,7 @@ object ArtNixTemplate {
     return ret
   }
 
-  @pure def compile(arch: Cli.ArsitPlatform.Type,
+  @pure def compile(arch: ArsitPlatform.Type,
                     dirs: ProjectDirectories,
                     cOutputDir: String): ST = {
 
@@ -656,7 +657,7 @@ object ArtNixTemplate {
     val cOutputDirRel = Util.relativizePaths(dirs.binDir, cOutputDir, script_home)
 
     val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
-    val mv: ST = if (arch == Cli.ArsitPlatform.Cygwin) {
+    val mv: ST = if (arch == ArsitPlatform.Cygwin) {
       st"mv *.exe ${script_home}/${buildDir}/"
     } else {
       st"""mv *_App ${script_home}/${buildDir}/
@@ -680,15 +681,15 @@ object ArtNixTemplate {
   }
 
   @pure def run(apps: ISZ[String],
-                arch: Cli.ArsitPlatform.Type): ST = {
+                arch: ArsitPlatform.Type): ST = {
 
     val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
-    val ext: String = if (arch == Cli.ArsitPlatform.Cygwin) ".exe" else ""
+    val ext: String = if (arch == ArsitPlatform.Cygwin) ".exe" else ""
     val stapp: ISZ[ST] = apps.map(st => {
       val prefix: String = arch match {
-        case Cli.ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
-        case Cli.ArsitPlatform.Linux => "x-terminal-emulator -e sh -c"
-        case Cli.ArsitPlatform.MacOS => "open -a Terminal"
+        case ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
+        case ArsitPlatform.Linux => "x-terminal-emulator -e sh -c"
+        case ArsitPlatform.MacOS => "open -a Terminal"
         case _ => halt(s"Unexpected platform ${arch}")
       }
       st"""$prefix "${buildDir}/${st}$ext" &"""

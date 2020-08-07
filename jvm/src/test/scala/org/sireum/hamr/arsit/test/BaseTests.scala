@@ -1,8 +1,8 @@
 package org.sireum.hamr.arsit.test
 
 import org.sireum._
-import org.sireum.hamr.arsit.Cli.{ArsitOption, ArsitPlatform}
 import org.sireum.hamr.arsit.test.ArsitTest.baseOptions
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 
 class BaseTests extends ArsitTest {
 
@@ -69,7 +69,7 @@ class BaseTests extends ArsitTest {
       test(s"$name--$platform--v2", baseOptions(platform = platform)))
   }
 
-  def test(name: String, options: ArsitOption): Unit = {
+  def test(name: String, options: ArsitOptions): Unit = {
     test(name, model, options, resultDir)
   }
 }

@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -16,7 +17,7 @@ import org.sireum.ops.ISZOps
 
 @record class ArchitectureGenerator(directories: ProjectDirectories,
                                     rootSystem: AadlSystem,
-                                    arsitOptions: Cli.ArsitOption,
+                                    arsitOptions: ArsitOptions,
                                     symbolTable: SymbolTable,
                                     types: AadlTypes,
                                     reporter: Reporter) {
@@ -43,7 +44,7 @@ import org.sireum.ops.ISZOps
       }
     }
 
-    val baseTypes = StringTemplate.Base_Types(basePackage)
+    val baseTypes = TypeTemplate.Base_Types(basePackage)
     addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
 
     generateInternal()

@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -21,7 +22,7 @@ import org.sireum.message.Reporter
 
   def root: AadlSystem
 
-  def arsitOptions: Cli.ArsitOption
+  def arsitOptions: ArsitOptions
 
   def symbolTable: SymbolTable
 
@@ -376,7 +377,7 @@ object NixGenDispatch {
 
   def generate(dirs: ProjectDirectories,
                root: AadlSystem,
-               arsitOptions: Cli.ArsitOption,
+               arsitOptions: ArsitOptions,
                symbolTable: SymbolTable,
                types: AadlTypes,
                reporter: Reporter,
@@ -390,13 +391,13 @@ object NixGenDispatch {
     }
 
     val ret: ArsitResult = arsitOptions.platform match {
-      case Cli.ArsitPlatform.Linux =>
+      case ArsitPlatform.Linux =>
         ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
-      case Cli.ArsitPlatform.Cygwin =>
+      case ArsitPlatform.Cygwin =>
         ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
-      case Cli.ArsitPlatform.MacOS =>
+      case ArsitPlatform.MacOS =>
         ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
-      case Cli.ArsitPlatform.SeL4 =>
+      case ArsitPlatform.SeL4 =>
         SeL4NixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case _ =>
         ArsitResult(

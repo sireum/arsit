@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -16,7 +17,7 @@ import org.sireum.message.Reporter
 @record class SeL4NixGen(val dirs: ProjectDirectories,
                          val cExtensionDir: String,
                          val root: AadlSystem,
-                         val arsitOptions: Cli.ArsitOption,
+                         val arsitOptions: ArsitOptions,
                          val symbolTable: SymbolTable,
                          val types: AadlTypes,
                          val previousPhase: Result,
@@ -33,7 +34,7 @@ import org.sireum.message.Reporter
   val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine())
 
   def generate(): ArsitResult = {
-    assert(arsitOptions.platform == Cli.ArsitPlatform.SeL4)
+    assert(arsitOptions.platform == ArsitPlatform.SeL4)
 
     gen(root)
 

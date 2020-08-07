@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
+import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -14,7 +15,7 @@ import org.sireum.message.Reporter
 @record class ArtNixGen(val dirs: ProjectDirectories,
                         val cExtensionDir: String,
                         val root: AadlSystem,
-                        val arsitOptions: Cli.ArsitOption,
+                        val arsitOptions: ArsitOptions,
                         val symbolTable: SymbolTable,
                         val types: AadlTypes,
                         val previousPhase: Result,
@@ -215,7 +216,7 @@ import org.sireum.message.Reporter
     platformPorts = platformPorts :+ ArtNixTemplate.platformPortDecl("Main", getPortId())
 
     arsitOptions.ipc match {
-      case Cli.IpcMechanism.SharedMemory =>
+      case IpcMechanism.SharedMemory =>
         addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory.scala"), ArtNixTemplate.SharedMemory(basePackage), T)
         addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory_Ext.scala"), ArtNixTemplate.SharedMemory_Ext(basePackage), T)
       case x => halt(s"Unexpected IPC ${x}")

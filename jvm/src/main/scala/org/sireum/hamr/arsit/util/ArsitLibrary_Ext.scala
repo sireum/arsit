@@ -1,4 +1,4 @@
-package org.sireum.hamr.arsit
+package org.sireum.hamr.arsit.util
 
 import java.io.StringReader
 
@@ -9,8 +9,8 @@ object ArsitLibrary_Ext {
 
   def getFiles: ISZ[(String, String)] = {
     val map = RC.text(Vector(
-      "../../../../../../../../resources/art/shared/src/main/scala/",
-      "../../../../../../../../resources/util")) { (p, f) => true }
+      "../../../../../../../../../resources/art/shared/src/main/scala/",
+      "../../../../../../../../../resources/util")) { (p, f) => true }
     ISZ(map.toSeq.map(p => (String(p._1.mkString("/")), String(p._2))): _*)
   }
 
@@ -48,5 +48,9 @@ object ArsitLibrary_Ext {
 
   def getSBTVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.version.sbt")
+  }
+
+  def getSbtAssemblyVersion(): String = {
+    return getBuildSbtProperties().getProperty("sbtassembly.version")
   }
 }

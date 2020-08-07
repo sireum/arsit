@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
@@ -50,13 +51,13 @@ object Util {
     return s"${anchorResource}/${rel}"
   }
 
-  def isNix(platform: Cli.ArsitPlatform.Type): B = {
+  def isNix(platform: ArsitPlatform.Type): B = {
     val ret: B = platform match {
-      case Cli.ArsitPlatform.JVM => F
-      case Cli.ArsitPlatform.MacOS => T
-      case Cli.ArsitPlatform.Linux => T
-      case Cli.ArsitPlatform.Cygwin => T
-      case Cli.ArsitPlatform.SeL4 => F
+      case ArsitPlatform.JVM => F
+      case ArsitPlatform.MacOS => T
+      case ArsitPlatform.Linux => T
+      case ArsitPlatform.Cygwin => T
+      case ArsitPlatform.SeL4 => F
     }
     return ret
   }
@@ -145,70 +146,16 @@ object Util {
     return ports
   }
 
-  @pure def getIpc(ipcmech: Cli.IpcMechanism.Type, packageName: String): ST = {
+  @pure def getIpc(ipcmech: IpcMechanism.Type, packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r: String = ipcmech match {
-      case Cli.IpcMechanism.SharedMemory => "ipc_shared_memory.c"
+      case IpcMechanism.SharedMemory => "ipc_shared_memory.c"
       case x => halt("Unexpected IPC mechanism ${x}")
     }
     val lib = Util.getLibraryFile(r).render
     val c = StringUtil.replaceAll(lib, PACKAGE_PLACEHOLDER, packageName)
     return st"${c}"
   }
-}
-
-object Cli {
-
-  @enum object IpcMechanism {
-    'SharedMemory
-  }
-
-  @enum object ArsitPlatform {
-    'JVM
-    'Linux
-    'Cygwin
-    'MacOS
-    'SeL4
-  }
-
-  @datatype class ArsitOption(
-                               outputDir: String,
-                               packageName: String,
-                               embedArt: B,
-                               bless: B,
-                               verbose: B,
-                               devicesAsThreads: B,
-                               ipc: IpcMechanism.Type,
-                               auxCodeDir: ISZ[String],
-                               outputCDir: Option[String],
-                               excludeImpl: B,
-                               platform: ArsitPlatform.Type,
-                               bitWidth: Z,
-                               maxStringSize: Z,
-                               maxArraySize: Z,
-                               pathSeparator: C,
-                               experimentalOptions: ISZ[String]
-                             )
-
-}
-
-
-@ext object ArsitLibrary {
-  def getFiles: ISZ[(String, String)] = $
-
-  def getArtVersion(): String = $
-
-  def getKekinianVersion(): String = $
-
-  def getRuntimeVersion(): String = $
-
-  def getSireumScalacVersionVersion(): String = $
-
-  def getScalaVersion(): String = $
-
-  def getScalaTestVersion(): String = $
-
-  def getSBTVersion(): String = $
 }
 
 @enum object EntryPoints {
