@@ -20,6 +20,7 @@ target
 /hamr_codegen
 /lib
 /runtime
+*.sc.jar
 *.cmd.jar
 *.cmd.com
 /jvm/src/test/results

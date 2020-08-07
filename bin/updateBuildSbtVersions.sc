@@ -21,15 +21,15 @@ exit /B %errorlevel%
 
 import org.sireum._
 
+val SIREUM_HOME = Os.path(Os.env("SIREUM_HOME").get)
+val sireum = SIREUM_HOME / "bin/sireum"
+val sireumProps = (SIREUM_HOME / "versions.properties").properties
+val mill = SIREUM_HOME / "bin/mill"
+
 def runGit(args: ISZ[String], path: Os.Path): String = {
   val p = org.sireum.Os.proc(args).at(path).runCheck()
   return ops.StringOps(p.out).trim
 }
-
-
-val SIREUM_HOME = Os.path(Os.env("SIREUM_HOME").get)
-val sireum = SIREUM_HOME / "bin/sireum"
-val sireumProps = (SIREUM_HOME / "versions.properties").properties
 
 val buildSbtProps = SIREUM_HOME / "hamr/codegen/arsit/resources/util/buildSbt.properties"
 println(s"Updating $buildSbtProps")
@@ -69,6 +69,27 @@ def update(key: String, currentVersion: String): B = {
     return F
   }
 }
+
+def jitpack(): Unit = {
+  println(s"Triggering jitpack on https://github.com/sireum/kekinian/tree/${kekinianVersion} ...")
+  val r = mill.call(ISZ("jitPack", "--owner", "sireum", "--repo", "kekinian", "--lib", "library", "--hash", kekinianVersion)).at(SIREUM_HOME).console.run()
+  r match {
+    case r: Os.Proc.Result.Normal =>
+      println(r.out)
+      println(r.err)
+      if (!r.ok) {
+        eprintln(s"Exit code: ${r.exitCode}")
+      }
+    case r: Os.Proc.Result.Exception =>
+      eprintln(s"Exception: ${r.err}")
+    case _: Os.Proc.Result.Timeout =>
+      eprintln("Timeout")
+      eprintln()
+  }
+  println()
+}
+
+jitpack()
 
 var updated = update("art.version", artVersion)
 updated |= update("org.sireum.kekinian.version", kekinianVersion)
