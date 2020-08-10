@@ -1,18 +1,22 @@
 package org.sireum.hamr.arsit.test
 
-import org.sireum.$internal.RC
 import org.sireum._
-import org.sireum.hamr.arsit.test.ArsitTest._
+import org.sireum.$internal.RC
+import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
 import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestResource, TestResult}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
+import org.sireum.hamr.arsit.test.ArsitTest._
 
 trait ArsitTest extends TestSuite {
 
   def generateExpected: B = F
+
+  def testMode: ArsitTestMode.Type = ArsitTestMode.Base
+  def timeoutInSeconds: Z = 60
 
   val (expectedJsonDir, baseModelsDir) = getDirectories()
 
@@ -74,7 +78,33 @@ trait ArsitTest extends TestSuite {
       (key, TestResource(m.content.render, m.overwrite, m.makeExecutable))
     })))
 
+    writeOutTestResults(resultMap, resultsDir)
+
     var testPass = T
+
+    envTest(testMode) match {
+      case ArsitTestMode.SbtCompile =>
+        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+        val args: ISZ[String] = ISZ("sbt", "compile")
+        val results = Os.proc(args).at(sbtDir).console.run()
+        testPass = testPass && results.ok
+
+      case ArsitTestMode.SbtTest =>
+        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+        val args: ISZ[String] = ISZ("sbt", "test")
+        val results = Os.proc(args).at(sbtDir).console.run()
+        testPass = testPass && results.ok
+
+      case ArsitTestMode.SbtRun =>
+        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+        val args: ISZ[String] = ISZ("sbt", "run")
+        val results = Os.Proc(args, Os.cwd, Map.empty, T, None(), F, F, F, F, F, (timeoutInSeconds * z"1000"), F)
+          .at(sbtDir).console().run()
+        testPass = testPass && results.ok
+
+      case ArsitTestMode.Base =>
+    }
+
     val expectedMap: TestResult =
       if(generateExpected) {
         writeExpected(resultMap, expectedJson)
@@ -90,13 +120,7 @@ trait ArsitTest extends TestSuite {
         TestResult(Map.empty)
       }
 
-    for(result <- resultMap.map.entries){
-      (resultsDir / result._1).canon.writeOver(result._2.content)
-    }
-
-    for(expected <- expectedMap.map.entries) {
-      (expectedDir / expected._1).canon.writeOver(expected._2.content)
-    }
+    writeOutTestResults(expectedMap, expectedDir)
 
     testPass = testPass && resultMap.map == expectedMap.map
 
@@ -193,5 +217,27 @@ object ArsitTest {
 
   def readExpected(expected: Os.Path): TestResult = {
     TestJSON.toTestResult(expected.read).left
+  }
+
+  def writeOutTestResults(testResults: TestResult, dir: Os.Path): Os.Path = {
+    for(result <- testResults.map.entries){
+      val r = (dir / result._1).canon
+      if(result._2.overwrite || !r.exists) {
+        r.writeOver(result._2.content)
+        if(result._2.makeExecutable) {
+          r.chmodAll("700")
+        }
+      }
+    }
+    return dir
+  }
+
+  def envTest(testMode: ArsitTestMode.Type): ArsitTestMode.Type = {
+    val ret: ArsitTestMode.Type =
+      Os.env("ARSIT_TEST_MODE") match {
+        case Some(x) => ArsitTestMode.byName(x).get
+        case _ => testMode
+      }
+    return ret
   }
 }
