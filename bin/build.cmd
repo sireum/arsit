@@ -137,6 +137,7 @@ def test(): Unit = {
 
 
 def clean(): Unit = {
+  println(s"Cleaning ${home}")
   val dirsToScrub: ISZ[Os.Path] = ISZ("air", "common", "hamr_codegen", "lib", "out", "runtime").map(m => home / m)
   dirsToScrub.foreach((m: Os.Path) => {
     println(s"Deleting ${m}")
