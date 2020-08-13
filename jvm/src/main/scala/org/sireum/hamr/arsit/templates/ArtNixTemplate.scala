@@ -12,7 +12,7 @@ import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
 import org.sireum.hamr.ir
 
 object ArtNixTemplate {
-  // @formatter:off
+
   @pure def portDef(portName: String,
                     portType: String): ST = {
     return st"""$portName: Option[$portType]"""
@@ -94,7 +94,6 @@ object ArtNixTemplate {
                 types: AadlTypes,
                 basePackage: String
                ): ST = {
-    // @formatter:off
 
     def localPortId(p: Port): String = {
       return s"${p.name}PortId"
@@ -129,7 +128,6 @@ object ArtNixTemplate {
 
     var computeBody: ST = st""
 
-    // @formatter:off
     val body: ST = {
 
       val loopBody: ST = {
@@ -254,7 +252,6 @@ object ArtNixTemplate {
           |  }
           |}"""
     return ret
-    // @formatter:on
   }
 
   @pure def ipc(packageName: String,
@@ -878,6 +875,4 @@ object ArtNixTemplate {
 
     return st"""${ret}${(extras, "")}"""
   }
-
-  // @formatter:on
 }

@@ -104,6 +104,15 @@ import org.sireum.message.Reporter
         _ports,
         _portArgs)
 
+      val transpilerToucher = SeL4NixTemplate.transpilerToucher(basePackage)
+      val transpilerToucherMethodCall = SeL4NixTemplate.callTranspilerToucher()
+
+      addResource(
+        dirs.componentDir,
+        ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
+        transpilerToucher,
+        F)
+
       val app = SeL4NixTemplate.app(
         basePackage,
         instanceName,
@@ -117,7 +126,8 @@ import org.sireum.message.Reporter
         getValue,
         putValue,
         sendOutput,
-        typeTouches)
+        typeTouches,
+        transpilerToucherMethodCall)
 
       addResource(
         dirs.seL4NixDir,

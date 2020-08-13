@@ -15,6 +15,14 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, Stri
 import org.sireum.hamr.ir
 import org.sireum.message.Reporter
 
+object NixGen{
+  val IPC_C: String = "ipc.c"
+  val EXT_H: String = "ext.h"
+  val EXT_C: String = "ext.c"
+
+  val KNOWN_HAMR_PROVIDED_FILES: ISZ[String] = ISZ(IPC_C, EXT_H, EXT_C)
+}
+
 @msig trait NixGen {
   def dirs: ProjectDirectories
 
@@ -41,10 +49,10 @@ import org.sireum.message.Reporter
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()
 
-    val extC = rootExtDir / "ext.c"
-    val extH = rootExtDir / "ext.h"
-    resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), Util.getLibraryFile("ext.c"), F)
-    resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), Util.getLibraryFile("ext.h"), F)
+    val extC = rootExtDir / NixGen.EXT_C
+    val extH = rootExtDir / NixGen.EXT_H
+    resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), Util.getLibraryFile(NixGen.EXT_C), F)
+    resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), Util.getLibraryFile(NixGen.EXT_H), F)
 
     extensionFiles = (extensionFiles :+ extC) :+ extH
 
@@ -295,7 +303,7 @@ import org.sireum.message.Reporter
 
         val impl =
           st"""#include <${apiHeaderFile.name}>
-              |#include <ext.h>
+              |#include <${NixGen.EXT_H}>
               |
               |${StringTemplate.safeToEditComment()}
               |
@@ -366,6 +374,7 @@ import org.sireum.message.Reporter
     val p = Os.path(cExtensionDir)
     val ret: ISZ[Os.Path] = if (p.exists && p.isDir) {
       p.list.filter(f => f.ext == "c" || f.ext == "h")
+        .filter(f => !ops.ISZOps(NixGen.KNOWN_HAMR_PROVIDED_FILES).contains(f.name))
     } else {
       ISZ()
     }

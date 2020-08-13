@@ -4,9 +4,13 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
 
 object SeL4NixTemplate {
+
+  val TRANSPILER_TOUCHER_OBJECT_NAME: String = "TranspilerToucher"
+  val TRANSPILER_TOUCHER_METHOD_NAME: String = "touch"
+
   def sendOutput(entries: ST): ST = {
     val ret: ST =
       st"""def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
@@ -155,7 +159,8 @@ object SeL4NixTemplate {
           getValue: ST,
           putValue: ST,
           sendOutput: ST,
-          typeTouches: ISZ[ST]): ST = {
+          typeTouches: ISZ[ST],
+          transpilerToucher: ST): ST = {
     val ret: ST =
       st"""// #Sireum
           |
@@ -210,6 +215,8 @@ object SeL4NixTemplate {
           |
           |    ${touchTypes(typeTouches)}
           |
+          |    ${transpilerToucher}
+          |
           |    return 0
           |  }
           |
@@ -256,14 +263,20 @@ object SeL4NixTemplate {
              c_this: String,
              typ: DataTypeNames): ST = {
 
-    val qualifiedName: String =
-      if (typ.isBitsTypes()) {
-        TypeUtil.BIT_SIG
-      } else {
-        s"${if (typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}"
+    // this CANNOT use type aliases
+    val qualifiedNameForFingerprinting: String =
+      typ.typ match {
+        case b: BaseType => b.slangType.string
+        case b: BitType => TypeUtil.BIT_SIG
+        case _ =>
+          if(typ.isEmptyType()) {
+            typ.qualifiedReferencedTypeName
+          } else {
+            s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
+          }
       }
 
-    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedName)
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedNameForFingerprinting)
 
     val typeAssign: Option[String] =
       if (typ.isEmptyType()) {
@@ -281,8 +294,8 @@ object SeL4NixTemplate {
       st"""${signature}{
           |  ${declNewStackFrame};
           |
-          |  // ${optionSig} = Option[${qualifiedName}]
-          |  // ${someSig} = Some[${qualifiedName}]
+          |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
+          |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
           |  DeclNew${optionSig}(t_0);
           |  ${apiGetMethodName}(
           |    SF
@@ -305,14 +318,20 @@ object SeL4NixTemplate {
                               c_this: String,
                               typ: DataTypeNames): ST = {
 
-    val qualifiedName: String =
-      if (typ.isBitsTypes()) {
-        TypeUtil.BIT_SIG
-      } else {
-        s"${if (typ.isAadlType()) s"${typ.basePackage}." else ""}${typ.qualifiedReferencedTypeName}"
+    // this CANNOT use type aliases
+    val qualifiedNameForFingerprinting: String =
+      typ.typ match {
+        case b: BaseType => b.slangType.string
+        case b: BitType => TypeUtil.BIT_SIG
+        case _ =>
+          if(typ.isEmptyType()) {
+            typ.qualifiedReferencedTypeName
+          } else {
+            s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
+          }
       }
 
-    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedName)
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedNameForFingerprinting)
 
     val typeAssign: Option[String] =
       if (typ.isEmptyType()) {
@@ -330,8 +349,8 @@ object SeL4NixTemplate {
       st"""${signature}{
           |  ${declNewStackFrame};
           |
-          |  // ${optionSig} = Option[${qualifiedName}]
-          |  // ${someSig} = Some[${qualifiedName}]
+          |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
+          |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
           |  DeclNew${optionSig}(t_0);
           |
           |  ${apiGetMethodName}(
@@ -479,5 +498,27 @@ object SeL4NixTemplate {
     }
 
     return body
+  }
+
+  def transpilerToucher(basePackage: String): ST = {
+    val ret: ST =
+      st"""// #Sireum
+          |
+          |package ${basePackage}
+          |
+          |import org.sireum._
+          |
+          |${StringTemplate.safeToEditComment()}
+          |
+          |object ${TRANSPILER_TOUCHER_OBJECT_NAME} {
+          |  def ${TRANSPILER_TOUCHER_METHOD_NAME}(): Unit = {
+          |  }
+          |}
+          |"""
+    return ret
+  }
+
+  def callTranspilerToucher(): ST = {
+    return st"${TRANSPILER_TOUCHER_OBJECT_NAME}.${TRANSPILER_TOUCHER_METHOD_NAME}()"
   }
 }

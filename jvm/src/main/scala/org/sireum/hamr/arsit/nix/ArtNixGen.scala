@@ -249,7 +249,7 @@ import org.sireum.message.Reporter
     addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, arsitOptions.platform), T)
     addExeResource(dirs.binDir, ISZ("stop.sh"), ArtNixTemplate.stop(appNames), T)
 
-    addResource(cExtensionDir, ISZ("ipc.c"), Util.getIpc(arsitOptions.ipc, basePackage), T)
+    addResource(cExtensionDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
 
     var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
     if (!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir)) {
@@ -269,7 +269,7 @@ import org.sireum.message.Reporter
     val buildApps: B = T
     val additionalInstructions: Option[ST] = None()
 
-    transpilerExtensions = transpilerExtensions :+ Os.path(cExtensionDir) / "ipc.c"
+    transpilerExtensions = transpilerExtensions :+ Os.path(cExtensionDir) / NixGen.IPC_C
 
     val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
 
