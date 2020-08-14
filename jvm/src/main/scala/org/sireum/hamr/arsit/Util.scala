@@ -44,11 +44,17 @@ object Util {
     }
   }
 
+  def convertWinPathSepToNix(s: String): String = {
+    return ops.StringOps(s).replaceAllChars('\\', '/')
+  }
+
+  // currently all Arsit targets are nix based so returned
+  // path will only contain nix style path separators
   def relativizePaths(anchorDir: String, toRel: String, anchorResource: String): String = {
     val o1 = Os.path(anchorDir)
     val o2 = Os.path(toRel)
     val rel = o1.relativize(o2)
-    return s"${anchorResource}/${rel}"
+    return convertWinPathSepToNix(s"${anchorResource}/${rel}")
   }
 
   def isNix(platform: ArsitPlatform.Type): B = {

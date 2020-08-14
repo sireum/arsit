@@ -5,7 +5,7 @@ import org.sireum.$internal.RC
 import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
-import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestResource, TestResult}
+import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestResource, TestResult, TestUtil}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
@@ -107,12 +107,12 @@ trait ArsitTest extends TestSuite {
 
     val expectedMap: TestResult =
       if(generateExpected) {
-        writeExpected(resultMap, expectedJson)
+        TestUtil.writeExpected(resultMap, expectedJson)
         println(s"Wrote: ${expectedJson}")
         resultMap
       }
       else if(expectedJson.exists) {
-        readExpected(expectedJson)
+        TestUtil.readExpected(expectedJson)
       }
       else {
         testPass = F
@@ -210,17 +210,8 @@ object ArsitTest {
     }
   }
 
-
-  def writeExpected(resultMap: TestResult, expected: Os.Path) = {
-    expected.writeOver(TestJSON.fromTestResult(resultMap, F))
-  }
-
-  def readExpected(expected: Os.Path): TestResult = {
-    TestJSON.toTestResult(expected.read).left
-  }
-
   def writeOutTestResults(testResults: TestResult, dir: Os.Path): Os.Path = {
-    for(result <- testResults.map.entries){
+    for(result <- testResults.map.entries) {
       val r = (dir / result._1).canon
       if(result._2.overwrite || !r.exists) {
         r.writeOver(result._2.content)
