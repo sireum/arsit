@@ -7,6 +7,7 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.util.PathUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
@@ -44,17 +45,13 @@ object Util {
     }
   }
 
-  def convertWinPathSepToNix(s: String): String = {
-    return ops.StringOps(s).replaceAllChars('\\', '/')
-  }
-
   // currently all Arsit targets are nix based so returned
   // path will only contain nix style path separators
   def relativizePaths(anchorDir: String, toRel: String, anchorResource: String): String = {
     val o1 = Os.path(anchorDir)
     val o2 = Os.path(toRel)
     val rel = o1.relativize(o2)
-    return convertWinPathSepToNix(s"${anchorResource}/${rel}")
+    return PathUtil.convertWinPathSepToNix(s"${anchorResource}/${rel}")
   }
 
   def isNix(platform: ArsitPlatform.Type): B = {
