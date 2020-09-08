@@ -10,8 +10,6 @@ import org.sireum._
 
   def getKekinianVersion(): String = $
 
-  def getRuntimeVersion(): String = $
-
   def getSireumScalacVersionVersion(): String = $
 
   def getScalaVersion(): String = $

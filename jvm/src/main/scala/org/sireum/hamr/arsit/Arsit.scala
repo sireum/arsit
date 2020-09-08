@@ -53,10 +53,15 @@ object Arsit {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
-    val buildSbtDest = Os.path(o.outputDir) / "build.sbt"
     val projectName = CommonUtil.getLastName(m.components(0).identifier)
-    val buildSbtContent = StringTemplate.buildSbt(projectName, o.packageName, o.embedArt)
-    artResources = artResources :+ Resource(buildSbtDest.value, buildSbtContent, F, F)
+
+    val millBuildDest = Os.path(o.outputDir) / "build.sc"
+    val millBuildContent = StringTemplate.millBuild(o.packageName, o.embedArt)
+    artResources = artResources :+ Resource(millBuildDest.value, millBuildContent, F, F)
+
+    val sbtBuildDest = Os.path(o.outputDir) / "build.sbt"
+    val sbtBuildContent = StringTemplate.sbtBuild(projectName, o.packageName, o.embedArt)
+    artResources = artResources :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
 
     val buildPropertiesDest = Os.path(o.outputDir) / "project/build.properties"
     artResources = artResources :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)

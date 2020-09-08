@@ -100,7 +100,7 @@ object StubTemplate {
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
 
-      st"""def ${m.string}: Unit = {
+      st"""def ${m.string}(): Unit = {
           |  $body
           |}"""
     })

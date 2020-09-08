@@ -16,12 +16,11 @@ object StringTemplate {
     return "// This file will not be overwritten so is safe to edit"
   }
 
-  def buildSbt(projectName: String,
+  def sbtBuild(projectName: String,
                basePackageName: String,
                embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
     val kekinianVersion = ArsitLibrary.getKekinianVersion()
-    val runtimeVersion = ArsitLibrary.getRuntimeVersion()
     val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
     val scalaVersion = ArsitLibrary.getScalaVersion()
@@ -65,7 +64,6 @@ object StringTemplate {
           |
           |val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
           |
-          |// kekinian commit corresponding to runtime https://github.com/sireum/runtime/tree/${runtimeVersion}
           |val kekinianVersion = "${kekinianVersion}" // https://github.com/sireum/kekinian/tree/${kekinianVersion}
           |
           |val scalaTestVersion = "${scalaTestVersion}"
@@ -140,6 +138,102 @@ object StringTemplate {
     val ret: ST =
       st"""addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "${sbtAssemblyVersion}")
           |"""
+    return ret
+  }
+
+  def millBuild(basePackageName: String,
+                embedArt: B): ST = {
+    val artVersion = ArsitLibrary.getArtVersion()
+    val kekinianVersion = ArsitLibrary.getKekinianVersion()
+    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
+    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
+    val scalaVersion = ArsitLibrary.getScalaVersion()
+
+    val ret: ST =
+      st"""import mill._
+          |import scalalib._
+          |
+          |// Example Mill build -- the contents of this file will not be overwritten
+          |//
+          |// To open the following project in VSCode, first follow Sireum Kekinian's
+          |// instructions for setting up a development environment using Scala Metals:
+          |//
+          |//   https://github.com/sireum/kekinian#scala-metals
+          |//
+          |// Then open the folder containing this file in VSCode and import the
+          |// mill build when asked.
+          |//
+          |// To run the demo from the command line:
+          |//   mill ${basePackageName}.run
+          |//
+          |// To run the example unit tests:
+          |//   mill ${basePackageName}.test
+          |
+          |trait SlangEmbeddedModule extends ScalaModule {
+          |  val scalaVer = "${scalaVersion}"
+          |
+          |  val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
+          |
+          |  val kekinianVersion = "${kekinianVersion}" // https://github.com/sireum/kekinian/tree/${kekinianVersion}
+          |
+          |  val scalaTestVersion = "${scalaTestVersion}"
+          |
+          |
+          |  def scalaVersion = scalaVer
+          |
+          |  override def javacOptions = T { Seq("-source", "1.8", "-target", "1.8", "-encoding", "utf8") }
+          |
+          |  override def scalacOptions = T { Seq(
+          |    "-target:jvm-1.8",
+          |    "-deprecation",
+          |    "-Yrangepos",
+          |    "-Ydelambdafy:method",
+          |    "-feature",
+          |    "-unchecked",
+          |    "-Xfatal-warnings",
+          |    "-language:postfixOps"
+          |  ) }
+          |
+          |  override def ivyDeps = Agg(ivy"org.sireum.kekinian::library::$${kekinianVersion}")
+          |
+          |  override def scalacPluginIvyDeps = Agg(ivy"org.sireum::scalac-plugin::$${sireumScalacVersion}")
+          |
+          |  override def repositories = super.repositories ++ Seq(
+          |    coursier.maven.MavenRepository("https://jitpack.io/"),
+          |  )
+          |}
+          |
+          |trait AadlModule extends SlangEmbeddedModule {
+          |  override def sources = T.sources (
+          |    millSourcePath / os.up / "src" / "main" / "architecture",
+          |    millSourcePath / os.up / "src" / "main" / "art",
+          |    millSourcePath / os.up / "src" / "main" / "bridge",
+          |    millSourcePath / os.up / "src" / "main" / "component",
+          |    millSourcePath / os.up / "src" / "main" / "data",
+          |    millSourcePath / os.up / "src" / "main" / "nix",
+          |    millSourcePath / os.up / "src" / "main" / "seL4Nix"
+          |  )
+          |}
+          |
+          |trait AadlTestModule extends AadlModule {
+          |  object test extends Tests {
+          |
+          |    final override def millSourcePath =
+          |      super.millSourcePath / os.up / os.up / "src" / "test"
+          |
+          |    override def sources = T.sources(millSourcePath / "bridge")
+          |
+          |    override def ivyDeps = Agg(ivy"org.scalatest::scalatest::$${scalaTestVersion}")
+          |
+          |    override def testFrameworks = T { Seq("org.scalatest.tools.Framework") }
+          |  }
+          |}
+          |
+          |object `${basePackageName}` extends AadlTestModule {
+          |  override def mainClass = T { Some("${basePackageName}.Demo") }
+          |}
+          |"""
+
     return ret
   }
 }
