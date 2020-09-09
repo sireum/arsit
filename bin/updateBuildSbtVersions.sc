@@ -36,16 +36,8 @@ println(s"Updating $buildSbtProps")
 
 var props: Map[String, String] = buildSbtProps.properties
 
-// commit id of runtime
-// val runtimeVersion: String = ops.StringOps(runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%H"), SIREUM_HOME / "runtime")).substring(0, 10)
-
-// kekinian commit id when runtime was last updated
-//val kekinianVersion: String = {
-//  val runtimeCommitDate = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%ct"), SIREUM_HOME / "runtime")
-//  val kekinianCommits = runGit(ISZ("git", "log", s"--since=${runtimeCommitDate}", "--pretty=format:%H"), SIREUM_HOME)
-//  ops.StringOps(ops.ISZOps(ops.StringOps(kekinianCommits).split(c => c == '\n')).last).substring(0, 10)
-//}
-val kekinianVersion: String = "4.20200902.3184e0c"
+// get most recent kekinian tag
+val kekinianVersion: String = runGit(ISZ("git", "describe", "--abbrev=0", "--tags"), SIREUM_HOME)
 
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
 val artEmbeddedVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/arsit/resources/art")
