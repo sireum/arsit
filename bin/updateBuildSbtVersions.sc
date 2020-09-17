@@ -22,16 +22,16 @@ exit /B %errorlevel%
 import org.sireum._
 
 val SIREUM_HOME = Os.path(Os.env("SIREUM_HOME").get)
-val sireum = SIREUM_HOME / "bin/sireum"
+val sireum = SIREUM_HOME / "bin" / "sireum"
 val sireumProps = (SIREUM_HOME / "versions.properties").properties
-val mill = SIREUM_HOME / "bin/mill"
+val mill = SIREUM_HOME / "bin" / "mill"
 
 def runGit(args: ISZ[String], path: Os.Path): String = {
   val p = org.sireum.Os.proc(args).at(path).runCheck()
   return ops.StringOps(p.out).trim
 }
 
-val buildSbtProps = SIREUM_HOME / "hamr/codegen/arsit/resources/util/buildSbt.properties"
+val buildSbtProps = SIREUM_HOME / "hamr" / "codegen" / "arsit" / "resources" / "util" / "buildSbt.properties"
 println(s"Updating $buildSbtProps")
 
 var props: Map[String, String] = buildSbtProps.properties
@@ -96,14 +96,14 @@ if(updated) {
   println(s"$buildSbtProps updated")
   
   println("\nRunning bin/build.cmd -- will touche Library_Ext.scala")
-  val build_cmd = SIREUM_HOME / "bin/build.cmd"
+  val build_cmd = SIREUM_HOME / "bin" / "build.cmd"
   Os.proc(ISZ(sireum.value, "slang", "run", build_cmd.value)).console.runCheck()
     
   println(s"\n$buildSbtProps updated and Sireum touched/rebuilt -- expect an error to follow")
   
   Os.exit(1) // return 1 to indicate versions have changed
 } else {
-  println(s"No updates needed")
+  println(s"No Arsit updates needed")
   Os.exit(0)
 }
 
