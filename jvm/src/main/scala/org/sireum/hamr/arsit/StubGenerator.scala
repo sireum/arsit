@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.templates.StubTemplate
+import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -92,15 +92,20 @@ import org.sireum.message.Reporter
   def genThread(m: AadlThreadOrDevice): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
+    var imports: ISZ[ST] = ISZ()
+
     val names = Names(m.component, basePackage)
-    val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentImpl}.scala"))
+    val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
 
-    val componentName = "component"
+    val componentName: String = "component"
+
+    imports = imports :+ st"${names.packageName}.{${names.componentSingletonType} => component}"
+
     val ports: ISZ[Port] = Util.getPorts(m.component, types, basePackage, z"-1000")
 
-    val bridgeTestSuite: ST = StubTemplate.bridgeTestSuite(basePackage, names, ports)
+    val bridgeTestSuite: ST = StubTemplate.bridgeTestSuite(basePackage, names, ports, T)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
 
     if (seenComponents.contains(filename)) {
@@ -118,35 +123,33 @@ import org.sireum.message.Reporter
     }
 
     val bridge = StubTemplate.bridge(
-      basePackage,
-      names.packageName,
-      names.bridge,
-      dispatchProtocol,
-      componentName,
-      names.componentType,
-      names.componentImpl,
-      ports,
-      dispatchTriggers,
-      types,
-      arsitOptions.bless)
+      topLevelPackageName = basePackage,
+      packageName = names.packageName,
+      imports = imports,
+      bridgeName = names.bridge,
+      dispatchProtocol = dispatchProtocol,
+      componentName = componentName,
+      componentType = names.componentSingletonType,
+      apiType = names.componentType,
+      ports = ports,
+      dispatchTriggers = dispatchTriggers,
+      names = names,
+      isBless = arsitOptions.bless)
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
-    if (!arsitOptions.bless) {
-      val component = StubTemplate.componentTrait(
-        basePackage,
-        names.packageName,
-        dispatchProtocol,
-        names.componentType,
-        names.bridge,
-        ports)
-      addResource(dirs.componentDir, ISZ(names.packagePath, s"${names.componentType}.scala"), component, T)
-    }
+    val api = ApiTemplate.api(
+      names.packageName,
+      basePackage,
+      names,
+      ports)
+
+    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
     val block = StubTemplate.componentImplBlock(
-      names.componentType,
+      names.componentSingletonType,
       names.bridge,
-      names.componentImpl,
+      names,
       dispatchProtocol,
       ports,
       arsitOptions.bless)
@@ -195,7 +198,7 @@ import org.sireum.message.Reporter
 
     if (subprograms.nonEmpty) {
       val names = Names(m, basePackage)
-      val objectName = s"${names.componentType}_subprograms"
+      val objectName = s"${names.componentSingletonType}_subprograms"
 
       val body = StubTemplate.slangBody(
         slangAnnotation = "@ext ",

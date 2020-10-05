@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
+import org.sireum.hamr.arsit.templates.SeL4NixTemplate
 import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -99,7 +100,7 @@ import org.sireum.message.Reporter
       val isPeriodic: B = dispatchProtocol == Dispatch_Protocol.Periodic
 
       val bridgeInstanceVarName: String = CommonUtil.getName(component.identifier)
-      val App_Id: String = s"${names.instanceName}_App"
+      val App_Id: String = s"${names.componentSingletonType}_App"
 
       var portDefs: ISZ[ST] = ISZ()
       var portOpts: ISZ[ST] = ISZ()
@@ -159,6 +160,18 @@ import org.sireum.message.Reporter
       mainSends = mainSends :+ ArtNixTemplate.mainSend(App_Id)
       appNames = appNames :+ App_Id
 
+      val transpilerToucher = SeL4NixTemplate.transpilerToucher(basePackage)
+      val transpilerToucherMethodCall = SeL4NixTemplate.callTranspilerToucher()
+
+      addResource(
+        dirs.componentDir,
+        ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
+        transpilerToucher,
+        F)
+
+      val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
+      val touchMethod = SeL4NixTemplate.genTouchMethod(genTypeTouches(types, basePackage), apiTouches)
+
       val stApp = ArtNixTemplate.app(
         packageName = basePackage,
         objectName = App_Id,
@@ -170,6 +183,7 @@ import org.sireum.message.Reporter
         component = component,
         isPeriodic = isPeriodic,
         types = types,
+        touchMethod = touchMethod,
         basePackage = basePackage
       )
 
@@ -196,7 +210,7 @@ import org.sireum.message.Reporter
 
         if (ops.ISZOps(inPorts.map((m: Port) => m.path)).contains(dstPath) &&
           (CommonUtil.isThread(srcComp) || CommonUtil.isDevice(srcComp)) && (CommonUtil.isThread(dstComp) || CommonUtil.isDevice(dstComp))) {
-          val dstCompApp = s"${name.instanceName}_App"
+          val dstCompApp = s"${name.componentSingletonType}_App"
           var cases: ISZ[ST] = {
             if (artNixCasesM.contains(srcArchPortInstanceName)) {
               artNixCasesM.get(srcArchPortInstanceName).get
@@ -259,7 +273,7 @@ import org.sireum.message.Reporter
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map((m: AadlThreadOrDevice) => {
         val name: Names = Names(m.component, basePackage)
-        s"${name.packageName}.${name.componentImpl}"
+        s"${name.packageName}.${name.componentSingletonType}"
       })
     } else {
       ISZ()

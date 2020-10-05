@@ -66,7 +66,8 @@ import org.sireum.message.Reporter
     }
 
     var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
-    val typeTouches: ISZ[ST] = genTypeTouches(types)
+
+    val typeTouches = genTypeTouches(types, basePackage)
 
     for (component <- components) {
 
@@ -74,7 +75,7 @@ import org.sireum.message.Reporter
 
       val ports: ISZ[Port] = Util.getPorts(component.component, types, basePackage, z"0")
 
-      val instanceName: String = names.instanceName
+      val instanceSingletonName: String = names.componentSingletonType
 
       val globals: ST = genGlobals(ports, names)
 
@@ -113,9 +114,12 @@ import org.sireum.message.Reporter
         transpilerToucher,
         F)
 
+      val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
+      val touchMethod = SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches)
+
       val app = SeL4NixTemplate.app(
         basePackage,
-        instanceName,
+        instanceSingletonName,
         ISZ(s"import ${names.basePackage}._", s"import ${names.packageName}.${names.sel4SlangExtensionName}"),
         names.identifier,
         bridge,
@@ -126,12 +130,12 @@ import org.sireum.message.Reporter
         getValue,
         putValue,
         sendOutput,
-        typeTouches,
+        touchMethod,
         transpilerToucherMethodCall)
 
       addResource(
         dirs.seL4NixDir,
-        ISZ(basePackage, instanceName, s"${names.identifier}.scala"),
+        ISZ(basePackage, instanceSingletonName, s"${names.identifier}.scala"),
         app,
         T)
 
@@ -154,7 +158,7 @@ import org.sireum.message.Reporter
           T)
       }
 
-      val cOutputDir: Os.Path = rootCOutputDir / instanceName
+      val cOutputDir: Os.Path = rootCOutputDir / instanceSingletonName
 
       val (paths, extResources) = genExtensionFiles(component.component, names, ports)
       resources = resources ++ extResources
@@ -165,8 +169,8 @@ import org.sireum.message.Reporter
         case _ => defaultMaxStackSizeInBytes
       }
 
-      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceName)}"
-      addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(instanceName), F)
+      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceSingletonName)}"
+      addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(instanceSingletonName), F)
 
       // prefix with '+' to indicate settings should come after library definitions
       val plusSettingsFilename = s"+${settingsFilename}"
@@ -182,7 +186,7 @@ import org.sireum.message.Reporter
         cmakeIncludes = ISZ(plusSettingsFilename)
       )
 
-      transpilerScripts = transpilerScripts + (instanceName ~> trans)
+      transpilerScripts = transpilerScripts + (instanceSingletonName ~> trans)
     }
 
     { // Slang Type Library
@@ -190,6 +194,7 @@ import org.sireum.message.Reporter
       val id = "SlangTypeLibrary"
       val cOutputDir: Os.Path = rootCOutputDir / id
       val relPath = s"${cOutputDir.up.name}/${id}"
+
 
       val typeApp = SeL4NixTemplate.typeApp(basePackage, id, id, typeTouches)
 
@@ -433,7 +438,7 @@ import org.sireum.message.Reporter
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map(c => {
         val componentNames: Names = Names(c._2, basePackage)
-        s"${componentNames.packageName}.${componentNames.componentImpl}"
+        s"${componentNames.packageName}.${componentNames.componentSingletonType}"
       })
     } else {
       ISZ()
@@ -471,7 +476,7 @@ import org.sireum.message.Reporter
 
     return genTranspilerBase(
       basePackage = basePackage,
-      instanceName = names.instanceName,
+      instanceName = names.componentSingletonType,
       identifier = names.identifier,
       sourcePaths = sourcePaths,
       cOutputDir = cOutputDir,
@@ -488,26 +493,6 @@ import org.sireum.message.Reporter
       cmakeIncludes = cmakeIncludes)
   }
 
-
-  def genTypeTouches(types: AadlTypes): ISZ[ST] = {
-    var a: ISZ[ST] = ISZ()
-    var counter: Z = z"0"
-    val _types: ISZ[AadlType] = if (types.rawConnections) {
-      ISZ(TypeUtil.SlangEmbeddedBitType)
-    } else {
-      types.typeMap.entries.map((x: (String, AadlType)) => x._2)
-    }
-
-    for (typ <- _types) {
-      //val typ = t._2
-      val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
-      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
-      counter = counter + z"1"
-    }
-    a = a :+ SeL4NixTemplate.touchType("art.Empty", None())
-    return a
-  }
-
   def genSel4Adapters(names: Names): ISZ[Os.Path] = {
 
     val root = Os.path(cExtensionDir)
@@ -516,8 +501,8 @@ import org.sireum.message.Reporter
 
     val fileName = names.cEntryPointAdapterName
     val macroName = StringUtil.toUpperCase(s"${fileName}_h")
-    val implFile = root / "adapters" / names.instanceName / s"${fileName}.c"
-    val headerFile = root / "adapters" / names.instanceName / s"${fileName}.h"
+    val implFile = root / "adapters" / names.componentSingletonType / s"${fileName}.c"
+    val headerFile = root / "adapters" / names.componentSingletonType / s"${fileName}.h"
 
     var implMethods: ISZ[ST] = ISZ()
     var headerMethods: ISZ[ST] = ISZ()
@@ -537,7 +522,7 @@ import org.sireum.message.Reporter
 
       val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, preParams, ISZ(), returnType)
 
-      val routeToInstance = s"${names.basePackage}_${names.instanceName}_${names.identifier}_${methodName}"
+      val routeToInstance = s"${names.basePackage}_${names.componentSingletonType}_${names.identifier}_${methodName}"
 
       val returnOpt: Option[String] = if (returnType == "Unit") None() else Some("return ")
 
@@ -553,7 +538,7 @@ import org.sireum.message.Reporter
       headerMethods = headerMethods :+ st"${signature};"
     }
 
-    val impl = SeL4NixTemplate.cImplFile(fileName, implMethods)
+    val impl = SeL4NixTemplate.cImplFile(fileName, implMethods, ISZ())
     val header = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
     addResource(implFile.up.value, ISZ(implFile.name), impl, T)

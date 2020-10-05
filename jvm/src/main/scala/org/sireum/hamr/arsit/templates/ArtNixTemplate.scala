@@ -92,6 +92,7 @@ object ArtNixTemplate {
                 component: ir.Component,
                 isPeriodic: B,
                 types: AadlTypes,
+                touchMethod: ST,
                 basePackage: String
                ): ST = {
 
@@ -239,8 +240,12 @@ object ArtNixTemplate {
           |
           |    ${body}
           |
+          |    touch()
+          |
           |    return 0
           |  }
+          |
+          |  ${touchMethod}
           |
           |  def exit(): Unit = {
           |    finalise()
@@ -671,7 +676,11 @@ object ArtNixTemplate {
           |mkdir -p ${buildDir}
           |mkdir -p ${cOutputDirRel}/${buildDir}
           |cd ${cOutputDirRel}/${buildDir}
-          |cmake -DCMAKE_BUILD_TYPE=Release ..
+          |BOUND_CHECK=$${BOUND_CHECK:-OFF}
+          |NO_PRINT=$${NO_PRINT:-OFF}
+          |RANGE_CHECK=$${RANGE_CHECK:-OFF}
+          |WITH_LOC=$${WITH_LOC:-OFF}
+          |cmake -DBOUND_CHECK=$$BOUND_CHECK -DNO_PRINT=$$NO_PRINT -DRANGE_CHECK=$$RANGE_CHECK -DWITH_LOC=$$WITH_LOC -DCMAKE_BUILD_TYPE=Release ..
           |make $$MAKE_ARGS
           |$mv"""
     return ret

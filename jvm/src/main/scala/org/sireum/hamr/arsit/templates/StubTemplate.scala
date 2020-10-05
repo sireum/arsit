@@ -12,7 +12,9 @@ import org.sireum.hamr.ir.FeatureCategory
 object StubTemplate {
   // @formatter:off
   @pure def bridgeTestSuite(basePackage: String,
-                            names: Names, ports: ISZ[Port]): ST = {
+                            names: Names,
+                            ports: ISZ[Port],
+                            isSingleton: B): ST = {
 
     val setters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map((p: Port) => {
       val (param, arg): (ST, ST) = p.feature.category match {
@@ -22,7 +24,7 @@ object StubTemplate {
 
       st"""// setter for in ${p.feature.category}
           |def put_${p.name}(${param}): Unit = {
-          |  ArtNative_Ext.insertInPortValue(bridge.api.${p.name}_Id, ${arg})
+          |  ArtNative_Ext.insertInPortValue(bridge.operational_api.${p.name}_Id, ${arg})
           |}
           |"""
     })
@@ -47,7 +49,7 @@ object StubTemplate {
           |
           |// payload getter for out ${p.feature.category}
           |def ${payloadMethodName}: Option[${payloadType}] = {
-          |  return ArtNative_Ext.observeOutPortValue(bridge.api.${addId(p.name)}).asInstanceOf[Option[${payloadType}]]
+          |  return ArtNative_Ext.observeOutPortValue(bridge.initialization_api.${addId(p.name)}).asInstanceOf[Option[${payloadType}]]
           |}
           |"""
     })
@@ -70,9 +72,6 @@ object StubTemplate {
           |  //////////////////////
           |
           |  ${(setters ++ getters, "\n")}
-          |  def getComponent(): ${names.componentImpl} = {
-          |    return bridge.entryPoints.asInstanceOf[${names.bridge}.EntryPoints].component
-          |  }
           |}
           |"""
     return ret
@@ -80,21 +79,25 @@ object StubTemplate {
 
   @pure def bridge(topLevelPackageName: String,
                    packageName: String,
+                   imports: ISZ[ST],
                    bridgeName: String,
                    dispatchProtocol: Dispatch_Protocol.Type,
                    componentName: String,
                    componentType: String,
-                   componentImplType: String,
+                   apiType: String,
                    ports: ISZ[Port],
                    dispatchTriggers: Option[ISZ[String]],
-                   types: AadlTypes,
+                   names: Names,
                    isBless: B): ST = {
 
     val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
 
     val entryPoints: ISZ[ST] = _entryPoints.map((m: EntryPoints.Type) => {
-      var body = st"${componentName}.${m.string}()"
-      if (m == EntryPoints.initialise) {
+      val isInitialize = m == EntryPoints.initialise
+      val apiId: String = if(isInitialize) ApiTemplate.apiInitializationId else ApiTemplate.apiOperationalId
+
+      var body = st"${componentName}.${m.string}(${apiId})"
+      if (isInitialize) {
         body =
           st"""$body
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
@@ -111,6 +114,28 @@ object StubTemplate {
       s"${p.name}: ${artPortType}[${portType}]"
     })
 
+    val (apiIds, apiDecls): (ISZ[String], ISZ[ST]) = {
+      var ids: ISZ[String] = ISZ(ApiTemplate.apiInitializationId, ApiTemplate.apiOperationalId)
+      var decls: ISZ[ST] = ISZ(
+        ApiTemplate.apiBridgeEntry(names, bridgeName, ports, T),
+        ApiTemplate.apiBridgeEntry(names, bridgeName, ports, F))
+
+      (ids, decls)
+    }
+
+    val stEntryPoints: ST = {
+      val s = st"""val entryPoints : Bridge.EntryPoints =
+                  |  ${bridgeName}.EntryPoints(
+                  |    id,
+                  |
+                  |    ${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},
+                  |
+                  |    dispatchTriggers,
+                  |
+                  |    ${(apiIds, ",\n")})"""
+      s
+    }
+
     val ret: ST =
       st"""// #Sireum
           |
@@ -119,6 +144,7 @@ object StubTemplate {
           |import org.sireum._
           |import art._
           |import ${topLevelPackageName}._
+          |${(imports.map((m: ST) => st"import $m"), "\n")}
           |
           |${StringTemplate.doNotEditComment(None())}
           |
@@ -143,46 +169,14 @@ object StubTemplate {
           |    eventOuts = ISZ(${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((m: Port) => m.name), ",\n")})
           |  )
           |
-          |  val api : ${bridgeName}.Api =
-          |    ${bridgeName}.Api(
-          |      id,
-          |      ${(ports.map((p: Port) => s"${p.name}.id"), ",\n")}
-          |    )
+          |  ${(apiDecls, "\n\n")}
           |
-          |  val entryPoints : Bridge.EntryPoints =
-          |    ${bridgeName}.EntryPoints(
-          |      id,
-          |
-          |      ${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},
-          |
-          |      dispatchTriggers,
-          |
-          |      ${componentImplType}(api)
-          |    )
+          |  ${stEntryPoints}
           |}
           |
           |object $bridgeName {
           |
-          |  @record class Api(
-          |    id : Art.BridgeId,
-          |    ${(ports.map((p: Port) => s"${addId(p.name)} : Art.PortId"), ",\n")}) {
-          |
-          |    ${(ports.filter((p: Port) => CommonUtil.isEventPort(p.feature)).map((p: Port) => eventPortApi(p).render), "\n\n")}
-          |
-          |    ${(ports.filter((p: Port) => CommonUtil.isAadlDataPort(p.feature)).map((p: Port) => dataPortApi(p).render), "\n\n")}
-          |
-          |    def logInfo(msg: String): Unit = {
-          |      Art.logInfo(id, msg)
-          |    }
-          |
-          |    def logDebug(msg: String): Unit = {
-          |      Art.logDebug(id, msg)
-          |    }
-          |
-          |    def logError(msg: String): Unit = {
-          |      Art.logError(id, msg)
-          |    }
-          |  }
+          |  ${ApiTemplate.companionObjectApiInstances(names)}
           |
           |  @record class EntryPoints(
           |    ${bridgeName}Id : Art.BridgeId,
@@ -191,7 +185,7 @@ object StubTemplate {
           |
           |    dispatchTriggers : Option[ISZ[Art.PortId]],
           |
-          |    $componentName : $componentImplType ) extends Bridge.EntryPoints {
+          |    ${(ApiTemplate.entryPointParams(names), ",\n")}) extends Bridge.EntryPoints {
           |
           |    val dataInPortIds: ISZ[Art.PortId] = ISZ(${(ports.filter((v: Port) => CommonUtil.isAadlDataPort(v.feature) && CommonUtil.isInFeature(v.feature)).map((p: Port) => addId(p.name)), ",\n")})
           |
@@ -264,9 +258,10 @@ object StubTemplate {
                 |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
           return ret
         case Dispatch_Protocol.Periodic =>
+          val apiId = ApiTemplate.apiOperationalId
           val ret: ST =
             st"""Art.receiveInput(eventInPortIds, dataInPortIds)
-                |${componentName}.timeTriggered()
+                |${componentName}.timeTriggered(${apiId})
                 |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
           return ret
       }
@@ -292,12 +287,14 @@ object StubTemplate {
                            dispatchProtocol: Dispatch_Protocol.Type,
                            componentType: String,
                            bridgeName: String,
-                           ports: ISZ[Port]): ST = {
+                           ports: ISZ[Port],
+                           names: Names): ST = {
     val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute).map((m: EntryPoints.Type) => st"def ${m.string}(): Unit = {}")
 
     val caseMethods: ISZ[ST] = dispatchProtocol match {
       case Dispatch_Protocol.Sporadic =>
-        ports.filter(p => CommonUtil.isEventPort(p.feature) && CommonUtil.isInFeature(p.feature)).map(m => portCaseMethod(m, F))
+        ports.filter(p => CommonUtil.isEventPort(p.feature) && CommonUtil.isInFeature(p.feature))
+          .map(m => portCaseEventHandlerMethod(m, names.apiOperational))
       case Dispatch_Protocol.Periodic => ISZ(st"""def timeTriggered() : Unit = {}""")
     }
 
@@ -401,41 +398,41 @@ object StubTemplate {
   }
 
   @pure def portCase(cname: String, v: Port, first: B): ST = {
+    val apiId = ApiTemplate.apiOperationalId
+
     v.feature.category match {
       case FeatureCategory.EventDataPort =>
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}){
               |  val Some(${v.getPortTypeNames.qualifiedPayloadName}(value)) = Art.getValue(${addId(v.name)})
-              |  ${cname}.handle${v.name}(value)
+              |  ${cname}.handle${v.name}(${apiId}, value)
               |}"""
         return ret
       case FeatureCategory.EventPort =>
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}) {
-              |  ${cname}.handle${v.name}()
+              |  ${cname}.handle${v.name}(${apiId})
               |}"""
         return ret
       case _ => halt(s"Unexpected ${v.feature.category}")
     }
   }
 
-  @pure def portCaseMethod(v: Port, isImpl: B): ST = {
-    val or: String = if (isImpl) "override " else ""
-    val ed: String = if (isImpl) "example" else "default"
+  @pure def portCaseEventHandlerMethod(v: Port, operationalApiType: String): ST = {
     val methodName: String = s"handle${v.name}"
 
     v.feature.category match {
       case FeatureCategory.EventDataPort =>
         val ret: ST =
-          st"""${or}def $methodName(value : ${v.getPortTypeNames.qualifiedReferencedTypeName}): Unit = {
-              |  api.logInfo("${ed} $methodName implementation")
+          st"""def $methodName(api: ${operationalApiType}, value : ${v.getPortTypeNames.qualifiedReferencedTypeName}): Unit = {
+              |  api.logInfo("example $methodName implementation")
               |  api.logInfo(s"received ${"${value}"}")
               |}"""
         return ret
       case FeatureCategory.EventPort =>
         val ret: ST =
-          st"""${or}def $methodName(): Unit = {
-              |  api.logInfo("${ed} $methodName implementation")
+          st"""def $methodName(api: ${operationalApiType}): Unit = {
+              |  api.logInfo("example $methodName implementation")
               |  api.logInfo("received ${v.name}")
               |}"""
         return ret
@@ -445,41 +442,43 @@ object StubTemplate {
 
   @pure def componentImplBlock(componentType: String,
                                bridgeName: String,
-                               componentImplType: String,
+                               names: Names,
                                dispatchProtocol: Dispatch_Protocol.Type,
                                ports: ISZ[Port],
                                isBless: B): ST = {
 
+     val outPorts = ports.filter(p => CommonUtil.isOutFeature(p.feature))
     val init =
-      st"""override def ${EntryPoints.initialise.string}(): Unit = {
+      st"""def ${EntryPoints.initialise.string}(api: ${names.apiInitialization}): Unit = {
           |  // example api usage
           |
           |  api.logInfo("Example info logging")
           |  api.logDebug("Example debug logging")
           |  api.logError("Example error logging")
           |
-          |  ${(ports.map((p: Port) => portApiUsage(p)), "\n")}
+          |  ${(outPorts.map((p: Port) => portApiUsage(p)), "\n")}
           |}"""
 
     val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute && f != EntryPoints.initialise).map((m: EntryPoints.Type) => {
-      st"""override def ${m.string}(): Unit = {
-          |  // example override of ${m.string}
-          |}"""
+      st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
     })
 
     val eventHandlers: ISZ[ST] =
       if (dispatchProtocol == Dispatch_Protocol.Periodic) {
         ISZ(
-          st"""override def timeTriggered(): Unit = {
-              |  // example override of timeTriggered
+          st"""def timeTriggered(api: ${names.apiOperational}): Unit = {
+              |  // example api usage
+              |
+              |  ${(ports.map((p: Port) => portApiUsage(p)), "\n")}
               |}""")
       } else {
-        ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature)).map(m => portCaseMethod(m, T))
+        ports.filter(p => CommonUtil.isInFeature(p.feature) &&
+          CommonUtil.isEventPort(p.feature)).map(m => portCaseEventHandlerMethod(m, names.apiOperational))
       }
 
     val ret: ST =
       st"""${StringTemplate.safeToEditComment()}
-          |@record class $componentImplType (val api : ${bridgeName}.Api) ${if (isBless) "" else s"extends ${componentType}"} {
+          |object $componentType {
           |
           |  ${init}
           |

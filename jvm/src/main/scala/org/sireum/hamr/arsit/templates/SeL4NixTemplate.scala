@@ -3,6 +3,8 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.arsit.Port
+import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
 
@@ -109,6 +111,41 @@ object SeL4NixTemplate {
     return ret
   }
 
+  @pure def portApiUsage(initApi: String, operApi: String, p: Port): ST = {
+    if (CommonUtil.isInFeature(p.feature)) {
+      val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
+      return st"val apiUsage_${p.name}: Option[${typeName}] = ${operApi}.get.get${p.name}()"
+    } else {
+      val payload: String =
+        if (p.getPortTypeNames.isEmptyType()) ""
+        else p.getPortTypeNames.empty()
+
+      val methodName: String =
+        if (CommonUtil.isAadlDataPort(p.feature)) "set"
+        else "send"
+
+      return st"""${initApi}.get.${methodName}${p.name}($payload)
+                 |${operApi}.get.${methodName}${p.name}($payload)"""
+
+    }
+  }
+
+  def apiTouches(names: Names, ports: ISZ[Port]): ISZ[ST] = {
+    var ret: ISZ[ST] = ISZ()
+    val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
+      .map(m => s"${names.packageName}.${names.bridge}.${m}")
+    val loggers = ISZ("logInfo", "logDebug", "logError")
+    for(api <- apis){
+      for(logger <- loggers) {
+        ret = ret :+ st"""${api}.get.${logger}("")"""
+      }
+    }
+    for(port <- ports) {
+      ret = ret :+ portApiUsage(apis(0), apis(1), port)
+    }
+    return ret
+  }
+
   def touchType(payloadName: String, typeName: Option[String]): ST = {
     return st"printDataContent(${payloadName}(${typeName}))"
   }
@@ -119,6 +156,20 @@ object SeL4NixTemplate {
           |def printDataContent(a: art.DataContent): Unit = { println(s"$${a}") }
           |
           |${(touches, "\n")}"""
+    return ret
+  }
+
+  def genTouchMethod(touches: ISZ[ST], apiTouches: ISZ[ST]): ST = {
+    val ret: ST =
+      st"""def touch(): Unit = {
+          |  if(F) {
+          |    ${callTranspilerToucher()}
+          |
+          |    ${touchTypes(touches)}
+          |
+          |    ${(apiTouches, "\n")}
+          |  }
+          |}"""
     return ret
   }
 
@@ -159,7 +210,7 @@ object SeL4NixTemplate {
           getValue: ST,
           putValue: ST,
           sendOutput: ST,
-          typeTouches: ISZ[ST],
+          touchMethod: ST,
           transpilerToucher: ST): ST = {
     val ret: ST =
       st"""// #Sireum
@@ -213,12 +264,12 @@ object SeL4NixTemplate {
           |    computeEntryPoint()
           |    finaliseEntryPoint()
           |
-          |    ${touchTypes(typeTouches)}
-          |
-          |    ${transpilerToucher}
+          |    touch()
           |
           |    return 0
           |  }
+          |
+          |  ${touchMethod}
           |
           |  def logInfo(title: String, msg: String): Unit = {
           |    print(title)
@@ -257,10 +308,39 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiGet(signature: ST,
+  def getInitializationApi(names: Names): ST = {
+    val apiType = names.cInitializationApi
+    val apiId = names.cInitializationApi_Id
+
+    val api = s"${names.packageName}.${names.apiInitialization}"
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(api)
+
+    val ret: ST =
+      st"""// ${optionSig} = Option[${api}]
+          |DeclNew${apiType}(api);
+          |${optionSig}_get_(${StackFrameTemplate.SF} (${apiType}) &api, ${apiId}(${StackFrameTemplate.SF_LAST}));"""
+   return ret
+  }
+
+  def getOperationalApi(names: Names): ST = {
+    val apiType = names.cOperationalApi
+    val apiId = names.cOperationalApi_Id
+
+    val api = s"${names.packageName}.${names.apiOperational}"
+    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(api)
+
+    val ret: ST =
+      st"""// ${optionSig} = Option[${api}]
+          |DeclNew${apiType}(api);
+          |${optionSig}_get_(${StackFrameTemplate.SF} (${apiType}) &api, ${apiId}(${StackFrameTemplate.SF_LAST}));"""
+    return ret
+  }
+
+  def apiGet(names: Names,
+             signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
-             c_this: String,
+             api: String,
              typ: DataTypeNames): ST = {
 
     // this CANNOT use type aliases
@@ -290,9 +370,13 @@ object SeL4NixTemplate {
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
+    val api = getOperationalApi(names)
+
     val ret: ST =
       st"""${signature}{
           |  ${declNewStackFrame};
+          |
+          |  ${api}
           |
           |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
@@ -300,7 +384,7 @@ object SeL4NixTemplate {
           |  ${apiGetMethodName}(
           |    SF
           |    (${optionSig}) &t_0,
-          |    ${c_this}(this));
+          |    &api);
           |
           |  if(t_0.type == T${someSig}){
           |    ${typeAssign}
@@ -312,10 +396,10 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiGet_byteArrayVersion(signature: ST,
+  def apiGet_byteArrayVersion(names: Names,
+                              signature: ST,
                               declNewStackFrame: ST,
                               apiGetMethodName: String,
-                              c_this: String,
                               typ: DataTypeNames): ST = {
 
     // this CANNOT use type aliases
@@ -345,6 +429,8 @@ object SeL4NixTemplate {
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
+    val api = getOperationalApi(names)
+
     val ret: ST =
       st"""${signature}{
           |  ${declNewStackFrame};
@@ -353,10 +439,12 @@ object SeL4NixTemplate {
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
           |  DeclNew${optionSig}(t_0);
           |
+          |  ${api}
+          |
           |  ${apiGetMethodName}(
           |    ${StackFrameTemplate.SF}
           |    (${optionSig}) &t_0,
-          |    ${c_this}(this));
+          |    &api);
           |
           |  if(t_0.type == T${someSig}){
           |    *numBits = t_0.Some_8D03B1.value.size;
@@ -369,15 +457,19 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(signature: ST, declNewStackFrame: ST, apiSetMethodName: String, c_this: String, isEventPort: B): ST = {
-    var args: ISZ[ST] = ISZ(st"${c_this}(this)")
+  def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, api: String, isEventPort: B): ST = {
+    var args: ISZ[ST] = ISZ(st"&api")
     if (!isEventPort) {
       args = args :+ st"value"
     }
 
+    val api = getInitializationApi(names)
+
     val ret: ST =
       st"""${signature} {
           |  ${declNewStackFrame};
+          |
+          |  ${api}
           |
           |  ${apiSetMethodName}(
           |    ${StackFrameTemplate.SF}
@@ -386,12 +478,17 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet_byteArrayVersion(signature: ST, declStackFrame: ST, apiSetMethodName: String, c_this: String): ST = {
+  def apiSet_byteArrayVersion(names: Names,
+                              signature: ST,
+                              declStackFrame: ST,
+                              apiSetMethodName: String): ST = {
 
     var args: ISZ[ST] = ISZ(
-      st"${c_this}(this)",
+      st"&api",
       st"&t_0"
     )
+
+    val api = getInitializationApi(names)
 
     val ret: ST =
       st"""${signature} {
@@ -407,6 +504,8 @@ object SeL4NixTemplate {
           |    memcpy(&t_0.value, byteArray, (numBits / 8) + 1);
           |  }
           |
+          |  ${api}
+          |
           |  ${apiSetMethodName}(
           |    ${StackFrameTemplate.SF}
           |    ${(args, ",\n")});
@@ -414,12 +513,16 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiLog(signature: ST, declNewStackFrame: ST, apiLogMethodName: String, c_this: String): ST = {
-    var args: ISZ[ST] = ISZ(st"${c_this}(this)", st"str")
+  def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String, api: String): ST = {
+    var args: ISZ[ST] = ISZ(st"&api", st"str")
+
+    val api = getInitializationApi(names)
 
     val ret: ST =
       st"""${signature} {
           |  ${declNewStackFrame};
+          |
+          |  ${api}
           |
           |  ${apiLogMethodName}(
           |    ${StackFrameTemplate.SF}
@@ -444,9 +547,12 @@ object SeL4NixTemplate {
   }
 
   def cImplFile(fileName: String,
-                implMethods: ISZ[ST]): ST = {
+                implMethods: ISZ[ST],
+                includes: ISZ[String]): ST = {
+    val _includes = ops.ISZOps(includes).map(s => s"#include ${s}")
     val ret: ST =
       st"""#include <${fileName}.h>
+          |${(_includes, "\n")}
           |
           |${(implMethods, "\n\n")}
           |"""

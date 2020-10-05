@@ -174,14 +174,14 @@ import org.sireum.ops.ISZOps
     val _portArgs = ports.map((p: Port) => st"${p.name} = ${p.name}")
 
     return ArchitectureTemplate.bridge(
-      names.instanceName,
-      names.instanceName,
-      names.bridgeTypeName,
-      id,
-      dispatchProtocolST,
-      dispatchTriggers,
-      _ports,
-      _portArgs)
+      bridgeIdentifier = names.instanceName,
+      instanceName = names.instanceName,
+      typeName = names.bridgeTypeName,
+      id = id,
+      dispatchProtocol = dispatchProtocolST,
+      dispatchTriggers = dispatchTriggers,
+      ports = _ports,
+      portArguments = _portArgs)
   }
 
   def processConnectionInstance(ci: ConnectionInstance): ST = {
