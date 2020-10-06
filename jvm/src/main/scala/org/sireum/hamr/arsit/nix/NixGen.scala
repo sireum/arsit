@@ -215,7 +215,7 @@ object NixGen{
 
         {
           extensionFiles = extensionFiles :+ userHeaderFile
-          val userHeaderMethods = ops.ISZOps(entrypointSignatures).map(s => st"${s};")
+          val userHeaderMethods = ops.ISZOps(entrypointSignatures).map((s: ST) => st"${s};")
           val userMacroName = StringUtil.toUpperCase(s"${names.componentSingletonType}_h")
           val headerSt = SeL4NixTemplate.cHeaderFile(userMacroName, userHeaderMethods)
           resources = resources :+ Util.createResource(userHeaderFile.up.value, ISZ(userHeaderFile.name), headerSt, T)
@@ -292,7 +292,6 @@ object NixGen{
                   signature = signature,
                   declNewStackFrame = declNewStackFrame,
                   apiGetMethodName = slangApiGetMethodName,
-                  api = names.cOperationalApi_Id,
                   typ = typeNames)
               }
             }
@@ -340,7 +339,6 @@ object NixGen{
                   altSignature,
                   declNewStackFrame,
                   slangApiSetMethodName,
-                  names.cInitializationApi_Id,
                   isEventPort)
               }
             }
@@ -368,7 +366,7 @@ object NixGen{
             val apiLogMethodName = s"${names.cInitializationApi}_${l}_"
 
             headerMethods = headerMethods :+ st"${signature};"
-            implMethods = implMethods :+ SeL4NixTemplate.apiLog(names, signature, declNewStackFrame, apiLogMethodName, names.cInitializationApi_Id)
+            implMethods = implMethods :+ SeL4NixTemplate.apiLog(names, signature, declNewStackFrame, apiLogMethodName)
           }
         }
 

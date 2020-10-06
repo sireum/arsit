@@ -133,7 +133,7 @@ object SeL4NixTemplate {
   def apiTouches(names: Names, ports: ISZ[Port]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
     val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
-      .map(m => s"${names.packageName}.${names.bridge}.${m}")
+      .map((m: String) => s"${names.packageName}.${names.bridge}.${m}")
     val loggers = ISZ("logInfo", "logDebug", "logError")
     for(api <- apis){
       for(logger <- loggers) {
@@ -340,7 +340,6 @@ object SeL4NixTemplate {
              signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
-             api: String,
              typ: DataTypeNames): ST = {
 
     // this CANNOT use type aliases
@@ -457,7 +456,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, api: String, isEventPort: B): ST = {
+  def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"&api")
     if (!isEventPort) {
       args = args :+ st"value"
@@ -513,7 +512,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String, api: String): ST = {
+  def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
     var args: ISZ[ST] = ISZ(st"&api", st"str")
 
     val api = getInitializationApi(names)
@@ -549,7 +548,7 @@ object SeL4NixTemplate {
   def cImplFile(fileName: String,
                 implMethods: ISZ[ST],
                 includes: ISZ[String]): ST = {
-    val _includes = ops.ISZOps(includes).map(s => s"#include ${s}")
+    val _includes = ops.ISZOps(includes).map((s: String) => s"#include ${s}")
     val ret: ST =
       st"""#include <${fileName}.h>
           |${(_includes, "\n")}

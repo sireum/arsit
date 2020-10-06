@@ -21,16 +21,16 @@ object ApiTemplate {
           ports: ISZ[Port]): ST = {
 
     val portDefs: ISZ[ST] = st"id: Art.BridgeId" +:
-      ops.ISZOps(ports).map(p => st"${p.name}_Id : Art.PortId")
+      ops.ISZOps(ports).map((p: Port) => st"${p.name}_Id : Art.PortId")
 
-    val portTraitDefs: ISZ[ST] = ops.ISZOps(portDefs).map(s => st"def ${s}")
-    val portParams: ISZ[ST] = ops.ISZOps(portDefs).map(s => st"val ${s}")
+    val portTraitDefs: ISZ[ST] = ops.ISZOps(portDefs).map((s: ST) => st"def ${s}")
+    val portParams: ISZ[ST] = ops.ISZOps(portDefs).map((s: ST) => st"val ${s}")
 
-    val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
-    val outPorts = ports.filter(p => !CommonUtil.isInPort(p.feature))
+    val inPorts = ports.filter((p: Port) => CommonUtil.isInPort(p.feature))
+    val outPorts = ports.filter((p: Port) => !CommonUtil.isInPort(p.feature))
 
-    val getters = inPorts.map(p => getterApi(p))
-    val setters = outPorts.map(p => setterApi(p))
+    val getters = inPorts.map((p: Port) => getterApi(p))
+    val setters = outPorts.map((p: Port) => setterApi(p))
 
     val ret: ST =
       st"""// #Sireum
@@ -91,7 +91,7 @@ object ApiTemplate {
       }
     }
 
-    val _ports = ops.ISZOps(ports).map(p => s"${p.name}.id")
+    val _ports = ops.ISZOps(ports).map((p: Port) => s"${p.name}.id")
     val ret: ST = {
       st"""val ${id} : ${typ} = {
           |  val api = ${typ}(
