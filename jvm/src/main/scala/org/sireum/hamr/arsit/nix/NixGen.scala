@@ -67,7 +67,6 @@ object NixGen{
       val apiFilename = SeL4NixNamesUtil.apiHelperFilename(names)
       val apiHeaderFile = extRoot / s"${apiFilename}.h"
       val apiImplFile = extRoot / s"${apiFilename}.c"
-      val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ST)
 
       var entrypointAdapters: ISZ[ST] = ISZ()
 
@@ -91,7 +90,8 @@ object NixGen{
             // timetriggered
             val apiMethodName = s"${componentName}_timeTriggered"
             val userMethodName = s"${apiMethodName}_"
-            val timeTriggeredSig = SeL4NixTemplate.methodSignature(userMethodName, preParams, params, "Unit")
+            val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
+            val timeTriggeredSig = SeL4NixTemplate.methodSignature(userMethodName, params, "Unit")
             entrypointSignatures = entrypointSignatures :+ timeTriggeredSig
             val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
               caller = T,
@@ -106,8 +106,7 @@ object NixGen{
                   |}"""
 
             val api_params = ISZ(st"${names.cOperationalApi} api")
-            val api_pre_params = Some(StackFrameTemplate.STACK_FRAME_ST)
-            val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_pre_params, api_params, "Unit")
+            val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_params, "Unit")
             val apiDeclNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
               caller = T,
               uri = apiImplFile.name,
@@ -137,7 +136,7 @@ object NixGen{
                 val typeNames = Util.getDataTypeNames(p._portType, names.basePackage)
                 eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
               }
-              val handlerSig = SeL4NixTemplate.methodSignature(handlerMethodName, preParams, eventDataParams, "Unit")
+              val handlerSig = SeL4NixTemplate.methodSignature(handlerMethodName, eventDataParams, "Unit")
               entrypointSignatures = entrypointSignatures :+ handlerSig
               val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names);
 
@@ -153,7 +152,7 @@ object NixGen{
 
                 val rawParams: ISZ[ST] = params :+ st"size_t numBits" :+ st"uint8_t *byteArray"
 
-                val rawHandler = SeL4NixTemplate.methodSignature(rawHandlerMethodName, preParams, rawParams, "Unit")
+                val rawHandler = SeL4NixTemplate.methodSignature(rawHandlerMethodName, rawParams, "Unit")
 
                 val declNewStackFrameRaw: ST = StackFrameTemplate.DeclNewStackFrame(
                   caller = T,
@@ -190,8 +189,7 @@ object NixGen{
               }
 
               val api_params = ISZ(st"${names.cOperationalApi} api") ++ eventDataParams
-              val api_pre_params = Some(StackFrameTemplate.STACK_FRAME_ST)
-              val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_pre_params, api_params, "Unit")
+              val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_params, "Unit")
               val apiDeclNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
                 caller = T,
                 uri = apiImplFile.name,
@@ -199,13 +197,13 @@ object NixGen{
                 name = apiMethodName,
                 line = 0)
 
-              val valueArg: String = if(isEventData) " value" else ""
+              val valueArg: String = if(isEventData) s"${StackFrameTemplate.SF} value" else StackFrameTemplate.SF_LAST
 
               val apiAdapterMethod: ST =
                 st"""${apiMethodSig} {
                     |  ${apiDeclNewStackFrame};
                     |
-                    |  ${handlerMethodName}(${StackFrameTemplate.SF_LAST}${valueArg});
+                    |  ${handlerMethodName}(${valueArg});
                     |}"""
 
               entrypointAdapters = entrypointAdapters :+ apiAdapterMethod
@@ -265,7 +263,7 @@ object NixGen{
                   st"size_t *numBits",
                   st"uint8_t *byteArray")
 
-                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, altParams, returnType)
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, altParams, returnType)
 
                 headerMethods = headerMethods :+ st"${altSignature};"
 
@@ -283,7 +281,7 @@ object NixGen{
                   params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
                 }
 
-                val signature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, params, returnType)
+                val signature = SeL4NixTemplate.methodSignature(cApiMethodName, params, returnType)
 
                 headerMethods = headerMethods :+ st"${signature};"
 
@@ -316,7 +314,7 @@ object NixGen{
                   st"size_t numBits",
                   st"uint8_t *byteArray"
                 )
-                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, altParams, returnType)
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, altParams, returnType)
 
                 headerMethods = headerMethods :+ st"${altSignature};"
                 implMethods = implMethods :+ SeL4NixTemplate.apiSet_byteArrayVersion(
@@ -331,7 +329,7 @@ object NixGen{
                   params = params :+ st"${typeNames.qualifiedCTypeName} value"
                 }
 
-                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, preParams, params, returnType)
+                val altSignature = SeL4NixTemplate.methodSignature(cApiMethodName, params, returnType)
 
                 headerMethods = headerMethods :+ st"${altSignature};"
                 implMethods = implMethods :+ SeL4NixTemplate.apiSet(
@@ -361,7 +359,7 @@ object NixGen{
               name = methodName,
               line = 0)
 
-            val signature = SeL4NixTemplate.methodSignature(methodName, preParams, params, "void")
+            val signature = SeL4NixTemplate.methodSignature(methodName, params, "void")
 
             val apiLogMethodName = s"${names.cInitializationApi}_${l}_"
 
@@ -394,7 +392,7 @@ object NixGen{
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_initialise"
     val userMethodName = s"${apiMethodName}_"
-    val initialiseMethodSig = SeL4NixTemplate.methodSignature(userMethodName, preParams, params, "Unit")
+    val initialiseMethodSig = SeL4NixTemplate.methodSignature(userMethodName, params, "Unit")
 
     val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
     val statements: ISZ[ST] = loggers.map((l: String) => {
@@ -418,8 +416,7 @@ object NixGen{
           |}"""
 
     val api_params = ISZ(st"${names.cInitializationApi} api")
-    val api_pre_params = Some(StackFrameTemplate.STACK_FRAME_ST)
-    val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_pre_params, api_params, "Unit")
+    val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_params, "Unit")
     val apiDeclNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
       caller = T,
       uri = apiFileUri,
@@ -436,11 +433,10 @@ object NixGen{
   }
 
   def genStubFinaliseMethod(names: Names, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
-    val preParams = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_finalise"
     val userMethodName = s"${apiMethodName}_"
-    val finaliseMethodSig = SeL4NixTemplate.methodSignature(userMethodName, preParams, params, "Unit")
+    val finaliseMethodSig = SeL4NixTemplate.methodSignature(userMethodName, params, "Unit")
 
     val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
       caller = T,
@@ -457,8 +453,7 @@ object NixGen{
           |}"""
 
     val api_params = ISZ(st"${names.cOperationalApi} api")
-    val api_pre_params = Some(StackFrameTemplate.STACK_FRAME_ST)
-    val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_pre_params, api_params, "Unit")
+    val apiMethodSig = SeL4NixTemplate.methodSignature(apiMethodName, api_params, "Unit")
     val apiDeclNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
       caller = T,
       uri = apiFileUri,

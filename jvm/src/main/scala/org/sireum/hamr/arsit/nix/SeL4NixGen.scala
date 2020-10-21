@@ -518,9 +518,8 @@ import org.sireum.message.Reporter
       val methodName = entry._1
       val returnType = entry._2
       val fullyQualifiedMethodName = s"${names.cEntryPointAdapterQualifiedName}_${methodName}"
-      val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
 
-      val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, preParams, ISZ(), returnType)
+      val signature = SeL4NixTemplate.methodSignature(fullyQualifiedMethodName, ISZ(), returnType)
 
       val routeToInstance = s"${names.basePackage}_${names.componentSingletonType}_${names.identifier}_${methodName}"
 

@@ -296,7 +296,8 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def methodSignature(methodName: String, preParams: Option[ST], params: ISZ[ST], returnType: String): ST = {
+  def methodSignature(methodName: String, params: ISZ[ST], returnType: String): ST = {
+    val preParams: ST = if(params.isEmpty) StackFrameTemplate.STACK_FRAME_ONLY_ST else StackFrameTemplate.STACK_FRAME_ST
     val ret: ST = if (params.isEmpty) {
       st"${returnType} ${methodName}(${preParams})"
     } else {
