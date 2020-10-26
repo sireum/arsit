@@ -7,6 +7,7 @@ import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols.SymbolResolver
+import org.sireum.hamr.codegen.common.transformers.Transformers
 import org.sireum.hamr.codegen.common.types.{TypeResolver, TypeUtil}
 import org.sireum.hamr.codegen.common.util.ExperimentalOptions
 import org.sireum.hamr.ir
