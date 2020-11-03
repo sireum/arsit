@@ -16,7 +16,7 @@ trait ArsitTest extends TestSuite {
   def generateExpected: B = F
 
   def testMode: ArsitTestMode.Type = ArsitTestMode.Base
-  def timeoutInSeconds: Z = 60
+  def timeoutInSeconds: Z = 7
 
   val (expectedJsonDir, baseModelsDir) = getDirectories()
 
@@ -98,8 +98,9 @@ trait ArsitTest extends TestSuite {
       case ArsitTestMode.SbtRun =>
         val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
         val args: ISZ[String] = ISZ("sbt", "run")
-        val results = Os.Proc(args, Os.cwd, Map.empty, T, None(), F, F, F, F, F, (timeoutInSeconds * z"1000"), F)
-          .at(sbtDir).console().run()
+        val p = Os.Proc(args, Os.cwd, Map.empty, T, None(), F, F, F, F, F, (timeoutInSeconds * z"1000"), F)
+          .at(sbtDir).console()
+        val results = TestOs.proc2(p, Some("[info] Done compiling."))
         testPass = testPass && results.ok
 
       case ArsitTestMode.Base =>
