@@ -100,11 +100,11 @@ object TestTemplate {
     val concretePutter: Option[ST] =
       if(concretePutBlocks.isEmpty) { None() }
       else {
-        val scalaDoc = concretePutScalaDoc.map(m => st"${m}")
+        val scalaDoc = concretePutScalaDoc.map((m: ST) => st"${m}")
         Some(st"""/** helper function to set the values of all input ports.
                  | ${(scalaDoc, "\n")}
                  | */
-                 |def put_concrete_inputs(${(concretePutParams, ",\n")}) = {
+                 |def put_concrete_inputs(${(concretePutParams, ",\n")}): Unit = {
                  |  ${(concretePutBlocks, "\n")}
                  |}
                  |
