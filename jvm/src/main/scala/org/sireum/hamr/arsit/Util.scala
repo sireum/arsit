@@ -244,6 +244,8 @@ object HAMR {
 
   val testBridgeDir: String = Util.pathAppend(testDir, ISZ("bridge"))
 
+  val testUtilDir: String = Util.pathAppend(testDir, ISZ("util"))
+
   val binDir: String = Util.pathAppend(rootDir, ISZ("bin"))
 
   val architectureDir: String = Util.pathAppend(rootDir, src_main :+ "architecture")

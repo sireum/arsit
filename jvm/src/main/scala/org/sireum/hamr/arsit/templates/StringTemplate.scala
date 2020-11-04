@@ -119,6 +119,7 @@ object StringTemplate {
           |    settings(commonSettings ++ slangEmbeddedSettings ++
           |      Seq(
           |        Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
+          |        Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
           |        libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test")
           |    )
           |"""
@@ -221,7 +222,10 @@ object StringTemplate {
           |    final override def millSourcePath =
           |      super.millSourcePath / os.up / os.up / "src" / "test"
           |
-          |    override def sources = T.sources(millSourcePath / "bridge")
+          |    override def sources = T.sources(
+          |      millSourcePath / "bridge",
+          |      millSourcePath / "util"
+          |    )
           |
           |    override def ivyDeps = Agg(ivy"org.scalatest::scalatest::$${scalaTestVersion}")
           |

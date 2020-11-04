@@ -1,4 +1,4 @@
-package __PACKAGE_NAME__
+package __BASE_PACKAGE_NAME__
 
 import art.{Art, Bridge}
 import org.scalatest.{BeforeAndAfterEach, OneInstancePerTest}

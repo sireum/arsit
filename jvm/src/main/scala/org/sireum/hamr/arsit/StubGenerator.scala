@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate}
+import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -105,7 +105,10 @@ import org.sireum.message.Reporter
 
     val ports: ISZ[Port] = Util.getPorts(m.component, types, basePackage, z"-1000")
 
-    val bridgeTestSuite: ST = StubTemplate.bridgeTestSuite(basePackage, names, ports, T)
+    val bridgeTestApis: ST = TestTemplate.bridgeTestApis(basePackage, names, ports)
+    addResource(dirs.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala"), bridgeTestApis, T)
+
+    val bridgeTestSuite: ST = TestTemplate.bridgeTestSuite(names.packageName, names, ports)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
 
     if (seenComponents.contains(filename)) {
@@ -168,9 +171,8 @@ import org.sireum.message.Reporter
     addResource(filename, ISZ(), componentImpl, F)
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
-    testSuite = ops.StringOps(testSuite).replaceAllLiterally("__PACKAGE_NAME__", names.packageName)
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
-    addResource(dirs.testBridgeDir, ISZ(names.packagePath, "BridgeTestSuite.scala"), st"${testSuite}", T)
+    addResource(dirs.testUtilDir, ISZ(basePackage, "BridgeTestSuite.scala"), st"${testSuite}", T)
 
     seenComponents = seenComponents + filename
   }

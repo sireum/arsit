@@ -11,71 +11,7 @@ import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
   // @formatter:off
-  @pure def bridgeTestSuite(basePackage: String,
-                            names: Names,
-                            ports: ISZ[Port],
-                            isSingleton: B): ST = {
 
-    val setters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map((p: Port) => {
-      val (param, arg): (ST, ST) = p.feature.category match {
-        case FeatureCategory.EventPort => (st"", st"Empty()")
-        case _ => (st"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}", st"${p.getPortTypeNames.qualifiedPayloadName}(value)")
-      }
-
-      st"""// setter for in ${p.feature.category}
-          |def put_${p.name}(${param}): Unit = {
-          |  ArtNative_Ext.insertInPortValue(bridge.operational_api.${p.name}_Id, ${arg})
-          |}
-          |"""
-    })
-
-    val getters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isOutFeature(p.feature)).map((p: Port) => {
-      val isEvent = p.feature.category == FeatureCategory.EventPort
-      val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
-      val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
-      val _match: String = if (isEvent) "Empty()" else s"${payloadType}(v)"
-      val value: String = if (isEvent) "Empty()" else "v"
-      val payloadMethodName: String = s"get_${p.name}_payload()"
-
-      st"""// getter for out ${p.feature.category}
-          |def get_${p.name}(): Option[${typeName}] = {
-          |  val value: Option[${typeName}] = ${payloadMethodName} match {
-          |    case Some(${_match}) => Some(${value})
-          |    case Some(v) => fail(s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}")
-          |    case _ => None[${typeName}]()
-          |  }
-          |  return value
-          |}
-          |
-          |// payload getter for out ${p.feature.category}
-          |def ${payloadMethodName}: Option[${payloadType}] = {
-          |  return ArtNative_Ext.observeOutPortValue(bridge.initialization_api.${addId(p.name)}).asInstanceOf[Option[${payloadType}]]
-          |}
-          |"""
-    })
-
-    val ret: ST =
-      st"""package ${names.packageName}
-          |
-          |import art.{ArtNative_Ext, Empty}
-          |import ${basePackage}._
-          |import org.sireum._
-          |
-          |${StringTemplate.safeToEditComment()}
-          |class ${names.testName} extends BridgeTestSuite[${names.bridge}](Arch.${names.instanceName}) {
-          |  test("Example Unit Test"){
-          |    executeTest()
-          |  }
-          |
-          |  //////////////////////
-          |  // HELPER FUNCTIONS //
-          |  //////////////////////
-          |
-          |  ${(setters ++ getters, "\n")}
-          |}
-          |"""
-    return ret
-  }
 
   @pure def bridge(topLevelPackageName: String,
                    packageName: String,
