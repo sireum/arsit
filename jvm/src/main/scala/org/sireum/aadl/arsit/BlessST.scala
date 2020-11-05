@@ -351,7 +351,7 @@ object BlessST {
         |
         |    frame.setBounds(100, 10, 675, 450)
         |
-        |    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+        |    frame.setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE)
         |
         |    tabbedPane = new JTabbedPane()
         |    frame.getContentPane.add(tabbedPane)
