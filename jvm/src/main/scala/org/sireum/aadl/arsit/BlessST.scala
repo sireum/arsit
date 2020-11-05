@@ -181,7 +181,7 @@ object BlessST {
                         fields: ISZ[ST],
                         names: ISZ[ST]): ST = {
     val vars: ST = st"${(names.map(s => st"${s} = $${$s}"), "\n|\n|")}"
-    val tq: ST = Library.tripleQuote // TODO how to write triple quote in slang
+    val tq: ST = ArsitLibrary.tripleQuote() // TODO how to write triple quote in slang
     val flds: ST = if(fields.isEmpty) st"// no global vars" else st"${(fields, ",\n")}"
 
     return st"""@record class ${componentName}_DebugObject (

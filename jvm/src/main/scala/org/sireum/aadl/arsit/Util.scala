@@ -25,7 +25,7 @@ object Util {
   @pure def getDiscreetPropertyValue[T](properties: ISZ[Property], propertyName: String): Option[T] = {
     for (p <- properties if getLastName(p.name) == propertyName)
       return Some(ISZOps(p.propertyValues).first.asInstanceOf[T])
-    return None[T]
+    return None[T]()
   }
 
   @pure def getPropertyValues(properties: ISZ[Property], propertyName: String): ISZ[PropertyValue] = {
@@ -101,7 +101,7 @@ object Util {
     val a: Array[scala.Predef.String] = c.name.toString.split("::")
     assert(a.length == 2)
     val compName = sanitizeName(a(1)) //a(1).replaceAll("\\.", "_")
-    Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", compName + "_Bridge", compName, compName + "_Impl")
+    Names(s"${basePackage}.${a(0)}", s"${basePackage}/${a(0)}", s"${compName}_Bridge", compName, s"${compName}_Impl")
   }
 
   @pure def getDataTypeNames(f: FeatureEnd, topPackage: String): DataTypeNames = {
@@ -194,7 +194,7 @@ object Util {
   }
 
   @pure def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: File): Unit = {
-    for((p, c) <- Library.getFiles if p.native.contains("art")) {
+    for((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
       val _c = if(p.native.contains("Art.scala")) {
         val out = new StringBuilder()
         c.native.split("\n").map(s =>
@@ -220,7 +220,7 @@ object Util {
       case Cli.Ipcmech.SharedMemory => "ipc_shared_memory.c"
       case Cli.Ipcmech.MessageQueue => "ipc_message_queue.c"
     }
-    val e = Library.getFiles.filter(p => p._1.native == r)
+    val e = ArsitLibrary.getFiles.filter(p => p._1.native == r)
     assert(e.length == 1)
     val c = e(0)._2.native.replaceAll(PACKAGE_PLACEHOLDER, packageName.native)
     st"""${c}"""
@@ -244,7 +244,7 @@ case class DataTypeNames(basePackage: String,
 
   def qualifiedTypeName: String = s"$packageName.$typeName"
 
-  def referencedTypeName: String = typeName + (if(isEnum) ".Type" else "")
+  def referencedTypeName: String = s"${typeName}${if(isEnum) ".Type" else ""}"
   def qualifiedReferencedTypeName: String = s"${packageName}.${referencedTypeName}"
 
   def payloadName: String = if(packageName == String("art") && typeName == String("Empty")) typeName else s"${typeName}_Payload"

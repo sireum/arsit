@@ -47,7 +47,7 @@ class ArtNixGen {
     { // build component map
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.getName(c.identifier)))
-        componentMap += (Util.getName(c.identifier) → c)
+        componentMap += (Util.getName(c.identifier) -> c)
         connections = connections ++ c.connectionInstances
         for (s <- c.subComponents) r(s)
       }
@@ -100,8 +100,8 @@ class ArtNixGen {
       for (p <- Util.getFeatureEnds(m.features) if Util.isInFeature(p)) {
         assert (Util.isPort(p))
         val port = Port(p, m, basePackage)
-        val portIdName: String = port.name + "PortId"
-        val portOptName: String = port.name + "Opt"
+        val portIdName: String = s"${port.name}PortId"
+        val portOptName: String = s"${port.name}Opt"
         val portType: String = port.portType.qualifiedReferencedTypeName
         val portPayloadTypeName: String = port.portType.qualifiedPayloadName
         val archPortInstanceName: String = s"${bridgeInstanceVarName}.${port.name}"

@@ -35,12 +35,6 @@ object Cli {
                              ) extends ArsitTopOption
 }
 
-@ext object Library {
-  def getFiles: ISZ[(String, String)] = $
-
-  def tripleQuote: ST = $
-}
-
 @enum object DispatchProtocol {
   'Periodic
   'Sporadic

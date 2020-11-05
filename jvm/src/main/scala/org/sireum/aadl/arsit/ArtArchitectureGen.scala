@@ -42,7 +42,7 @@ class ArtArchitectureGen {
     { // build the component map
       def r(c: Component): Unit = {
         assert(!componentMap.contains(Util.getName(c.identifier)))
-        componentMap += (Util.getName(c.identifier) → c)
+        componentMap += (Util.getName(c.identifier) -> c)
         for (s <- c.subComponents) r(s)
       }
       r(systems(0))

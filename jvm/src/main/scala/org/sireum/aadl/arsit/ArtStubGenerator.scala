@@ -37,7 +37,7 @@ class ArtStubGenerator {
 
       Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}.scala"), so, true)
       Util.writeFile(new File(utilDir, s"${BlessST.vizObjectName}_Ext.scala"), eo,true)
-      Util.writeFile(new File(utilDir, s"${BlessST.vizBlessVizName.render}.scala"), bv,true)
+      Util.writeFile(new File(utilDir, s"${BlessST.vizBlessVizName().render}.scala"), bv,true)
     }
   }
 
@@ -331,7 +331,7 @@ class ArtStubGenerator {
                   |    }
                   |
                   |    def compute(): Unit = {
-                  |      ${computeBody(bridgeName + "Id", componentName, ports, dispatchProtocol, genBlessEntryPoints)}
+                  |      ${computeBody(s"${bridgeName}Id", componentName, ports, dispatchProtocol, genBlessEntryPoints)}
                   |    }
                   |
                   |    def activate(): Unit = {
@@ -437,7 +437,7 @@ class ArtStubGenerator {
                  |}"""
     }
 
-    @pure def addId(s: String) : String = s + "_Id"
+    @pure def addId(s: String) : String = s"${s}_Id"
 
     @pure def putValue(p: Port) : ST =
       return st"""Art.putValue(${addId(p.name)}, ${p.portType.qualifiedPayloadName}${if(Util.isEmptyType(p.portType)) "()" else "(value)"})"""

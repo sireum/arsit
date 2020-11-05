@@ -22,9 +22,9 @@ object Arsit {
       return -1
     }
 
-    val inputFile:Option[File] = if(o.args.size != 1) None[File] else Some(new File(o.args(0).native))
+    val inputFile:Option[File] = if(o.args.size != 1) None[File]() else Some(new File(o.args(0).native))
     val input = if (inputFile.nonEmpty && inputFile.get.exists) {
-      scala.io.Source.fromFile(inputFile.get).getLines.mkString
+      scala.io.Source.fromFile(inputFile.get).getLines().mkString
     } else {
       println("Input file not found.  Expecting exactly 1")
       return -1
