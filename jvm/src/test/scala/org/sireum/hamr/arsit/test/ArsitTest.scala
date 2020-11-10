@@ -5,7 +5,7 @@ import org.sireum.$internal.RC
 import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
-import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestResource, TestResult, TestUtil}
+import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestOs, TestResource, TestResult, TestUtil}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
@@ -100,7 +100,7 @@ trait ArsitTest extends TestSuite {
         val args: ISZ[String] = ISZ("sbt", "run")
         val p = Os.Proc(args, Os.cwd, Map.empty, T, None(), F, F, F, F, F, (timeoutInSeconds * z"1000"), F)
           .at(sbtDir).console()
-        val results = TestOs.proc2(p, Some("[info] Done compiling."))
+        val results = TestOs.proc2(p, Some("[info] Done compiling."), Some("\n"))
         testPass = testPass && results.ok
 
       case ArsitTestMode.Base =>
