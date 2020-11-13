@@ -40,6 +40,10 @@ object TestTemplate {
     var concretePutBlocks: ISZ[ST] = ISZ()
     var concretePutScalaDoc: ISZ[ST] = ISZ()
 
+    var concreteCheckParams: ISZ[ST] = ISZ()
+    var concreteCheckBlocks: ISZ[ST] = ISZ()
+    var concreteCheckScalaDoc: ISZ[ST] = ISZ()
+
     val setters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map((p: Port) => {
       val putMethodName = s"put_${p.name}"
 
@@ -111,30 +115,94 @@ object TestTemplate {
                  |""")
       }
 
+    val testFailures = "testFailures"
+
     val getters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isOutFeature(p.feature)).map((p: Port) => {
+      val portName = p.name
+      val portNameValue = s"${portName}Value"
+      val getterName = s"get_${portName}"
+      val payloadGetterName: String = s"get_${portName}_payload()"
+
       val isEvent = p.feature.category == FeatureCategory.EventPort
       val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
       val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
       val _match: String = if (isEvent) "Empty()" else s"${payloadType}(v)"
       val value: String = if (isEvent) "Empty()" else "v"
-      val payloadMethodName: String = s"get_${p.name}_payload()"
+
+      val (checkParamType, concretePreamble, checkExplanation, checkScalaDoc): (String, ST, String, ST) =
+        p.feature.category match {
+        case FeatureCategory.EventPort =>
+          val preamble =
+            st"""// TODO: event port getter should return the number of events in
+                |//       the output queue when queue sizes > 1 support is added to ART
+                |val ${portNameValue}: Z = if(${getterName}().nonEmpty) z"1" else z"0""""
+          val scalaDoc = st"""* @param ${portName} method that will be called with the number of events to be sent
+                             |*        on the outgoing event port '${portName}'."""
+          ("Z", preamble, s"$${${portNameValue}} events were in the outgoing event queue", scalaDoc)
+        case FeatureCategory.EventDataPort =>
+          val preamble =
+            st"""var ${portNameValue}: ISZ[${typeName}] = ISZ()
+                |// TODO: event data port getter should return all of the events/payloads
+                |//       received on event data ports when queue sizes > 1 support is added
+                |//       to ART
+                |if(${getterName}().nonEmpty) ${portNameValue} = ${portNameValue} :+ ${getterName}().get"""
+          val scalaDoc = st"""* @param ${portName} method that will be called with the payloads to be sent
+                             |*        on the outgoing event data port '${portName}'."""
+          (s"ISZ[$typeName]", preamble, s"received $${${portNameValue}.size} events with the following payloads $${${portNameValue}}", scalaDoc)
+        case FeatureCategory.DataPort =>
+          val preamble = st"val ${portNameValue}: ${typeName} = ${getterName}().get"
+          val scalaDoc = st"""* @param ${portName} method that will be called with the value of the outgoing data
+                             |*        port '${portName}'."""
+          (typeName, preamble, s"value of the outgoing data port is $${${portNameValue}}", scalaDoc)
+        case _ => halt("Unexpected")
+      }
+
+      concreteCheckScalaDoc = concreteCheckScalaDoc :+ checkScalaDoc
+
+      concreteCheckParams = concreteCheckParams :+
+        st"${portName}: ${checkParamType} => B = ${portName}Param => {T}"
+
+      concreteCheckBlocks = concreteCheckBlocks :+
+        st"""${concretePreamble}
+            |if(!${portName}(${portNameValue})) {
+            |  testFailures = testFailures :+ st"'${portName}' did not match expected: ${checkExplanation}"
+            |}"""
 
       st"""// getter for out ${p.feature.category}
-          |def get_${p.name}(): Option[${typeName}] = {
-          |  val value: Option[${typeName}] = ${payloadMethodName} match {
+          |def ${getterName}(): Option[${typeName}] = {
+          |  val value: Option[${typeName}] = ${payloadGetterName} match {
           |    case Some(${_match}) => Some(${value})
-          |    case Some(v) => fail(s"Unexpected payload on port ${p.name}.  Expecting '${payloadType}' but received $${v}")
+          |    case Some(v) => fail(s"Unexpected payload on port ${portName}.  Expecting '${payloadType}' but received $${v}")
           |    case _ => None[${typeName}]()
           |  }
           |  return value
           |}
           |
           |// payload getter for out ${p.feature.category}
-          |def ${payloadMethodName}: Option[${payloadType}] = {
-          |  return ArtNative_Ext.observeOutPortValue(bridge.initialization_api.${addId(p.name)}).asInstanceOf[Option[${payloadType}]]
+          |def ${payloadGetterName}: Option[${payloadType}] = {
+          |  return ArtNative_Ext.observeOutPortValue(bridge.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
           |}
           |"""
     })
+
+    val concreteChecker: Option[ST] =
+    if(concreteCheckBlocks.isEmpty) { None() }
+    else {
+      val scalaDoc = concreteCheckScalaDoc.map((m: ST) => st"${m}")
+      Some(st"""/** helper function to check ${names.componentSingletonType}'s
+               | * output ports.  Use named arguments to check subsets of the output ports.
+               | ${(scalaDoc, "\n")}
+               | */
+               |def check_concrete_output(${(concreteCheckParams, ",\n")}): Unit = {
+               |  var ${testFailures}: ISZ[ST] = ISZ()
+               |
+               |  ${(concreteCheckBlocks, "\n")}
+               |
+               |  assert(testFailures.isEmpty, st"$${(testFailures, "\n")}".render)
+               |}
+               |
+               |""")
+    }
 
     val ret: ST =
       st"""package ${names.packageName}
@@ -147,6 +215,7 @@ object TestTemplate {
           |abstract class ${names.testApisName} extends BridgeTestSuite[${names.bridge}](Arch.${names.instanceName}) {
           |
           |  ${concretePutter}
+          |  ${concreteChecker}
           |  ${(setters ++ getters, "\n")}
           |}
           |"""
