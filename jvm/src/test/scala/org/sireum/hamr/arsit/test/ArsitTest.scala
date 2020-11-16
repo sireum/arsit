@@ -98,8 +98,7 @@ trait ArsitTest extends TestSuite {
       case ArsitTestMode.SbtRun =>
         val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
         val args: ISZ[String] = ISZ("sbt", "run")
-        val p = Os.Proc(args, Os.cwd, Map.empty, T, None(), F, F, F, F, F, (timeoutInSeconds * z"1000"), F)
-          .at(sbtDir).console()
+        val p = Os.proc(args).timeout(timeoutInSeconds * z"1000").at(sbtDir).console()
         val results = TestOs.proc2(p, Some("[info] Done compiling."), Some("\n"))
         testPass = testPass && results.ok
 
