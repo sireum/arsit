@@ -17,18 +17,15 @@ object StringTemplate {
   }
 
   def arsitSlangInstructionsMessage(path: String): ST = {
-    var lng = st""
-    lng = st"${lng}Refer to the comments in build.sbt for instructions on how to open the "
-    lng = st"${lng}project in Sireum IVE and how to run the system/unit-tests from IVE or the command line. "
-    lng = st"${lng}Alternatively, refer to the comments in build.sc for instructions on how open the "
-    lng = st"${lng}project in Visual Studio Code and how to run the system/unit-tests using mill."
-
     val ret: ST =
       st"""Slang Instructions:
           |-------------------
           |  Slang-Embedded Project Directory: ${path}
           |
-          |  $lng"""
+          |    Refer to the comments in build.sbt for instructions on how to open the
+          |    project in Sireum IVE and how to run the system/unit-tests from IVE or the command line.
+          |    Alternatively, refer to the comments in build.sc for instructions on how open the
+          |    project in Visual Studio Code and how to run the system/unit-tests using mill."""
     return ret
   }
 
@@ -67,7 +64,8 @@ object StringTemplate {
           |--------------------------
           |  Developer Code Directory: ${devDir}
           |
-          |  Execute the following script to transpile the Slang code for CAmkES (transpiler only needs to be rerun when changes are made to Slang code):
+          |  Execute the following script to transpile the Slang code for CAmkES (transpiler only needs
+          |  to be rerun when changes are made to Slang code):
           |
           |    ${transpileScript}"""
 
