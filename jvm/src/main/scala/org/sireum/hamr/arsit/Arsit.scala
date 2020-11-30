@@ -2,7 +2,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
-import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions}
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -41,7 +41,7 @@ object Arsit {
       return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
-    val projectDirectories = ProjectDirectories(o.outputDir)
+    val projectDirectories = ProjectDirectories(o)
 
     val nixPhase =
       nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
@@ -54,21 +54,8 @@ object Arsit {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
-    val projectName = CommonUtil.getLastName(m.components(0).identifier)
-
-    val millBuildDest = Os.path(o.outputDir) / "build.sc"
-    val millBuildContent = StringTemplate.millBuild(o.packageName, o.embedArt)
-    artResources = artResources :+ Resource(millBuildDest.value, millBuildContent, F, F)
-
-    val sbtBuildDest = Os.path(o.outputDir) / "build.sbt"
-    val sbtBuildContent = StringTemplate.sbtBuild(projectName, o.packageName, o.embedArt)
-    artResources = artResources :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
-
-    val buildPropertiesDest = Os.path(o.outputDir) / "project/build.properties"
-    artResources = artResources :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
-
-    val pluginsSbtDest = Os.path(o.outputDir) / "project" / "plugins.sbt"
-    artResources = artResources :+ Resource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F, F)
+    artResources = artResources ++ createBuildArtifacts(
+      CommonUtil.getLastName(m.components(0).identifier), o, projectDirectories, nixPhase.resources, reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
@@ -101,5 +88,95 @@ object Arsit {
       resources = resources :+ Util.createResource(outputDir, ISZ(p), st"${_c}", T)
     }
     return resources
+  }
+
+  def createBuildArtifacts(projectName: String,
+                           options: ArsitOptions,
+                           projDirs: ProjectDirectories,
+                           resources: ISZ[Resource],
+                           reporter: Reporter): ISZ[Resource] = {
+
+    var ret: ISZ[Resource] = ISZ()
+    val root = Os.path(options.outputDir)
+
+    val demoScalaPath: String = {
+      val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.path).endsWith("Demo.scala"))
+      if(candidate.nonEmpty) root.relativize(Os.path(candidate(0).path)).value
+      else "??"
+    }
+
+    val bridgeTestPath: String = root.relativize(Os.path(projDirs.testBridgeDir)).value
+
+    val millBuildDest = Os.path(options.outputDir) / "build.sc"
+    val millBuildContent = StringTemplate.millBuild(options.packageName, options.embedArt)
+    ret = ret :+ Resource(millBuildDest.value, millBuildContent, T, F)
+
+    val sbtBuildDest = Os.path(options.outputDir) / "build.sbt"
+    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt, demoScalaPath, bridgeTestPath)
+    ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, T, F)
+
+    val buildPropertiesDest = Os.path(options.outputDir) / "project/build.properties"
+    ret = ret :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
+
+    val pluginsSbtDest = Os.path(options.outputDir) / "project" / "plugins.sbt"
+    ret = ret :+ Resource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F, F)
+
+    reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
+      StringTemplate.arsitSlangInstructionsMessage(options.outputDir).render)
+
+    if(isNixProject(options.platform)) {
+      val cmakeDir: String = projDirs.cNixDir
+
+      val devDir = projDirs.ext_cDir
+
+      val transpile: String = {
+        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile.sh"))
+        if (x.nonEmpty) x(0).path
+        else "??"
+      }
+
+      val compile: String = {
+        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/compile-"))
+        if (x.nonEmpty) x(0).path
+        else "??"
+      }
+
+      val run: String = {
+        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/run-"))
+        if (x.nonEmpty) x(0).path
+        else "??"
+      }
+
+      val stop: String = {
+        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/stop.sh"))
+        if (x.nonEmpty) x(0).path
+        else "??"
+      }
+
+      reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
+        StringTemplate.arsitCInstructionsMessage(cmakeDir, devDir, transpile, compile, run, stop).render)
+    }
+
+    if(options.platform == ArsitPlatform.SeL4) {
+      val transpile: String = {
+        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile-sel4.sh"))
+        if(x.nonEmpty) x(0).path
+        else "??"
+      }
+
+      reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
+        StringTemplate.arsitCAmkESInstructionsMessage(projDirs.ext_cDir, transpile).render)
+    }
+
+    return ret
+  }
+
+  def isNixProject(value: ArsitPlatform.Type): B = {
+    return value match {
+      case ArsitPlatform.Linux => T
+      case ArsitPlatform.MacOS => T
+      case ArsitPlatform.Cygwin => T
+      case _ => F
+    }
   }
 }

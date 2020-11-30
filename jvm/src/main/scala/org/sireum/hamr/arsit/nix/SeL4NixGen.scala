@@ -15,7 +15,6 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 import org.sireum.message.Reporter
 
 @record class SeL4NixGen(val dirs: ProjectDirectories,
-                         val cExtensionDir: String,
                          val root: AadlSystem,
                          val arsitOptions: ArsitOptions,
                          val symbolTable: SymbolTable,
@@ -58,12 +57,6 @@ import org.sireum.message.Reporter
     val components: ISZ[AadlThreadOrDevice] = symbolTable.componentMap.values.filter(p =>
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
       .map(m => m.asInstanceOf[AadlThreadOrDevice])
-
-    val rootCOutputDir: Os.Path = if (arsitOptions.outputCDir.nonEmpty) {
-      Os.path(arsitOptions.outputCDir.get)
-    } else {
-      Os.path(dirs.srcDir) / "c/sel4"
-    }
 
     var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
 
@@ -158,11 +151,11 @@ import org.sireum.message.Reporter
           T)
       }
 
-      val cOutputDir: Os.Path = rootCOutputDir / instanceSingletonName
+      val cOutputDir: Os.Path = Os.path(dirs.cDir) / instanceSingletonName
 
       val (paths, extResources) = genExtensionFiles(component.component, names, ports)
       resources = resources ++ extResources
-      val transpilerExtensions: ISZ[Os.Path] = paths ++ genSel4Adapters(names) ++ getExistingCFiles(cExtensionDir)
+      val transpilerExtensions: ISZ[Os.Path] = paths ++ genSel4Adapters(names) //++ getExistingCFiles(cExtensionDir)
 
       val stackSizeInBytes: Z = PropertyUtil.getStackSizeInBytes(component.component) match {
         case Some(size) => size
@@ -192,7 +185,7 @@ import org.sireum.message.Reporter
     { // Slang Type Library
 
       val id = "SlangTypeLibrary"
-      val cOutputDir: Os.Path = rootCOutputDir / id
+      val cOutputDir: Os.Path = Os.path(dirs.cDir) / id
       val relPath = s"${cOutputDir.up.name}/${id}"
 
 
@@ -495,7 +488,7 @@ import org.sireum.message.Reporter
 
   def genSel4Adapters(names: Names): ISZ[Os.Path] = {
 
-    val root = Os.path(cExtensionDir)
+    val root = Os.path(dirs.sel4EtcDir)
 
     var extensionFiles: ISZ[Os.Path] = ISZ()
 

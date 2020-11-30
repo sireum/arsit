@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform, IpcMechanism}
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
@@ -16,6 +16,9 @@ object Util {
   var pathSep: C = '/'
 
   val toolName: String = "Arsit"
+
+  // special message 'kind' so instruction messages can be filtered
+  val ARSIT_INSTRUCTIONS_MESSAGE_KIND: String = "Arsit - Instructions"
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
 
@@ -233,34 +236,56 @@ object HAMR {
   }
 }
 
-@datatype class ProjectDirectories(rootDir: String) {
-  val src_main: ISZ[String] = ISZ("src", "main")
+@datatype class ProjectDirectories(options: ArsitOptions) {
+
+  val rootDir: String = options.outputDir
 
   val srcDir: String = Util.pathAppend(rootDir, ISZ("src"))
 
-  val srcMainDir: String = Util.pathAppend(rootDir, src_main)
+  /* Slang dirs */
+  val srcMainDir: String = Util.pathAppend(srcDir, ISZ("main"))
 
+  val architectureDir: String = Util.pathAppend(srcMainDir, ISZ("architecture"))
+
+  val bridgeDir: String = Util.pathAppend(srcMainDir, ISZ("bridge"))
+
+  val dataDir: String = Util.pathAppend(srcMainDir, ISZ("data"))
+
+  val componentDir: String = Util.pathAppend(srcMainDir, ISZ("component"))
+
+  /* Testing dirs */
   val testDir: String = Util.pathAppend(srcDir, ISZ("test"))
 
   val testBridgeDir: String = Util.pathAppend(testDir, ISZ("bridge"))
 
   val testUtilDir: String = Util.pathAppend(testDir, ISZ("util"))
 
+  /* C/CAmkES dirs */
   val binDir: String = Util.pathAppend(rootDir, ISZ("bin"))
 
-  val architectureDir: String = Util.pathAppend(rootDir, src_main :+ "architecture")
+  val cDir: String =
+    if(options.outputCDir.nonEmpty) options.outputCDir.get
+    else Util.pathAppend(srcDir, ISZ("c"))
 
-  val bridgeDir: String = Util.pathAppend(rootDir, src_main :+ "bridge")
+  val cNixDir: String = Util.pathAppend(cDir, ISZ("nix"))
 
-  val dataDir: String = Util.pathAppend(rootDir, src_main :+ "data")
+  val auxCodeDir: ISZ[String] = {
+    assert(options.auxCodeDir.size > 0, "Expecting at least on aux code dir")
+    options.auxCodeDir
+  }
 
-  val componentDir: String = Util.pathAppend(rootDir, src_main :+ "component")
+  val ext_cDir: String = Util.pathAppend(auxCodeDir(0), ISZ("ext-c"))
 
-  val nixDir: String = Util.pathAppend(rootDir, src_main :+ "nix")
+  val etcDir: String = Util.pathAppend(auxCodeDir(0), ISZ("etc"))
 
-  val seL4NixDir: String = Util.pathAppend(rootDir, src_main :+ "seL4Nix")
+  val sel4EtcDir: String = Util.pathAppend(auxCodeDir(0), ISZ("etc_seL4"))
 
-  val seL4CDir: String = Util.pathAppend(srcDir, ISZ("c", "CAmkES_seL4"))
+
+  val nixDir: String = Util.pathAppend(srcMainDir, ISZ("nix"))
+
+  val seL4NixDir: String = Util.pathAppend(srcMainDir, ISZ("seL4Nix"))
+
+  val seL4CDir: String = Util.pathAppend(cDir, ISZ("CAmkES_seL4"))
 }
 
 @sig trait Result {

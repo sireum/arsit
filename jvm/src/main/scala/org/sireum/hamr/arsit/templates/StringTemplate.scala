@@ -16,17 +16,75 @@ object StringTemplate {
     return "// This file will not be overwritten so is safe to edit"
   }
 
+  def arsitSlangInstructionsMessage(path: String): ST = {
+    var lng = st""
+    lng = st"${lng}Refer to the comments in build.sbt for instructions on how to open the "
+    lng = st"${lng}project in Sireum IVE and how to run the system/unit-tests from IVE or the command line. "
+    lng = st"${lng}Alternatively, refer to the comments in build.sc for instructions on how open the "
+    lng = st"${lng}project in Visual Studio Code and how to run the system/unit-tests using mill."
+
+    val ret: ST =
+      st"""Slang Instructions:
+          |-------------------
+          |  Slang-Embedded Project Directory: ${path}
+          |
+          |  $lng"""
+    return ret
+  }
+
+  def arsitCInstructionsMessage(cmakeProjDirectory: String,
+                                devDir: String,
+                                transpileScript: String,
+                                compileScript: String,
+                                runScript: String,
+                                stopScript: String): ST = {
+    var lng = st""
+    lng = st"${lng}The cmake directory will be created by the transpiler. "
+    lng = st"${lng}The transpiler only needs to be rerun when changes are made to Slang code. "
+
+    val ret: ST =
+      st"""C Instructions:
+          |---------------
+          |  Cmake Project Directory:  ${cmakeProjDirectory}
+          |  Developer Code Directory: ${devDir}
+          |
+          |  $lng
+          |
+          |  Execute the following scripts to build/run the system:
+          |
+          |    ${transpileScript}
+          |    ${compileScript}
+          |    ${runScript}
+          |    ${stopScript}"""
+
+    return ret
+  }
+
+  def arsitCAmkESInstructionsMessage(devDir: String,
+                                     transpileScript: String): ST = {
+    val ret: ST =
+      st"""C Instructions for CAmkES:
+          |--------------------------
+          |  Developer Code Directory: ${devDir}
+          |
+          |  Execute the following script to transpile the Slang code for CAmkES (transpiler only needs to be rerun when changes are made to Slang code):
+          |
+          |    ${transpileScript}"""
+
+    return ret
+  }
+
   def sbtBuild(projectName: String,
                basePackageName: String,
-               embedArt: B): ST = {
+               embedArt: B,
+               demoScalaPath: String,
+               bridgeTestPath: String): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
-    val kekinianVersion = ArsitLibrary.getKekinianVersion()
-    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
-    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
-    val scalaVersion = ArsitLibrary.getScalaVersion()
 
-    val embeddedArt: (Option[ST], Option[ST], Option[ST]) = if (!embedArt) {
-      (Some(st"""val artVersion = "${artVersion}" // https://github.com/sireum/slang-embedded-art/tree/${artVersion}"""),
+    val (artVer, artJitpack, artSrcDir): (Option[ST], Option[ST], Option[ST]) = if (!embedArt) {
+      (Some(
+        st"""// https://github.com/sireum/slang-embedded-art/tree/${artVersion}
+            |val artVersion = "${artVersion}""""),
         Some(st""""org.sireum.slang-embedded-art" %% "slang-embedded-art" % artVersion withSources() withJavadoc(),"""),
         None())
     } else {
@@ -40,10 +98,20 @@ object StringTemplate {
           |// navigate to the directory containing this file then click 'OK'.  To install
           |// Sireum IVE see https://github.com/sireum/kekinian#installing
           |//
+          |// To run the demo from within Sireum IVE:
+          |//   Right click ${demoScalaPath} and choose "Run 'Demo'"
+          |//
+          |// To run the unit test cases from within Sireum IVE:
+          |//   Right click the ${bridgeTestPath} directory and choose "Run ScalaTests in bridge"
+          |//
+          |// NOTE: A ClassNotFoundException may be raised the first time you try to
+          |//       run the demo or unit tests.  If this occurs simply delete the directory
+          |//       named 'target' and retry
+          |//
           |// To run the demo from the command line:
           |//   sbt run
           |//
-          |// To run the example unit tests:
+          |// To run the example unit tests from the command line:
           |//   sbt test
           |//
           |// To build a runnable/executable jar:
@@ -60,15 +128,9 @@ object StringTemplate {
           |lazy val ${projectName} = slangEmbeddedTestProject("${projectName}", ".")
           |
           |
-          |val scalaVer = "${scalaVersion}"
+          |${libDependencies()}
           |
-          |val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
-          |
-          |val kekinianVersion = "${kekinianVersion}" // https://github.com/sireum/kekinian/tree/${kekinianVersion}
-          |
-          |val scalaTestVersion = "${scalaTestVersion}"
-          |
-          |${embeddedArt._1}
+          |${artVer}
           |
           |val commonSettings = Seq(
           |  organization := "org.sireum",
@@ -80,14 +142,14 @@ object StringTemplate {
           |  resolvers ++= Seq(Resolver.sonatypeRepo("public"), "jitpack" at "https://jitpack.io"),
           |  addCompilerPlugin("org.sireum" %% "scalac-plugin" % sireumScalacVersion),
           |  libraryDependencies ++= Seq(
-          |    ${embeddedArt._2}
+          |    ${artJitpack}
           |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources() withJavadoc()
           |  )
           |)
           |
           |import sbtassembly.AssemblyPlugin.defaultUniversalScript
           |val slangEmbeddedSettings = Seq(
-          |  ${embeddedArt._3}
+          |  ${artSrcDir}
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/architecture",
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/bridge",
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/component",
@@ -145,39 +207,31 @@ object StringTemplate {
   def millBuild(basePackageName: String,
                 embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
-    val kekinianVersion = ArsitLibrary.getKekinianVersion()
-    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
-    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
-    val scalaVersion = ArsitLibrary.getScalaVersion()
 
     val ret: ST =
       st"""import mill._
           |import scalalib._
           |
-          |// Example Mill build -- the contents of this file will not be overwritten
+          |// Example mill build -- the contents of this file will not be overwritten
+          |//
+          |// mill is included with Sireum Kekinian: https://github.com/sireum/kekinian#installing
           |//
           |// To open the following project in VSCode, first follow Sireum Kekinian's
           |// instructions for setting up a development environment using Scala Metals:
-          |//
-          |//   https://github.com/sireum/kekinian#scala-metals
+          |// https://github.com/sireum/kekinian#scala-metals
           |//
           |// Then open the folder containing this file in VSCode and import the
           |// mill build when asked.
           |//
           |// To run the demo from the command line:
-          |//   mill ${basePackageName}.run
+          |//   $$SIREUM_HOME/bin/mill ${basePackageName}.run
           |//
           |// To run the example unit tests:
-          |//   mill ${basePackageName}.test
+          |//   $$SIRUEM_HOME/bin/mill ${basePackageName}.test
           |
           |trait SlangEmbeddedModule extends ScalaModule {
-          |  val scalaVer = "${scalaVersion}"
           |
-          |  val sireumScalacVersion = "${sireumScalacVersion}" // https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
-          |
-          |  val kekinianVersion = "${kekinianVersion}" // https://github.com/sireum/kekinian/tree/${kekinianVersion}
-          |
-          |  val scalaTestVersion = "${scalaTestVersion}"
+          |  ${libDependencies()}
           |
           |
           |  def scalaVersion = scalaVer
@@ -238,6 +292,33 @@ object StringTemplate {
           |}
           |"""
 
+    return ret
+  }
+
+  def libDependencies(): ST = {
+    val kekinianVersion = ArsitLibrary.getKekinianVersion()
+    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
+    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
+    val scalaVersion = ArsitLibrary.getScalaVersion()
+    val ret: ST =
+      st"""// refer to https://github.com/sireum/kekinian/blob/master/versions.properties
+          |// to get the most recent versions of the following dependencies
+          |
+          |// versions.properties key: org.sireum.version.scala
+          |val scalaVer = "${scalaVersion}"
+          |
+          |// versions.properties key: org.sireum.version.scalatest
+          |val scalaTestVersion = "${scalaTestVersion}"
+          |
+          |// versions.properties key: org.sireum.version.scalac-plugin
+          |// https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
+          |val sireumScalacVersion = "${sireumScalacVersion}"
+          |
+          |
+          |// refer to https://github.com/sireum/kekinian/releases to get the latest
+          |// Sireum Kekinian release
+          |// https://github.com/sireum/kekinian/tree/${kekinianVersion}
+          |val kekinianVersion = "${kekinianVersion}""""
     return ret
   }
 }

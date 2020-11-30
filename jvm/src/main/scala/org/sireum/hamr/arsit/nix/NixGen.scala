@@ -26,8 +26,6 @@ object NixGen{
 @msig trait NixGen {
   def dirs: ProjectDirectories
 
-  def cExtensionDir: String
-
   def root: AadlSystem
 
   def arsitOptions: ArsitOptions
@@ -44,7 +42,7 @@ object NixGen{
 
   def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
 
-    val rootExtDir = Os.path(cExtensionDir)
+    val rootExtDir = Os.path(dirs.ext_cDir)
 
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()
@@ -70,6 +68,8 @@ object NixGen{
 
       var entrypointAdapters: ISZ[ST] = ISZ()
 
+      val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names)
+
       { // add entrypoint stubs
         var entrypointSignatures: ISZ[ST] = ISZ()
 
@@ -85,12 +85,48 @@ object NixGen{
 
         var methods: ISZ[ST] = ISZ(initMethodImpl, finalizeMethodImpl)
 
+        var exampleApiUsage: ISZ[ST] = ISZ()
+        var tindex = z"0"
+
+        for(p <- ports.filter(f => CommonUtil.isInPort(f.feature))) {
+          val getter = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
+          val str = s"${p.name}_str"
+          val s: ST = if(CommonUtil.isDataPort(p.feature)) {
+            val t = s"t$tindex"
+            tindex = tindex + 1
+
+            val (refName, decl): (String, ST) = if(p.getPortTypeNames.isEnum()) {
+              (t, st"${p.getPortTypeNames.qualifiedCTypeName} $t;")
+            } else {
+              (s"&$t", st"DeclNew${p.getPortTypeNames.qualifiedCTypeName}($t);")
+            }
+            st"""${decl}
+                |if(${getter}(${StackFrameTemplate.SF} &${t})) {
+                |  DeclNewString(${str});
+                |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
+                |  ${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &${str}, ${refName});
+                |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
+                |}"""
+          } else {
+            st"""if(${getter}(${StackFrameTemplate.SF_LAST} )){
+                |  String ${str} = string("Received event on ${p.name}");
+                |  ${logInfo}(${StackFrameTemplate.SF} ${str});
+                |}"""
+          }
+          exampleApiUsage = exampleApiUsage :+ s
+        }
+
+        val _exampleApiUsage: Option[ST] =
+          if(exampleApiUsage.isEmpty) None()
+          else Some(st"""// examples of api getter usage
+                        |
+                        |${(exampleApiUsage, "\n\n")}""")
+
         PropertyUtil.getDispatchProtocol(c) match {
           case Some(Dispatch_Protocol.Periodic) =>
             // timetriggered
             val apiMethodName = s"${componentName}_timeTriggered"
             val userMethodName = s"${apiMethodName}_"
-            val preParams: Option[ST] = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
             val timeTriggeredSig = SeL4NixTemplate.methodSignature(userMethodName, params, "Unit")
             entrypointSignatures = entrypointSignatures :+ timeTriggeredSig
             val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
@@ -103,6 +139,8 @@ object NixGen{
             methods = methods :+
               st"""${timeTriggeredSig} {
                   |  ${declNewStackFrame};
+                  |
+                  |  ${_exampleApiUsage}
                   |}"""
 
             val api_params = ISZ(st"${names.cOperationalApi} api")
@@ -125,6 +163,7 @@ object NixGen{
           case Some(Dispatch_Protocol.Sporadic) =>
             val inEventPorts = ports.filter(f => CommonUtil.isEventPort(f.feature) && CommonUtil.isInFeature(f.feature))
 
+            var dumpedExampleGetterApiUsageAlready: B = F
             for (p <- inEventPorts) {
               val isEventData: B = p.feature.category == ir.FeatureCategory.EventDataPort
               val handlerName = s"${componentName}_handle${p.name}"
@@ -138,7 +177,6 @@ object NixGen{
               }
               val handlerSig = SeL4NixTemplate.methodSignature(handlerMethodName, eventDataParams, "Unit")
               entrypointSignatures = entrypointSignatures :+ handlerSig
-              val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names);
 
               val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
                 caller = T,
@@ -178,6 +216,24 @@ object NixGen{
                       |}"""
               }
               else {
+                val printValue: ST = if(isEventData) {
+                  st"""DeclNewString(_str);
+                      |String__append(${StackFrameTemplate.SF} (String) &_str, string("Received on ${p.name}: "));
+                      |${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &_str, value);
+                      |${logInfo}(${StackFrameTemplate.SF} (String) &_str);"""
+                } else {
+                  st"""String str = string("Received event on ${p.name}");
+                      |${logInfo}(${StackFrameTemplate.SF} str);"""
+                }
+
+                val __exampleApiUsage: Option[ST] =
+                  if(!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
+                    dumpedExampleGetterApiUsageAlready = T
+                    _exampleApiUsage
+                  } else {
+                    None()
+                  }
+
                 methods = methods :+
                   st"""${handlerSig} {
                       |  ${declNewStackFrame};
@@ -185,6 +241,10 @@ object NixGen{
                       |  DeclNewString(${p.name}String);
                       |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${handlerName} called"));
                       |  ${logInfo} (${StackFrameTemplate.SF} (String) &${p.name}String);
+                      |
+                      |  ${printValue}
+                      |
+                      |  ${__exampleApiUsage}
                       |}"""
               }
 
@@ -388,17 +448,42 @@ object NixGen{
   }
 
   def genStubInitializeMethod(names: Names, ports: ISZ[Port], apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
-    val preParams = Some(StackFrameTemplate.STACK_FRAME_ONLY_ST)
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_initialise"
     val userMethodName = s"${apiMethodName}_"
     val initialiseMethodSig = SeL4NixTemplate.methodSignature(userMethodName, params, "Unit")
 
-    val loggers: ISZ[String] = ISZ("logInfo", "logDebug", "logError")
-    val statements: ISZ[ST] = loggers.map((l: String) => {
+    var statements: ISZ[ST] = ISZ()
+
+    var resultCount = z"0"
+    for(p <- ports.filter(f => CommonUtil.isOutPort(f.feature))) {
+      val setterName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
+      val u: ST = if(CommonUtil.isDataPort(p.feature)) {
+        val result = s"t${resultCount}"
+        resultCount = resultCount + 1
+        val decl: ST = if(p.getPortTypeNames.isEnum()) {
+          st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()};
+              |${setterName}(${StackFrameTemplate.SF} ${result});"""
+        } else {
+          st"""DeclNew${p.getPortTypeNames.qualifiedCTypeName}(${result});
+              |${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF} &${result});
+              |${setterName}(${StackFrameTemplate.SF} &${result});"""
+        }
+        decl
+      } else {
+        st"${setterName}(${StackFrameTemplate.SF_LAST});"
+      }
+
+      statements = statements :+ u
+    }
+
+    val loggers: ISZ[ST] = ISZ[String]("logInfo", "logDebug", "logError").map((l: String) => {
       val mname = SeL4NixNamesUtil.apiHelperMethodName(l, names)
       st"""${mname}(${StackFrameTemplate.SF} string("Example ${l}"));"""
     })
+
+    statements = statements ++ loggers
+
     val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
       caller = T,
       uri = userFileUri,
@@ -410,9 +495,9 @@ object NixGen{
       st"""${initialiseMethodSig} {
           | ${declNewStackFrame};
           |
-          | // example api usage
+          | // examples of api setter and logging usage
           |
-          | ${(statements, "\n")}
+          | ${(statements, "\n\n")}
           |}"""
 
     val api_params = ISZ(st"${names.cInitializationApi} api")
@@ -448,8 +533,6 @@ object NixGen{
     val ret: ST =
       st"""${finaliseMethodSig} {
           |  ${declNewStackFrame};
-          |
-          |  // example finalise method
           |}"""
 
     val api_params = ISZ(st"${names.cOperationalApi} api")
@@ -511,22 +594,15 @@ object NixGenDispatch {
                reporter: Reporter,
                previousPhase: Result): ArsitResult = {
 
-    val cExtensionDir: String = if (arsitOptions.auxCodeDir.nonEmpty) {
-      assert(arsitOptions.auxCodeDir.size == 1)
-      arsitOptions.auxCodeDir(0)
-    } else {
-      Util.pathAppend(dirs.srcDir, ISZ("c", "ext-c"))
-    }
-
     val ret: ArsitResult = arsitOptions.platform match {
       case ArsitPlatform.Linux =>
-        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case ArsitPlatform.Cygwin =>
-        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case ArsitPlatform.MacOS =>
-        ArtNixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case ArsitPlatform.SeL4 =>
-        SeL4NixGen(dirs, cExtensionDir, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        SeL4NixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
       case _ =>
         ArsitResult(
           previousPhase.resources,

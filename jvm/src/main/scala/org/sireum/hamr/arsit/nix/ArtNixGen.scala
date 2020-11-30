@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.SeL4NixTemplate
-import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -14,15 +14,13 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.message.Reporter
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
-                        val cExtensionDir: String,
+                        //val cExtensionDir: String,
                         val root: AadlSystem,
                         val arsitOptions: ArsitOptions,
                         val symbolTable: SymbolTable,
                         val types: AadlTypes,
                         val previousPhase: Result,
                         val reporter: Reporter) extends NixGen {
-
-  var cOutputDir: String = ""
 
   val basePackage: String = arsitOptions.packageName
 
@@ -44,12 +42,6 @@ import org.sireum.message.Reporter
 
   def generate(): ArsitResult = {
     assert(Util.isNix(arsitOptions.platform))
-
-    cOutputDir = if (arsitOptions.outputCDir.nonEmpty) {
-      arsitOptions.outputCDir.get
-    } else {
-      Util.pathAppend(dirs.srcDir, ISZ("c", "nix"))
-    }
 
     gen(root)
 
@@ -78,8 +70,6 @@ import org.sireum.message.Reporter
     val components = symbolTable.componentMap.values.filter(p =>
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
       .map((m: AadlComponent) => m.asInstanceOf[AadlThreadOrDevice])
-
-    var transpilerExtensions: ISZ[Os.Path] = getExistingCFiles(cExtensionDir)
 
     for (threadOrDevice <- components) {
       val component = threadOrDevice.component
@@ -191,7 +181,6 @@ import org.sireum.message.Reporter
 
       val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
-      transpilerExtensions = transpilerExtensions ++ paths
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
@@ -257,13 +246,15 @@ import org.sireum.message.Reporter
     addResource(dirs.nixDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
     addResource(dirs.nixDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
 
-    val platName = ops.StringOps(arsitOptions.platform.name).firstToLower
+    for(plat <- ISZ(ArsitPlatform.Linux, ArsitPlatform.MacOS, ArsitPlatform.Cygwin)) {
+      val platName = ops.StringOps(plat.name).firstToLower
+      addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), ArtNixTemplate.compile(plat, dirs), T)
+      addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, plat), T)
+    }
 
-    addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), ArtNixTemplate.compile(arsitOptions.platform, dirs, cOutputDir), T)
-    addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, arsitOptions.platform), T)
     addExeResource(dirs.binDir, ISZ("stop.sh"), ArtNixTemplate.stop(appNames), T)
 
-    addResource(cExtensionDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
+    addResource(dirs.etcDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
 
     var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
     if (!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir)) {
@@ -282,8 +273,6 @@ import org.sireum.message.Reporter
     val transpileScriptName = "transpile.sh"
     val buildApps: B = T
     val additionalInstructions: Option[ST] = None()
-
-    transpilerExtensions = transpilerExtensions :+ Os.path(cExtensionDir) / NixGen.IPC_C
 
     val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
 
@@ -315,23 +304,22 @@ import org.sireum.message.Reporter
       s"art.Art.maxPorts=${numPorts}"
     )
 
-    val _extensions: ISZ[String] = (Set.empty[String] ++ transpilerExtensions.map((m: Os.Path) => m.value)).elements
+    val _extensions: ISZ[String] = ISZ(dirs.ext_cDir, dirs.etcDir)
 
     val transpiler = ArtNixTemplate.transpiler(
-      (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
-      ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
-      arsitOptions.bitWidth,
-      maxArraySize,
-      arsitOptions.maxStringSize,
-      customSequenceSizes,
-      customConstants,
-      maxStackSize,
-      _extensions,
-      excludes,
-      buildApps,
-      additionalInstructions,
-      dirs,
-      cOutputDir
+      apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
+      forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
+      numBits = arsitOptions.bitWidth,
+      maxSequenceSize = maxArraySize,
+      maxStringSize = arsitOptions.maxStringSize,
+      customArraySizes = customSequenceSizes,
+      customConstants = customConstants,
+      stackSizeInBytes = maxStackSize,
+      extensions = _extensions,
+      excludes = excludes,
+      buildApps = buildApps,
+      additionalInstructions = additionalInstructions,
+      dirs = dirs
     )
 
     transpilerOptions = transpilerOptions :+ transpiler._2

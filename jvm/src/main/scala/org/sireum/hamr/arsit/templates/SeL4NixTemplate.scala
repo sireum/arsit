@@ -362,7 +362,7 @@ object SeL4NixTemplate {
       if (typ.isEmptyType()) {
         None[String]()
       }
-      else if (typ.isBaseType()) {
+      else if (typ.isBaseType() || typ.isEnum()) {
         Some(s"*value = t_0.${someSig}.value;")
       }
       else {

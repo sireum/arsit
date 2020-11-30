@@ -652,11 +652,10 @@ object ArtNixTemplate {
   }
 
   @pure def compile(arch: ArsitPlatform.Type,
-                    dirs: ProjectDirectories,
-                    cOutputDir: String): ST = {
+                    dirs: ProjectDirectories): ST = {
 
     val script_home = "${SCRIPT_HOME}"
-    val cOutputDirRel = Util.relativizePaths(dirs.binDir, cOutputDir, script_home)
+    val cOutputDirRel = Util.relativizePaths(dirs.binDir, dirs.cNixDir, script_home)
 
     val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
     val mv: ST = if (arch == ArsitPlatform.Cygwin) {
@@ -763,8 +762,7 @@ object ArtNixTemplate {
                        excludes: ISZ[String],
                        buildApps: B,
                        additionalInstructions: Option[ST],
-                       dirs: ProjectDirectories,
-                       cOutputDir: String): (ST, TranspilerConfig) = {
+                       dirs: ProjectDirectories): (ST, TranspilerConfig) = {
 
     val _stackSizeInBytes: String = if (stackSizeInBytes < 0) {
       "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
@@ -776,7 +774,7 @@ object ArtNixTemplate {
       help = "",
       args = ISZ(),
       sourcepath = ISZ(dirs.srcMainDir),
-      output = Some(cOutputDir),
+      output = Some(dirs.cNixDir),
       verbose = T,
       projectName = Some("main"), // default set in org.sireum.transpilers.cli.cTranspiler
       apps = apps,
