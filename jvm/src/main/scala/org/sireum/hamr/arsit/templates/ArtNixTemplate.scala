@@ -693,7 +693,7 @@ object ArtNixTemplate {
     val stapp: ISZ[ST] = apps.map(st => {
       val prefix: String = arch match {
         case ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
-        case ArsitPlatform.Linux => "x-terminal-emulator -e sh -c"
+        case ArsitPlatform.Linux => s"x-terminal-emulator -T ${st} -e sh -c"
         case ArsitPlatform.MacOS => "open -a Terminal"
         case _ => halt(s"Unexpected platform ${arch}")
       }
