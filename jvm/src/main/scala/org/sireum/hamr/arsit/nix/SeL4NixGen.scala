@@ -194,8 +194,8 @@ import org.sireum.message.Reporter
     }
 
     {
-      val _ext_c_entries: ISZ[ST] = (Set.empty ++ ext_c_entries.map(s => s.render)).elements.map(s => st"${s}")
-      val _ext_h_entries: ISZ[ST] = (Set.empty ++ ext_h_entries.map(s => s.render)).elements.map(s => st"${s}")
+      val _ext_c_entries: ISZ[ST] = (Set.empty[String] ++ ext_c_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
+      val _ext_h_entries: ISZ[ST] = (Set.empty[String] ++ ext_h_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
 
       resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(_ext_c_entries), F)
       resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(_ext_h_entries), F)
