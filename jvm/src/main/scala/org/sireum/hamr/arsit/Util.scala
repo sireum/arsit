@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.util.PathUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
@@ -74,10 +74,10 @@ object Util {
     return st"${e(0)._2}"
   }
 
-  @pure def getDataTypeNames(typ: AadlType, topPackage: String): DataTypeNames = {
+  @pure def getDataTypeNames(typ: AadlType, basePackageName: String): DataTypeNames = {
     val (packageName, typeName): (String, String) = typ match {
       case TypeUtil.EmptyType => ("art", "Empty")
-      case TypeUtil.SlangEmbeddedBitType => ("Base_Types", "Bits")
+      case b: BitType => ("Base_Types", "Bits")
       case _ =>
         val classifier = typ.container.get.classifier.get
 
@@ -86,7 +86,7 @@ object Util {
 
         (a(0), a(1))
     }
-    return DataTypeNames(typ, topPackage, packageName, StringUtil.sanitizeName(typeName))
+    return DataTypeNames(typ, basePackageName, packageName, StringUtil.sanitizeName(typeName))
   }
 
   @pure def getDispatchTriggers(c: ir.Component): Option[ISZ[String]] = {
@@ -124,10 +124,11 @@ object Util {
               isTrigger: B,
               counter: Z): Port = {
 
+    val candidate = getFeatureEndType(feature, types)
     val pType: AadlType = if (types.rawConnections && CommonUtil.isDataPort(feature)) {
-      TypeUtil.SlangEmbeddedBitType
+      BitType(TypeUtil.SlangEmbeddedBitTypeName, candidate.container, Some(candidate))
     } else {
-      getFeatureEndType(feature, types)
+      candidate
     }
 
     return Port(feature, parent, pType, basePackage, isTrigger, counter)

@@ -448,7 +448,10 @@ object SeL4NixTemplate {
           |
           |  if(t_0.type == T${someSig}){
           |    *numBits = t_0.Some_8D03B1.value.size;
-          |    memcpy(byteArray, &t_0.Some_8D03B1.value.value, (*numBits / 8) + 1);
+          |    if(*numBits > 0) {
+          |      size_t numBytes = (*numBits - 1) / 8 + 1;
+          |      memcpy(byteArray, &t_0.Some_8D03B1.value.value, numBytes);
+          |    }
           |    return true;
           |  } else {
           |    return false;
@@ -501,7 +504,8 @@ object SeL4NixTemplate {
           |
           |  t_0.size = numBits;
           |  if(numBits > 0) {
-          |    memcpy(&t_0.value, byteArray, (numBits / 8) + 1);
+          |    size_t numBytes = (numBits - 1) / 8 + 1;
+          |    memcpy(&t_0.value, byteArray, numBytes);
           |  }
           |
           |  ${api}
@@ -626,5 +630,66 @@ object SeL4NixTemplate {
 
   def callTranspilerToucher(): ST = {
     return st"${TRANSPILER_TOUCHER_OBJECT_NAME}.${TRANSPILER_TOUCHER_METHOD_NAME}()"
+  }
+
+  def ext_h(blocks: ISZ[ST]): ST = {
+    val ret: ST =
+      st"""#ifndef EXT_H
+          |#define EXT_H
+          |
+          |#include <all.h>
+          |
+          |${(blocks, "\n\n")}
+          |#endif"""
+        return ret
+  }
+
+  def ext_c(blocks: ISZ[ST]): ST= {
+    val ret: ST =
+      st"""#include <ext.h>
+          |
+          |// add c extension code here
+          |
+          |${(blocks, "\n\n")}"""
+    return ret
+  }
+
+  def bitCodecExtHEnties(): ST = {
+    val ret: ST =
+      st"""void byte_array_default(STACK_FRAME uint8_t* byteArray, size_t numBits, size_t numBytes);
+          |
+          |void byte_array_string(STACK_FRAME String str, uint8_t* byteArray, size_t numBytes);"""
+    return ret
+  }
+
+  def bitCodecExtCEnties(): ST = {
+    val ret: ST =
+      st"""// example method that sets the first numBits bits of byteArray to 1
+          |void byte_array_default(STACK_FRAME uint8_t* byteArray, size_t numBits, size_t numBytes) {
+          |  DeclNewStackFrame(caller, "ext.c", "", "byte_array_default", 0);
+          |
+          |  sfAssert(SF (numBits - 1) / 8  + 1 <= numBytes, "");
+          |
+          |  for(size_t byte = 0; byte < numBytes; byte++) {
+          |    uint8_t v = 0;
+          |    for(uint8_t bit = 0; bit < 8; bit++) {
+          |      if(byte * 8 + bit < numBits) {
+          |        v |= 1UL << bit;
+          |      }
+          |    }
+          |    byteArray[byte] = v;
+          |  }
+          |}
+          |
+          |// example method that places the hex value of byteArray into str
+          |void byte_array_string(STACK_FRAME String str, uint8_t* byteArray, size_t numBytes) {
+          |  DeclNewStackFrame(caller, "ext.c", "", "byte_array_string", 0);
+          |
+          |  for(size_t byte = 0; byte < numBytes; byte++) {
+          |    U8_string_(SF str, byteArray[byte]);
+          |    String__append(SF str, string(" "));
+          |  }
+          |}"""
+    return ret
   }
 }

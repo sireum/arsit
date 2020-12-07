@@ -10,8 +10,8 @@ import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names, SeL4NixNamesUtil, StringUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.{BitCodecNameUtil, CommonUtil, Names, NixSeL4NameUtil, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.message.Reporter
 
@@ -40,19 +40,50 @@ object NixGen{
 
   def generate(): ArsitResult
 
+  def genExtensionEntries(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[ST], ISZ[ST]) = {
+    var extHEntries: ISZ[ST] = ISZ()
+    var extCEntries: ISZ[ST] = ISZ()
+
+    if(types.rawConnections) {
+      // add numBit and numBytes global vars for each type passing between components
+
+      var seenTypes: Set[AadlType] = Set.empty
+      for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
+        val originatingType: AadlType = p._portType match {
+          case BitType(_, _, Some(o)) => o
+          case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
+        }
+        if(!seenTypes.contains(originatingType)) {
+          seenTypes = seenTypes + originatingType
+
+          val originatingTypeNames: DataTypeNames = Util.getDataTypeNames(originatingType, names.basePackage)
+
+          val bits: Z = TypeUtil.getBitCodecMaxSize(originatingType) match {
+            case Some(b) => b
+            case _ => halt(s"Unexpected: Bit-codec size not attached to ${originatingTypeNames.typeName}")
+          }
+
+          val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
+          val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+
+          extHEntries = extHEntries :+
+            st"""const static size_t ${numBitsName} = ${bits}; // bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
+                |const static size_t ${numBytesName} = (${numBitsName} - 1) / 8 + 1;"""
+        }
+      }
+
+      extHEntries = extHEntries :+ SeL4NixTemplate.bitCodecExtHEnties()
+      extCEntries = extCEntries :+ SeL4NixTemplate.bitCodecExtCEnties()
+    }
+    return (extHEntries, extCEntries)
+  }
+
   def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
 
     val rootExtDir = Os.path(dirs.ext_cDir)
 
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()
-
-    val extC = rootExtDir / NixGen.EXT_C
-    val extH = rootExtDir / NixGen.EXT_H
-    resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), Util.getLibraryFile(NixGen.EXT_C), F)
-    resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), Util.getLibraryFile(NixGen.EXT_H), F)
-
-    extensionFiles = (extensionFiles :+ extC) :+ extH
 
     if (arsitOptions.excludeImpl) {
 
@@ -62,13 +93,13 @@ object NixGen{
       val userImplFile = extRoot / s"${names.componentSingletonType}.c"
       val userHeaderFile = extRoot / s"${names.componentSingletonType}.h"
 
-      val apiFilename = SeL4NixNamesUtil.apiHelperFilename(names)
+      val apiFilename = NixSeL4NameUtil.apiHelperFilename(names)
       val apiHeaderFile = extRoot / s"${apiFilename}.h"
       val apiImplFile = extRoot / s"${apiFilename}.c"
 
       var entrypointAdapters: ISZ[ST] = ISZ()
 
-      val logInfo = SeL4NixNamesUtil.apiHelperMethodName("logInfo", names)
+      val logInfo = NixSeL4NameUtil.apiHelperMethodName("logInfo", names)
 
       { // add entrypoint stubs
         var entrypointSignatures: ISZ[ST] = ISZ()
@@ -89,24 +120,51 @@ object NixGen{
         var tindex = z"0"
 
         for(p <- ports.filter(f => CommonUtil.isInPort(f.feature))) {
-          val getter = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
+          val getter = NixSeL4NameUtil.apiHelperGetterMethodName(p.name, names)
           val str = s"${p.name}_str"
           val s: ST = if(CommonUtil.isDataPort(p.feature)) {
             val t = s"t$tindex"
             tindex = tindex + 1
 
-            val (refName, decl): (String, ST) = if(p.getPortTypeNames.isEnum()) {
-              (t, st"${p.getPortTypeNames.qualifiedCTypeName} $t;")
-            } else {
-              (s"&$t", st"DeclNew${p.getPortTypeNames.qualifiedCTypeName}($t);")
+            val entry:ST = {
+              if(types.rawConnections) {
+                val originatingTypeNames: DataTypeNames = p._portType match {
+                  case BitType(_, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+                  case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
+                }
+
+                val numBits = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
+                val numBytes = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+                val bitsName = s"${t}_numBits"
+
+                st"""uint8_t ${t}[${numBytes}];
+                    |size_t ${bitsName};
+                    |if(${getter}(${StackFrameTemplate.SF} &${bitsName}, ${t})) {
+                    |  // sanity check
+                    |  sfAssert(${StackFrameTemplate.SF} (Z) ${bitsName} == ${numBits}, "numBits received does not match expected");
+                    |
+                    |  DeclNewString(${str});
+                    |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
+                    |  byte_array_string(${StackFrameTemplate.SF} (String) &${str}, ${t}, ${numBytes});
+                    |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
+                    |}"""
+              }
+              else {
+                val (refName, decl): (String, ST) = if (p.getPortTypeNames.isEnum() || p.getPortTypeNames.isBaseType()) {
+                  (t, st"${p.getPortTypeNames.qualifiedCTypeName} $t;")
+                } else {
+                  (s"&$t", st"DeclNew${p.getPortTypeNames.qualifiedCTypeName}($t);")
+                }
+                st"""${decl}
+                    |if(${getter}(${StackFrameTemplate.SF} &${t})) {
+                    |  DeclNewString(${str});
+                    |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
+                    |  ${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &${str}, ${refName});
+                    |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
+                    |}"""
+              }
             }
-            st"""${decl}
-                |if(${getter}(${StackFrameTemplate.SF} &${t})) {
-                |  DeclNewString(${str});
-                |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
-                |  ${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &${str}, ${refName});
-                |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
-                |}"""
+            entry
           } else {
             st"""if(${getter}(${StackFrameTemplate.SF_LAST} )){
                 |  String ${str} = string("Received event on ${p.name}");
@@ -187,8 +245,9 @@ object NixGen{
 
               if (types.rawConnections && p.feature.category == ir.FeatureCategory.EventDataPort) {
                 val rawHandlerMethodName = s"${handlerName}_raw"
-
-                val rawParams: ISZ[ST] = params :+ st"size_t numBits" :+ st"uint8_t *byteArray"
+                val numBits = "numBits"
+                val byteArray = "byteArray"
+                val rawParams: ISZ[ST] = params :+ st"size_t ${numBits}" :+ st"uint8_t *${byteArray}"
 
                 val rawHandler = SeL4NixTemplate.methodSignature(rawHandlerMethodName, rawParams, "Unit")
 
@@ -199,20 +258,33 @@ object NixGen{
                   name = rawHandlerMethodName,
                   line = 0)
 
+                val str = s"${p.name}String"
                 methods = methods :+
                   st"""${rawHandler} {
                       |  ${declNewStackFrameRaw};
                       |
+                      |  size_t numBytes = ${numBits} == 0 ? 0 : (${numBits} - 1) / 8 + 1;
                       |  DeclNewString(${p.name}String);
-                      |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${rawHandlerMethodName} called"));
-                      |  ${logInfo} (${StackFrameTemplate.SF} (String) &${p.name}String);
+                      |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("${rawHandlerMethodName} called"));
+                      |  byte_array_string(${StackFrameTemplate.SF} (String) &${str}, ${byteArray}, numBytes);
+                      |  ${logInfo} (${StackFrameTemplate.SF} (String) &${str});
                       |}"""
+
+                val __exampleApiUsage: Option[ST] =
+                  if(!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
+                    dumpedExampleGetterApiUsageAlready = T
+                    _exampleApiUsage
+                  } else {
+                    None()
+                  }
 
                 methods = methods :+
                   st"""${handlerSig} {
                       |  ${declNewStackFrame};
                       |
                       |  ${rawHandlerMethodName}(${StackFrameTemplate.SF} value->size, value->value);
+                      |
+                      |  ${__exampleApiUsage}
                       |}"""
               }
               else {
@@ -306,7 +378,7 @@ object NixGen{
           p.feature.direction match {
             case ir.Direction.In => {
 
-              val cApiMethodName = SeL4NixNamesUtil.apiHelperGetterMethodName(p.name, names)
+              val cApiMethodName = NixSeL4NameUtil.apiHelperGetterMethodName(p.name, names)
               val returnType = "bool"
               val slangApiGetMethodName = s"${names.cOperationalApi}_get${p.name}_"
               val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
@@ -356,7 +428,7 @@ object NixGen{
             case ir.Direction.Out => {
               val isEventPort = p.feature.category == ir.FeatureCategory.EventPort
 
-              val cApiMethodName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
+              val cApiMethodName = NixSeL4NameUtil.apiHelperSetterMethodName(p.name, names)
               val returnType = "void"
               val sendSet: String = if (CommonUtil.isAadlDataPort(p.feature)) "set" else "send"
               val slangApiSetMethodName = s"${names.cInitializationApi}_${sendSet}${p.name}_"
@@ -409,7 +481,7 @@ object NixGen{
           val loggers = ISZ("logInfo", "logDebug", "logError")
 
           for (l <- loggers) {
-            val methodName = SeL4NixNamesUtil.apiHelperMethodName(l, names)
+            val methodName = NixSeL4NameUtil.apiHelperMethodName(l, names)
             val params = ISZ(st"String str")
 
             val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
@@ -457,18 +529,37 @@ object NixGen{
 
     var resultCount = z"0"
     for(p <- ports.filter(f => CommonUtil.isOutPort(f.feature))) {
-      val setterName = SeL4NixNamesUtil.apiHelperSetterMethodName(p.name, names)
+      val setterName = NixSeL4NameUtil.apiHelperSetterMethodName(p.name, names)
       val u: ST = if(CommonUtil.isDataPort(p.feature)) {
         val result = s"t${resultCount}"
         resultCount = resultCount + 1
-        val decl: ST = if(p.getPortTypeNames.isEnum()) {
-          st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()};
-              |${setterName}(${StackFrameTemplate.SF} ${result});"""
-        } else {
-          st"""DeclNew${p.getPortTypeNames.qualifiedCTypeName}(${result});
-              |${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF} &${result});
-              |${setterName}(${StackFrameTemplate.SF} &${result});"""
-        }
+        val decl: ST =
+          if(types.rawConnections) {
+            val originatingTypeNames: DataTypeNames = p._portType match {
+              case BitType(_, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+              case _ =>halt(s"Unexpected: Could not find originating type for ${p._portType}")
+            }
+
+            val numBits = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
+            val numBytes = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+
+            st"""uint8_t ${result}[${numBytes}];
+                |byte_array_default(${StackFrameTemplate.SF} ${result}, ${numBits}, ${numBytes});
+                |${setterName}(${StackFrameTemplate.SF} ${numBits}, ${result});"""
+
+          } else {
+            if (p.getPortTypeNames.isEnum()) {
+              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()};
+                  |${setterName}(${StackFrameTemplate.SF} ${result});"""
+            } else if(p.getPortTypeNames.isBaseType()){
+              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF_LAST});
+                  |${setterName}(${StackFrameTemplate.SF} ${result});"""
+            } else {
+              st"""DeclNew${p.getPortTypeNames.qualifiedCTypeName}(${result});
+                  |${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF} &${result});
+                  |${setterName}(${StackFrameTemplate.SF} &${result});"""
+            }
+          }
         decl
       } else {
         st"${setterName}(${StackFrameTemplate.SF_LAST});"
@@ -478,7 +569,7 @@ object NixGen{
     }
 
     val loggers: ISZ[ST] = ISZ[String]("logInfo", "logDebug", "logError").map((l: String) => {
-      val mname = SeL4NixNamesUtil.apiHelperMethodName(l, names)
+      val mname = NixSeL4NameUtil.apiHelperMethodName(l, names)
       st"""${mname}(${StackFrameTemplate.SF} string("Example ${l}"));"""
     })
 
@@ -491,13 +582,13 @@ object NixGen{
       name = userMethodName,
       line = 0)
 
-    val ret: ST =
+    val initMethodImpl: ST =
       st"""${initialiseMethodSig} {
-          | ${declNewStackFrame};
+          |  ${declNewStackFrame};
           |
-          | // examples of api setter and logging usage
+          |  // examples of api setter and logging usage
           |
-          | ${(statements, "\n\n")}
+          |  ${(statements, "\n\n")}
           |}"""
 
     val api_params = ISZ(st"${names.cInitializationApi} api")
@@ -508,13 +599,13 @@ object NixGen{
       owner = "",
       name = apiMethodName,
       line = 0)
-    val adapterMethod: ST =
+    val apiMethodImpl: ST =
       st"""${apiMethodSig} {
           |  ${apiDeclNewStackFrame};
           |
           |  ${userMethodName}(${StackFrameTemplate.SF_LAST});
           |}"""
-    return (initialiseMethodSig, ret, adapterMethod)
+    return (initialiseMethodSig, initMethodImpl, apiMethodImpl)
   }
 
   def genStubFinaliseMethod(names: Names, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
@@ -567,13 +658,14 @@ object NixGen{
     var a: ISZ[ST] = ISZ()
     var counter: Z = z"0"
     val _types: ISZ[AadlType] = if (types.rawConnections) {
-      ISZ(TypeUtil.SlangEmbeddedBitType)
+      // TODO all types in typesMap should be BitTypes that optionally link
+      // back to their originating type
+      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None()))
     } else {
       types.typeMap.entries.map((x: (String, AadlType)) => x._2)
     }
 
     for (typ <- _types) {
-      //val typ = t._2
       val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
       a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
       counter = counter + z"1"

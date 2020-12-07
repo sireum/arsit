@@ -66,6 +66,8 @@ import org.sireum.message.Reporter
     var mainSends: ISZ[ST] = ISZ()
     var inPorts: ISZ[Port] = ISZ()
     var appNames: ISZ[String] = ISZ()
+    var ext_h_entries: ISZ[ST] = ISZ()
+    var ext_c_entries: ISZ[ST] = ISZ()
 
     val components = symbolTable.componentMap.values.filter(p =>
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
@@ -179,8 +181,23 @@ import org.sireum.message.Reporter
 
       addResource(dirs.nixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
 
+      val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component, names, ports)
+      ext_h_entries = ext_h_entries ++ _ext_h_entries
+      ext_c_entries = ext_c_entries ++ _ext_c_entries
+
+      // don't care about paths since the root directory containing the 'ext-c'
+      // dir will be passed to the transpiler rather than the individual resources
       val (paths, extResources) = genExtensionFiles(component, names, ports)
+
       resources = resources ++ extResources
+    }
+
+    {
+      val extC = Os.path(dirs.ext_cDir) / NixGen.EXT_C
+      val extH = Os.path(dirs.ext_cDir) / NixGen.EXT_H
+
+      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(ext_c_entries), F)
+      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(ext_h_entries), F)
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty

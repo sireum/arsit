@@ -218,43 +218,6 @@ object StubTemplate {
     return ret
   }
 
-  @pure def componentTrait(topLevelPackageName: String,
-                           packageName: String,
-                           dispatchProtocol: Dispatch_Protocol.Type,
-                           componentType: String,
-                           bridgeName: String,
-                           ports: ISZ[Port],
-                           names: Names): ST = {
-    val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute).map((m: EntryPoints.Type) => st"def ${m.string}(): Unit = {}")
-
-    val caseMethods: ISZ[ST] = dispatchProtocol match {
-      case Dispatch_Protocol.Sporadic =>
-        ports.filter(p => CommonUtil.isEventPort(p.feature) && CommonUtil.isInFeature(p.feature))
-          .map(m => portCaseEventHandlerMethod(m, names.apiOperational))
-      case Dispatch_Protocol.Periodic => ISZ(st"""def timeTriggered() : Unit = {}""")
-    }
-
-    val ret: ST =
-      st"""// #Sireum
-          |
-          |package $packageName
-          |
-          |import org.sireum._
-          |import ${topLevelPackageName}._
-          |
-          |${StringTemplate.doNotEditComment(None())}
-          |
-          |@msig trait ${componentType} {
-          |
-          |  def api : ${bridgeName}.Api
-          |
-          |  ${(caseMethods, "\n\n")}
-          |
-          |  ${(entryPoints, "\n\n")}
-          |}"""
-    return ret
-  }
-
   @pure def addId(s: String): String = {
     return s"${s}_Id"
   }
@@ -319,7 +282,8 @@ object StubTemplate {
   @pure def portApiUsage(p: Port): ST = {
     if (CommonUtil.isInFeature(p.feature)) {
       val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
-      return st"val apiUsage_${p.name}: Option[${typeName}] = api.get${p.name}()"
+      return st"""val apiUsage_${p.name}: Option[${typeName}] = api.get${p.name}()
+                 |api.logInfo(s"Received on ${p.name}: $${apiUsage_${p.name}}")"""
     } else {
       val payload: String =
         if (p.getPortTypeNames.isEmptyType()) ""
@@ -354,7 +318,7 @@ object StubTemplate {
     }
   }
 
-  @pure def portCaseEventHandlerMethod(v: Port, operationalApiType: String): ST = {
+  @pure def portCaseEventHandlerMethod(v: Port, operationalApiType: String, extras: Option[ST]): ST = {
     val methodName: String = s"handle${v.name}"
 
     v.feature.category match {
@@ -363,13 +327,15 @@ object StubTemplate {
           st"""def $methodName(api: ${operationalApiType}, value : ${v.getPortTypeNames.qualifiedReferencedTypeName}): Unit = {
               |  api.logInfo("example $methodName implementation")
               |  api.logInfo(s"received ${"${value}"}")
+              |  ${extras}
               |}"""
         return ret
       case FeatureCategory.EventPort =>
         val ret: ST =
           st"""def $methodName(api: ${operationalApiType}): Unit = {
               |  api.logInfo("example $methodName implementation")
-              |  api.logInfo("received ${v.name}")
+              |  api.logInfo("received ${v.name} event")
+              |  ${extras}
               |}"""
         return ret
       case _ => halt(s"Unexpected ${v.feature.category}")
@@ -383,7 +349,8 @@ object StubTemplate {
                                ports: ISZ[Port],
                                isBless: B): ST = {
 
-     val outPorts = ports.filter(p => CommonUtil.isOutFeature(p.feature))
+    val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
+    val outPorts = ports.filter(p => CommonUtil.isOutPort(p.feature))
     val init =
       st"""def ${EntryPoints.initialise.string}(api: ${names.apiInitialization}): Unit = {
           |  // example api usage
@@ -399,17 +366,23 @@ object StubTemplate {
       st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
     })
 
+    val exampleApiGetterUsage: ST = st"""// example api usage
+                                        |
+                                        |${(inPorts.map((p: Port) => portApiUsage(p)), "\n")}"""
     val eventHandlers: ISZ[ST] =
       if (dispatchProtocol == Dispatch_Protocol.Periodic) {
         ISZ(
           st"""def timeTriggered(api: ${names.apiOperational}): Unit = {
-              |  // example api usage
-              |
-              |  ${(ports.map((p: Port) => portApiUsage(p)), "\n")}
+              |  ${exampleApiGetterUsage}
               |}""")
       } else {
+        var extras: Option[ST] = Some(exampleApiGetterUsage)
         ports.filter(p => CommonUtil.isInFeature(p.feature) &&
-          CommonUtil.isEventPort(p.feature)).map(m => portCaseEventHandlerMethod(m, names.apiOperational))
+          CommonUtil.isEventPort(p.feature)).map(m => {
+          val ret = portCaseEventHandlerMethod(m, names.apiOperational, extras)
+          extras = None() // only emit 'other api usage' for first event handler
+          ret
+        })
       }
 
     val ret: ST =

@@ -54,6 +54,12 @@ import org.sireum.message.Reporter
 
   def gen(root: AadlSystem): Unit = {
 
+    val extC = Os.path(dirs.ext_cDir) / NixGen.EXT_C
+    val extH = Os.path(dirs.ext_cDir) / NixGen.EXT_H
+
+    var ext_h_entries: ISZ[ST] = ISZ()
+    var ext_c_entries: ISZ[ST] = ISZ()
+
     val components: ISZ[AadlThreadOrDevice] = symbolTable.componentMap.values.filter(p =>
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
       .map(m => m.asInstanceOf[AadlThreadOrDevice])
@@ -153,9 +159,14 @@ import org.sireum.message.Reporter
 
       val cOutputDir: Os.Path = Os.path(dirs.cDir) / instanceSingletonName
 
+      val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component.component, names, ports)
+      ext_h_entries = ext_h_entries ++ _ext_h_entries
+      ext_c_entries = ext_c_entries ++ _ext_c_entries
+
       val (paths, extResources) = genExtensionFiles(component.component, names, ports)
       resources = resources ++ extResources
-      val transpilerExtensions: ISZ[Os.Path] = paths ++ genSel4Adapters(names) //++ getExistingCFiles(cExtensionDir)
+
+      val transpilerExtensions: ISZ[Os.Path] = (extC +: (extH +: paths)) ++ genSel4Adapters(names)
 
       val stackSizeInBytes: Z = PropertyUtil.getStackSizeInBytes(component.component) match {
         case Some(size) => size
@@ -180,6 +191,14 @@ import org.sireum.message.Reporter
       )
 
       transpilerScripts = transpilerScripts + (instanceSingletonName ~> trans)
+    }
+
+    {
+      val _ext_c_entries: ISZ[ST] = (Set.empty ++ ext_c_entries.map(s => s.render)).elements.map(s => st"${s}")
+      val _ext_h_entries: ISZ[ST] = (Set.empty ++ ext_h_entries.map(s => s.render)).elements.map(s => st"${s}")
+
+      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(_ext_c_entries), F)
+      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(_ext_h_entries), F)
     }
 
     { // Slang Type Library
