@@ -107,12 +107,18 @@ object Arsit {
 
     val bridgeTestPath: String = root.relativize(Os.path(projDirs.testBridgeDir)).value
 
+    def dewindowfy(s: String): String = {
+      // want path seps in build.sbt comments to be nix so they don't break reg tests
+      return ops.StringOps.replaceAllLiterally(conversions.String.toCis(s), "\\", "/")
+    }
+
     val millBuildDest = Os.path(options.outputDir) / "build.sc"
     val millBuildContent = StringTemplate.millBuild(options.packageName, options.embedArt)
     ret = ret :+ Resource(millBuildDest.value, millBuildContent, T, F)
 
     val sbtBuildDest = Os.path(options.outputDir) / "build.sbt"
-    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt, demoScalaPath, bridgeTestPath)
+    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt,
+      dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, T, F)
 
     val buildPropertiesDest = Os.path(options.outputDir) / "project/build.properties"
