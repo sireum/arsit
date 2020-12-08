@@ -271,8 +271,11 @@ object HAMR {
   val cNixDir: String = Util.pathAppend(cDir, ISZ("nix"))
 
   val auxCodeDir: ISZ[String] = {
-    assert(options.auxCodeDir.size > 0, "Expecting at least on aux code dir")
-    options.auxCodeDir
+    if(options.auxCodeDir.isEmpty) {
+      ISZ(cDir)
+    } else {
+      options.auxCodeDir
+    }
   }
 
   val ext_cDir: String = Util.pathAppend(auxCodeDir(0), ISZ("ext-c"))

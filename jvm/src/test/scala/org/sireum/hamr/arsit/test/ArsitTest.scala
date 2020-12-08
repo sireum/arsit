@@ -210,11 +210,14 @@ object ArsitTest {
     }
   }
 
-  def writeOutTestResults(testResults: TestResult, dir: Os.Path): Os.Path = {
+  def writeOutTestResults(testResults: TestResult, dir: Os.Path, verbose: B = F): Os.Path = {
     for(result <- testResults.map.entries) {
       val r = (dir / result._1).canon
       if(result._2.overwrite || !r.exists) {
         r.writeOver(result._2.content)
+        if(verbose) {
+          println(s"Wrote: ${r}")
+        }
         if(result._2.makeExecutable) {
           r.chmodAll("700")
         }
