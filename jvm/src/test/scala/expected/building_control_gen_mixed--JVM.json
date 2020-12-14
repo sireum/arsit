@@ -7,7 +7,7 @@
         "building_control_gen_mixed--JVM\/src\/main\/data\/packageName_not_set\/BuildingControl\/TempUnit.scala",
         {
           "type" : "TestResource",
-          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object TempUnit {\n  'Fahrenheit\n  'Celsius\n  'Kelvin\n}\n\nobject TempUnit_Payload {\n  def empty(): TempUnit_Payload = {\n    return TempUnit_Payload(BuildingControl.TempUnit.byOrdinal(0).get)\n  }\n}\n\n@datatype class TempUnit_Payload(value: BuildingControl.TempUnit.Type) extends art.DataContent\n",
+          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object TempUnit {\n  \"Fahrenheit\"\n  \"Celsius\"\n  \"Kelvin\"\n}\n\nobject TempUnit_Payload {\n  def empty(): TempUnit_Payload = {\n    return TempUnit_Payload(BuildingControl.TempUnit.byOrdinal(0).get)\n  }\n}\n\n@datatype class TempUnit_Payload(value: BuildingControl.TempUnit.Type) extends art.DataContent\n",
           "overwrite" : true,
           "makeExecutable" : false
         }
@@ -34,7 +34,7 @@
         "building_control_gen_mixed--JVM\/src\/main\/data\/packageName_not_set\/BuildingControl\/FanAck.scala",
         {
           "type" : "TestResource",
-          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object FanAck {\n  'Ok\n  'Error\n}\n\nobject FanAck_Payload {\n  def empty(): FanAck_Payload = {\n    return FanAck_Payload(BuildingControl.FanAck.byOrdinal(0).get)\n  }\n}\n\n@datatype class FanAck_Payload(value: BuildingControl.FanAck.Type) extends art.DataContent\n",
+          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object FanAck {\n  \"Ok\"\n  \"Error\"\n}\n\nobject FanAck_Payload {\n  def empty(): FanAck_Payload = {\n    return FanAck_Payload(BuildingControl.FanAck.byOrdinal(0).get)\n  }\n}\n\n@datatype class FanAck_Payload(value: BuildingControl.FanAck.Type) extends art.DataContent\n",
           "overwrite" : true,
           "makeExecutable" : false
         }
@@ -43,7 +43,7 @@
         "building_control_gen_mixed--JVM\/src\/main\/data\/packageName_not_set\/BuildingControl\/FanCmd.scala",
         {
           "type" : "TestResource",
-          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object FanCmd {\n  'On\n  'Off\n}\n\nobject FanCmd_Payload {\n  def empty(): FanCmd_Payload = {\n    return FanCmd_Payload(BuildingControl.FanCmd.byOrdinal(0).get)\n  }\n}\n\n@datatype class FanCmd_Payload(value: BuildingControl.FanCmd.Type) extends art.DataContent\n",
+          "content" : "\/\/ #Sireum\n\npackage packageName_not_set.BuildingControl\n\nimport org.sireum._\nimport packageName_not_set._\n\n\/\/ This file was auto-generated.  Do not edit\n\n@enum object FanCmd {\n  \"On\"\n  \"Off\"\n}\n\nobject FanCmd_Payload {\n  def empty(): FanCmd_Payload = {\n    return FanCmd_Payload(BuildingControl.FanCmd.byOrdinal(0).get)\n  }\n}\n\n@datatype class FanCmd_Payload(value: BuildingControl.FanCmd.Type) extends art.DataContent\n",
           "overwrite" : true,
           "makeExecutable" : false
         }
