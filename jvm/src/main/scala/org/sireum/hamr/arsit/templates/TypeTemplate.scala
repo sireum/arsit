@@ -102,7 +102,7 @@ object TypeTemplate {
   }
   @pure def enumType(typeNames: DataTypeNames,
                      values: ISZ[String]): ST = {
-    val vals = values.map((m: String) => st"'$m")
+    val vals = values.map((m: String) => st""""$m"""")
     val ret: ST =
       st"""@enum object ${typeNames.typeName} {
           |  ${(vals, "\n")}
