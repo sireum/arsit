@@ -19,4 +19,8 @@ import org.sireum._
   def getSBTVersion(): String = $
 
   def getSbtAssemblyVersion(): String = $
+
+  def getInspectorVersion(): String = $
+
+  def getFormsRtVersion(): String = $
 }

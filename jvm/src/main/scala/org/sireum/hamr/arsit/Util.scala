@@ -254,6 +254,8 @@ object HAMR {
 
   val componentDir: String = Util.pathAppend(srcMainDir, ISZ("component"))
 
+  val inspectorDir: String= Util.pathAppend(srcMainDir, ISZ("inspector"))
+
   /* Testing dirs */
   val testDir: String = Util.pathAppend(srcDir, ISZ("test"))
 

@@ -33,10 +33,6 @@ import org.sireum.ops.ISZOps
 
   var resources: ISZ[Resource] = ISZ()
 
-  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
-  }
-
   def generate(): PhaseResult = {
     if (!types.rawConnections) {
       for (t <- types.typeMap.values) {
@@ -72,6 +68,12 @@ import org.sireum.ops.ISZOps
 
     val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
     addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
+
+    val inspectorDemo = InspectorTemplate.inspectorDemo(basePackage)
+    addResource(directories.inspectorDir, ISZ(basePackage, "InspectorDemo.scala"), inspectorDemo, T)
+
+    val genSerializers = InspectorTemplate.genSeralizersScript()
+    addExeResource(directories.dataDir, ISZ(basePackage, "sergen.sh"), genSerializers, T)
   }
 
   def getComponentId(): Z = {
@@ -218,7 +220,7 @@ import org.sireum.ops.ISZOps
 
           fldInits = fldInits :+ fieldTypeNames.empty()
 
-          flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedTypeName}"
+          flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
 
         TypeTemplate.dataType(typeNames, flds, fldInits, None[ST]())
@@ -301,5 +303,13 @@ import org.sireum.ops.ISZOps
     seenConnections = seenConnections + (c.src.feature.get ~> seq)
 
     return T
+  }
+
+  def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ Util.createExeResource(baseDir, paths, content, overwrite)
+  }
+
+  def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
+    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
   }
 }

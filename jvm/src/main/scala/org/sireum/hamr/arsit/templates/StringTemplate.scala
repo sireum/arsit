@@ -167,6 +167,24 @@ object StringTemplate {
           |  }
           |)
           |
+          |val slangEmbeddedTestSettings = Seq(
+          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
+          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
+          |
+          |  libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
+          |
+          |  // Jetbrains UI Designer
+          |  libraryDependencies += "com.intellij" % "forms_rt" % formsRtVersion withSources() withJavadoc(),
+          |)
+          |
+          |val slangEmbeddedInspectorSettings = Seq(
+          |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/inspector",
+          |
+          |  libraryDependencies += "org.sireum" % "inspector-capabilities" % inspectorVersion withSources() withJavadoc(),
+          |  libraryDependencies += "org.sireum" % "inspector-gui" % inspectorVersion withSources() withJavadoc(),
+          |  libraryDependencies += "org.sireum" % "inspector-services-jvm" % inspectorVersion withSources() withJavadoc()
+          |)
+          |
           |def standardProject(projId: String, projectDirectory: String) =
           |  Project(id = projId, base = file(projectDirectory)).settings(commonSettings)
           |
@@ -176,12 +194,12 @@ object StringTemplate {
           |
           |def slangEmbeddedTestProject(projId: String, projectDirectory: String) =
           |  Project(id = projId, base = file(projectDirectory)).
-          |    settings(commonSettings ++ slangEmbeddedSettings ++
-          |      Seq(
-          |        Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
-          |        Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
-          |        libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test")
-          |    )
+          |    settings(commonSettings ++ slangEmbeddedSettings ++ slangEmbeddedTestSettings)
+          |
+          |def slangEmbeddedInspectorProject(projId: String, projectDirectory: String) = {
+          |  Project(id = projId, base = file(projectDirectory)).
+          |    settings(commonSettings ++ slangEmbeddedSettings ++ slangEmbeddedTestSettings ++ slangEmbeddedInspectorSettings)
+          |}
           |"""
     return ret
   }
@@ -298,6 +316,9 @@ object StringTemplate {
     val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
     val scalaVersion = ArsitLibrary.getScalaVersion()
+    val formsRtVersion = ArsitLibrary.getFormsRtVersion()
+    val inspectorVersion = ArsitLibrary.getInspectorVersion()
+
     val ret: ST =
       st"""// refer to https://github.com/sireum/kekinian/blob/master/versions.properties
           |// to get the most recent versions of the following dependencies
@@ -316,7 +337,13 @@ object StringTemplate {
           |// refer to https://github.com/sireum/kekinian/releases to get the latest
           |// Sireum Kekinian release
           |// https://github.com/sireum/kekinian/tree/${kekinianVersion}
-          |val kekinianVersion = "${kekinianVersion}""""
+          |val kekinianVersion = "${kekinianVersion}"
+          |
+          |
+          |val inspectorVersion = "${inspectorVersion}"
+          |
+          |val formsRtVersion = "${formsRtVersion}"
+          |"""
     return ret
   }
 }

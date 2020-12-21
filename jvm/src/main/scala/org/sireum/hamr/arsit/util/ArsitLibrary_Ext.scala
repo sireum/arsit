@@ -49,4 +49,12 @@ object ArsitLibrary_Ext {
   def getSbtAssemblyVersion(): String = {
     return getBuildSbtProperties().getProperty("sbtassembly.version")
   }
+
+  def getFormsRtVersion(): String = {
+    return getBuildSbtProperties().getProperty("com.intellij.forms_rt.version")
+  }
+
+  def getInspectorVersion(): String = {
+    return getBuildSbtProperties().getProperty("org.sireum.inspector.version")
+  }
 }

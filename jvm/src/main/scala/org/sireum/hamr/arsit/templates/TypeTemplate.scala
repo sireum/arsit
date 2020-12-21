@@ -27,53 +27,52 @@ object TypeTemplate {
           |
           |object Base_Types {
           |
-          |  type Boolean = org.sireum.B
+          |  type Boolean = B
           |
-          |  type Integer = org.sireum.Z
+          |  type Integer = Z
           |
-          |  type Integer_8 = org.sireum.S8
-          |  type Integer_16 = org.sireum.S16
-          |  type Integer_32 = org.sireum.S32
-          |  type Integer_64 = org.sireum.S64
+          |  type Integer_8 = S8
+          |  type Integer_16 = S16
+          |  type Integer_32 = S32
+          |  type Integer_64 = S64
           |
-          |  type Unsigned_8 = org.sireum.U8
-          |  type Unsigned_16 = org.sireum.U16
-          |  type Unsigned_32 = org.sireum.U32
-          |  type Unsigned_64 = org.sireum.U64
+          |  type Unsigned_8 = U8
+          |  type Unsigned_16 = U16
+          |  type Unsigned_32 = U32
+          |  type Unsigned_64 = U64
           |
           |  // TODO: Base_Types::Natural
           |
-          |  type Float = org.sireum.R
-          |  type Float_32 = org.sireum.F32
-          |  type Float_64 = org.sireum.F64
+          |  type Float = R
+          |  type Float_32 = F32
+          |  type Float_64 = F64
           |
-          |  type Character = org.sireum.C
-          |  type String = org.sireum.String
+          |  type Character = C
           |
-          |  type Bits = org.sireum.ISZ[org.sireum.B]
+          |  type Bits = org.sireum.ISZ[B]
           |
-          |  @datatype class Boolean_Payload(value: Boolean) extends art.DataContent
+          |  @datatype class Boolean_Payload(value: B) extends art.DataContent
           |
-          |  @datatype class Integer_Payload(value: Integer) extends art.DataContent
+          |  @datatype class Integer_Payload(value: Z) extends art.DataContent
           |
-          |  @datatype class Integer_8_Payload(value: Integer_8) extends art.DataContent
-          |  @datatype class Integer_16_Payload(value: Integer_16) extends art.DataContent
-          |  @datatype class Integer_32_Payload(value: Integer_32) extends art.DataContent
-          |  @datatype class Integer_64_Payload(value: Integer_64) extends art.DataContent
+          |  @datatype class Integer_8_Payload(value: S8) extends art.DataContent
+          |  @datatype class Integer_16_Payload(value: S16) extends art.DataContent
+          |  @datatype class Integer_32_Payload(value: S32) extends art.DataContent
+          |  @datatype class Integer_64_Payload(value: S64) extends art.DataContent
           |
-          |  @datatype class Unsigned_8_Payload(value: Unsigned_8) extends art.DataContent
-          |  @datatype class Unsigned_16_Payload(value: Unsigned_16) extends art.DataContent
-          |  @datatype class Unsigned_32_Payload(value: Unsigned_32) extends art.DataContent
-          |  @datatype class Unsigned_64_Payload(value: Unsigned_64) extends art.DataContent
+          |  @datatype class Unsigned_8_Payload(value: U8) extends art.DataContent
+          |  @datatype class Unsigned_16_Payload(value: U16) extends art.DataContent
+          |  @datatype class Unsigned_32_Payload(value: U32) extends art.DataContent
+          |  @datatype class Unsigned_64_Payload(value: U64) extends art.DataContent
           |
-          |  @datatype class Float_Payload(value: Float) extends art.DataContent
-          |  @datatype class Float_32_Payload(value: Float_32) extends art.DataContent
-          |  @datatype class Float_64_Payload(value: Float_64) extends art.DataContent
+          |  @datatype class Float_Payload(value: R) extends art.DataContent
+          |  @datatype class Float_32_Payload(value: S32) extends art.DataContent
+          |  @datatype class Float_64_Payload(value: S64) extends art.DataContent
           |
-          |  @datatype class Character_Payload(value: Character) extends art.DataContent
+          |  @datatype class Character_Payload(value: C) extends art.DataContent
           |  @datatype class String_Payload(value: String) extends art.DataContent
           |
-          |  @datatype class Bits_Payload(value: Bits) extends art.DataContent
+          |  @datatype class Bits_Payload(value: ISZ[B]) extends art.DataContent
           |
           |  def Boolean_empty(): Boolean = { return F }
           |
@@ -131,10 +130,6 @@ object TypeTemplate {
   }
 
   @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
-    val typeName = typeNames.qualifiedReferencedTypeName
-    val payloadTypeName = typeNames.payloadName
-    val emptyPayload = typeNames.empty()
-
     val ret: ST =
       st"""object ${typeNames.typeName} {
           |  def empty(): ${typeNames.qualifiedTypeName} = {
