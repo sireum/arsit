@@ -48,6 +48,7 @@ object TypeTemplate {
           |  type Float_64 = F64
           |
           |  type Character = C
+          |  type String = org.sireum.String
           |
           |  type Bits = org.sireum.ISZ[B]
           |
