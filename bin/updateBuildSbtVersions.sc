@@ -64,20 +64,24 @@ def update(key: String, currentVersion: String): B = {
 }
 
 def jitpack(): Unit = {
-  println(s"Triggering jitpack on https://github.com/sireum/kekinian/tree/${kekinianVersion} ...")
-  val r = mill.call(ISZ("jitPack", "--owner", "sireum", "--repo", "kekinian", "--lib", "library", "--hash", kekinianVersion)).at(SIREUM_HOME).console.run()
-  r match {
-    case r: Os.Proc.Result.Normal =>
-      println(r.out)
-      println(r.err)
-      if (!r.ok) {
-        eprintln(s"Exit code: ${r.exitCode}")
-      }
-    case r: Os.Proc.Result.Exception =>
-      eprintln(s"Exception: ${r.err}")
-    case _: Os.Proc.Result.Timeout =>
-      eprintln("Timeout")
-      eprintln()
+  val jitpacks: ISZ[(String, String, String)] = ISZ(("kekinian", "library", kekinianVersion), ("slang-embedded-art", "slang-embedded-art", artVersion))
+
+  for(j <- jitpacks) {
+    println(s"Triggering jitpack on https://github.com/sireum/${j._1}/tree/${j._3} ...")
+    val r = mill.call(ISZ("jitPack", "--owner", "sireum", "--repo", j._1, "--lib", j._2, "--hash", j._3)).at(SIREUM_HOME).console.run()
+    r match {
+      case r: Os.Proc.Result.Normal =>
+        println(r.out)
+        println(r.err)
+        if (!r.ok) {
+          eprintln(s"Exit code: ${r.exitCode}")
+        }
+      case r: Os.Proc.Result.Exception =>
+        eprintln(s"Exception: ${r.err}")
+      case _: Os.Proc.Result.Timeout =>
+        eprintln("Timeout")
+        eprintln()
+    }
   }
   println()
 }
