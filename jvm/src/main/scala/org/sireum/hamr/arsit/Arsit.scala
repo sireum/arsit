@@ -113,7 +113,8 @@ object Arsit {
     }
 
     val millBuildDest = Os.path(options.outputDir) / "build.sc"
-    val millBuildContent = StringTemplate.millBuild(options.packageName, options.embedArt)
+    val outputDirSimpleName = millBuildDest.up.name
+    val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, options.embedArt)
     ret = ret :+ Resource(millBuildDest.value, millBuildContent, T, F)
 
     val sbtBuildDest = Os.path(options.outputDir) / "build.sbt"

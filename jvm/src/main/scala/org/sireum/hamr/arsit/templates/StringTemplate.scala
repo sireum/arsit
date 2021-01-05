@@ -92,19 +92,7 @@ object StringTemplate {
     val ret: ST =
       st"""// Example sbt build definitions -- the contents of this file will not be overwritten
           |//
-          |// To open the following project in Sireum IVE select 'File > Open ...' and
-          |// navigate to the directory containing this file then click 'OK'.  To install
-          |// Sireum IVE see https://github.com/sireum/kekinian#installing
-          |//
-          |// To run the demo from within Sireum IVE:
-          |//   Right click ${demoScalaPath} and choose "Run 'Demo'"
-          |//
-          |// To run the unit test cases from within Sireum IVE:
-          |//   Right click the ${bridgeTestPath} directory and choose "Run ScalaTests in bridge"
-          |//
-          |// NOTE: A ClassNotFoundException may be raised the first time you try to
-          |//       run the demo or unit tests.  If this occurs simply delete the directory
-          |//       named 'target' and retry
+          |// sbt can be obtained from https://www.scala-sbt.org/download.html
           |//
           |// To run the demo from the command line:
           |//   sbt run
@@ -121,10 +109,22 @@ object StringTemplate {
           |//   sbt "set test in assembly := {}" assembly
           |// on Windows
           |//
-          |// sbt can be obtained from https://www.scala-sbt.org/download.html
+          |// Sireum IVE:
+          |//   In IVE select 'File > Open ...' and navigate to the directory containing
+          |//   this file then click 'OK'.  To install Sireum IVE see https://github.com/sireum/kekinian#installing
+          |//
+          |//   To run the demo from within Sireum IVE:
+          |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
+          |//
+          |//   To run the unit test cases from within Sireum IVE:
+          |//     Right click the ${bridgeTestPath} directory and choose "Run ScalaTests in bridge"
+          |//
+          |//   NOTE: A ClassNotFoundException may be raised the first time you try to
+          |//         run the demo or unit tests.  If this occurs simply delete the directory
+          |//         named 'target' and retry
           |
-          |lazy val ${projectName} = slangEmbeddedTestProject("${projectName}", ".")
           |
+          |lazy val ${projectName} = slangEmbeddedProject("${projectName}", ".")
           |
           |${libDependencies()}
           |
@@ -155,6 +155,14 @@ object StringTemplate {
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/nix",
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/seL4Nix",
           |
+          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
+          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
+          |
+          |  libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
+          |
+          |  // Jetbrains UI Designer
+          |  libraryDependencies += "com.intellij" % "forms_rt" % formsRtVersion,
+          |
           |  mainClass in (Compile, run) := Some("${basePackageName}.Demo"),
           |
           |  mainClass in assembly := Some("${basePackageName}.Demo"),
@@ -167,38 +175,23 @@ object StringTemplate {
           |  }
           |)
           |
-          |val slangEmbeddedTestSettings = Seq(
-          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
-          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
-          |
-          |  libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
-          |
-          |  // Jetbrains UI Designer
-          |  libraryDependencies += "com.intellij" % "forms_rt" % formsRtVersion,
-          |)
-          |
           |val slangEmbeddedInspectorSettings = Seq(
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/inspector",
           |
-           |  libraryDependencies += "org.sireum" % "inspector-capabilities" % inspectorVersion withSources(),
+          |  libraryDependencies += "org.sireum" % "inspector-capabilities" % inspectorVersion withSources(),
           |  libraryDependencies += "org.sireum" % "inspector-gui" % inspectorVersion withSources(),
-          |  libraryDependencies += "org.sireum" % "inspector-services-jvm" % inspectorVersion withSources()
-          |)
+          |  libraryDependencies += "org.sireum" % "inspector-services-jvm" % inspectorVersion withSources(),
           |
-          |def standardProject(projId: String, projectDirectory: String) =
-          |  Project(id = projId, base = file(projectDirectory)).settings(commonSettings)
+          |  mainClass in (Compile, run) := Some("${basePackageName}.InspectorDemo"),
+          |)
           |
           |def slangEmbeddedProject(projId: String, projectDirectory: String) =
           |  Project(id = projId, base = file(projectDirectory)).
           |    settings(commonSettings ++ slangEmbeddedSettings)
           |
-          |def slangEmbeddedTestProject(projId: String, projectDirectory: String) =
-          |  Project(id = projId, base = file(projectDirectory)).
-          |    settings(commonSettings ++ slangEmbeddedSettings ++ slangEmbeddedTestSettings)
-          |
           |def slangEmbeddedInspectorProject(projId: String, projectDirectory: String) = {
           |  Project(id = projId, base = file(projectDirectory)).
-          |    settings(commonSettings ++ slangEmbeddedSettings ++ slangEmbeddedTestSettings ++ slangEmbeddedInspectorSettings)
+          |    settings(commonSettings ++ slangEmbeddedSettings ++ slangEmbeddedInspectorSettings)
           |}
           |"""
     return ret
@@ -221,6 +214,7 @@ object StringTemplate {
   }
 
   def millBuild(basePackageName: String,
+                outputDirSimpleName: String,
                 embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
     val inspectorVersion = ArsitLibrary.getInspectorVersion()
@@ -230,29 +224,39 @@ object StringTemplate {
           |import scalalib._
           |import ammonite.ops._
           |
-          |// Example mill build -- the contents of this file will not be overwritten
+          |// Example mill build -- the contents of this file will not be overwritten.
           |//
           |// mill is included with Sireum Kekinian: https://github.com/sireum/kekinian#installing
-          |//
-          |// To open the following project in VSCode, first follow Sireum Kekinian's
-          |// instructions for setting up a development environment using Scala Metals:
-          |// https://github.com/sireum/kekinian#scala-metals
-          |//
-          |// Then open the folder containing this file in VSCode and import the
-          |// mill build when asked.
           |//
           |// To run the demo from the command line:
           |//   $$SIREUM_HOME/bin/mill ${basePackageName}.run
           |//
           |// To run the example unit tests:
-          |//   $$SIRUEM_HOME/bin/mill ${basePackageName}.test
+          |//   $$SIREUM_HOME/bin/mill ${basePackageName}.tests
+          |//
+          |// Sireum IVE:
+          |//   First cd to the directory containing this file and execute the following:
+          |//
+          |//     $$SIREUM_HOME/bin/sireum tools ivegen -f -m mill -n ${outputDirSimpleName} ../
+          |//
+          |//   Then in IVE select 'File > Open ...' and navigate to the directory
+          |//   containing this file then click 'OK'.  To have the codebase and its
+          |//   test suites recompiled upon changes, run:
+          |//
+          |//     $$SIREUM_HOME/bin/mill -w ${basePackageName}.tests.compile
+          |//
+          |// Visual Studio Code:
+          |//   Follow Sireum Kekinian's instructions for setting up a development
+          |//   environment using Scala Metals: https://github.com/sireum/kekinian#scala-metals
+          |//   Then open the folder containing this file in VS Code and import the
+          |//   mill build when asked.
+          |
           |
           |object `${basePackageName}` extends slangEmbeddedProject
           |
           |trait SlangEmbeddedModule extends ScalaModule {
           |
           |  ${libDependencies()}
-          |
           |
           |  def scalaVersion = scalaVer
           |
@@ -299,20 +303,16 @@ object StringTemplate {
           |
           |  override def sources = T.sources(contributedSources)
           |
-          |  object test extends Tests {
+          |  object tests extends Tests {
           |
           |    final override def millSourcePath = super.millSourcePath / os.up / os.up / "src" / "test"
           |
-          |    override def sources = T.sources(
-          |      millSourcePath / "bridge",
-          |      millSourcePath / "util"
-          |    )
+          |    override def sources = T.sources( millSourcePath / "bridge",
+          |                                      millSourcePath / "util" )
           |
           |    override def ivyDeps = Agg(ivy"org.scalatest::scalatest::$${scalaTestVersion}")
           |
-          |    override def testFrameworks = T {
-          |      Seq("org.scalatest.tools.Framework")
-          |    }
+          |    override def testFrameworks = T { Seq("org.scalatest.tools.Framework") }
           |  }
           |}
           |
@@ -338,8 +338,10 @@ object StringTemplate {
           |      dep"org.sireum:inspector-capabilities:${inspectorVersion}",
           |      dep"org.sireum:inspector-gui:${inspectorVersion}",
           |      dep"org.sireum:inspector-services-jvm:${inspectorVersion}"
-          |    ).addRepositories(Repositories.jitpack)
-          |     .run()
+          |    ).addRepositories(
+          |      Repositories.sonatype("releases"),
+          |      Repositories.jitpack
+          |    ).run()
           |    val pathRefs = files.map(f => PathRef(Path(f)))
           |    Agg(pathRefs : _*)
           |  }
@@ -373,8 +375,7 @@ object StringTemplate {
           |
           |
           |// refer to https://github.com/sireum/kekinian/releases to get the latest
-          |// Sireum Kekinian release
-          |// https://github.com/sireum/kekinian/tree/${kekinianVersion}
+          |// Sireum Kekinian release: https://github.com/sireum/kekinian/tree/${kekinianVersion}
           |val kekinianVersion = "${kekinianVersion}"
           |
           |
