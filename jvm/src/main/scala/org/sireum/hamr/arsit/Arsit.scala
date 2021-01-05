@@ -115,12 +115,12 @@ object Arsit {
     val millBuildDest = Os.path(options.outputDir) / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
     val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, options.embedArt)
-    ret = ret :+ Resource(millBuildDest.value, millBuildContent, T, F)
+    ret = ret :+ Resource(millBuildDest.value, millBuildContent, F, F)
 
     val sbtBuildDest = Os.path(options.outputDir) / "build.sbt"
     val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
-    ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, T, F)
+    ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
 
     val buildPropertiesDest = Os.path(options.outputDir) / "project/build.properties"
     ret = ret :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
