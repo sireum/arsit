@@ -180,9 +180,9 @@ object StringTemplate {
           |val slangEmbeddedInspectorSettings = Seq(
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/inspector",
           |
-          |  libraryDependencies += "org.sireum" % "inspector-capabilities" % inspectorVersion withSources() withJavadoc(),
-          |  libraryDependencies += "org.sireum" % "inspector-gui" % inspectorVersion withSources() withJavadoc(),
-          |  libraryDependencies += "org.sireum" % "inspector-services-jvm" % inspectorVersion withSources() withJavadoc()
+           |  libraryDependencies += "org.sireum" % "inspector-capabilities" % inspectorVersion withSources(),
+          |  libraryDependencies += "org.sireum" % "inspector-gui" % inspectorVersion withSources(),
+          |  libraryDependencies += "org.sireum" % "inspector-services-jvm" % inspectorVersion withSources()
           |)
           |
           |def standardProject(projId: String, projectDirectory: String) =
@@ -223,10 +223,12 @@ object StringTemplate {
   def millBuild(basePackageName: String,
                 embedArt: B): ST = {
     val artVersion = ArsitLibrary.getArtVersion()
+    val inspectorVersion = ArsitLibrary.getInspectorVersion()
 
     val ret: ST =
       st"""import mill._
           |import scalalib._
+          |import ammonite.ops._
           |
           |// Example mill build -- the contents of this file will not be overwritten
           |//
@@ -244,6 +246,8 @@ object StringTemplate {
           |//
           |// To run the example unit tests:
           |//   $$SIRUEM_HOME/bin/mill ${basePackageName}.test
+          |
+          |object `${basePackageName}` extends slangEmbeddedProject
           |
           |trait SlangEmbeddedModule extends ScalaModule {
           |
@@ -265,17 +269,25 @@ object StringTemplate {
           |    "-language:postfixOps"
           |  ) }
           |
-          |  override def ivyDeps = Agg(ivy"org.sireum.kekinian::library::$${kekinianVersion}")
+          |  override def ivyDeps = Agg(
+          |    ivy"org.sireum.kekinian::library::$${kekinianVersion}",
+          |
+          |    // Jetbrains UI Designer
+          |    ivy"com.intellij:forms_rt:$${formsRtVersion}"
+          |  )
           |
           |  override def scalacPluginIvyDeps = Agg(ivy"org.sireum::scalac-plugin::$${sireumScalacVersion}")
           |
-          |  override def repositories = super.repositories ++ Seq(
-          |    coursier.maven.MavenRepository("https://jitpack.io/"),
-          |  )
+          |  override def repositories = super.repositories :+ coursier.Repositories.jitpack
+          |
+          |  override def mainClass = T { Some("${basePackageName}.Demo") }
+          |
+          |  implicit def osPath2PathRef(p: os.Path): PathRef = PathRef(p)
           |}
           |
-          |trait AadlModule extends SlangEmbeddedModule {
-          |  override def sources = T.sources (
+          |trait slangEmbeddedProject extends SlangEmbeddedModule {
+          |
+          |  def contributedSources: Seq[PathRef] = Seq(
           |    millSourcePath / os.up / "src" / "main" / "architecture",
           |    millSourcePath / os.up / "src" / "main" / "art",
           |    millSourcePath / os.up / "src" / "main" / "bridge",
@@ -284,13 +296,12 @@ object StringTemplate {
           |    millSourcePath / os.up / "src" / "main" / "nix",
           |    millSourcePath / os.up / "src" / "main" / "seL4Nix"
           |  )
-          |}
           |
-          |trait AadlTestModule extends AadlModule {
+          |  override def sources = T.sources(contributedSources)
+          |
           |  object test extends Tests {
           |
-          |    final override def millSourcePath =
-          |      super.millSourcePath / os.up / os.up / "src" / "test"
+          |    final override def millSourcePath = super.millSourcePath / os.up / os.up / "src" / "test"
           |
           |    override def sources = T.sources(
           |      millSourcePath / "bridge",
@@ -299,12 +310,39 @@ object StringTemplate {
           |
           |    override def ivyDeps = Agg(ivy"org.scalatest::scalatest::$${scalaTestVersion}")
           |
-          |    override def testFrameworks = T { Seq("org.scalatest.tools.Framework") }
+          |    override def testFrameworks = T {
+          |      Seq("org.scalatest.tools.Framework")
+          |    }
           |  }
           |}
           |
-          |object `${basePackageName}` extends AadlTestModule {
-          |  override def mainClass = T { Some("${basePackageName}.Demo") }
+          |trait slangEmbeddedInspectorProject extends slangEmbeddedProject {
+          |
+          |  override def mainClass = T { Some("${basePackageName}.InspectorDemo") }
+          |
+          |  override def contributedSources =
+          |    super.contributedSources :+ millSourcePath / os.up / "src" / "main" / "inspector"
+          |
+          |  // FIXME: 2021.01.04 - the following doesn't work due to javafx/mill resolution issue
+          |  //        -- refer to https://github.com/lihaoyi/mill/issues/767
+          |  // override def ivyDeps = Agg(
+          |  //   ivy"org.sireum::inspector-capabilities::$${inspectorVersion}",
+          |  //   ivy"org.sireum::inspector-gui::$${inspectorVersion}",
+          |  //   ivy"org.sireum::inspector-services-jvm::$${inspectorVersion}"
+          |
+          |  // workaround to #767 -- refer to https://github.com/lihaoyi/mill/issues/767#issuecomment-652799588
+          |  override def unmanagedClasspath = T {
+          |    import coursier._
+          |
+          |    val files = Fetch().addDependencies(
+          |      dep"org.sireum:inspector-capabilities:${inspectorVersion}",
+          |      dep"org.sireum:inspector-gui:${inspectorVersion}",
+          |      dep"org.sireum:inspector-services-jvm:${inspectorVersion}"
+          |    ).addRepositories(Repositories.jitpack)
+          |     .run()
+          |    val pathRefs = files.map(f => PathRef(Path(f)))
+          |    Agg(pathRefs : _*)
+          |  }
           |}
           |"""
 
