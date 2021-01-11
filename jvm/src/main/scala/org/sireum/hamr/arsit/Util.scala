@@ -6,6 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
+import org.sireum.hamr.codegen.common.symbols.AadlThreadOrDevice
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.util.PathUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -134,19 +135,21 @@ object Util {
     return Port(feature, parent, pType, basePackage, isTrigger, counter)
   }
 
-  def getPorts(m: ir.Component, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
+  def getPorts(m: AadlThreadOrDevice, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
     var _counter = counter
 
-    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m)
+    val component = m.component
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
     var ports: ISZ[Port] = ISZ()
-    for (f <- Util.getFeatureEnds(m.features) if CommonUtil.isPort(f)) {
-      val portName = CommonUtil.getLastName(f.identifier)
+    for(f <- m.ports.filter(_f => CommonUtil.isPort(_f.feature))){
+      val feature = f.feature.asInstanceOf[ir.FeatureEnd]
+      val portName = CommonUtil.getLastName(feature.identifier)
       val isTrigger: B =
         if (dispatchTriggers.isEmpty) T
         else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
 
-      ports = ports :+ getPort(f, m, types, basePackage, isTrigger, _counter)
+      ports = ports :+ getPort(feature, component, types, basePackage, isTrigger, _counter)
 
       _counter = _counter + 1
     }

@@ -77,7 +77,7 @@ import org.sireum.message.Reporter
       val component = threadOrDevice.component
 
       val names: Names = Names(component, basePackage)
-      val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
+      val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
       val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(component) match {
         case Some(x) => x

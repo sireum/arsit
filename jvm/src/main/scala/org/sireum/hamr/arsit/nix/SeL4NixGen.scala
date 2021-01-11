@@ -72,7 +72,7 @@ import org.sireum.message.Reporter
 
       val names: Names = Names(component.component, basePackage)
 
-      val ports: ISZ[Port] = Util.getPorts(component.component, types, basePackage, z"0")
+      val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
 
       val instanceSingletonName: String = names.componentSingletonType
 

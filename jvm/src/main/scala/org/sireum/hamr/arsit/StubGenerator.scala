@@ -103,7 +103,7 @@ import org.sireum.message.Reporter
 
     imports = imports :+ st"${names.packageName}.{${names.componentSingletonType} => component}"
 
-    val ports: ISZ[Port] = Util.getPorts(m.component, types, basePackage, z"-1000")
+    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
     val bridgeTestApis: ST = TestTemplate.bridgeTestApis(basePackage, names, ports)
     addResource(dirs.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala"), bridgeTestApis, T)

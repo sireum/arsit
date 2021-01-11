@@ -169,7 +169,7 @@ import org.sireum.ops.ISZOps
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
 
-    val ports: ISZ[Port] = Util.getPorts(m.component, types, basePackage, portId)
+    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, portId)
     portId = portId + ports.size
 
     val _ports = ports.map((p: Port) => ArchitectureTemplate.genPort(p))
