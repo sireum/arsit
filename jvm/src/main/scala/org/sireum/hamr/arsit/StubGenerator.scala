@@ -181,16 +181,16 @@ import org.sireum.message.Reporter
     val m = s.component
     val subprograms: ISZ[(ST, ST)] = m.subComponents.filter(p => p.category == ComponentCategory.Subprogram).map(p => {
       // only expecting in or out parameters
-      assert(ops.ISZOps(Util.getFeatureEnds(p.features))
+      assert(ops.ISZOps(Util.getFeatureEnds_DEPRECATED(p.features))
         .forall(f => f.category == FeatureCategory.Parameter && f.direction != Direction.InOut))
 
       val methodName = CommonUtil.getLastName(p.identifier)
-      val params: ISZ[String] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
+      val params: ISZ[String] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
         .map(param => {
           val pType = Util.getFeatureEndType(param, types)
           s"${CommonUtil.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).referencedTypeName}"
         })
-      val rets: ISZ[FeatureEnd] = Util.getFeatureEnds(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
+      val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
       assert(rets.size == 1)
       val rType = Util.getFeatureEndType(rets(0), types)
       val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName

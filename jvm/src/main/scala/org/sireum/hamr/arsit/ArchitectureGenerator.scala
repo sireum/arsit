@@ -188,10 +188,12 @@ import org.sireum.ops.ISZOps
 
   def processConnectionInstance(ci: ConnectionInstance): ST = {
     val srcComponentId = CommonUtil.getName(ci.src.component)
-    val srcComponentFeatureId = CommonUtil.getLastName(ci.src.feature.get)
+    val srcFeatureId = CommonUtil.getName(ci.src.feature.get)
+    val srcComponentFeatureId = symbolTable.featureMap.get(srcFeatureId).get.identifier
 
     val dstComponentId = CommonUtil.getName(ci.dst.component)
-    val dstComponentFeatureId = CommonUtil.getLastName(ci.dst.feature.get)
+    val dstFeatureId = CommonUtil.getName(ci.dst.feature.get)
+    val dstComponentFeatureId = symbolTable.featureMap.get(dstFeatureId).get.identifier
 
     return ArchitectureTemplate.connection(
       s"${srcComponentId}.${srcComponentFeatureId}",

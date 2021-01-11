@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
-import org.sireum.hamr.codegen.common.symbols.AadlThreadOrDevice
+import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.util.PathUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -105,8 +105,13 @@ object Util {
     }
   }
 
-  @pure def getFeatureEnds(is: ISZ[ir.Feature]): ISZ[ir.FeatureEnd] = {
+  // FIXME: add symbol resolver support for subprograms and then remove this method
+  @pure def getFeatureEnds_DEPRECATED(is: ISZ[ir.Feature]): ISZ[ir.FeatureEnd] = {
     return is.filter(f => f.isInstanceOf[ir.FeatureEnd]).map(m => m.asInstanceOf[ir.FeatureEnd])
+  }
+
+  @pure def getFeatureEnds(is: ISZ[AadlFeature]): ISZ[AadlFeature] = {
+    return is.filter(f => f.feature.isInstanceOf[ir.Feature])
   }
 
   @pure def getFeatureEndType(f: ir.FeatureEnd, types: AadlTypes): AadlType = {
@@ -118,7 +123,8 @@ object Util {
   }
 
 
-  def getPort(feature: ir.FeatureEnd,
+  def getPort(aadlFeature: AadlFeature,
+              feature: ir.FeatureEnd,
               parent: ir.Component,
               types: AadlTypes,
               basePackage: String,
@@ -132,7 +138,7 @@ object Util {
       candidate
     }
 
-    return Port(feature, parent, pType, basePackage, isTrigger, counter)
+    return Port(aadlFeature, feature, parent, pType, basePackage, isTrigger, counter)
   }
 
   def getPorts(m: AadlThreadOrDevice, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
@@ -142,14 +148,14 @@ object Util {
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
     var ports: ISZ[Port] = ISZ()
-    for(f <- m.ports.filter(_f => CommonUtil.isPort(_f.feature))){
+    for(f <- m.ports.filter(_f => CommonUtil.isPort(_f.feature))) {
       val feature = f.feature.asInstanceOf[ir.FeatureEnd]
       val portName = CommonUtil.getLastName(feature.identifier)
       val isTrigger: B =
         if (dispatchTriggers.isEmpty) T
         else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
 
-      ports = ports :+ getPort(feature, component, types, basePackage, isTrigger, _counter)
+      ports = ports :+ getPort(f, feature, component, types, basePackage, isTrigger, _counter)
 
       _counter = _counter + 1
     }
@@ -196,7 +202,8 @@ object HAMR {
 
 }
 
-@datatype class Port(feature: ir.FeatureEnd,
+@datatype class Port(aadlFeature: AadlFeature,
+                     feature: ir.FeatureEnd,
                      parent: ir.Component,
                      _portType: AadlType,
                      basePackageName: String,
@@ -204,7 +211,7 @@ object HAMR {
                      portId: Z) {
 
   def name: String = {
-    return CommonUtil.getLastName(feature.identifier)
+    return aadlFeature.identifier
   }
 
   def nameWithPortId: String = {

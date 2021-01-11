@@ -11,6 +11,7 @@ import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.ir.FeatureEnd
 import org.sireum.message.Reporter
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
@@ -110,23 +111,23 @@ import org.sireum.message.Reporter
         case _ =>
       }
 
-      val featureEnds = Util.getFeatureEnds(component.features)
-      val portSize = featureEnds.filter(f => CommonUtil.isInFeature(f) || CommonUtil.isOutFeature(f)).size
+      val featureEnds = Util.getFeatureEnds(threadOrDevice.ports)
+      val portSize = featureEnds.filter(f => CommonUtil.isInFeature(f.feature) || CommonUtil.isOutFeature(f.feature)).size
       if (portSize > maxPortsForComponents) {
         maxPortsForComponents = portSize
       }
 
       val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
-      for (p <- featureEnds if CommonUtil.isInFeature(p)) {
-        assert(CommonUtil.isPort(p))
+      for (p <- featureEnds if CommonUtil.isInFeature(p.feature)) {
+        assert(CommonUtil.isPort(p.feature))
 
-        val portName = CommonUtil.getLastName(p.identifier)
+        val portName = p.identifier
         val isTrigger: B =
           if (dispatchTriggers.isEmpty) T
           else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
 
-        val port = Util.getPort(p, component, types, basePackage, isTrigger, z"-1000")
+        val port = Util.getPort(p, p.feature.asInstanceOf[FeatureEnd], component, types, basePackage, isTrigger, z"-1000")
 
         val portIdName: String = s"${port.name}PortId"
         val portOptName: String = s"${port.name}Opt"
@@ -172,7 +173,7 @@ import org.sireum.message.Reporter
         bridge = bridgeInstanceVarName,
         portIds = portIds,
         cases = appCases,
-        component = component,
+        component = threadOrDevice,
         isPeriodic = isPeriodic,
         types = types,
         touchMethod = touchMethod,
