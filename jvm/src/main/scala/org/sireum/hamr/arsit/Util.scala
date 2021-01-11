@@ -111,7 +111,7 @@ object Util {
   }
 
   @pure def getFeatureEnds(is: ISZ[AadlFeature]): ISZ[AadlFeature] = {
-    return is.filter(f => f.feature.isInstanceOf[ir.Feature])
+    return is.filter(f => f.feature.isInstanceOf[ir.FeatureEnd])
   }
 
   @pure def getFeatureEndType(f: ir.FeatureEnd, types: AadlTypes): AadlType = {
