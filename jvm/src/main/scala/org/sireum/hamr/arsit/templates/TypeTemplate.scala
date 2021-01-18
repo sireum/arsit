@@ -67,8 +67,8 @@ object TypeTemplate {
           |  @datatype class Unsigned_64_Payload(value: U64) extends art.DataContent
           |
           |  @datatype class Float_Payload(value: R) extends art.DataContent
-          |  @datatype class Float_32_Payload(value: S32) extends art.DataContent
-          |  @datatype class Float_64_Payload(value: S64) extends art.DataContent
+          |  @datatype class Float_32_Payload(value: F32) extends art.DataContent
+          |  @datatype class Float_64_Payload(value: F64) extends art.DataContent
           |
           |  @datatype class Character_Payload(value: C) extends art.DataContent
           |  @datatype class String_Payload(value: String) extends art.DataContent
