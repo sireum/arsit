@@ -43,13 +43,13 @@ object BlessST {
                |
                |
                |  //methods for execution states
-               |  def Finalize_Entrypoint(): Unit = {}
+               |  def finalise(_api: ${operationalApiType}): Unit = {}
                |
-               |  def Activate_Entrypoint(): Unit = {}
+               |  def activate(_api: ${operationalApiType}): Unit = {}
                |
-               |  def Deactivate_Entrypoint(): Unit = {}
+               |  def deactivate(_api: ${operationalApiType}): Unit = {}
                |
-               |  def Recover_Entrypoint(): Unit = {}
+               |  def recover(_api: ${operationalApiType}): Unit = {}
                |}
                |
                |${(extensions, "\n")}

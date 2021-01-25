@@ -103,9 +103,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     var extensions: ISZ[ST] = ISZ()
 
     if(subprograms.nonEmpty) {
+      /*
       extensions = extensions :+ BlessST.externalObjectSlang(extSubprogramObject(F),
         subprograms.values.map(sp => st"${sp.extMethod}$$"))
-
 
       val extName = extSubprogramObject(T)
       val eo = BlessST.externalObjectJVM(st"${packageName}", extName, ISZ(), subprograms.values.map(sp =>
@@ -115,6 +115,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
       //CommonUtil.writeFileString(st"${componentDirectory}/${extName}.scala".render, eo, false)
       addResource(directories.componentDir, ISZ(s"${extName}.scala"), eo, F)
+      */
     }
 
     val globalVars: ISZ[ST] = if(genDebugObjects) {
@@ -184,7 +185,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
                    |$body"""
       }
 
-      return BlessST.method(st"Initialize_Entrypoint", ISZ(), body, st"Unit")
+      val initApiParam = st"_api: ${componentNames.apiInitialization}"
+      return BlessST.method(st"initialise", ISZ(initApiParam), body, st"Unit")
     } else {
       var cases: ISZ[ST] = ISZ()
 
@@ -211,8 +213,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
                      |  case _ => halt(s"Unexpected: $$currentState")
                      |}"""
 
-      val params: ISZ[ST] = ISZ(BlessST.dispatchedPortsDec())
-      return BlessST.method(st"Compute_Entrypoint", params, body, st"Unit")
+      val operationalApiParam = st"_api: ${componentNames.apiOperational}"
+      val params: ISZ[ST] = ISZ(operationalApiParam, BlessST.dispatchedPortsDec())
+      return BlessST.method(st"compute", params, body, st"Unit")
     }
   }
 
@@ -372,15 +375,30 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
       case c: BTSSubprogramCallAction => visitBTSSubprogramCallAction(c)
     }
 
-    return ret;
+    return ret
   }
 
   def visitBTSSubprogramCallAction(action: BTSSubprogramCallAction): ST = {
-    val params: ISZ[ST] = action.params.map(m => {
-      val exp = visitBTSExp(m.exp.get)
-      st"${m.paramName.get} = ${exp}"
-    })
-    val ret: ST = st"${action.name}(${(params, ", ")})"
+    val sb = resolveSubprogram(action.name)
+
+    var params: ISZ[ST] = ISZ()
+    for(i <- z"0" until sb.params.size){
+      val p = action.params(i)
+      val paramName = CommonUtil.getLastName(p.paramName.get)
+      val exp = visitBTSExp(p.exp.get)
+      params = params :+ st"${paramName} = ${exp}"
+    }
+
+    val methodName = st"${extSubprogramObject(F)}.${CommonUtil.getLastName(action.name)}"
+
+    var ret: ST = st"${methodName}(${(params, ", ")})"
+
+    if(action.params.size > sb.params.size) {
+      // TODO: assumes single and optional out param that has to be last
+      assert(action.params.size == sb.params.size + 1)
+      val assignExp = visitBTSExp(action.params(action.params.size - 1).exp.get)
+      ret = st"${assignExp} = ${ret}"
+    }
     return ret
   }
 
@@ -546,7 +564,14 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     } else {
       assert(e.name.name.size == 1)
 
-      if (genDebugObjects && isGlobalVariables(n)) {
+      if(aadlTypes.typeMap.contains(n)){
+        aadlTypes.typeMap.get(n).get match {
+          case e: EnumType =>
+            val dn = Util.getDataTypeNames(e, basePackage)
+            st"${dn.qualifiedTypeName}"
+          case x => halt(s"Unexpected type: $x")
+        }
+      } else if (genDebugObjects && isGlobalVariables(n)) {
         BlessST.debugObjectAccess(n)
       }
       else {
@@ -735,7 +760,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
   }
 
   def extSubprogramObject(isJvm: B): ST = {
-    return st"${componentNames.componentSingletonType}_Subprograms${if(isJvm) "_Ext" else ""}"
+    return st"${componentNames.componentSingletonType}_subprograms${if(isJvm) "_Ext" else ""}"
   }
 
   def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {

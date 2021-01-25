@@ -202,16 +202,17 @@ object StubTemplate {
           return ret
       }
     } else {
+      val apiId = ApiTemplate.apiOperationalId
       val ret: ST =
         dispatchProtocol match {
         case Dispatch_Protocol.Sporadic =>
           st"""val EventTriggered(dispatchedPortIds) = Art.dispatchStatus(${bridgeName})
               |Art.receiveInput(dispatchedPortIds, dataInPortIds)
-              |${componentName}.Compute_Entrypoint(dispatchedPortIds)
+              |${componentName}.compute(${apiId}, dispatchedPortIds)
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
         case Dispatch_Protocol.Periodic =>
           st"""Art.receiveInput(eventInPortIds, dataInPortIds)
-              |${componentName}.Compute_Entrypoint(ISZ())
+              |${componentName}.compute(${apiId}, ISZ())
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
 
