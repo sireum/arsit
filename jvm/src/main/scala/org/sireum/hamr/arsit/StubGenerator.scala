@@ -3,12 +3,14 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.util.ExperimentalOptions
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir._
 import org.sireum.message.Reporter
@@ -25,6 +27,8 @@ import org.sireum.message.Reporter
   val basePackage: String = arsitOptions.packageName
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
+
+  val processBTSNodes: B = ExperimentalOptions.processBtsNodes(arsitOptions.experimentalOptions)
 
   def generate(): Result = {
 
@@ -125,6 +129,10 @@ import org.sireum.message.Reporter
         }
     }
 
+    val blessAnnexes : ISZ[Annex] = m.component.annexes.filter(a => a.name == "behavior_specification")
+
+    val genBlessEntryPoints: B = blessAnnexes.nonEmpty && processBTSNodes
+
     val bridge = StubTemplate.bridge(
       topLevelPackageName = basePackage,
       packageName = names.packageName,
@@ -137,7 +145,7 @@ import org.sireum.message.Reporter
       ports = ports,
       dispatchTriggers = dispatchTriggers,
       names = names,
-      isBless = arsitOptions.bless)
+      isBless = genBlessEntryPoints)
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
@@ -149,17 +157,41 @@ import org.sireum.message.Reporter
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
-    val block = StubTemplate.componentImplBlock(
-      names.componentSingletonType,
-      names.bridge,
-      names,
-      dispatchProtocol,
-      ports,
-      arsitOptions.bless)
+    var blocks: ISZ[ST] = ISZ()
 
-    val blocks: ISZ[ST] = genSubprograms(m) match {
-      case Some(x) => ISZ(block, x)
-      case _ => ISZ(block)
+    if(!genBlessEntryPoints) {
+      val componentImplBlock = StubTemplate.componentImplBlock(
+        componentType = names.componentSingletonType,
+        bridgeName = names.bridge,
+        names = names,
+        dispatchProtocol = dispatchProtocol,
+        ports = ports,
+        isBless = genBlessEntryPoints)
+      blocks = blocks :+ componentImplBlock
+    } else {
+      assert(blessAnnexes.size == 1, s"Length is ${blessAnnexes.size}")
+
+      val btsNode = blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause]
+
+      val br: BTSResults = BTSGen(
+        directories = dirs,
+        basePackage = basePackage,
+        aadlComponent = m,
+        componentNames = names,
+        aadlTypes = types,
+        addViz = F,
+        genDebugObjects = F).process(btsNode)
+
+      assert(br.maxPort == -1 && br.maxComponent == -1 && br.optVizEntries.isEmpty) // TODO
+
+      blocks = blocks :+ br.component
+
+      resources = resources ++ br.resources
+    }
+
+    genSubprograms(m) match {
+      case Some(x) => blocks = blocks :+ x
+      case _ =>
     }
 
     val componentImpl = StubTemplate.slangPreamble(
@@ -168,7 +200,7 @@ import org.sireum.message.Reporter
       topLevelPackageName = basePackage,
       blocks = blocks)
 
-    addResource(filename, ISZ(), componentImpl, F)
+    addResource(filename, ISZ(), componentImpl, genBlessEntryPoints)
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
@@ -192,10 +224,17 @@ import org.sireum.message.Reporter
         })
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
       assert(rets.size == 1)
-      val rType = Util.getFeatureEndType(rets(0), types)
+      val rType: AadlType = Util.getFeatureEndType(rets(0), types)
+      val emptyType: Option[ST] =
+        if(rType == TypeUtil.EmptyType) { None() }
+        else {
+          val emptyValue: String = Util.getDataTypeNames(rType, basePackage).empty()
+          Some(st"${emptyValue}")
+        }
+
       val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
 
-      StubTemplate.subprogram(methodName, params, returnType)
+      StubTemplate.subprogram(methodName, params, returnType, emptyType)
     })
 
     if (subprograms.nonEmpty) {

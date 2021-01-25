@@ -203,9 +203,18 @@ object StubTemplate {
       }
     } else {
       val ret: ST =
-        st"""Art.receiveInput(eventInPortIds, dataInPortIds)
-            |${componentName}.Compute_Entrypoint()
-            |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
+        dispatchProtocol match {
+        case Dispatch_Protocol.Sporadic =>
+          st"""val EventTriggered(dispatchedPortIds) = Art.dispatchStatus(${bridgeName})
+              |Art.receiveInput(dispatchedPortIds, dataInPortIds)
+              |${componentName}.Compute_Entrypoint(dispatchedPortIds)
+              |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+        case Dispatch_Protocol.Periodic =>
+          st"""Art.receiveInput(eventInPortIds, dataInPortIds)
+              |${componentName}.Compute_Entrypoint(ISZ())
+              |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+      }
+
       return ret
     }
   }
@@ -400,11 +409,12 @@ object StubTemplate {
 
   @pure def subprogram(methodName: String,
                        params: ISZ[String],
-                       returnType: String): (ST, ST) = {
+                       returnType: String,
+                       emptyValue: Option[ST]): (ST, ST) = {
     return (
       st"""def ${methodName}(${(params, ",\n")}): ${returnType} = ${"$"}""",
       st"""def ${methodName}(${(params, ",\n")}): ${returnType} = {
-          |  ${if (returnType != "") s"return ${returnType}()" else ""}
+          |  ${if (returnType != "") st"return ${emptyValue.get}" else ""}
           |}""")
   }
 
