@@ -698,7 +698,7 @@ object ArtNixTemplate {
         case ArsitPlatform.MacOS => "open -a Terminal"
         case _ => halt(s"Unexpected platform ${arch}")
       }
-      st"""$prefix "${buildDir}/${st}$ext" &"""
+      st"""$prefix "${buildDir}/${st}$ext$${PREVENT_CLOSE}" &"""
     })
     val ret: ST =
       st"""#!/usr/bin/env bash
@@ -708,6 +708,10 @@ object ArtNixTemplate {
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
           |cd $$SCRIPT_HOME
+          |
+          |# Uncomment the following to prevent terminal from closing if app crashes
+          |#PREVENT_CLOSE="; bash -i"
+          |
           |${(stapp, "\n")}
           |read -p "Press enter to initialise components ..."
           |${buildDir}/Main$ext

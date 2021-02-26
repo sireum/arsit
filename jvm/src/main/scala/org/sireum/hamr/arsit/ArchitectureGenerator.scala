@@ -12,15 +12,14 @@ import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
-import org.sireum.message.Reporter
 import org.sireum.ops.ISZOps
+import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
 @record class ArchitectureGenerator(directories: ProjectDirectories,
                                     rootSystem: AadlSystem,
                                     arsitOptions: ArsitOptions,
                                     symbolTable: SymbolTable,
-                                    types: AadlTypes,
-                                    reporter: Reporter) {
+                                    types: AadlTypes) {
   var componentId: Z = 0
   var portId: Z = 0
 

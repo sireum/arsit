@@ -13,14 +13,13 @@ import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.util.ExperimentalOptions
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir._
-import org.sireum.message.Reporter
+import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
 @record class StubGenerator(dirs: ProjectDirectories,
                             rootSystem: AadlSystem,
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
-                            reporter: Reporter,
                             previousPhase: Result) {
 
   var toImpl: ISZ[(ST, ST)] = ISZ()

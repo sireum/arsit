@@ -5,15 +5,15 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
+import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
-import org.sireum.hamr.codegen.common.{BitCodecNameUtil, CommonUtil, Names, NixSeL4NameUtil, StringUtil}
+import org.sireum.hamr.codegen.common.types._
+import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.ir
-import org.sireum.message.Reporter
 
 object NixGen{
   val IPC_C: String = "ipc.c"
@@ -35,8 +35,6 @@ object NixGen{
   def types: AadlTypes
 
   def previousPhase: Result
-
-  def reporter: Reporter
 
   def generate(): ArsitResult
 
@@ -60,7 +58,11 @@ object NixGen{
 
           val bits: Z = TypeUtil.getBitCodecMaxSize(originatingType) match {
             case Some(b) => b
-            case _ => halt(s"Unexpected: Bit-codec size not attached to ${originatingTypeNames.typeName}")
+            case _ =>
+              //halt(s"Unexpected: Bit-codec size not attached to ${originatingTypeNames.typeName}")
+              reporter.warn(originatingType.container.get.identifier.pos, Util.toolName,
+                s"Bit-codec size not attached to ${originatingTypeNames.typeName}.  Using '1'")
+              z"1"
           }
 
           val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
@@ -683,18 +685,17 @@ object NixGenDispatch {
                arsitOptions: ArsitOptions,
                symbolTable: SymbolTable,
                types: AadlTypes,
-               reporter: Reporter,
                previousPhase: Result): ArsitResult = {
 
     val ret: ArsitResult = arsitOptions.platform match {
       case ArsitPlatform.Linux =>
-        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case ArsitPlatform.Cygwin =>
-        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case ArsitPlatform.MacOS =>
-        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case ArsitPlatform.SeL4 =>
-        SeL4NixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase, reporter).generate()
+        SeL4NixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case _ =>
         ArsitResult(
           previousPhase.resources,

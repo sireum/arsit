@@ -249,7 +249,7 @@ object HAMR {
 
 @datatype class ProjectDirectories(options: ArsitOptions) {
 
-  val rootDir: String = options.outputDir
+  val rootDir: String = options.outputDir.value
 
   val srcDir: String = Util.pathAppend(rootDir, ISZ("src"))
 
@@ -273,28 +273,31 @@ object HAMR {
 
   val testUtilDir: String = Util.pathAppend(testDir, ISZ("util"))
 
+  val auxCodeDir: ISZ[String] = options.auxCodeDirs
+
+
   /* C/CAmkES dirs */
   val binDir: String = Util.pathAppend(rootDir, ISZ("bin"))
 
-  val cDir: String =
-    if(options.outputCDir.nonEmpty) options.outputCDir.get
-    else Util.pathAppend(srcDir, ISZ("c"))
+  val outSharedCDir: Os.Path =
+    if(options.outputSharedCDir.nonEmpty) options.outputSharedCDir.get
+    else options.outputDir / "src" / "c"    // srcDir / "c"
 
-  val cNixDir: String = Util.pathAppend(cDir, ISZ("nix"))
+  val outPlatformCDir: Os.Path =
+    if(options.outputPlatformCDir.nonEmpty) options.outputPlatformCDir.get
+    else outSharedCDir
 
-  val auxCodeDir: ISZ[String] = {
-    if(options.auxCodeDir.isEmpty) {
-      ISZ(cDir)
-    } else {
-      options.auxCodeDir
-    }
-  }
+  val cDir: String = outPlatformCDir.value
+    //if(options.outputCDir.nonEmpty) options.outputCDir.get
+    //else Util.pathAppend(srcDir, ISZ("c"))
 
-  val ext_cDir: String = Util.pathAppend(auxCodeDir(0), ISZ("ext-c"))
+  val cNixDir: String = Util.pathAppend(outSharedCDir.value, ISZ("nix"))
 
-  val etcDir: String = Util.pathAppend(auxCodeDir(0), ISZ("etc"))
+  val ext_cDir: String = Util.pathAppend(outSharedCDir.value, ISZ("ext-c"))
 
-  val sel4EtcDir: String = Util.pathAppend(auxCodeDir(0), ISZ("etc_seL4"))
+  val etcDir: String = Util.pathAppend(outSharedCDir.value, ISZ("etc"))
+
+  val sel4EtcDir: String = Util.pathAppend(outSharedCDir.value, ISZ("etc_seL4"))
 
 
   val nixDir: String = Util.pathAppend(srcMainDir, ISZ("nix"))

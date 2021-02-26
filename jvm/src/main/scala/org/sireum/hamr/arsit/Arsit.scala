@@ -2,7 +2,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
-import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform}
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -15,38 +15,41 @@ import org.sireum.message._
 
 object Arsit {
   def run(m: ir.Aadl, o: ArsitOptions, reporter: Reporter): ArsitResult = {
-    return runInternal(m, o, reporter)
+    ReporterUtil.resetReporter()
+    val ret = runInternal(m, o)
+    ReporterUtil.addReports(reporter)
+    return ret
   }
 
-  private def runInternal(m: ir.Aadl, o: ArsitOptions, reporter: Reporter): ArsitResult = {
+  private def runInternal(m: ir.Aadl, o: ArsitOptions): ArsitResult = {
     var model = m
 
     if (model.components.isEmpty) {
-      reporter.error(None(), Util.toolName, "Model is empty")
+      ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
       return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
 
-    val result = ir.Transformer(Transformers.MissingTypeRewriter(reporter)).transformAadl(Transformers.CTX(F, F), model)
+    val result = ir.Transformer(Transformers.MissingTypeRewriter(ReporterUtil.reporter)).transformAadl(Transformers.CTX(F, F), model)
     model = if (result.resultOpt.nonEmpty) result.resultOpt.get else model
 
     val rawConnections: B = PropertyUtil.getUseRawConnection(model.components(0).properties)
     val aadlTypes = TypeResolver.processDataTypes(model, rawConnections, o.packageName)
 
     val useCaseConnectors: B = ExperimentalOptions.useCaseConnectors(o.experimentalOptions)
-    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, aadlTypes, reporter)
+    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, aadlTypes, ReporterUtil.reporter)
 
-    if (!TypeUtil.verifyBitCodec(aadlTypes, symbolTable, reporter)) {
+    if (!TypeUtil.verifyBitCodec(aadlTypes, symbolTable, ReporterUtil.reporter)) {
       return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
     val projectDirectories = ProjectDirectories(o)
 
     val nixPhase =
-      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
-        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter,
-          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes, reporter).generate()
+      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
+        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
+          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes).generate()
         ).generate())
 
     var artResources: ISZ[Resource] = ISZ()
@@ -55,7 +58,7 @@ object Arsit {
     }
 
     artResources = artResources ++ createBuildArtifacts(
-      CommonUtil.getLastName(m.components(0).identifier), o, projectDirectories, nixPhase.resources, reporter)
+      CommonUtil.getLastName(m.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
@@ -97,7 +100,7 @@ object Arsit {
                            reporter: Reporter): ISZ[Resource] = {
 
     var ret: ISZ[Resource] = ISZ()
-    val root = Os.path(options.outputDir)
+    val root = options.outputDir
 
     val demoScalaPath: String = {
       val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.path).endsWith("Demo.scala"))
@@ -112,24 +115,24 @@ object Arsit {
       return ops.StringOps.replaceAllLiterally(conversions.String.toCis(s), "\\", "/")
     }
 
-    val millBuildDest = Os.path(options.outputDir) / "build.sc"
+    val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
     val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, options.embedArt)
     ret = ret :+ Resource(millBuildDest.value, millBuildContent, F, F)
 
-    val sbtBuildDest = Os.path(options.outputDir) / "build.sbt"
+    val sbtBuildDest = options.outputDir / "build.sbt"
     val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
 
-    val buildPropertiesDest = Os.path(options.outputDir) / "project/build.properties"
+    val buildPropertiesDest = options.outputDir / "project/build.properties"
     ret = ret :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
 
-    val pluginsSbtDest = Os.path(options.outputDir) / "project" / "plugins.sbt"
+    val pluginsSbtDest = options.outputDir / "project" / "plugins.sbt"
     ret = ret :+ Resource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F, F)
 
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-      StringTemplate.arsitSlangInstructionsMessage(options.outputDir).render)
+      StringTemplate.arsitSlangInstructionsMessage(options.outputDir.value).render)
 
     if(isNixProject(options.platform)) {
       val cmakeDir: String = projDirs.cNixDir

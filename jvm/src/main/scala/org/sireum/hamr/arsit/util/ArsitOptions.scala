@@ -16,15 +16,16 @@ import org.sireum._
   'SeL4
 }
 
-@datatype class ArsitOptions(outputDir: String,
+@datatype class ArsitOptions(outputDir: Os.Path,
                              packageName: String,
                              embedArt: B,
                              bless: B,
                              verbose: B,
                              devicesAsThreads: B,
                              ipc: IpcMechanism.Type,
-                             auxCodeDir: ISZ[String],
-                             outputCDir: Option[String],
+                             auxCodeDirs: ISZ[String],
+                             outputSharedCDir: Option[Os.Path],
+                             outputPlatformCDir: Option[Os.Path],
                              excludeImpl: B,
                              platform: ArsitPlatform.Type,
                              bitWidth: Z,

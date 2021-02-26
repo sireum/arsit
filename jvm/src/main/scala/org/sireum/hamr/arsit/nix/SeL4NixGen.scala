@@ -10,17 +10,16 @@ import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
-import org.sireum.message.Reporter
 
 @record class SeL4NixGen(val dirs: ProjectDirectories,
                          val root: AadlSystem,
                          val arsitOptions: ArsitOptions,
                          val symbolTable: SymbolTable,
                          val types: AadlTypes,
-                         val previousPhase: Result,
-                         val reporter: Reporter) extends NixGen {
+                         val previousPhase: Result
+                        ) extends NixGen {
 
   val basePackage: String = arsitOptions.packageName
 
@@ -408,7 +407,7 @@ import org.sireum.message.Reporter
       Util.pathAppend(dirs.srcMainDir, ISZ("data")),
       Util.pathAppend(dirs.seL4NixDir, ISZ(packageName)))
 
-    val _extensions: Set[String] = Set.empty[String] ++ extensions.map((m: Os.Path) => m.value)
+    val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
 
     return TranspilerTemplate.transpiler(
       libraryName = instanceName,

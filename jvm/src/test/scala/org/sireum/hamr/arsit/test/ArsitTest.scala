@@ -52,7 +52,7 @@ trait ArsitTest extends TestSuite {
     val slangOutputDir = resultsDir / testName
 
     var testOps = ops(
-      outputDir = if(ops.outputDir != string"") ops.outputDir else slangOutputDir.canon.value,
+      outputDir = if(ops.outputDir.name != string"fake") ops.outputDir else slangOutputDir.canon,
       packageName = if(ops.packageName != string"") ops.packageName else "packageName_not_set"
     )
 
@@ -131,15 +131,16 @@ trait ArsitTest extends TestSuite {
 object ArsitTest {
 
   val baseOptions = ArsitOptions(
-    outputDir = "",
+    outputDir = Os.path("fake"),
     packageName = "",
     embedArt = T,
     bless = F,
     verbose = T,
     devicesAsThreads = T,
     ipc = IpcMechanism.SharedMemory,
-    auxCodeDir = ISZ(),
-    outputCDir = None(),
+    auxCodeDirs = ISZ(),
+    outputSharedCDir = None(),
+    outputPlatformCDir = None(),
     excludeImpl = F,
     platform = ArsitPlatform.JVM,
     bitWidth = 64,

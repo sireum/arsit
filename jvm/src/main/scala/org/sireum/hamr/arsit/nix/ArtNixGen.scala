@@ -12,16 +12,16 @@ import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir.FeatureEnd
-import org.sireum.message.Reporter
+import org.sireum.hamr.arsit.util.ReporterUtil.reporter
+import org.sireum.hamr.codegen.common.templates.TemplateUtil
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
-                        //val cExtensionDir: String,
                         val root: AadlSystem,
                         val arsitOptions: ArsitOptions,
                         val symbolTable: SymbolTable,
                         val types: AadlTypes,
-                        val previousPhase: Result,
-                        val reporter: Reporter) extends NixGen {
+                        val previousPhase: Result
+                       ) extends NixGen {
 
   val basePackage: String = arsitOptions.packageName
 
@@ -197,8 +197,11 @@ import org.sireum.message.Reporter
       val extC = Os.path(dirs.ext_cDir) / NixGen.EXT_C
       val extH = Os.path(dirs.ext_cDir) / NixGen.EXT_H
 
-      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(ext_c_entries), F)
-      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(ext_h_entries), F)
+      val uc = TemplateUtil.uniqueSTs(ext_c_entries)
+      val uh = TemplateUtil.uniqueSTs(ext_h_entries)
+
+      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(uc), F)
+      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(uh), F)
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
@@ -322,7 +325,7 @@ import org.sireum.message.Reporter
       s"art.Art.maxPorts=${numPorts}"
     )
 
-    val _extensions: ISZ[String] = ISZ(dirs.ext_cDir, dirs.etcDir)
+    val _extensions: ISZ[String] = ISZ(dirs.ext_cDir, dirs.etcDir) ++ arsitOptions.auxCodeDirs
 
     val transpiler = ArtNixTemplate.transpiler(
       apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
