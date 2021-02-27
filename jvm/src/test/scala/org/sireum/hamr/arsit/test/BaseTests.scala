@@ -42,7 +42,7 @@ class BaseTests extends ArsitTest {
     test(s"$name--${platform}-Do-not-embed-art",
       baseOptions(
         platform = platform,
-        embedArt = F))
+        noEmbedArt = T))
 
     platform = ArsitPlatform.Linux
     test(s"$name--${platform}", baseOptions(platform = platform))

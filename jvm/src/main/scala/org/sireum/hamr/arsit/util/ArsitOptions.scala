@@ -18,7 +18,7 @@ import org.sireum._
 
 @datatype class ArsitOptions(outputDir: Os.Path,
                              packageName: String,
-                             embedArt: B,
+                             noEmbedArt: B,
                              bless: B,
                              verbose: B,
                              devicesAsThreads: B,

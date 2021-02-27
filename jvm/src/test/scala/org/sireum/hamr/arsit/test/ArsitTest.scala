@@ -133,7 +133,7 @@ object ArsitTest {
   val baseOptions = ArsitOptions(
     outputDir = Os.path("fake"),
     packageName = "",
-    embedArt = T,
+    noEmbedArt = F,
     bless = F,
     verbose = T,
     devicesAsThreads = T,

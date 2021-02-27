@@ -53,7 +53,7 @@ object Arsit {
         ).generate())
 
     var artResources: ISZ[Resource] = ISZ()
-    if (o.embedArt) {
+    if (!o.noEmbedArt) {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
     }
 
@@ -117,11 +117,11 @@ object Arsit {
 
     val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
-    val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, options.embedArt)
+    val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
     ret = ret :+ Resource(millBuildDest.value, millBuildContent, F, F)
 
     val sbtBuildDest = options.outputDir / "build.sbt"
-    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, options.embedArt,
+    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
 
