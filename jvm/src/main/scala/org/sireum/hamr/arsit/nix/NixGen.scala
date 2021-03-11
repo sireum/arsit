@@ -69,8 +69,9 @@ object NixGen{
           val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
 
           extHEntries = extHEntries :+
-            st"""const static size_t ${numBitsName} = ${bits}; // bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
-                |const static size_t ${numBytesName} = (${numBitsName} - 1) / 8 + 1;"""
+            st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName})
+                |#define ${numBitsName} ${bits}
+                |#define ${numBytesName} ((${numBitsName} - 1) / 8 + 1)"""
         }
       }
 

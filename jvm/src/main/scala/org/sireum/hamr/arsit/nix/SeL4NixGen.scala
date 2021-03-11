@@ -110,7 +110,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
         dirs.componentDir,
         ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
         transpilerToucher,
-        F)
+        F) // DON'T overwrite as user's will add contents to this file
 
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
       val touchMethod = SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches)
@@ -196,8 +196,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       val _ext_c_entries: ISZ[ST] = (Set.empty[String] ++ ext_c_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
       val _ext_h_entries: ISZ[ST] = (Set.empty[String] ++ ext_h_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
 
-      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(_ext_c_entries), F)
-      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(_ext_h_entries), F)
+      addResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(_ext_c_entries), F)
+      addResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(_ext_h_entries), F)
     }
 
     { // Slang Type Library

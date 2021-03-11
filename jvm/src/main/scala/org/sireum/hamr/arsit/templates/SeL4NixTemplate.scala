@@ -91,6 +91,8 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""// #Sireum
           |
+          |${StringTemplate.doNotEditComment(None())}
+          |
           |package ${packageName}
           |
           |import org.sireum._
@@ -214,6 +216,8 @@ object SeL4NixTemplate {
           transpilerToucher: ST): ST = {
     val ret: ST =
       st"""// #Sireum
+          |
+          |${StringTemplate.doNotEditComment(None())}
           |
           |package ${packageName}.${instanceName}
           |
@@ -637,6 +641,8 @@ object SeL4NixTemplate {
       st"""#ifndef EXT_H
           |#define EXT_H
           |
+          |${StringTemplate.safeToEditComment()}
+          |
           |#include <all.h>
           |
           |${(blocks, "\n\n")}
@@ -647,6 +653,8 @@ object SeL4NixTemplate {
   def ext_c(blocks: ISZ[ST]): ST= {
     val ret: ST =
       st"""#include <ext.h>
+          |
+          |${StringTemplate.safeToEditComment()}
           |
           |// add c extension code here
           |

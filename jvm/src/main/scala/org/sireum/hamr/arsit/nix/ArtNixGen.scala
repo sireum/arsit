@@ -160,7 +160,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
         dirs.componentDir,
         ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
         transpilerToucher,
-        F)
+        F) // don't overwrite since user may add contents to this file
 
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
       val touchMethod = SeL4NixTemplate.genTouchMethod(genTypeTouches(types, basePackage), apiTouches)
@@ -200,8 +200,8 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
       val uc = TemplateUtil.uniqueSTs(ext_c_entries)
       val uh = TemplateUtil.uniqueSTs(ext_h_entries)
 
-      resources = resources :+ Util.createResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(uc), F)
-      resources = resources :+ Util.createResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(uh), F)
+      addResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(uc), F)
+      addResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(uh), F)
     }
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
