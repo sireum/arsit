@@ -385,7 +385,7 @@
         "building_control_gen_mixed--Linux-Excludes-Impl\/src\/c\/ext-c\/ext.c",
         {
           "type" : "TestResource",
-          "content" : "#include <ext.h>\n\n\/\/ add c extension code here\n\n",
+          "content" : "#include <ext.h>\n\n\/\/ This file will not be overwritten so is safe to edit\n\n\/\/ add c extension code here\n\n",
           "overwrite" : false,
           "makeExecutable" : false
         }
@@ -394,7 +394,7 @@
         "building_control_gen_mixed--Linux-Excludes-Impl\/src\/c\/ext-c\/ext.h",
         {
           "type" : "TestResource",
-          "content" : "#ifndef EXT_H\n#define EXT_H\n\n#include <all.h>\n\n#endif",
+          "content" : "#ifndef EXT_H\n#define EXT_H\n\n\/\/ This file will not be overwritten so is safe to edit\n\n#include <all.h>\n\n#endif",
           "overwrite" : false,
           "makeExecutable" : false
         }
