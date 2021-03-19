@@ -219,7 +219,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
           val fname = f._1
           val fieldTypeNames = Util.getDataTypeNames(f._2, basePackage)
 
-          fldInits = fldInits :+ fieldTypeNames.empty()
+          fldInits = fldInits :+ fieldTypeNames.example()
 
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
@@ -228,7 +228,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
       case e: ArrayType =>
         val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
-        val baseTypeEmpty = baseTypeNames.empty()
+        val baseTypeEmpty = baseTypeNames.example()
 
         val dims = TypeUtil.getArrayDimensions(e)
 

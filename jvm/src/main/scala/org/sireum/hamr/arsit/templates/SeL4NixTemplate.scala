@@ -116,19 +116,13 @@ object SeL4NixTemplate {
   @pure def portApiUsage(initApi: String, operApi: String, p: Port): ST = {
     if (CommonUtil.isInFeature(p.feature)) {
       val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
-      return st"val apiUsage_${p.name}: Option[${typeName}] = ${operApi}.get.get${p.name}()"
+      return st"val apiUsage_${p.name}: Option[${typeName}] = ${operApi}.get.get_${p.name}()"
     } else {
       val payload: String =
         if (p.getPortTypeNames.isEmptyType()) ""
-        else p.getPortTypeNames.empty()
-
-      val methodName: String =
-        if (CommonUtil.isAadlDataPort(p.feature)) "set"
-        else "send"
-
-      return st"""${initApi}.get.${methodName}${p.name}($payload)
-                 |${operApi}.get.${methodName}${p.name}($payload)"""
-
+        else p.getPortTypeNames.example()
+      return st"""${initApi}.get.put_${p.name}($payload)
+                 |${operApi}.get.put_${p.name}($payload)"""
     }
   }
 

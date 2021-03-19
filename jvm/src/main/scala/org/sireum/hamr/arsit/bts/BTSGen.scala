@@ -269,7 +269,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
   def initType(a: AadlType): ST = {
     val dataTypeNames = Util.getDataTypeNames(a, basePackage)
-    return st"${dataTypeNames.empty()}"
+    return st"${dataTypeNames.example()}"
   }
 
   def visitBTSTransition(t: BTSTransition): Unit = {

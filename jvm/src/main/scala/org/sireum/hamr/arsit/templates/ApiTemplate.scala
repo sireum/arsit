@@ -125,15 +125,15 @@ object ApiTemplate {
     val isEmpty = p.getPortTypeNames.isEmptyType()
     val ret: ST = p.feature.category match {
       case FeatureCategory.DataPort =>
-        st"""def set${p.name}(value : ${q}) : Unit = {
+        st"""def put_${p.name}(value : ${q}) : Unit = {
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventPort =>
-        st"""def send${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventDataPort =>
-        st"""def send${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
             |  ${putValue(p)}
             |}"""
       case _ => halt("Unexpected: $p")
@@ -149,7 +149,7 @@ object ApiTemplate {
     val value: String = if (isEvent) "Empty()" else "v"
 
     val ret: ST =
-      st"""def get${p.name}() : Option[${typeName}] = {
+      st"""def get_${p.name}() : Option[${typeName}] = {
           |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
           |    case Some(${_match}) => Some(${value})
           |    case Some(v) =>

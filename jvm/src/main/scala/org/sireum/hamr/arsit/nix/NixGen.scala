@@ -227,7 +227,7 @@ object NixGen{
             var dumpedExampleGetterApiUsageAlready: B = F
             for (p <- inEventPorts) {
               val isEventData: B = p.feature.category == ir.FeatureCategory.EventDataPort
-              val handlerName = s"${componentName}_handle${p.name}"
+              val handlerName = s"${componentName}_handle_${p.name}"
               val apiMethodName = handlerName
               val handlerMethodName = s"${handlerName}_"
 
@@ -383,7 +383,7 @@ object NixGen{
 
               val cApiMethodName = NixSeL4NameUtil.apiHelperGetterMethodName(p.name, names)
               val returnType = "bool"
-              val slangApiGetMethodName = s"${names.cOperationalApi}_get${p.name}_"
+              val slangApiGetMethodName = s"${names.cOperationalApi}_get_${p.name}_"
               val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
                 caller = T,
                 uri = apiImplFile.name,
@@ -433,8 +433,7 @@ object NixGen{
 
               val cApiMethodName = NixSeL4NameUtil.apiHelperSetterMethodName(p.name, names)
               val returnType = "void"
-              val sendSet: String = if (CommonUtil.isAadlDataPort(p.feature)) "set" else "send"
-              val slangApiSetMethodName = s"${names.cInitializationApi}_${sendSet}${p.name}_"
+              val slangApiSetMethodName = s"${names.cInitializationApi}_put_${p.name}_"
               val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
                 caller = T,
                 uri = apiImplFile.name,
@@ -552,14 +551,14 @@ object NixGen{
 
           } else {
             if (p.getPortTypeNames.isEnum()) {
-              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()};
+              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()};
                   |${setterName}(${StackFrameTemplate.SF} ${result});"""
             } else if(p.getPortTypeNames.isBaseType()){
-              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF_LAST});
+              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()}(${StackFrameTemplate.SF_LAST});
                   |${setterName}(${StackFrameTemplate.SF} ${result});"""
             } else {
               st"""DeclNew${p.getPortTypeNames.qualifiedCTypeName}(${result});
-                  |${p.getPortTypeNames.empty_C_Name()}(${StackFrameTemplate.SF} &${result});
+                  |${p.getPortTypeNames.example_C_Name()}(${StackFrameTemplate.SF} &${result});
                   |${setterName}(${StackFrameTemplate.SF} &${result});"""
             }
           }
@@ -670,7 +669,7 @@ object NixGen{
 
     for (typ <- _types) {
       val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
-      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.empty()))
+      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.example()))
       counter = counter + z"1"
     }
     a = a :+ SeL4NixTemplate.touchType("art.Empty", None())

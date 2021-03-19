@@ -140,11 +140,11 @@ object BlessST {
 
   @pure def portSend(portName: String,
                      arg: ST): ST = {
-    return st"api.send${portName}(${arg})"
+    return st"api.put_${portName}(${arg})"
   }
 
   @pure def portFetch(portName: String): ST = {
-    return st"api.get${portName}()"
+    return st"api.get_${portName}()"
   }
 
   @pure def portGet(portName: String): ST = {

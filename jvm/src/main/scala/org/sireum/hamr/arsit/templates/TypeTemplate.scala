@@ -75,28 +75,28 @@ object TypeTemplate {
           |
           |  @datatype class Bits_Payload(value: ISZ[B]) extends art.DataContent
           |
-          |  def Boolean_empty(): Boolean = { return F }
+          |  def Boolean_example(): Boolean = { return F }
           |
-          |  def Integer_empty(): Integer = { return z"0" }
+          |  def Integer_example(): Integer = { return z"0" }
           |
-          |  def Integer_8_empty(): Integer_8 = { return s8"0" }
-          |  def Integer_16_empty(): Integer_16 = { return s16"0" }
-          |  def Integer_32_empty(): Integer_32 = { return s32"0" }
-          |  def Integer_64_empty(): Integer_64 = { return s64"0" }
+          |  def Integer_8_example(): Integer_8 = { return s8"0" }
+          |  def Integer_16_example(): Integer_16 = { return s16"0" }
+          |  def Integer_32_example(): Integer_32 = { return s32"0" }
+          |  def Integer_64_example(): Integer_64 = { return s64"0" }
           |
-          |  def Unsigned_8_empty(): Unsigned_8 = { return u8"0" }
-          |  def Unsigned_16_empty(): Unsigned_16 = { return u16"0" }
-          |  def Unsigned_32_empty(): Unsigned_32 = { return u32"0" }
-          |  def Unsigned_64_empty(): Unsigned_64 = { return u64"0" }
+          |  def Unsigned_8_example(): Unsigned_8 = { return u8"0" }
+          |  def Unsigned_16_example(): Unsigned_16 = { return u16"0" }
+          |  def Unsigned_32_example(): Unsigned_32 = { return u32"0" }
+          |  def Unsigned_64_example(): Unsigned_64 = { return u64"0" }
           |
-          |  def Float_empty(): Float = { return r"0" }
-          |  def Float_32_empty(): Float_32 = { return f32"0" }
-          |  def Float_64_empty(): Float_64 = { return f64"0" }
+          |  def Float_example(): Float = { return r"0" }
+          |  def Float_32_example(): Float_32 = { return f32"0" }
+          |  def Float_64_example(): Float_64 = { return f64"0" }
           |
-          |  def Character_empty(): Character = { return ' ' }
-          |  def String_empty(): String = { return "" }
+          |  def Character_example(): Character = { return ' ' }
+          |  def String_example(): String = { return "" }
           |
-          |  def Bits_empty(): Bits = { return ISZ() }
+          |  def Bits_example(): Bits = { return ISZ() }
           |}"""
     return ret
   }
@@ -117,7 +117,7 @@ object TypeTemplate {
                      optChecks: Option[ST]): ST = {
     val ret: ST =
       st"""object ${typeNames.typeName} {
-          |  def empty(): ${typeNames.qualifiedTypeName} = {
+          |  def example(): ${typeNames.qualifiedTypeName} = {
           |    return ${typeNames.qualifiedTypeName}(${(paramInits, ", ")})
           |  }
           |}
@@ -133,7 +133,7 @@ object TypeTemplate {
   @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
     val ret: ST =
       st"""object ${typeNames.typeName} {
-          |  def empty(): ${typeNames.qualifiedTypeName} = {
+          |  def example(): ${typeNames.qualifiedTypeName} = {
           |    return ${typeNames.qualifiedTypeName}()
           |  }
           |}
@@ -146,12 +146,12 @@ object TypeTemplate {
   @pure def payloadType(typeNames: DataTypeNames): ST = {
     val typeName = typeNames.qualifiedReferencedTypeName
     val payloadTypeName = typeNames.payloadName
-    val emptyPayload = typeNames.empty()
+    val examplePayload = typeNames.example()
 
     val ret: ST =
       st"""object $payloadTypeName {
-          |  def empty(): $payloadTypeName = {
-          |    return $payloadTypeName($emptyPayload)
+          |  def example(): $payloadTypeName = {
+          |    return $payloadTypeName($examplePayload)
           |  }
           |}
           |

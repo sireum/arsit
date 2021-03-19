@@ -224,16 +224,16 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
       assert(rets.size == 1)
       val rType: AadlType = Util.getFeatureEndType(rets(0), types)
-      val emptyType: Option[ST] =
+      val exampleType: Option[ST] =
         if(rType == TypeUtil.EmptyType) { None() }
         else {
-          val emptyValue: String = Util.getDataTypeNames(rType, basePackage).empty()
-          Some(st"${emptyValue}")
+          val exampleValue: String = Util.getDataTypeNames(rType, basePackage).example()
+          Some(st"${exampleValue}")
         }
 
       val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
 
-      StubTemplate.subprogram(methodName, params, returnType, emptyType)
+      StubTemplate.subprogram(methodName, params, returnType, exampleType)
     })
 
     if (subprograms.nonEmpty) {

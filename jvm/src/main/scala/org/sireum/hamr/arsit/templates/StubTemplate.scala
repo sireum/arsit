@@ -252,7 +252,7 @@ object StubTemplate {
     val value: String = if (isEvent) "Empty()" else "v"
 
     val ret: ST =
-      st"""def get${p.name}() : Option[${typeName}] = {
+      st"""def get_${p.name}() : Option[${typeName}] = {
           |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
           |    case Some(${_match}) => Some(${value})
           |    case Some(v) =>
@@ -270,7 +270,7 @@ object StubTemplate {
       return getterApi(p)
     } else {
       val ret: ST =
-        st"""def send${p.name}(${if (p.getPortTypeNames.isEmptyType()) "" else s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}"}) : Unit = {
+        st"""def put_${p.name}(${if (p.getPortTypeNames.isEmptyType()) "" else s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}"}) : Unit = {
             |  ${putValue(p)}
             |}"""
       return ret
@@ -282,7 +282,7 @@ object StubTemplate {
       return getterApi(p)
     } else {
       val ret: ST =
-        st"""def set${p.name}(value : ${p.getPortTypeNames.qualifiedReferencedTypeName}) : Unit = {
+        st"""def put_${p.name}(value : ${p.getPortTypeNames.qualifiedReferencedTypeName}) : Unit = {
             |  ${putValue(p)}
             |}"""
       return ret
@@ -292,18 +292,14 @@ object StubTemplate {
   @pure def portApiUsage(p: Port): ST = {
     if (CommonUtil.isInFeature(p.feature)) {
       val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
-      return st"""val apiUsage_${p.name}: Option[${typeName}] = api.get${p.name}()
+      return st"""val apiUsage_${p.name}: Option[${typeName}] = api.get_${p.name}()
                  |api.logInfo(s"Received on ${p.name}: $${apiUsage_${p.name}}")"""
     } else {
       val payload: String =
         if (p.getPortTypeNames.isEmptyType()) ""
-        else p.getPortTypeNames.empty()
+        else p.getPortTypeNames.example()
 
-      val methodName: String =
-        if (CommonUtil.isAadlDataPort(p.feature)) "set"
-        else "send"
-
-      return st"api.${methodName}${p.name}($payload)"
+      return st"api.put_${p.name}($payload)"
     }
   }
 
@@ -315,13 +311,13 @@ object StubTemplate {
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}){
               |  val Some(${v.getPortTypeNames.qualifiedPayloadName}(value)) = Art.getValue(${addId(v.name)})
-              |  ${cname}.handle${v.name}(${apiId}, value)
+              |  ${cname}.handle_${v.name}(${apiId}, value)
               |}"""
         return ret
       case FeatureCategory.EventPort =>
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}) {
-              |  ${cname}.handle${v.name}(${apiId})
+              |  ${cname}.handle_${v.name}(${apiId})
               |}"""
         return ret
       case _ => halt(s"Unexpected ${v.feature.category}")
@@ -329,7 +325,7 @@ object StubTemplate {
   }
 
   @pure def portCaseEventHandlerMethod(v: Port, operationalApiType: String, extras: Option[ST]): ST = {
-    val methodName: String = s"handle${v.name}"
+    val methodName: String = s"handle_${v.name}"
 
     v.feature.category match {
       case FeatureCategory.EventDataPort =>
@@ -411,11 +407,11 @@ object StubTemplate {
   @pure def subprogram(methodName: String,
                        params: ISZ[String],
                        returnType: String,
-                       emptyValue: Option[ST]): (ST, ST) = {
+                       exampleValue: Option[ST]): (ST, ST) = {
     return (
       st"""def ${methodName}(${(params, ",\n")}): ${returnType} = ${"$"}""",
       st"""def ${methodName}(${(params, ",\n")}): ${returnType} = {
-          |  ${if (returnType != "") st"return ${emptyValue.get}" else ""}
+          |  ${if (returnType != "") st"return ${exampleValue.get}" else ""}
           |}""")
   }
 
