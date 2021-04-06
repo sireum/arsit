@@ -26,11 +26,17 @@ val arsit = "hamr-arsit"
 
 val homeDir = Os.slashDir.up.canon
 
-val arsitJvm = moduleJvm(
+val arsitJvm = moduleJvmPub(
   id = arsit,
   baseDir = homeDir,
   jvmDeps = ISZ(common),
-  jvmIvyDeps = ISZ()
+  jvmIvyDeps = ISZ(),
+  pubOpt = pub(
+    desc = "HAMR AADL Slang Code Generator (Arsit)",
+    url = "github.com/sireum/arsit",
+    licenses = org.sireum.project.ProjectUtil.bsd2,
+    devs = ISZ(jasonBelt)
+  )
 )
 
 val project = Project.empty + arsitJvm
