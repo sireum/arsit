@@ -203,7 +203,7 @@ object ArtNixTemplate {
           |  def initialiseArchitecture(seed: Z): Unit = {
           |    ${(inits, "\n")}
           |
-          |    Art.run(Arch.ad)
+          |    Art.run(Arch.ad, art.scheduling.nop.NopScheduler())
           |  }
           |
           |  def initialise(): Unit = {
@@ -403,8 +403,11 @@ object ArtNixTemplate {
           |    println(msg)
           |  }
           |
-          |  def run(): Unit = {
-          |  }
+          |  def setUpSystemState(): Unit = {}
+          |  def tearDownSystemState(): Unit = {}
+          |  def initializePhase(): Unit = {}
+          |  def computePhase(): Unit = {}
+          |  def finalizePhase(): Unit = {}
           |
           |  def time(): Art.Time = {
           |    return Process.time()

@@ -54,7 +54,9 @@ object Arsit {
 
     var artResources: ISZ[Resource] = ISZ()
     if (!o.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
+      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, Util.pathAppend(projectDirectories.srcMainDir, ISZ("art")))
+
+      artResources = artResources ++ copyArtSchedulingFiles(Util.pathAppend(projectDirectories.srcMainDir, ISZ("scheduling")))
     }
 
     artResources = artResources ++ createBuildArtifacts(
@@ -66,9 +68,17 @@ object Arsit {
       nixPhase.transpilerOptions)
   }
 
+  private def copyArtSchedulingFiles(outputDir: String): ISZ[Resource] = {
+    var resources: ISZ[Resource] = ISZ()
+    for ((p, c) <- ArsitLibrary.getFiles if p.native.contains("scheduling")) {
+      resources = resources :+ Util.createResource(outputDir, ISZ(p), st"${c}", T)
+    }
+    return resources
+  }
+
   private def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
-    for ((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
+    for ((p, c) <- ArsitLibrary.getFiles if Os.path(p).up.name.native == "art") {
       val _c =
         if (p.native.contains("Art.scala")) {
           val out = new StringBuilder()

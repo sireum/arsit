@@ -404,6 +404,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     val _sourcePaths = sourcePaths ++ ISZ(
       Util.pathAppend(dirs.srcMainDir, ISZ("art")),
+      Util.pathAppend(dirs.srcMainDir, ISZ("scheduling")),
       Util.pathAppend(dirs.srcMainDir, ISZ("data")),
       Util.pathAppend(dirs.seL4NixDir, ISZ(packageName)))
 
@@ -458,10 +459,16 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
 
     var customSequenceSizes: ISZ[String] = ISZ(
-      s"MS[Z,art.Bridge]=1",
+      // not needed anymore since bridges and connection data structs not touched in seL4
+      // s"MS[Z,art.Bridge]=1",
+      // s"IS[Z,art.UConnection]=1" // no connetions, but arg has to be > 0
+
+      // the Art.bridges data struct is touched by the logger methods, even though it
+      // will always be empty, and args must be > 0
       s"MS[Z,MOption[art.Bridge]]=1",
-      s"IS[Z,art.UPort]=${numComponentPorts}",
-      s"IS[Z,art.UConnection]=1" // no connetions, but arg has to be > 0
+
+      // needed for the Bridge.Ports data struct contained in the bridges
+      s"IS[Z,art.UPort]=${numComponentPorts}"
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"

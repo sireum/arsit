@@ -34,8 +34,10 @@ object ArchitectureTemplate {
       st"""${StringTemplate.doNotEditComment(None())}
           |package $packageName
           |
+          |import art.scheduling.roundrobin.legacy.{RoundRobin => DefaultScheduler}
+          |
           |object Demo extends App {
-          |  art.Art.run(${architectureName}.${architectureDescriptionName})
+          |  art.Art.run(Arch.ad, DefaultScheduler(Arch.ad.components))
           |}"""
     return ret
   }

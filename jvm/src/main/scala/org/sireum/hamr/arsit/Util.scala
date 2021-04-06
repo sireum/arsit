@@ -181,6 +181,7 @@ object Util {
   'finalise
   'initialise
   'recover
+  'testInitialise
 }
 
 // see property set in HAMR.aadl

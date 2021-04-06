@@ -241,11 +241,7 @@ object SeL4NixTemplate {
           |  ${sendOutput}
           |
           |  def initialiseArchitecture(): Unit = {
-          |    val ad = ArchitectureDescription(
-          |      components = MSZ (${bridgeIdentifier}),
-          |      connections = ISZ ()
-          |    )
-          |    Art.run(ad)
+          |    // do nothing as seL4 is responsible for component/port setup
           |  }
           |
           |  def initialiseEntryPoint(): Unit = { entryPoints.initialise() }
@@ -269,20 +265,20 @@ object SeL4NixTemplate {
           |
           |  ${touchMethod}
           |
-          |  def logInfo(title: String, msg: String): Unit = {
-          |    print(title)
+          |  def logInfo(ignored_title: String, msg: String): Unit = {
+          |    print(${bridgeIdentifier}.name)
           |    print(": ")
           |    println(msg)
           |  }
           |
-          |  def logError(title: String, msg: String): Unit = {
-          |    eprint(title)
+          |  def logError(ignored_title: String, msg: String): Unit = {
+          |    eprint(${bridgeIdentifier}.name)
           |    eprint(": ")
           |    eprintln(msg)
           |  }
           |
-          |  def logDebug(title: String, msg: String): Unit = {
-          |    print(title)
+          |  def logDebug(ignored_title: String, msg: String): Unit = {
+          |    print(${bridgeIdentifier}.name)
           |    print(": ")
           |    println(msg)
           |  }

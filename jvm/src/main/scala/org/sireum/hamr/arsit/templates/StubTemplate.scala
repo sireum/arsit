@@ -26,17 +26,25 @@ object StubTemplate {
                    names: Names,
                    isBless: B): ST = {
 
-    val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
+    val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise,
+      EntryPoints.initialise, EntryPoints.testInitialise, EntryPoints.recover)
 
     val entryPoints: ISZ[ST] = _entryPoints.map((m: EntryPoints.Type) => {
-      val isInitialize = m == EntryPoints.initialise
-      val apiId: String = if(isInitialize) ApiTemplate.apiInitializationId else ApiTemplate.apiOperationalId
+      val isInitialize = m == EntryPoints.initialise || m == EntryPoints.testInitialise
+      val apiId: String =
+        if(isInitialize) ApiTemplate.apiInitializationId
+        else ApiTemplate.apiOperationalId
 
-      var body = st"${componentName}.${m.string}(${apiId})"
+      val entryPointToCall: String =
+        if(isInitialize) EntryPoints.initialise.string
+        else m.string
+      var body = st"${componentName}.${entryPointToCall}(${apiId})"
+
       if (isInitialize) {
+        val sendOrRelease: String = if(m == EntryPoints.initialise) "send" else "release"
         body =
           st"""$body
-              |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
+              |Art.${sendOrRelease}Output(eventOutPortIds, dataOutPortIds)"""
       }
 
       st"""def ${m.string}(): Unit = {
@@ -218,14 +226,6 @@ object StubTemplate {
 
       return ret
     }
-  }
-
-  @pure def demo(): ST = {
-    val ret: ST =
-      st"""object Demo extends App {
-          |  art.Art.run(Arch.ad)
-          |}"""
-    return ret
   }
 
   @pure def addId(s: String): String = {
