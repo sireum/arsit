@@ -24,3 +24,4 @@ target
 *.cmd.jar
 *.cmd.com
 /jvm/src/test/results
+project.json
