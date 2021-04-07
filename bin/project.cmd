@@ -34,7 +34,7 @@ val arsitJvm = moduleJvmPub(
   pubOpt = pub(
     desc = "HAMR AADL Slang Code Generator (Arsit)",
     url = "github.com/sireum/arsit",
-    licenses = org.sireum.project.ProjectUtil.bsd2,
+    licenses = bsd2,
     devs = ISZ(jasonBelt)
   )
 )
