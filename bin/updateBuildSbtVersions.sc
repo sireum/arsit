@@ -41,9 +41,9 @@ val kekinianVersion: String = runGit(ISZ("git", "describe", "--abbrev=0", "--tag
 
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
 val artEmbeddedVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/arsit/resources/art")
-val scalaVersion = sireumProps.get("org.sireum.version.scala").get
-val scalacPluginVersion = sireumProps.get("org.sireum.version.scalac-plugin").get
-val scalaTestVersion = sireumProps.get("org.sireum.version.scalatest").get
+val scalaVersion = sireumProps.get("org.scala-lang%scala-library%").get
+val scalacPluginVersion = sireumProps.get("org.sireum%%scalac-plugin%").get
+val scalaTestVersion = sireumProps.get("org.scalatest%%scalatest%%").get
 
 if(artVersion != artEmbeddedVersion) {
   for(i <- 0 to 10) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -94,15 +94,30 @@ updated |= update("org.sireum.version.scala", scalaVersion)
 updated |= update("org.sireum.version.scalac-plugin", scalacPluginVersion)
 updated |= update("org.sireum.version.scalatest", scalaTestVersion)
 
+def touchePath(path: Os.Path): Unit = {
+  val content = path.read
+  val lineSep: String = if (Os.isWin) "\r\n" else "\n"
+  val sops = ops.StringOps(content)
+  val newContent: String =
+    if (sops.endsWith(lineSep)) ops.StringOps(content).trim
+    else s"$content$lineSep"
+  path.writeOver(newContent)
+  println(s"Touched ${path}")
+}
+
 if(updated) {
+  val artFiles = SIREUM_HOME / "hamr" / "codegen" / "arsit" / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util" / "ArsitLibrary_Ext.scala"
+
   val pst = st"""${(props.entries.map(m => st"${m._1}=${m._2}"), "\n")}""".render
   buildSbtProps.writeOver(pst)
   println(s"$buildSbtProps updated")
   
-  println("\nRunning bin/build.cmd -- will touche Library_Ext.scala")
+  println("\nRunning bin/build.cmd")
+  touchePath(artFiles)
   val build_cmd = SIREUM_HOME / "bin" / "build.cmd"
   Os.proc(ISZ(sireum.value, "slang", "run", build_cmd.value)).console.runCheck()
-    
+  touchePath(artFiles)
+
   println(s"\n$buildSbtProps updated and Sireum touched/rebuilt -- expect an error to follow")
   
   Os.exit(1) // return 1 to indicate versions have changed

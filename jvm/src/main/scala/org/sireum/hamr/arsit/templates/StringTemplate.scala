@@ -226,7 +226,7 @@ object StringTemplate {
           |
           |// Example mill build -- the contents of this file will not be overwritten.
           |//
-          |// mill is included with Sireum Kekinian: https://github.com/sireum/kekinian#installing
+          |// mill can be obtained following instructions at https://github.com/sireum/kekinian#slang-app-example-mill-project
           |//
           |// To run the demo from the command line:
           |//   $$SIREUM_HOME/bin/mill ${basePackageName}.run
@@ -363,13 +363,13 @@ object StringTemplate {
       st"""// refer to https://github.com/sireum/kekinian/blob/master/versions.properties
           |// to get the most recent versions of the following dependencies
           |
-          |// versions.properties key: org.sireum.version.scala
+          |// versions.properties key: org.scala-lang%scala-library%
           |val scalaVer = "${scalaVersion}"
           |
-          |// versions.properties key: org.sireum.version.scalatest
+          |// versions.properties key: org.scalatest%%scalatest%%
           |val scalaTestVersion = "${scalaTestVersion}"
           |
-          |// versions.properties key: org.sireum.version.scalac-plugin
+          |// versions.properties key: org.sireum%%scalac-plugin%
           |// https://github.com/sireum/scalac-plugin/tree/${sireumScalacVersion}
           |val sireumScalacVersion = "${sireumScalacVersion}"
           |
