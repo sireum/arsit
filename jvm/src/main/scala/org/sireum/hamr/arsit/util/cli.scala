@@ -36,6 +36,7 @@ object arsitCli {
     description = "Generate Slang project from Aadl IR",
     header = "Slang Generator",
     usage = "<option>* air-file",
+    usageDescOpt = None(),
     opts = ISZ(
       Opt(name = "json", longKey = "json", shortKey = Some('j'),
         tpe = Type.Flag(F), description = "Input serialized using Json (otherwise MsgPack assumed)"),
