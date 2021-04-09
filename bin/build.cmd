@@ -61,24 +61,12 @@ if (Os.cliArgs.isEmpty) {
 }
 
 
-val homeBin = Os.slashDir
-val home = homeBin.up
-val sireumJar = homeBin / "sireum.jar"
-val mill = homeBin / "mill.bat"
-var didTipe = F
-var didCompile = F
-var didM2 = F
+val homeBin: Os.Path = Os.slashDir
+val home: Os.Path = homeBin.up
+val sireum : Os.Path = homeBin / (if (Os.isWin) "sireum.bat" else "sireum")
 
-
-def downloadMill(): Unit = {
-  if (!mill.exists) {
-    println("Downloading mill ...")
-    mill.downloadFrom("http://files.sireum.org/mill-standalone")
-    mill.chmod("+x")
-    println()
-  }
-}
-
+val proyekName: String = "sireum-proyek"
+val project: Os.Path = homeBin / "project4testing.cmd"
 
 def clone(repo: String): Unit = {
   val clean = ops.StringOps(repo).replaceAllChars('-', '_')
@@ -102,36 +90,32 @@ def cloneProjects(): Unit = {
 
 
 def tipe(): Unit = {
-  if (!didTipe) {
-    didTipe = T
-    println("Slang type checking ...")
-    val excludes = "jvm/src/test/results"
-    Os.proc(ISZ("java", "-jar", sireumJar.string, "slang", "tipe", "--verbose", "-r", "-x", excludes, "-s", home.string)).
-      at(home).console.runCheck()
-    println()
-  }
+
+  println("Slang type checking ...")
+  val excludes = "jvm/src/test/results"
+  Os.proc(ISZ(sireum.string, "slang", "tipe", "--verbose", "-r", "-x", excludes, "-s", home.string)).
+    at(home).console.runCheck()
+  println()
 }
 
 
 def compile(): Unit = {
-  if (!didCompile) {
-    didCompile = T
-    if (didM2) {
-      didM2 = F
-      (home / "out").removeAll()
-    }
-    tipe()
-    println("Compiling ...")
-    mill.call(ISZ("all", "arsit.jvm.tests.compile")).at(home).console.runCheck()
-    println()
-  }
+  tipe()
+
+  println("Compiling ...")
+  proc"$sireum proyek compile --project $project -n $proyekName --par --sha3 .".at(home).console.runCheck()
+  println()
 }
 
 
 def test(): Unit = {
-  compile()
-  println("Running shared tests ...")
-  mill.call(ISZ("arsit.jvm.tests")).at(home).console.runCheck()
+  tipe()
+
+  val packageNames: String = "org.sireum.hamr.arsit"
+  val names: String = "org.sireum.hamr.arsit"
+
+  println("Testing ...")
+  proc"$sireum proyek test --project $project -n $proyekName --par --sha3 --packages $packageNames . $names".at(home).console.runCheck()
   println()
 }
 
@@ -144,9 +128,6 @@ def clean(): Unit = {
     m.removeAll()
   })
 }
-
-downloadMill()
-
 
 for (i <- 0 until Os.cliArgs.size) {
   Os.cliArgs(i) match {
