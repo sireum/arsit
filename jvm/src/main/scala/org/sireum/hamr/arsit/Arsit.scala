@@ -40,7 +40,7 @@ object Arsit {
     val useCaseConnectors: B = ExperimentalOptions.useCaseConnectors(o.experimentalOptions)
     val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, aadlTypes, ReporterUtil.reporter)
 
-    if (!TypeUtil.verifyBitCodec(aadlTypes, symbolTable, ReporterUtil.reporter)) {
+    if(ReporterUtil.reporter.hasError) {
       return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
     }
 
