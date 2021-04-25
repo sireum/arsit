@@ -6,23 +6,22 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, Re
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
-import org.sireum.hamr.codegen.common.symbols.SymbolResolver
+import org.sireum.hamr.codegen.common.symbols.{SymbolResolver, SymbolTable}
 import org.sireum.hamr.codegen.common.transformers.Transformers
-import org.sireum.hamr.codegen.common.types.{TypeResolver, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeResolver, TypeUtil}
 import org.sireum.hamr.codegen.common.util.ExperimentalOptions
 import org.sireum.hamr.ir
 import org.sireum.message._
 
 object Arsit {
-  def run(m: ir.Aadl, o: ArsitOptions, reporter: Reporter): ArsitResult = {
+  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
-    val ret = runInternal(m, o)
+    val ret = runInternal(model, o, aadlTypes, symbolTable)
     ReporterUtil.addReports(reporter)
     return ret
   }
 
-  private def runInternal(m: ir.Aadl, o: ArsitOptions): ArsitResult = {
-    var model = m
+  private def runInternal(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable): ArsitResult = {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
@@ -30,19 +29,6 @@ object Arsit {
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
-
-    val result = ir.Transformer(Transformers.MissingTypeRewriter(ReporterUtil.reporter)).transformAadl(Transformers.CTX(F, F), model)
-    model = if (result.resultOpt.nonEmpty) result.resultOpt.get else model
-
-    val rawConnections: B = PropertyUtil.getUseRawConnection(model.components(0).properties)
-    val aadlTypes = TypeResolver.processDataTypes(model, rawConnections, o.packageName)
-
-    val useCaseConnectors: B = ExperimentalOptions.useCaseConnectors(o.experimentalOptions)
-    val symbolTable = SymbolResolver.resolve(model, Some(o.packageName), useCaseConnectors, aadlTypes, ReporterUtil.reporter)
-
-    if(ReporterUtil.reporter.hasError) {
-      return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
-    }
 
     val projectDirectories = ProjectDirectories(o)
 
@@ -58,7 +44,7 @@ object Arsit {
     }
 
     artResources = artResources ++ createBuildArtifacts(
-      CommonUtil.getLastName(m.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
+      CommonUtil.getLastName(model.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,

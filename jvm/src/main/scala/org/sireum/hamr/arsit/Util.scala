@@ -133,7 +133,7 @@ object Util {
 
     val candidate = getFeatureEndType(feature, types)
     val pType: AadlType = if (types.rawConnections && CommonUtil.isDataPort(feature)) {
-      BitType(TypeUtil.SlangEmbeddedBitTypeName, candidate.container, Some(candidate))
+      BitType(TypeUtil.SlangEmbeddedBitTypeName, candidate.container, None(), Some(candidate))
     } else {
       candidate
     }

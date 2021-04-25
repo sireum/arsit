@@ -313,7 +313,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
     )
 
     if (types.rawConnections) {
-      TypeUtil.getMaxBitsSize(types) match {
+      TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
         case _ => halt("Raw connections specified but couldn't determine max bit size")

@@ -48,29 +48,24 @@ object NixGen{
       var seenTypes: Set[AadlType] = Set.empty
       for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
         val originatingType: AadlType = p._portType match {
-          case BitType(_, _, Some(o)) => o
-          case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
+          case BitType(_, _, None(), Some(o)) => o
+          case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
         }
         if(!seenTypes.contains(originatingType)) {
+          assert(originatingType.bitSize.nonEmpty, s"${originatingType.name} does not specify a bit size. Used by ${p.parentName}.${p.name}")
+
           seenTypes = seenTypes + originatingType
 
           val originatingTypeNames: DataTypeNames = Util.getDataTypeNames(originatingType, names.basePackage)
 
-          val bits: Z = TypeUtil.getBitCodecMaxSize(originatingType) match {
-            case Some(b) => b
-            case _ =>
-              //halt(s"Unexpected: Bit-codec size not attached to ${originatingTypeNames.typeName}")
-              reporter.warn(originatingType.container.get.identifier.pos, Util.toolName,
-                s"Bit-codec size not attached to ${originatingTypeNames.typeName}.  Using '1'")
-              z"1"
-          }
-
           val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
           val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
 
+          val bitSize = originatingType.bitSize.get
+
           extHEntries = extHEntries :+
-            st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName})
-                |#define ${numBitsName} ${bits}
+            st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
+                |#define ${numBitsName} ${bitSize}
                 |#define ${numBytesName} ((${numBitsName} - 1) / 8 + 1)"""
         }
       }
@@ -132,7 +127,7 @@ object NixGen{
             val entry:ST = {
               if(types.rawConnections) {
                 val originatingTypeNames: DataTypeNames = p._portType match {
-                  case BitType(_, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+                  case BitType(_, _, None(), Some(o)) => Util.getDataTypeNames(o, names.basePackage)
                   case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
                 }
 
@@ -538,7 +533,7 @@ object NixGen{
         val decl: ST =
           if(types.rawConnections) {
             val originatingTypeNames: DataTypeNames = p._portType match {
-              case BitType(_, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+              case BitType(_, _, None(), Some(o)) => Util.getDataTypeNames(o, names.basePackage)
               case _ =>halt(s"Unexpected: Could not find originating type for ${p._portType}")
             }
 
@@ -662,7 +657,7 @@ object NixGen{
     val _types: ISZ[AadlType] = if (types.rawConnections) {
       // TODO all types in typesMap should be BitTypes that optionally link
       // back to their originating type
-      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None()))
+      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None(), None()))
     } else {
       types.typeMap.entries.map((x: (String, AadlType)) => x._2)
     }

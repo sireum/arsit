@@ -10,6 +10,7 @@ import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
 import org.sireum.hamr.arsit.test.ArsitTest._
+import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ModelUtil}
 
 trait ArsitTest extends TestSuite {
 
@@ -65,7 +66,10 @@ trait ArsitTest extends TestSuite {
 
     println(s"Result Dir: ${rootTestOutputDir.canon.toUri}")
 
-    val results: ArsitResult = Arsit.run(model.get, testOps, reporter)
+    val (rmodel, aadlTypes, symbolTable) =
+      ModelUtil.resolve(model.get, ops.packageName, ops.maxStringSize, ops.bitWidth, ExperimentalOptions.useCaseConnectors(ops.experimentalOptions), reporter)
+
+    val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, reporter)
 
     reporter.printMessages()
 

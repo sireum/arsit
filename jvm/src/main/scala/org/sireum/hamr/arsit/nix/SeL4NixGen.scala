@@ -218,7 +218,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       var customSequenceSizes: ISZ[String] = ISZ()
       if (types.rawConnections) {
         // TODO is this necessary?
-        TypeUtil.getMaxBitsSize(types) match {
+        TypeUtil.getMaxBitsSize(symbolTable) match {
           case Some(z) =>
             customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
           case _ => halt("Raw connections specified but couldn't determine max bit size")
@@ -468,7 +468,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     )
 
     if (types.rawConnections) {
-      TypeUtil.getMaxBitsSize(types) match {
+      TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
         case _ => halt("Raw connections specified but couldn't determine max bit size")
