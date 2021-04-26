@@ -5,7 +5,6 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
-import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir.FeatureCategory
 
@@ -30,7 +29,9 @@ object StubTemplate {
 
     val entryPoints: ISZ[ST] = _entryPoints.map((m: EntryPoints.Type) => {
       val isInitialize = m == EntryPoints.initialise
-      val apiId: String = if(isInitialize) ApiTemplate.apiInitializationId else ApiTemplate.apiOperationalId
+      val (apiId, apiType): (String, String) =
+        if(isInitialize) (ApiTemplate.apiInitializationId, names.apiInitialization)
+        else (ApiTemplate.apiOperationalId, names.apiOperational)
 
       var body = st"${componentName}.${m.string}(${apiId})"
       if (isInitialize) {
@@ -40,6 +41,7 @@ object StubTemplate {
       }
 
       st"""def ${m.string}(): Unit = {
+          |  // implement the following method in '${componentName}':  def ${m.string}(api: ${apiType}): Unit = {}
           |  $body
           |}"""
     })
@@ -51,8 +53,8 @@ object StubTemplate {
     })
 
     val (apiIds, apiDecls): (ISZ[String], ISZ[ST]) = {
-      var ids: ISZ[String] = ISZ(ApiTemplate.apiInitializationId, ApiTemplate.apiOperationalId)
-      var decls: ISZ[ST] = ISZ(
+      val ids: ISZ[String] = ISZ(ApiTemplate.apiInitializationId, ApiTemplate.apiOperationalId)
+      val decls: ISZ[ST] = ISZ(
         ApiTemplate.apiBridgeEntry(names, bridgeName, ports, T),
         ApiTemplate.apiBridgeEntry(names, bridgeName, ports, F))
 
@@ -132,12 +134,12 @@ object StubTemplate {
           |    val eventOutPortIds: ISZ[Art.PortId] = ISZ(${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((p: Port) => addId(p.name)), ",\n")})
           |
           |    def compute(): Unit = {
-          |      ${computeBody(s"${bridgeName}Id", componentName, ports, dispatchProtocol, F, isBless)}
+          |      ${computeBody(s"${bridgeName}Id", componentName, names, ports, dispatchProtocol, F, isBless)}
           |    }
           |
           |    override
           |    def testCompute(): Unit = {
-          |      ${computeBody(s"${bridgeName}Id", componentName, ports, dispatchProtocol, T, isBless)}
+          |      ${computeBody(s"${bridgeName}Id", componentName, names, ports, dispatchProtocol, T, isBless)}
           |    }
           |
           |    ${(entryPoints, "\n\n")}
@@ -148,6 +150,7 @@ object StubTemplate {
 
   @pure def computeBody(bridgeName: String,
                         componentName: String,
+                        names: Names,
                         ports: ISZ[Port],
                         dispatchProtocol: Dispatch_Protocol.Type,
                         isTesting: B,
@@ -160,7 +163,7 @@ object StubTemplate {
         case Dispatch_Protocol.Sporadic =>
           var isFirst = T
           val cases: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isEventPort(p.feature) && CommonUtil.isInFeature(p.feature)).map((m: Port) => {
-            val ret = portCase(componentName, m, isFirst)
+            val ret = portCase(componentName, m, names.apiOperational, isFirst)
             isFirst = F
             ret
           })
@@ -197,7 +200,10 @@ object StubTemplate {
           val apiId = ApiTemplate.apiOperationalId
           val ret: ST =
             st"""Art.receiveInput(eventInPortIds, dataInPortIds)
+                |
+                |// implement the following in 'component':  def timeTriggered(api: ${names.apiOperational}): Unit = {}
                 |${componentName}.timeTriggered(${apiId})
+                |
                 |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
           return ret
       }
@@ -303,21 +309,27 @@ object StubTemplate {
     }
   }
 
-  @pure def portCase(cname: String, v: Port, first: B): ST = {
+  @pure def portCase(cname: String, v: Port, operationalApiType: String, first: B): ST = {
     val apiId = ApiTemplate.apiOperationalId
+    val methodName = s"handle_${v.name}"
+    val cMethodName = s"${cname}.${methodName}"
 
     v.feature.category match {
       case FeatureCategory.EventDataPort =>
+
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}){
               |  val Some(${v.getPortTypeNames.qualifiedPayloadName}(value)) = Art.getValue(${addId(v.name)})
-              |  ${cname}.handle_${v.name}(${apiId}, value)
+              |
+              |  // implement the following in 'component':  def ${methodName}(api: ${operationalApiType}, value: ${v.getPortTypeNames.qualifiedReferencedTypeName}): Unit = {}
+              |  ${cMethodName}(${apiId}, value)
               |}"""
         return ret
       case FeatureCategory.EventPort =>
         val ret: ST =
           st"""${if (!first) "else " else ""}if(portId == ${addId(v.name)}) {
-              |  ${cname}.handle_${v.name}(${apiId})
+              |  // implement the following in 'component':  def ${methodName}(api: ${operationalApiType}): Unit = {}
+              |  ${cMethodName}(${apiId})
               |}"""
         return ret
       case _ => halt(s"Unexpected ${v.feature.category}")
@@ -383,8 +395,7 @@ object StubTemplate {
               |}""")
       } else {
         var extras: Option[ST] = Some(exampleApiGetterUsage)
-        ports.filter(p => CommonUtil.isInFeature(p.feature) &&
-          CommonUtil.isEventPort(p.feature)).map(m => {
+        ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature)).map(m => {
           val ret = portCaseEventHandlerMethod(m, names.apiOperational, extras)
           extras = None() // only emit 'other api usage' for first event handler
           ret
