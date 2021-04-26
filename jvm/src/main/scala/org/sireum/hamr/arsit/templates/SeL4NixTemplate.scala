@@ -662,7 +662,7 @@ object SeL4NixTemplate {
           |
           |void byte_array_string(STACK_FRAME String str, uint8_t* byteArray, size_t numBytes);
           |
-          |void hexDump(STACK_FRAME uint8_t* byte_array, size_t numBytes);"""
+          |void hex_dump(STACK_FRAME uint8_t* byte_array, size_t numBytes);"""
     return ret
   }
 
