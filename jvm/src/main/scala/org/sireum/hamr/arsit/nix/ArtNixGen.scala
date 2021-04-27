@@ -329,6 +329,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
 
     val transpiler = ArtNixTemplate.transpiler(
       apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
+      verbose = arsitOptions.verbose,
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       numBits = arsitOptions.bitWidth,
       maxSequenceSize = maxArraySize,

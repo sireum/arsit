@@ -756,6 +756,7 @@ object ArtNixTemplate {
 
 
   @pure def transpiler(apps: ISZ[String],
+                       verbose: B,
                        forwards: ISZ[String],
                        numBits: Z,
                        maxSequenceSize: Z,
@@ -780,7 +781,7 @@ object ArtNixTemplate {
       args = ISZ(),
       sourcepath = ISZ(dirs.srcMainDir),
       output = Some(dirs.cNixDir),
-      verbose = T,
+      verbose = verbose,
       projectName = Some("main"), // default set in org.sireum.transpilers.cli.cTranspiler
       apps = apps,
       unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler

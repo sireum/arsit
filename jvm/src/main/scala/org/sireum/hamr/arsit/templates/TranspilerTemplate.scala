@@ -39,7 +39,8 @@ object TranspilerTemplate {
     return ret
   }
 
-  @pure def transpiler(libraryName: String,
+  @pure def transpiler(verbose: B,
+                       libraryName: String,
                        sourcepaths: ISZ[String],
                        outputDir: Os.Path,
                        binDir: String,
@@ -68,7 +69,7 @@ object TranspilerTemplate {
         args = ISZ(),
         sourcepath = sourcepaths,
         output = Some(outputDir.value),
-        verbose = T,
+        verbose = verbose,
         projectName = Some(libraryName), // default set in org.sireum.transpilers.cli.cTranspiler
         apps = apps,
         unroll = F, // default set in org.sireum.transpilers.cli.cTranspiler

@@ -410,6 +410,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
 
     return TranspilerTemplate.transpiler(
+      verbose = arsitOptions.verbose,
       libraryName = instanceName,
       sourcepaths = _sourcePaths,
       outputDir = cOutputDir,
