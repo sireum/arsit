@@ -45,6 +45,8 @@ object NixGen{
     if(types.rawConnections) {
       // add numBit and numBytes global vars for each type passing between components
 
+      val maxBitSize = TypeUtil.getMaxBitsSize(symbolTable).get
+
       var seenTypes: Set[AadlType] = Set.empty
       for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
         val originatingType: AadlType = p._portType match {
@@ -52,7 +54,15 @@ object NixGen{
           case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
         }
         if(!seenTypes.contains(originatingType)) {
-          assert(originatingType.bitSize.nonEmpty, s"${originatingType.name} does not specify a bit size. Used by ${p.parentName}.${p.name}")
+
+          val bitSize: Z = originatingType.bitSize match {
+            case Some(z) => z
+            case _ =>
+              val msg = s"${originatingType.name} does not specify a bit size, assuming max bit size or ${maxBitSize}. Used by port ${p.parentName}.${p.name}"
+              reporter.warn(None(), Util.toolName, msg)
+
+              maxBitSize
+          }
 
           seenTypes = seenTypes + originatingType
 
@@ -60,8 +70,6 @@ object NixGen{
 
           val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
           val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
-
-          val bitSize = originatingType.bitSize.get
 
           extHEntries = extHEntries :+
             st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
