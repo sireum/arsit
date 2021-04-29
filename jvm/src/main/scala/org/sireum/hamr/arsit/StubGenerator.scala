@@ -165,7 +165,9 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         names = names,
         dispatchProtocol = dispatchProtocol,
         ports = ports,
-        isBless = genBlessEntryPoints)
+        isBless = genBlessEntryPoints,
+        excludeComponentImpl = arsitOptions.excludeImpl
+      )
       blocks = blocks :+ componentImplBlock
     } else {
       assert(blessAnnexes.size == 1, s"Length is ${blessAnnexes.size}")

@@ -336,71 +336,90 @@ object StubTemplate {
     }
   }
 
-  @pure def portCaseEventHandlerMethod(v: Port, operationalApiType: String, extras: Option[ST]): ST = {
-    val methodName: String = s"handle_${v.name}"
-
-    v.feature.category match {
-      case FeatureCategory.EventDataPort =>
-        val ret: ST =
-          st"""def $methodName(api: ${operationalApiType}, value : ${v.getPortTypeNames.qualifiedReferencedTypeName}): Unit = {
-              |  api.logInfo("example $methodName implementation")
-              |  api.logInfo(s"received ${"${value}"}")
-              |  ${extras}
-              |}"""
-        return ret
-      case FeatureCategory.EventPort =>
-        val ret: ST =
-          st"""def $methodName(api: ${operationalApiType}): Unit = {
-              |  api.logInfo("example $methodName implementation")
-              |  api.logInfo("received ${v.name} event")
-              |  ${extras}
-              |}"""
-        return ret
-      case _ => halt(s"Unexpected ${v.feature.category}")
-    }
-  }
-
   @pure def componentImplBlock(componentType: String,
                                bridgeName: String,
                                names: Names,
                                dispatchProtocol: Dispatch_Protocol.Type,
                                ports: ISZ[Port],
-                               isBless: B): ST = {
+                               isBless: B,
+                               excludeComponentImpl: B): ST = {
 
     val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter(p => CommonUtil.isOutPort(p.feature))
-    val init =
-      st"""def ${EntryPoints.initialise.string}(api: ${names.apiInitialization}): Unit = {
-          |  // example api usage
-          |
-          |  api.logInfo("Example info logging")
-          |  api.logDebug("Example debug logging")
-          |  api.logError("Example error logging")
-          |
-          |  ${(outPorts.map((p: Port) => portApiUsage(p)), "\n")}
-          |}"""
+
+    def genMethod(signature: String, body: Option[ST]): ST = {
+      if(body.nonEmpty) {
+        st"""def ${signature}: Unit = {
+            |  ${body}
+            |}"""
+      } else {
+        st"def ${signature}: Unit = { }"
+      }
+    }
+
+    val initSig: String = s"${EntryPoints.initialise.string}(api: ${names.apiInitialization})"
+    val init: ST =
+      if(excludeComponentImpl) { genMethod(initSig, None()) }
+      else {
+        val o: Option[ST] =
+          if(outPorts.nonEmpty) Some(st"""
+                                         |${(outPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
+          else None()
+        genMethod(initSig, Some(st"""// example api usage
+                                    |
+                                    |api.logInfo("Example info logging")
+                                    |api.logDebug("Example debug logging")
+                                    |api.logError("Example error logging")
+                                    |${o}"""))
+      }
+
+    val exampleApiGetterUsage: Option[ST] =
+      if(excludeComponentImpl) { None() }
+      else {
+        Some(st"""// example api usage
+                 |
+                 |${(inPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
+      }
+    val eventHandlers: ISZ[ST] =
+      if (dispatchProtocol == Dispatch_Protocol.Periodic) {
+        val ttsig: String = s"timeTriggered(api: ${names.apiOperational})"
+        ISZ(if(excludeComponentImpl) genMethod(ttsig, None())
+            else genMethod(ttsig, exampleApiGetterUsage))
+      } else {
+        val inEventPorts = ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature))
+        var first = T
+        inEventPorts.map(p => {
+          val handlerName: String = s"handle_${p.name}"
+
+          val (eventSig, receivedFeedback) : (String, String) = p.feature.category match {
+            case FeatureCategory.EventDataPort =>
+              val edpSig = s"$handlerName(api: ${names.apiOperational}, value : ${p.getPortTypeNames.qualifiedReferencedTypeName})"
+              (edpSig, s"${"${value}"}")
+            case FeatureCategory.EventPort =>
+              val epSig = s"$handlerName(api: ${names.apiOperational})"
+              (epSig, s"${p.name} event")
+            case _ => halt(s"Unexpected ${p.feature.category}")
+          }
+
+          if(excludeComponentImpl) {
+            genMethod(eventSig, None())
+          } else {
+            val stringInterp: String = if(CommonUtil.isAadlEventPort(p.feature)) "" else "s"
+            var body = st"""api.logInfo("example $handlerName implementation")
+                           |api.logInfo(${stringInterp}"received ${receivedFeedback}")"""
+            if(first) { // only attach example api usage to first event handler
+              first = F
+              body = st"""$body
+                         |${exampleApiGetterUsage}"""
+            }
+            genMethod(eventSig, Some(body))
+          }
+        })
+      }
 
     val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute && f != EntryPoints.initialise).map((m: EntryPoints.Type) => {
       st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
     })
-
-    val exampleApiGetterUsage: ST = st"""// example api usage
-                                        |
-                                        |${(inPorts.map((p: Port) => portApiUsage(p)), "\n")}"""
-    val eventHandlers: ISZ[ST] =
-      if (dispatchProtocol == Dispatch_Protocol.Periodic) {
-        ISZ(
-          st"""def timeTriggered(api: ${names.apiOperational}): Unit = {
-              |  ${exampleApiGetterUsage}
-              |}""")
-      } else {
-        var extras: Option[ST] = Some(exampleApiGetterUsage)
-        ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature)).map(m => {
-          val ret = portCaseEventHandlerMethod(m, names.apiOperational, extras)
-          extras = None() // only emit 'other api usage' for first event handler
-          ret
-        })
-      }
 
     val ret: ST =
       st"""${StringTemplate.safeToEditComment()}
