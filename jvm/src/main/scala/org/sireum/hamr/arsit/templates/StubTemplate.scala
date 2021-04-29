@@ -348,13 +348,16 @@ object StubTemplate {
     val outPorts = ports.filter(p => CommonUtil.isOutPort(p.feature))
 
     def genMethod(signature: String, body: Option[ST]): ST = {
-      if(body.nonEmpty) {
-        st"""def ${signature}: Unit = {
-            |  ${body}
-            |}"""
-      } else {
-        st"def ${signature}: Unit = { }"
+      val ret: ST = {
+        if(body.nonEmpty) {
+          st"""def ${signature}: Unit = {
+              |  ${body}
+              |}"""
+        } else {
+          st"def ${signature}: Unit = { }"
+        }
       }
+      return ret
     }
 
     val initSig: String = s"${EntryPoints.initialise.string}(api: ${names.apiInitialization})"
