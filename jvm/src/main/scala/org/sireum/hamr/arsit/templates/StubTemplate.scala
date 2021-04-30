@@ -86,7 +86,7 @@ object StubTemplate {
           |
           |${StringTemplate.doNotEditComment(None())}
           |
-          |@record class $bridgeName(
+          |@datatype class $bridgeName(
           |  val id: Art.BridgeId,
           |  val name: String,
           |  val dispatchProtocol: DispatchPropertyProtocol,
@@ -116,7 +116,7 @@ object StubTemplate {
           |
           |  ${ApiTemplate.companionObjectApiInstances(names)}
           |
-          |  @record class EntryPoints(
+          |  @datatype class EntryPoints(
           |    ${bridgeName}Id : Art.BridgeId,
           |
           |    ${(ports.map((p: Port) => s"${addId(p.name)} : Art.PortId"), ",\n")},

@@ -242,7 +242,7 @@ object SeL4NixTemplate {
           |
           |  def initialiseArchitecture(): Unit = {
           |    val ad = ArchitectureDescription(
-          |      components = MSZ (${bridgeIdentifier}),
+          |      components = ISZ (${bridgeIdentifier}),
           |      connections = ISZ ()
           |    )
           |    Art.run(ad)

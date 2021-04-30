@@ -303,7 +303,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
     val numComponents: Z = previousPhase.maxComponent
 
     var customSequenceSizes: ISZ[String] = ISZ(
-      s"MS[Z,art.Bridge]=${numComponents}",
+      s"IS[Z,art.Bridge]=${numComponents}",
       s"MS[Z,MOption[art.Bridge]]=${numComponents}",
       s"IS[Z,art.UPort]=${maxPortsForComponents}",
       s"IS[Z,art.UConnection]=${numConnections}"

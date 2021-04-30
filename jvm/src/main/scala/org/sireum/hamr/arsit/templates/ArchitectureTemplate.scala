@@ -134,7 +134,7 @@ object ArchitectureTemplate {
           |  val $architectureDescriptionName : ArchitectureDescription = {
           |
           |    ArchitectureDescription(
-          |      components = MSZ (${(components, ", ")}),
+          |      components = ISZ (${(components, ", ")}),
           |
           |      connections = ISZ (${(connections, ",\n")})
           |    )
