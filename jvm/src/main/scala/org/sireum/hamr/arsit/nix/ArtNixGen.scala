@@ -304,7 +304,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
 
     var customSequenceSizes: ISZ[String] = ISZ(
       s"IS[Z,art.Bridge]=${numComponents}",
-      s"MS[Z,MOption[art.Bridge]]=${numComponents}",
+      s"MS[Z,Option[art.Bridge]]=${numComponents}",
       s"IS[Z,art.UPort]=${maxPortsForComponents}",
       s"IS[Z,art.UConnection]=${numConnections}"
 
