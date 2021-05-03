@@ -10,7 +10,7 @@ import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
 import org.sireum.hamr.arsit.test.ArsitTest._
-import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ModelUtil}
+import org.sireum.hamr.codegen.common.util.{CodeGenConfig, CodeGenIpcMechanism, CodeGenPlatform, ExperimentalOptions, ModelUtil}
 
 trait ArsitTest extends TestSuite {
 
@@ -66,8 +66,38 @@ trait ArsitTest extends TestSuite {
 
     println(s"Result Dir: ${rootTestOutputDir.canon.toUri}")
 
+    val p:CodeGenPlatform.Type = ops.platform match {
+      case ArsitPlatform.JVM => CodeGenPlatform.JVM
+      case ArsitPlatform.Linux => CodeGenPlatform.Linux
+      case ArsitPlatform.Cygwin => CodeGenPlatform.Cygwin
+      case ArsitPlatform.MacOS => CodeGenPlatform.MacOS
+      case ArsitPlatform.SeL4 => CodeGenPlatform.SeL4
+      case x => halt(s"Unexpected $x")
+    }
+
+    val co = CodeGenConfig(
+      writeOutResources = F,
+      ipc = CodeGenIpcMechanism.SharedMemory,
+      verbose = T,
+      platform = p,
+      slangOutputDir = None(),
+      packageName = Some(ops.packageName),
+      noEmbedArt = ops.noEmbedArt,
+      devicesAsThreads = ops.devicesAsThreads,
+      slangAuxCodeDirs = ISZ(),
+      slangOutputCDir = None(),
+      excludeComponentImpl = ops.excludeImpl,
+      bitWidth = ops.bitWidth,
+      maxStringSize = ops.maxStringSize,
+      maxArraySize = ops.maxArraySize,
+      runTranspiler = F,
+      camkesOutputDir = None(),
+      camkesAuxCodeDirs = ISZ(),
+      aadlRootDir = None(),
+      experimentalOptions = ops.experimentalOptions
+    )
     val (rmodel, aadlTypes, symbolTable) =
-      ModelUtil.resolve(model.get, ops.packageName, ops.maxStringSize, ops.bitWidth, ExperimentalOptions.useCaseConnectors(ops.experimentalOptions), reporter)
+      ModelUtil.resolve(model.get, ops.packageName, co, reporter)
 
     val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, reporter)
 
