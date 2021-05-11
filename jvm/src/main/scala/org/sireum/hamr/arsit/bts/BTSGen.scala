@@ -675,9 +675,32 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
   def resolveSubprogram(name: Name): Subprogram = {
 
     if(!subprograms.contains(name)) {
-      val _c = component.subComponents.filter(sc => sc.identifier.name == name.name)
-      assert(_c.size == 1)
-      val subprog = _c(0)
+      val subprog: Component = {
+        val x = component.subComponents.filter(sc => sc.identifier.name == name.name)
+
+        if (x.isEmpty) {
+          // is this a bless hack?
+          val nameops = ops.StringOps(CommonUtil.getLastName(name))
+          val subComponentName = nameops.substring(nameops.indexOf('.') + 1, nameops.size)
+          val hackX = component.subComponents.filter(sc => {
+            val scops = ops.StringOps(CommonUtil.getLastName(sc.identifier))
+            if(scops.startsWith("codegen_hack_")) {
+              val candidate = scops.substring(13, scops.size)
+              println(s"$candidate == $subComponentName ${candidate == subComponentName}")
+              candidate == subComponentName
+            } else {
+              F
+            }
+          })
+          assert(hackX.size == 1)
+          hackX(0)
+        }
+        else {
+          assert(x.size == 1)
+          x(0)
+        }
+      }
+
       val featureSize = subprog.features.size
 
       assert(subprog.category == ComponentCategory.Subprogram)

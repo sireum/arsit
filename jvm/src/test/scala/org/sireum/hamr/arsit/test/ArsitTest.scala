@@ -96,8 +96,10 @@ trait ArsitTest extends TestSuite {
       aadlRootDir = None(),
       experimentalOptions = ops.experimentalOptions
     )
-    val (rmodel, aadlTypes, symbolTable) =
-      ModelUtil.resolve(model.get, ops.packageName, co, reporter)
+    val (rmodel, aadlTypes, symbolTable) = {
+      val me = ModelUtil.resolve(model.get, ops.packageName, co, reporter).get
+      (me.model, me.types, me.symbolTable)
+    }
 
     val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, reporter)
 

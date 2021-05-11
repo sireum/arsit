@@ -128,7 +128,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         }
     }
 
-    val blessAnnexes : ISZ[Annex] = m.component.annexes.filter(a => a.name == "behavior_specification")
+    val blessAnnexes : ISZ[Annex] = m.component.annexes.filter(a => a.name == "behavior_specification" || a.name == "BLESS")
 
     val genBlessEntryPoints: B = blessAnnexes.nonEmpty && processBTSNodes
 
