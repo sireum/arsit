@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
 import org.sireum.hamr.arsit.templates.BlessST
 import org.sireum.hamr.codegen.common.containers.Resource
-import org.sireum.hamr.codegen.common.symbols.AadlThreadOrDevice
+import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
 import org.sireum.hamr.ir._
 import org.sireum.ops._
 import org.sireum.hamr.codegen.common.types._
@@ -15,7 +15,11 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
                      basePackage: String,
                      aadlComponent: AadlThreadOrDevice,
                      componentNames: Names,
+
+                     symbolTable: SymbolTable,
+                     btsSymbolTable: BTSSymbolTable,
                      aadlTypes: AadlTypes,
+
                      addViz: B,
                      genDebugObjects: B) {
 
@@ -169,7 +173,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     if(t == BTSStateCategory.Initial) {
       val inits = l.filter(f => f.srcState == initialState).map((m: GuardedTransition) =>
         (m.transCondition, st"${m.actionMethodName}()"))
-      assert(inits.size == 1)
+
+      assert(inits.size == 1, s"Expecting only one initial state but found ${inits.size}")
 
       var body = BlessST.ifST(inits(0), ISZOps(inits).tail, None[ST]())
 
@@ -319,18 +324,18 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
     transitionMethods = transitionMethods + (actionMethodName.render ~> doMethod)
 
-    assert(btsStates.get(src).get.categories.size == 1)
+    assert(btsStates.get(src).get.categories.size == 1, btsStates.get(src).get.categories.size)
 
 
     if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
-      // transitioning to a complete state
+      // transitioning from a complete state
       val gt = GuardedTransition(src, dst, cond, actionMethodName)
 
       val key: BTSStateCategory.Type = btsStates.get(src).get.categories(0) // TODO assumes single state type per state
       val list: ISZ[GuardedTransition] = completeStateMachines.getOrElse(key, ISZ())
       completeStateMachines = completeStateMachines + (key ~> (list :+ gt))
     } else {
-      // transitioning to an execute state
+      // transitioning from an execute state
       assert(isExecuteState(src))
 
       /*
@@ -422,23 +427,6 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     return BlessST.portSend(portName, arg)
   }
 
-
-  def visitBTSIfBAAction(action: BTSIfBAAction): ST = {
-    val ifb = visitBTSConditionalActions(action.ifBranch)
-
-    val elsifs = action.elseIfBranches.map((e: BTSConditionalActions) => visitBTSConditionalActions(e)).map((x: ST) => st"else ${x}")
-
-    val elseb: ST = if(action.elseBranch.nonEmpty) {
-      visitBTSBehaviorActions(action.elseBranch.get)
-    } else {
-      st""
-    }
-
-    return st"""${ifb}
-               |${(elsifs, "\n")}
-               |${elseb}"""
-  }
-
   def visitBTSConditionalActions(actions: BTSConditionalActions): ST = {
 
     val cond = visitBTSExp(actions.cond);
@@ -450,6 +438,25 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
                |}"""
   }
 
+  def visitBTSIfBAAction(action: BTSIfBAAction): ST = {
+    val ifb = visitBTSConditionalActions(action.ifBranch)
+
+    val elsifs = action.elseIfBranches.map((e: BTSConditionalActions) => visitBTSConditionalActions(e)).map((x: ST) => st"else ${x}")
+
+    val elseb: ST = if(action.elseBranch.nonEmpty) {
+      val body = visitBTSBehaviorActions(action.elseBranch.get)
+      st"""else {
+          |  $body
+          |}"""
+    } else {
+      st""
+    }
+
+    return st"""${ifb}
+               |${(elsifs, "\n")}
+               |${elseb}"""
+  }
+
   def visitBTSIfBLESSAction(action: BTSIfBLESSAction): ST = {
     assert(action.availability.isEmpty)
 
@@ -459,6 +466,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
       (guard, _action)
     })
+
 
     return BlessST.ifST(_actions(0), ISZOps(_actions).tail, None[ST]())
   }
@@ -599,10 +607,16 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
           // TODO need to fix bless grammar
           st"${so.replaceAllLiterally("#Enumerators", "")}"
         } else {
-          st"${exp.exp}"
+          st"""s"${exp.exp}""""
         }
       case BTSLiteralType.INTEGER =>
-        st"${exp.exp}"
+        btsSymbolTable.expTypes.get(exp) match {
+          case Some(b: BaseType) =>
+            st"${b.slangType}(${exp.exp})"
+          case _ =>
+            halt(s"Why doesn't this have a type ${exp}")
+        }
+
       case BTSLiteralType.FLOAT =>
         st"${exp.exp}f"
     }
@@ -708,11 +722,16 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
       val methodName = st"${CommonUtil.getLastName(subprog.identifier)}"
       var i = 0
-      val params: ISZ[(ST, ST)] = subprog.features.map(f => {
+      var isLastParamOut: B = F
+      var params: ISZ[(ST, ST)] = subprog.features.map(f => {
         f match {
           case fe: FeatureEnd =>
-            // last param must be the return type, all others must be in
-            assert(if (i == featureSize - 1) fe.direction == Direction.Out else fe.direction == Direction.In)
+            // last param might be the return type, all others must be in
+            assert((i == featureSize - 1) || fe.direction == Direction.In, "All but last param must be 'in'")
+
+            if(i == featureSize - 1) {
+              isLastParamOut = fe.direction == Direction.Out
+            }
 
             val paramName = CommonUtil.getLastName(fe.identifier)
             //var paramType: ST = st"${CommonUtil.getNamesFromClassifier(fe.classifier.get, basePackage).component}"
@@ -728,11 +747,12 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
         }
       })
 
-      val soParams = ISZOps(params)
-      val last = soParams.last
-      val slangParams = soParams.dropRight(1)
+      val (lastType, slangParams) : (ST, ISZ[(ST, ST)])=
+        if(isLastParamOut)
+          (ISZOps(params).last._2, ISZOps(params).dropRight(1))
+        else (st"Unit", params)
 
-      val extMethod = BlessST.extMethod(methodName, slangParams.map(s => st"${s._1} : ${s._2}"), last._2)
+      val extMethod = BlessST.extMethod(methodName, slangParams.map(s => st"${s._1} : ${s._2}"), lastType)
 
       val qualifiedName = st"${extSubprogramObject(F)}.${methodName}"
 

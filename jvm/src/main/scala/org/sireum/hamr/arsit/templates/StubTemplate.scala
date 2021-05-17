@@ -439,12 +439,13 @@ object StubTemplate {
 
   @pure def subprogram(methodName: String,
                        params: ISZ[String],
-                       returnType: String,
+                       returnType: Option[String],
                        exampleValue: Option[ST]): (ST, ST) = {
+    val _returnType: String = if(returnType.nonEmpty) returnType.get else "Unit"
     return (
-      st"""def ${methodName}(${(params, ",\n")}): ${returnType} = ${"$"}""",
-      st"""def ${methodName}(${(params, ",\n")}): ${returnType} = {
-          |  ${if (returnType != "") st"return ${exampleValue.get}" else ""}
+      st"""def ${methodName}(${(params, ",\n")}): ${_returnType} = ${"$"}""",
+      st"""def ${methodName}(${(params, ",\n")}): ${_returnType} = {
+          |  ${if (exampleValue.nonEmpty) st"return ${exampleValue.get}" else ""}
           |}""")
   }
 

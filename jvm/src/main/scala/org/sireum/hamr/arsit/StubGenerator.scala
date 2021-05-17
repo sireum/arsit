@@ -128,9 +128,10 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         }
     }
 
-    val blessAnnexes : ISZ[Annex] = m.component.annexes.filter(a => a.name == "behavior_specification" || a.name == "BLESS")
+    val btsAnnexes : ISZ[AnnexInfo] =
+      symbolTable.annexInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
 
-    val genBlessEntryPoints: B = blessAnnexes.nonEmpty && processBTSNodes
+    val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 
     val bridge = StubTemplate.bridge(
       topLevelPackageName = basePackage,
@@ -170,18 +171,22 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       )
       blocks = blocks :+ componentImplBlock
     } else {
-      assert(blessAnnexes.size == 1, s"Length is ${blessAnnexes.size}")
+      assert(btsAnnexes.size == 1, s"Expecting exactly one BTS annex but found ${btsAnnexes.size}")
 
-      val btsNode = blessAnnexes(0).clause.asInstanceOf[BTSBLESSAnnexClause]
+      val btsAnnexInfo = btsAnnexes(0).asInstanceOf[BTSAnnexInfo]
 
       val br: BTSResults = BTSGen(
         directories = dirs,
         basePackage = basePackage,
         aadlComponent = m,
         componentNames = names,
+
+        symbolTable = symbolTable,
+        btsSymbolTable = btsAnnexInfo.btsSymbolTable,
         aadlTypes = types,
+
         addViz = F,
-        genDebugObjects = F).process(btsNode)
+        genDebugObjects = F).process(btsAnnexInfo.annex)
 
       assert(br.maxPort == -1 && br.maxComponent == -1 && br.optVizEntries.isEmpty) // TODO
 
@@ -221,19 +226,23 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       val params: ISZ[String] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
         .map(param => {
           val pType = Util.getFeatureEndType(param, types)
-          s"${CommonUtil.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).referencedTypeName}"
+          s"${CommonUtil.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).qualifiedReferencedTypeName}"
         })
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
-      assert(rets.size == 1)
-      val rType: AadlType = Util.getFeatureEndType(rets(0), types)
-      val exampleType: Option[ST] =
-        if(rType == TypeUtil.EmptyType) { None() }
-        else {
-          val exampleValue: String = Util.getDataTypeNames(rType, basePackage).example()
-          Some(st"${exampleValue}")
-        }
+      assert(rets.size <= 1, s"Expecting a single out param but found ${rets.size}")
 
-      val returnType = Util.getDataTypeNames(rType, basePackage).referencedTypeName
+
+      val (returnType, exampleType) : (Option[String], Option[ST]) =
+        if(rets.isEmpty) {
+          (None(), None())
+        }
+        else {
+          val rType: AadlType = Util.getFeatureEndType(rets(0), types)
+          val _exampleValue: String = Util.getDataTypeNames(rType, basePackage).example()
+          val returnType = Util.getDataTypeNames(rType, basePackage).qualifiedReferencedTypeName
+
+          (Some(returnType), Some(st"${_exampleValue}"))
+        }
 
       StubTemplate.subprogram(methodName, params, returnType, exampleType)
     })
