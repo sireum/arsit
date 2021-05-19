@@ -324,7 +324,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
     transitionMethods = transitionMethods + (actionMethodName.render ~> doMethod)
 
-    assert(btsStates.get(src).get.categories.size == 1, btsStates.get(src).get.categories.size)
+    assert(btsStates.get(src).get.categories.size == 1, s"Need to handle states with 2+ categories: ${src} has ${btsStates.get(src).get.categories.size}")
 
 
     if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
