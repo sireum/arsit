@@ -656,7 +656,7 @@ object ArtNixTemplate {
                     dirs: ProjectDirectories): ST = {
 
     val script_home = "${SCRIPT_HOME}"
-    val cOutputDirRel = Util.relativizePaths(dirs.binDir, dirs.cNixDir, script_home)
+    val cOutputDirRel = Util.relativizePaths(dirs.cBinDir.value, dirs.cNixDir, script_home)
 
     val buildDir = st"${ops.StringOps(arch.name).firstToLower}-build"
     val mv: ST = if (arch == ArsitPlatform.Cygwin) {
@@ -779,7 +779,7 @@ object ArtNixTemplate {
     val ops = TranspilerConfig(
       help = "",
       args = ISZ(),
-      sourcepath = ISZ(dirs.srcMainDir),
+      sourcepath = ISZ(dirs.mainDir),
       output = Some(dirs.cNixDir),
       verbose = verbose,
       projectName = Some("main"), // default set in org.sireum.transpilers.cli.cTranspiler
@@ -812,8 +812,8 @@ object ArtNixTemplate {
 
     val script_home = s"$${${Util.SCRIPT_HOME}}"
 
-    val projHomesRel = opts.sourcepath.map((s: String) => Util.relativizePaths(dirs.binDir, s, script_home))
-    val cOutputDirRel = Util.relativizePaths(dirs.binDir, opts.output.get, script_home)
+    val projHomesRel = opts.sourcepath.map((s: String) => Util.relativizePaths(dirs.slangBinDir, s, script_home))
+    val cOutputDirRel = Util.relativizePaths(dirs.slangBinDir, opts.output.get, script_home)
 
     val path_sep = s"$${PATH_SEP}"
 
@@ -855,7 +855,7 @@ object ArtNixTemplate {
     var extras: ISZ[ST] = ISZ()
 
     if (opts.exts.nonEmpty) {
-      val extsRel = opts.exts.map((s: String) => Util.relativizePaths(dirs.binDir, s, script_home))
+      val extsRel = opts.exts.map((s: String) => Util.relativizePaths(dirs.slangBinDir, s, script_home))
       extras = extras :+
         st""" \
             |  --exts "${(extsRel, path_sep)}""""

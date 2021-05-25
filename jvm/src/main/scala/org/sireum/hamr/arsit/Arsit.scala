@@ -40,7 +40,7 @@ object Arsit {
 
     var artResources: ISZ[Resource] = ISZ()
     if (!o.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.srcMainDir)
+      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.mainDir)
     }
 
     artResources = artResources ++ createBuildArtifacts(
@@ -123,7 +123,7 @@ object Arsit {
     if(isNixProject(options.platform)) {
       val cmakeDir: String = projDirs.cNixDir
 
-      val devDir = projDirs.ext_cDir
+      val devDir = projDirs.cExt_c_Dir
 
       val transpile: String = {
         val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile.sh"))
@@ -161,7 +161,7 @@ object Arsit {
       }
 
       reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-        StringTemplate.arsitCAmkESInstructionsMessage(projDirs.ext_cDir, transpile).render)
+        StringTemplate.arsitCAmkESInstructionsMessage(projDirs.cExt_c_Dir, transpile).render)
     }
 
     return ret

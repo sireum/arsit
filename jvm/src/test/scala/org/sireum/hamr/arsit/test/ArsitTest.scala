@@ -51,9 +51,14 @@ trait ArsitTest extends TestSuite {
     val expectedDir = rootTestOutputDir / "expected"
     val resultsDir = rootTestOutputDir / "results"
     val slangOutputDir = resultsDir / testName
+    val outputSharedCDir = slangOutputDir / "src" / "c"
+    val outputPlatformCDir = outputSharedCDir
 
     var testOps = ops(
       outputDir = if(ops.outputDir.name != string"fake") ops.outputDir else slangOutputDir.canon,
+      outputSharedCDir = if(ops.outputSharedCDir.name != string"fake") ops.outputSharedCDir else outputSharedCDir.canon,
+      outputPlatformCDir = if(ops.outputPlatformCDir.name != string"fake") ops.outputPlatformCDir else outputPlatformCDir.canon,
+
       packageName = if(ops.packageName != string"") ops.packageName else "packageName_not_set"
     )
 
@@ -166,8 +171,9 @@ trait ArsitTest extends TestSuite {
 
 object ArsitTest {
 
+  val fakedir = Os.path("fake")
   val baseOptions = ArsitOptions(
-    outputDir = Os.path("fake"),
+    outputDir = fakedir,
     packageName = "",
     noEmbedArt = F,
     bless = F,
@@ -175,8 +181,8 @@ object ArsitTest {
     devicesAsThreads = T,
     ipc = IpcMechanism.SharedMemory,
     auxCodeDirs = ISZ(),
-    outputSharedCDir = None(),
-    outputPlatformCDir = None(),
+    outputSharedCDir = fakedir,
+    outputPlatformCDir = fakedir,
     excludeImpl = F,
     platform = ArsitPlatform.JVM,
     bitWidth = 64,

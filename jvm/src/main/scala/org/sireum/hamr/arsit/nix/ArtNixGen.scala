@@ -180,7 +180,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
         basePackage = basePackage
       )
 
-      addResource(dirs.nixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
+      addResource(dirs.slangNixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
 
       val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component, names, ports)
       ext_h_entries = ext_h_entries ++ _ext_h_entries
@@ -194,8 +194,8 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
     }
 
     {
-      val extC = Os.path(dirs.ext_cDir) / NixGen.EXT_C
-      val extH = Os.path(dirs.ext_cDir) / NixGen.EXT_H
+      val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
+      val extH = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_H
 
       val uc = TemplateUtil.uniqueSTs(ext_c_entries)
       val uh = TemplateUtil.uniqueSTs(ext_h_entries)
@@ -241,13 +241,13 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
 
     arsitOptions.ipc match {
       case IpcMechanism.SharedMemory =>
-        addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory.scala"), ArtNixTemplate.SharedMemory(basePackage), T)
-        addResource(dirs.nixDir, ISZ(basePackage, "SharedMemory_Ext.scala"), ArtNixTemplate.SharedMemory_Ext(basePackage), T)
+        addResource(dirs.slangNixDir, ISZ(basePackage, "SharedMemory.scala"), ArtNixTemplate.SharedMemory(basePackage), T)
+        addResource(dirs.slangNixDir, ISZ(basePackage, "SharedMemory_Ext.scala"), ArtNixTemplate.SharedMemory_Ext(basePackage), T)
       case x => halt(s"Unexpected IPC ${x}")
     }
 
     val stIPC = ArtNixTemplate.ipc(basePackage, platformPorts)
-    addResource(dirs.nixDir, ISZ(basePackage, "IPC.scala"), stIPC, T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "IPC.scala"), stIPC, T)
 
     val artNixCases: ISZ[ST] = artNixCasesM.entries.map(k => ArtNixTemplate.artNixCases(k._1, k._2))
     val stArtNix = ArtNixTemplate.artNix(
@@ -256,30 +256,30 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
       inPorts.filter(p => CommonUtil.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id")
     )
 
-    addResource(dirs.nixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
 
     val stMain = ArtNixTemplate.main(basePackage, mainSends)
-    addResource(dirs.nixDir, ISZ(basePackage, "Main.scala"), stMain, T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "Main.scala"), stMain, T)
 
-    addResource(dirs.nixDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
-    addResource(dirs.nixDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
-    addResource(dirs.nixDir, ISZ(basePackage, "PlatformNix.scala"), ArtNixTemplate.PlatformNix(basePackage), T)
-    addResource(dirs.nixDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
-    addResource(dirs.nixDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "PlatformNix.scala"), ArtNixTemplate.PlatformNix(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
 
     for(plat <- ISZ(ArsitPlatform.Linux, ArsitPlatform.MacOS, ArsitPlatform.Cygwin)) {
       val platName = ops.StringOps(plat.name).firstToLower
-      addExeResource(dirs.binDir, ISZ(s"compile-${platName}.sh"), ArtNixTemplate.compile(plat, dirs), T)
-      addExeResource(dirs.binDir, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, plat), T)
+      addExeResource(dirs.cBinDir.value, ISZ(s"compile-${platName}.sh"), ArtNixTemplate.compile(plat, dirs), T)
+      addExeResource(dirs.cBinDir.value, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, plat), T)
     }
 
-    addExeResource(dirs.binDir, ISZ("stop.sh"), ArtNixTemplate.stop(appNames), T)
+    addExeResource(dirs.cBinDir.value, ISZ("stop.sh"), ArtNixTemplate.stop(appNames), T)
 
-    addResource(dirs.etcDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
+    addResource(dirs.cEtcDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
 
-    var outputPaths: ISZ[String] = ISZ(dirs.srcMainDir)
-    if (!org.sireum.ops.StringOps(dirs.nixDir).contains(dirs.srcMainDir)) {
-      outputPaths = outputPaths :+ dirs.nixDir
+    var outputPaths: ISZ[String] = ISZ(dirs.mainDir)
+    if (!org.sireum.ops.StringOps(dirs.slangNixDir).contains(dirs.mainDir)) {
+      outputPaths = outputPaths :+ dirs.slangNixDir
     }
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
@@ -316,7 +316,9 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
       TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
-        case _ => halt("Raw connections specified but couldn't determine max bit size")
+        case _ =>
+          // model must only contain event ports (i.e. no data ports)
+          1
       }
     }
 
@@ -325,7 +327,7 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
       s"art.Art.maxPorts=${numPorts}"
     )
 
-    val _extensions: ISZ[String] = ISZ(dirs.ext_cDir, dirs.etcDir) ++ arsitOptions.auxCodeDirs
+    val _extensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
     val transpiler = ArtNixTemplate.transpiler(
       apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
@@ -345,6 +347,6 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
     )
 
     transpilerOptions = transpilerOptions :+ transpiler._2
-    addExeResource(dirs.binDir, ISZ(transpileScriptName), transpiler._1, T)
+    addExeResource(dirs.slangBinDir, ISZ(transpileScriptName), transpiler._1, T)
   }
 }

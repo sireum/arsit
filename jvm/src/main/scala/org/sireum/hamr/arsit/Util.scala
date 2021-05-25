@@ -249,25 +249,25 @@ object HAMR {
 
 @datatype class ProjectDirectories(options: ArsitOptions) {
 
-  val rootDir: String = options.outputDir.value
+  val slangOutputDir: String = options.outputDir.value
 
-  val srcDir: String = Util.pathAppend(rootDir, ISZ("src"))
+  val slangSrcDir: String = Util.pathAppend(slangOutputDir, ISZ("src"))
 
   /* Slang dirs */
-  val srcMainDir: String = Util.pathAppend(srcDir, ISZ("main"))
+  val mainDir: String = Util.pathAppend(slangSrcDir, ISZ("main"))
 
-  val architectureDir: String = Util.pathAppend(srcMainDir, ISZ("architecture"))
+  val architectureDir: String = Util.pathAppend(mainDir, ISZ("architecture"))
 
-  val bridgeDir: String = Util.pathAppend(srcMainDir, ISZ("bridge"))
+  val bridgeDir: String = Util.pathAppend(mainDir, ISZ("bridge"))
 
-  val dataDir: String = Util.pathAppend(srcMainDir, ISZ("data"))
+  val dataDir: String = Util.pathAppend(mainDir, ISZ("data"))
 
-  val componentDir: String = Util.pathAppend(srcMainDir, ISZ("component"))
+  val componentDir: String = Util.pathAppend(mainDir, ISZ("component"))
 
-  val inspectorDir: String= Util.pathAppend(srcMainDir, ISZ("inspector"))
+  val inspectorDir: String= Util.pathAppend(mainDir, ISZ("inspector"))
 
   /* Testing dirs */
-  val testDir: String = Util.pathAppend(srcDir, ISZ("test"))
+  val testDir: String = Util.pathAppend(slangSrcDir, ISZ("test"))
 
   val testBridgeDir: String = Util.pathAppend(testDir, ISZ("bridge"))
 
@@ -275,36 +275,32 @@ object HAMR {
 
   val auxCodeDir: ISZ[String] = options.auxCodeDirs
 
+  val slangBinDir: String = Util.pathAppend(slangOutputDir, ISZ("bin"))
 
-  /* C/CAmkES dirs */
-  val binDir: String = Util.pathAppend(rootDir, ISZ("bin"))
+  val slangNixDir: String = Util.pathAppend(mainDir, ISZ("nix"))
 
-  val outSharedCDir: Os.Path =
-    if(options.outputSharedCDir.nonEmpty) options.outputSharedCDir.get
-    else options.outputDir / "src" / "c"    // srcDir / "c"
-
-  val outPlatformCDir: Os.Path =
-    if(options.outputPlatformCDir.nonEmpty) options.outputPlatformCDir.get
-    else outSharedCDir
-
-  val cDir: String = outPlatformCDir.value
-    //if(options.outputCDir.nonEmpty) options.outputCDir.get
-    //else Util.pathAppend(srcDir, ISZ("c"))
-
-  val cNixDir: String = Util.pathAppend(outSharedCDir.value, ISZ("nix"))
-
-  val ext_cDir: String = Util.pathAppend(outSharedCDir.value, ISZ("ext-c"))
-
-  val etcDir: String = Util.pathAppend(outSharedCDir.value, ISZ("etc"))
-
-  val sel4EtcDir: String = Util.pathAppend(outSharedCDir.value, ISZ("etc_seL4"))
+  val seL4NixDir: String = Util.pathAppend(mainDir, ISZ("seL4Nix"))
 
 
-  val nixDir: String = Util.pathAppend(srcMainDir, ISZ("nix"))
+  /* C dirs */
+  val cOutputSharedDir: Os.Path = options.outputSharedCDir
 
-  val seL4NixDir: String = Util.pathAppend(srcMainDir, ISZ("seL4Nix"))
+  val cBinDir: Os.Path = cOutputSharedDir / "bin"
 
-  val seL4CDir: String = Util.pathAppend(cDir, ISZ("CAmkES_seL4"))
+  val cNixDir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("nix"))
+
+  val cExt_c_Dir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("ext-c"))
+
+  val cEtcDir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("etc"))
+
+
+
+  /* Camkes specific dirs */
+  val cOutputPlatformDir: Os.Path = options.outputPlatformCDir
+
+  val seL4CDir: String = Util.pathAppend(cOutputPlatformDir.value, ISZ("CAmkES_seL4"))
+
+  val sel4EtcDir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("etc_seL4"))
 }
 
 @sig trait Result {

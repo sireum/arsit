@@ -45,7 +45,12 @@ object NixGen{
     if(types.rawConnections) {
       // add numBit and numBytes global vars for each type passing between components
 
-      val maxBitSize = TypeUtil.getMaxBitsSize(symbolTable).get
+      val maxBitSize = TypeUtil.getMaxBitsSize(symbolTable) match {
+        case Some(z) => z
+        case _ =>
+          // model must only contain event ports (i.e not data ports)
+          1
+      }
 
       var seenTypes: Set[AadlType] = Set.empty
       for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
@@ -86,7 +91,7 @@ object NixGen{
 
   def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
 
-    val rootExtDir = Os.path(dirs.ext_cDir)
+    val rootExtDir = Os.path(dirs.cExt_c_Dir)
 
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()

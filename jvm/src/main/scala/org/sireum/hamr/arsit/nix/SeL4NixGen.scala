@@ -53,8 +53,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
   def gen(root: AadlSystem): Unit = {
 
-    val extC = Os.path(dirs.ext_cDir) / NixGen.EXT_C
-    val extH = Os.path(dirs.ext_cDir) / NixGen.EXT_H
+    val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
+    val extH = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_H
 
     var ext_h_entries: ISZ[ST] = ISZ()
     var ext_c_entries: ISZ[ST] = ISZ()
@@ -156,7 +156,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
           T)
       }
 
-      val cOutputDir: Os.Path = Os.path(dirs.cDir) / instanceSingletonName
+      val cOutputDir: Os.Path = dirs.cOutputPlatformDir / instanceSingletonName
 
       val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component.component, names, ports)
       ext_h_entries = ext_h_entries ++ _ext_h_entries
@@ -172,7 +172,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
         case _ => defaultMaxStackSizeInBytes
       }
 
-      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(instanceSingletonName)}"
+      val settingsFilename = s"${dirs.slangBinDir}/${CMakeTemplate.cmake_settingsFilename(instanceSingletonName)}"
       addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(instanceSingletonName), F)
 
       // prefix with '+' to indicate settings should come after library definitions
@@ -203,7 +203,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     { // Slang Type Library
 
       val id = "SlangTypeLibrary"
-      val cOutputDir: Os.Path = Os.path(dirs.cDir) / id
+      val cOutputDir: Os.Path = dirs.cOutputPlatformDir / id
       val relPath = s"${cOutputDir.up.name}/${id}"
 
 
@@ -221,12 +221,14 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
         TypeUtil.getMaxBitsSize(symbolTable) match {
           case Some(z) =>
             customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
-          case _ => halt("Raw connections specified but couldn't determine max bit size")
+          case _ =>
+            // model must only contain event ports (i.e. no data ports)
+            1
         }
       }
 
 
-      val settingsFilename = s"${dirs.binDir}/${CMakeTemplate.cmake_settingsFilename(id)}"
+      val settingsFilename = s"${dirs.slangBinDir}/${CMakeTemplate.cmake_settingsFilename(id)}"
       addResource(settingsFilename, ISZ(), CMakeTemplate.cmake_sel4_settings_cmake(id), F)
 
       // prefix with '+' to indicate settings should come after library definitions
@@ -259,7 +261,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     val transpileScript = TranspilerTemplate.transpilerScriptPreamble(scripts)
 
-    addExeResource(dirs.binDir, ISZ("transpile-sel4.sh"), transpileScript, T)
+    addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.sh"), transpileScript, T)
   }
 
   def genGlobals(ports: ISZ[Port],
@@ -403,8 +405,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val buildApps = F
 
     val _sourcePaths = sourcePaths ++ ISZ(
-      Util.pathAppend(dirs.srcMainDir, ISZ("art")),
-      Util.pathAppend(dirs.srcMainDir, ISZ("data")),
+      Util.pathAppend(dirs.mainDir, ISZ("art")),
+      Util.pathAppend(dirs.mainDir, ISZ("data")),
       Util.pathAppend(dirs.seL4NixDir, ISZ(packageName)))
 
     val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
@@ -414,7 +416,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       libraryName = instanceName,
       sourcepaths = _sourcePaths,
       outputDir = cOutputDir,
-      binDir = dirs.binDir,
+      binDir = dirs.slangBinDir,
       apps = apps,
       forwards = forwards,
       numBits = arsitOptions.bitWidth,
@@ -443,8 +445,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))
 
     val sourcePaths: ISZ[String] = ISZ(
-      Util.pathAppend(dirs.srcMainDir, ISZ("bridge")),
-      Util.pathAppend(dirs.srcMainDir, ISZ("component")),
+      Util.pathAppend(dirs.mainDir, ISZ("bridge")),
+      Util.pathAppend(dirs.mainDir, ISZ("component")),
       Util.pathAppend(dirs.seL4NixDir, names.path))
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
@@ -472,7 +474,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) =>
           customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
-        case _ => halt("Raw connections specified but couldn't determine max bit size")
+        case _ =>
+          // model must only contain event ports (i.e. no data ports)
+          1
       }
     }
 
