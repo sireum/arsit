@@ -45,7 +45,7 @@ object NixGen{
     if(types.rawConnections) {
       // add numBit and numBytes global vars for each type passing between components
 
-      val maxBitSize = TypeUtil.getMaxBitsSize(symbolTable) match {
+      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) => z
         case _ =>
           // model must only contain event ports (i.e not data ports)

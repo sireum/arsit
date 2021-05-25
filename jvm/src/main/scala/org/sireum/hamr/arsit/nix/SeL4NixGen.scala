@@ -218,13 +218,13 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       var customSequenceSizes: ISZ[String] = ISZ()
       if (types.rawConnections) {
         // TODO is this necessary?
-        TypeUtil.getMaxBitsSize(symbolTable) match {
-          case Some(z) =>
-            customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
+        val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
+          case Some(z) => z
           case _ =>
             // model must only contain event ports (i.e. no data ports)
             1
         }
+        customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${maxBitSize}"
       }
 
 
@@ -471,13 +471,13 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     )
 
     if (types.rawConnections) {
-      TypeUtil.getMaxBitsSize(symbolTable) match {
-        case Some(z) =>
-          customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${z}"
+      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
+        case Some(z) => z
         case _ =>
           // model must only contain event ports (i.e. no data ports)
           1
       }
+      customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${maxBitSize}"
     }
 
     val customConstants: ISZ[String] = ISZ(
