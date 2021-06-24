@@ -549,6 +549,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
       case c: BTSLiteralExp => visitBTSLiteralExp(c)
       case c: BTSNameExp => visitBTSNameExp(c)
       case c: BTSFunctionCall => visitBTSFunctionCall(c)
+      case c: BTSUnaryExp => visitBTSUnaryExp(c)
     }
     return ret
   }
@@ -652,6 +653,18 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
     }
 
     return st"($lhs $op $rhs)"
+  }
+
+  def visitBTSUnaryExp(exp: BTSUnaryExp): ST = {
+    val expr = visitBTSExp(exp.exp)
+
+    val op: String = exp.op match {
+      case BTSUnaryOp.NOT => "!"
+      case BTSUnaryOp.NEG => "-"
+      case BTSUnaryOp.ABS => halt("Need to handle ABS unary expressions")
+    }
+
+    return st"(${op}(${expr}))"
   }
 
   def visitBTSFunctionCall(call: BTSFunctionCall): ST = {
