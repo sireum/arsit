@@ -22,10 +22,10 @@ object StringTemplate {
           |-------------------
           |  Slang-Embedded Project Directory: ${path}
           |
-          |    Refer to the comments in build.sbt for instructions on how to open the
+          |    Refer to the comments in bin/project.cmd for instructions on how to open the
           |    project in Sireum IVE and how to run the system/unit-tests from IVE or the command line.
-          |    Alternatively, refer to the comments in build.sc for instructions on how open the
-          |    project in Visual Studio Code and how to run the system/unit-tests using mill."""
+          |    Alternatively, refer to the comments in build.sbt or build.sc for sbt or mill
+          |    based instructions."""
     return ret
   }
 
@@ -69,6 +69,141 @@ object StringTemplate {
           |
           |    ${transpileScript}"""
 
+    return ret
+  }
+
+  def proyekBuild(projectName: String,
+                  basePackageName: String,
+                  embedArt: B,
+                  demoScalaPath: String,
+                  bridgeTestPath: String): ST = {
+    val (artDir, artIvy): (Option[ST], Option[ST]) =
+      if(embedArt)
+        (Some(st""""art", """), None())
+      else
+        (None(), Some(st""""org.sireum.slang-embedded-art::slang-embedded-art:", """))
+
+    val ret = st"""::#! 2> /dev/null                                   #
+                  |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+                  |if [ -z $${SIREUM_HOME} ]; then                      #
+                  |  echo "Please set SIREUM_HOME env var"             #
+                  |  exit -1                                           #
+                  |fi                                                  #
+                  |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+                  |:BOF
+                  |setlocal
+                  |if not defined SIREUM_HOME (
+                  |  echo Please set SIREUM_HOME env var
+                  |  exit /B -1
+                  |)
+                  |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+                  |exit /B %errorlevel%
+                  |::!#
+                  |// #Sireum
+                  |
+                  |// Example Sireum Proyek build definitions -- the contents of this file will not be overwritten
+                  |//
+                  |// To install Sireum Proyek see https://github.com/sireum/kekinian#installing
+                  |//
+                  |// The following commands should be executed in the parent directory of the 'bin' directory.
+                  |//
+                  |// Command Line:
+                  |//   To run the demo from the command line
+                  |//     sireum proyek run . ${basePackageName}.Demo
+                  |//
+                  |//   To run the example unit tests from the command line:
+                  |//     sireum proyek test .
+                  |//
+                  |//   To build a jar:
+                  |//     sireum proyek assemble . ${basePackageName}.Demo
+                  |//
+                  |// Sireum IVE:
+                  |//   Generate the IVE project
+                  |//     sireum proyek ive .
+                  |//
+                  |//   Then in IVE select 'File > Open ...' and navigate to the directory containing
+                  |//   this file then click 'OK'.  To install Sireum IVE see https://github.com/sireum/kekinian#installing
+                  |//
+                  |//   To run the demo from within Sireum IVE:
+                  |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
+                  |//
+                  |//   To run the unit test cases from within Sireum IVE:
+                  |//     Right click the ${bridgeTestPath} and choose "Run ScalaTests in bridge"
+                  |//
+                  |//   NOTE: A ClassNotFoundException may be raised the first time you try to
+                  |//         run the demo or unit tests.  If this occurs simply delete the directory
+                  |//         named 'target' and retry
+                  |
+                  |import org.sireum._
+                  |import org.sireum.project.{Module, Project, Target}
+                  |import SlangEmbedded._
+                  |
+                  |val prj: Project = slangProject
+                  |//val prj: Project = inspectorProject()
+                  |
+                  |object SlangEmbedded {
+                  |
+                  |  val home: Os.Path = Os.slashDir.up.canon
+                  |  val mainDir: Os.Path = Os.path("src") / "main"
+                  |
+                  |  val slangModule: Module = Module(
+                  |    id = "${projectName}",
+                  |    basePath = (home).string,
+                  |    subPathOpt = None(),
+                  |    deps = ISZ(),
+                  |    targets = ISZ(Target.Jvm),
+                  |    ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:", "com.intellij:forms_rt:"),
+                  |    sources = ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix").map(p => (mainDir / p).string),
+                  |    resources = ISZ(),
+                  |    testSources = ISZ("bridge", "util").map(p => (Os.path("src") / "test" / p).string),
+                  |    testResources = ISZ(),
+                  |    publishInfoOpt = None()
+                  |  )
+                  |
+                  |  val inspectorModule: Module = slangModule(
+                  |    sources = slangModule.sources :+ (mainDir / "inspector").string,
+                  |    ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:"
+                  |    )
+                  |  )
+                  |
+                  |  val slangProject: Project = Project.empty + slangModule
+                  |  val inspectorProject: Project = Project.empty + inspectorModule
+                  |}
+                  |
+                  |println(project.JSON.fromProject(prj, T))
+                  |"""
+    return ret
+  }
+
+  def proyekVersionProperties(): ST = {
+    val kekinianVersion = ArsitLibrary.getKekinianVersion()
+    val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
+    val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
+    val scalaVersion = ArsitLibrary.getScalaVersion()
+    val formsRtVersion = ArsitLibrary.getFormsRtVersion()
+    val inspectorVersion = ArsitLibrary.getInspectorVersion()
+    val artVersion = ArsitLibrary.getArtVersion()
+
+    val ret:ST = st"""org.sireum.slang-embedded-art%%slang-embedded-art%=${artVersion}
+                     |
+                     |org.sireum%inspector-capabilities%=${inspectorVersion}
+                     |org.sireum%inspector-gui%=${inspectorVersion}
+                     |org.sireum%inspector-services-jvm%=${inspectorVersion}
+                     |
+                     |com.intellij%forms_rt%=${formsRtVersion}
+                     |
+                     |
+                     |# remove the following entries if you want to use the versions
+                     |# that ship with sireum (i.e. $$SIREUM_HOME/bin/sireum --version)
+                     |
+                     |# Scala compiler plugin for Slang
+                     |org.sireum%%scalac-plugin%=${sireumScalacVersion}
+                     |
+                     |org.sireum.kekinian%%library%kekinianVersion%=${kekinianVersion}
+                     |
+                     |org.scala-lang%scala-library%=${scalaVersion}
+                     |org.scalatest%%scalatest%%=${scalaTestVersion}
+                     |"""
     return ret
   }
 
@@ -216,8 +351,19 @@ object StringTemplate {
   def millBuild(basePackageName: String,
                 outputDirSimpleName: String,
                 embedArt: B): ST = {
-    val artVersion = ArsitLibrary.getArtVersion()
     val inspectorVersion = ArsitLibrary.getInspectorVersion()
+
+    val artVersion = ArsitLibrary.getArtVersion()
+
+    val (artVer, artJitpack, artSrcDir): (Option[ST], Option[ST], Option[ST]) = if (!embedArt) {
+      (Some(
+        st"""// https://github.com/sireum/slang-embedded-art/tree/${artVersion}
+            |val artVersion = "${artVersion}""""),
+        Some(st"""ivy"org.sireum.slang-embedded-art::slang-embedded-art::$${artVersion}","""),
+        None())
+    } else {
+      (None(), None(), Some(st"""millSourcePath / os.up / "src" / "main" / "art","""))
+    }
 
     val ret: ST =
       st"""import mill._
@@ -257,6 +403,7 @@ object StringTemplate {
           |trait SlangEmbeddedModule extends ScalaModule {
           |
           |  ${libDependencies()}
+          |  ${artVer}
           |
           |  def scalaVersion = scalaVer
           |
@@ -274,6 +421,7 @@ object StringTemplate {
           |  ) }
           |
           |  override def ivyDeps = Agg(
+          |    ${artJitpack}
           |    ivy"org.sireum.kekinian::library::$${kekinianVersion}",
           |
           |    // Jetbrains UI Designer
@@ -293,7 +441,7 @@ object StringTemplate {
           |
           |  def contributedSources: Seq[PathRef] = Seq(
           |    millSourcePath / os.up / "src" / "main" / "architecture",
-          |    millSourcePath / os.up / "src" / "main" / "art",
+          |    ${artSrcDir}
           |    millSourcePath / os.up / "src" / "main" / "bridge",
           |    millSourcePath / os.up / "src" / "main" / "component",
           |    millSourcePath / os.up / "src" / "main" / "data",

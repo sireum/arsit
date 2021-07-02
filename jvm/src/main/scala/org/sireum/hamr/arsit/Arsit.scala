@@ -101,6 +101,15 @@ object Arsit {
       return ops.StringOps.replaceAllLiterally(conversions.String.toCis(s), "\\", "/")
     }
 
+    val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
+    val proyekBuildContent = StringTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
+      dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
+    ret = ret :+ Resource(proyekBuildDest.value, proyekBuildContent, F, T)
+
+    val versionPropDest = options.outputDir / "versions.properties"
+    val versionPropBuildContent = StringTemplate.proyekVersionProperties()
+    ret = ret :+ Resource(versionPropDest.value, versionPropBuildContent, F, F)
+
     val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
     val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
