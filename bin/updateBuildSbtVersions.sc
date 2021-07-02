@@ -112,14 +112,15 @@ if(updated) {
   buildSbtProps.writeOver(pst)
   println(s"$buildSbtProps updated")
   
-  println("\nRunning bin/build.cmd")
+  //println("\nRunning bin/build.cmd")
   touchePath(artFiles)
-  val build_cmd = SIREUM_HOME / "bin" / "build.cmd"
-  Os.proc(ISZ(sireum.value, "slang", "run", build_cmd.value)).console.runCheck()
+  //val build_cmd = SIREUM_HOME / "bin" / "build.cmd"
+  //Os.proc(ISZ(sireum.value, "slang", "run", build_cmd.value)).console.runCheck()
   touchePath(artFiles)
 
-  println(s"\n$buildSbtProps updated and Sireum touched/rebuilt -- expect an error to follow")
-  
+  //println(s"\n$buildSbtProps updated and Sireum touched/rebuilt -- expect an error to follow")
+  println(s"\n$buildSbtProps updated -- expect an error to follow")
+
   Os.exit(1) // return 1 to indicate versions have changed
 } else {
   println(s"No Arsit updates needed")
