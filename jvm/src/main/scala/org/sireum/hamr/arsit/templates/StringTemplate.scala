@@ -103,26 +103,26 @@ object StringTemplate {
                   |
                   |// Example Sireum Proyek build definitions -- the contents of this file will not be overwritten
                   |//
-                  |// To install Sireum Proyek see https://github.com/sireum/kekinian#installing
+                  |// To install Sireum (Proyek and IVE) see https://github.com/sireum/kekinian#installing
                   |//
-                  |// The following commands should be executed in the parent directory of the 'bin' directory.
+                  |// The following commands should be executed in the parent of the 'bin' directory.
                   |//
                   |// Command Line:
-                  |//   To run the demo from the command line
+                  |//   To run the demo from the command line:
                   |//     sireum proyek run . ${basePackageName}.Demo
                   |//
                   |//   To run the example unit tests from the command line:
                   |//     sireum proyek test .
                   |//
-                  |//   To build a jar:
-                  |//     sireum proyek assemble . ${basePackageName}.Demo
+                  |//   To build an executable jar:
+                  |//     sireum proyek assemble --uber --main ${basePackageName}.Demo .
                   |//
                   |// Sireum IVE:
-                  |//   Generate the IVE project
+                  |//   Generate the IVE project:
                   |//     sireum proyek ive .
                   |//
-                  |//   Then in IVE select 'File > Open ...' and navigate to the directory containing
-                  |//   this file then click 'OK'.  To install Sireum IVE see https://github.com/sireum/kekinian#installing
+                  |//   Then in IVE select 'File > Open ...' and navigate to the parent of the
+                  |//   'bin' directory and click 'OK'.
                   |//
                   |//   To run the demo from within Sireum IVE:
                   |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
@@ -162,8 +162,7 @@ object StringTemplate {
                   |
                   |  val inspectorModule: Module = slangModule(
                   |    sources = slangModule.sources :+ (mainDir / "inspector").string,
-                  |    ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:"
-                  |    )
+                  |    ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:")
                   |  )
                   |
                   |  val slangProject: Project = Project.empty + slangModule
