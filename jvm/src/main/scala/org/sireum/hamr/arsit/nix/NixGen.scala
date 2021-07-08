@@ -55,7 +55,7 @@ object NixGen{
       var seenTypes: Set[AadlType] = Set.empty
       for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
         val originatingType: AadlType = p._portType match {
-          case BitType(_, _, None(), Some(o)) => o
+          case BitType(_, _, _, Some(o)) => o
           case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
         }
         if(!seenTypes.contains(originatingType)) {
@@ -140,7 +140,7 @@ object NixGen{
             val entry:ST = {
               if(types.rawConnections) {
                 val originatingTypeNames: DataTypeNames = p._portType match {
-                  case BitType(_, _, None(), Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+                  case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
                   case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
                 }
 
@@ -546,7 +546,7 @@ object NixGen{
         val decl: ST =
           if(types.rawConnections) {
             val originatingTypeNames: DataTypeNames = p._portType match {
-              case BitType(_, _, None(), Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+              case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
               case _ =>halt(s"Unexpected: Could not find originating type for ${p._portType}")
             }
 
