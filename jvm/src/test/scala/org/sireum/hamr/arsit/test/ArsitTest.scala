@@ -87,6 +87,7 @@ trait ArsitTest extends TestSuite {
       platform = p,
       slangOutputDir = None(),
       packageName = Some(ops.packageName),
+      noProyekIve = T,
       noEmbedArt = ops.noEmbedArt,
       devicesAsThreads = ops.devicesAsThreads,
       slangAuxCodeDirs = ISZ(),

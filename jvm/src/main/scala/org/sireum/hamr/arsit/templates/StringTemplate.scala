@@ -118,7 +118,8 @@ object StringTemplate {
                   |//     sireum proyek assemble --uber --main ${basePackageName}.Demo .
                   |//
                   |// Sireum IVE:
-                  |//   Generate the IVE project:
+                  |//
+                  |//   If you prevented HAMR from running Proyek IVE then first generate the IVE project:
                   |//     sireum proyek ive .
                   |//
                   |//   Then in IVE select 'File > Open ...' and navigate to the parent of the
