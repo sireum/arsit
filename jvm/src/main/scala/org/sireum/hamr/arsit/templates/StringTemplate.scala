@@ -137,38 +137,33 @@ object StringTemplate {
                   |
                   |import org.sireum._
                   |import org.sireum.project.{Module, Project, Target}
-                  |import SlangEmbedded._
+                  |
+                  |val home: Os.Path = Os.slashDir.up.canon
+                  |
+                  |val slangModule: Module = Module(
+                  |  id = "${projectName}",
+                  |  basePath = (home / "src").string,
+                  |  subPathOpt = None(),
+                  |  deps = ISZ(),
+                  |  targets = ISZ(Target.Jvm),
+                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:", "com.intellij:forms_rt:"),
+                  |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
+                  |  resources = ISZ(),
+                  |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
+                  |  testResources = ISZ(),
+                  |  publishInfoOpt = None()
+                  |)
+                  |
+                  |val inspectorModule: Module = slangModule(
+                  |  sources = slangModule.sources :+ (Os.path("main") / "inspector").string,
+                  |  ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:")
+                  |)
+                  |
+                  |val slangProject: Project = Project.empty + slangModule
+                  |val inspectorProject: Project = Project.empty + inspectorModule
                   |
                   |val prj: Project = slangProject
                   |//val prj: Project = inspectorProject()
-                  |
-                  |object SlangEmbedded {
-                  |
-                  |  val home: Os.Path = Os.slashDir.up.canon
-                  |  val mainDir: Os.Path = Os.path("src") / "main"
-                  |
-                  |  val slangModule: Module = Module(
-                  |    id = "${projectName}",
-                  |    basePath = (home).string,
-                  |    subPathOpt = None(),
-                  |    deps = ISZ(),
-                  |    targets = ISZ(Target.Jvm),
-                  |    ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:", "com.intellij:forms_rt:"),
-                  |    sources = ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix").map(p => (mainDir / p).string),
-                  |    resources = ISZ(),
-                  |    testSources = ISZ("bridge", "util").map(p => (Os.path("src") / "test" / p).string),
-                  |    testResources = ISZ(),
-                  |    publishInfoOpt = None()
-                  |  )
-                  |
-                  |  val inspectorModule: Module = slangModule(
-                  |    sources = slangModule.sources :+ (mainDir / "inspector").string,
-                  |    ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:")
-                  |  )
-                  |
-                  |  val slangProject: Project = Project.empty + slangModule
-                  |  val inspectorProject: Project = Project.empty + inspectorModule
-                  |}
                   |
                   |println(project.JSON.fromProject(prj, T))
                   |"""
