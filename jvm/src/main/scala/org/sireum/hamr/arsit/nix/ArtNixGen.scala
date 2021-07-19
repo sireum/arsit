@@ -55,11 +55,11 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(outDir, path), content, overwrite)
+    resources = resources :+ ResourceUtil.createExeResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(outDir, path), content, overwrite)
+    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def gen(model: AadlSystem): Unit = {

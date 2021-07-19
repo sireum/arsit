@@ -278,6 +278,6 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(baseDir, paths), content, overwrite)
+    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 }

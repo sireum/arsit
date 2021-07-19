@@ -106,23 +106,23 @@ object Arsit {
 
     val versionPropDest = options.outputDir / "versions.properties"
     val versionPropBuildContent = StringTemplate.proyekVersionProperties()
-    ret = ret :+ ResourceUtil.createStResource(versionPropDest.value, versionPropBuildContent, F)
+    ret = ret :+ ResourceUtil.createResource(versionPropDest.value, versionPropBuildContent, F)
 
     val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
     val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
-    ret = ret :+ ResourceUtil.createStResource(millBuildDest.value, millBuildContent, F)
+    ret = ret :+ ResourceUtil.createResource(millBuildDest.value, millBuildContent, F)
 
     val sbtBuildDest = options.outputDir / "build.sbt"
     val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
-    ret = ret :+ ResourceUtil.createStResource(sbtBuildDest.value, sbtBuildContent, F)
+    ret = ret :+ ResourceUtil.createResource(sbtBuildDest.value, sbtBuildContent, F)
 
     val buildPropertiesDest = options.outputDir / "project/build.properties"
-    ret = ret :+ ResourceUtil.createStResource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F)
+    ret = ret :+ ResourceUtil.createResource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F)
 
     val pluginsSbtDest = options.outputDir / "project" / "plugins.sbt"
-    ret = ret :+ ResourceUtil.createStResource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F)
+    ret = ret :+ ResourceUtil.createResource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F)
 
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
       StringTemplate.arsitSlangInstructionsMessage(options.outputDir.value).render)

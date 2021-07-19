@@ -308,10 +308,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
   }
 
   def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(baseDir, paths), content, overwrite)
+    resources = resources :+ ResourceUtil.createExeResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(baseDir, paths), content, overwrite)
+    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 }

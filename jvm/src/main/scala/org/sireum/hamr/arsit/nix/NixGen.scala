@@ -360,7 +360,7 @@ object NixGen{
           val userHeaderMethods = ops.ISZOps(entrypointSignatures).map((s: ST) => st"${s};")
           val userMacroName = StringUtil.toUpperCase(s"${names.componentSingletonType}_h")
           val headerSt = SeL4NixTemplate.cHeaderFile(userMacroName, userHeaderMethods)
-          resources = resources :+ ResourceUtil.createStResource(
+          resources = resources :+ ResourceUtil.createResource(
             Util.pathAppend(userHeaderFile.up.value, ISZ(userHeaderFile.name)), headerSt, T)
         }
 
@@ -377,7 +377,7 @@ object NixGen{
         {
           val implFile = extRoot / s"${names.componentSingletonType}.c"
           extensionFiles = extensionFiles :+ implFile
-          resources = resources :+ ResourceUtil.createStResource(
+          resources = resources :+ ResourceUtil.createResource(
             Util.pathAppend(implFile.up.value, ISZ(implFile.name)), impl, F)
         }
       }
@@ -524,8 +524,8 @@ object NixGen{
         extensionFiles = extensionFiles :+ apiHeaderFile
         extensionFiles = extensionFiles :+ apiImplFile
 
-        resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(apiHeaderFile.up.value, ISZ(apiHeaderFile.name)), headerContents, T)
-        resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(apiImplFile.up.value, ISZ(apiImplFile.name)), implContents, T)
+        resources = resources :+ ResourceUtil.createResource(Util.pathAppend(apiHeaderFile.up.value, ISZ(apiHeaderFile.name)), headerContents, T)
+        resources = resources :+ ResourceUtil.createResource(Util.pathAppend(apiImplFile.up.value, ISZ(apiImplFile.name)), implContents, T)
       } // end helper api methods
     }
 
