@@ -14,6 +14,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir.FeatureEnd
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.templates.TemplateUtil
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
                         val root: AadlSystem,
@@ -54,11 +55,11 @@ import org.sireum.hamr.codegen.common.templates.TemplateUtil
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createExeResource(outDir, path, content, overwrite)
+    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(outDir, path, content, overwrite)
+    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def gen(model: AadlSystem): Unit = {

@@ -13,6 +13,7 @@ import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common._
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 
 object NixGen{
@@ -359,7 +360,8 @@ object NixGen{
           val userHeaderMethods = ops.ISZOps(entrypointSignatures).map((s: ST) => st"${s};")
           val userMacroName = StringUtil.toUpperCase(s"${names.componentSingletonType}_h")
           val headerSt = SeL4NixTemplate.cHeaderFile(userMacroName, userHeaderMethods)
-          resources = resources :+ Util.createResource(userHeaderFile.up.value, ISZ(userHeaderFile.name), headerSt, T)
+          resources = resources :+ ResourceUtil.createStResource(
+            Util.pathAppend(userHeaderFile.up.value, ISZ(userHeaderFile.name)), headerSt, T)
         }
 
         val impl =
@@ -375,7 +377,8 @@ object NixGen{
         {
           val implFile = extRoot / s"${names.componentSingletonType}.c"
           extensionFiles = extensionFiles :+ implFile
-          resources = resources :+ Util.createResource(implFile.up.value, ISZ(implFile.name), impl, F)
+          resources = resources :+ ResourceUtil.createStResource(
+            Util.pathAppend(implFile.up.value, ISZ(implFile.name)), impl, F)
         }
       }
 
@@ -521,8 +524,8 @@ object NixGen{
         extensionFiles = extensionFiles :+ apiHeaderFile
         extensionFiles = extensionFiles :+ apiImplFile
 
-        resources = resources :+ Util.createResource(apiHeaderFile.up.value, ISZ(apiHeaderFile.name), headerContents, T)
-        resources = resources :+ Util.createResource(apiImplFile.up.value, ISZ(apiImplFile.name), implContents, T)
+        resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(apiHeaderFile.up.value, ISZ(apiHeaderFile.name)), headerContents, T)
+        resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(apiImplFile.up.value, ISZ(apiImplFile.name)), implContents, T)
       } // end helper api methods
     }
 

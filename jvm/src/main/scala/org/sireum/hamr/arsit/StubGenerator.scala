@@ -9,8 +9,8 @@ import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
-import org.sireum.hamr.codegen.common.util.ExperimentalOptions
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
+import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -278,6 +278,6 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
+    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 }

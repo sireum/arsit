@@ -14,6 +14,7 @@ import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 
 @record class ArchitectureGenerator(directories: ProjectDirectories,
                                     rootSystem: AadlSystem,
@@ -307,10 +308,10 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   }
 
   def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createExeResource(baseDir, paths, content, overwrite)
+    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
+    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 }

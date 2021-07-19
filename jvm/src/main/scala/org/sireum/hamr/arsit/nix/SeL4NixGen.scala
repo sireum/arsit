@@ -11,6 +11,7 @@ import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
 @record class SeL4NixGen(val dirs: ProjectDirectories,
@@ -44,11 +45,11 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createExeResource(outDir, path, content, overwrite)
+    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def addResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(outDir, path, content, overwrite)
+    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
   def gen(root: AadlSystem): Unit = {

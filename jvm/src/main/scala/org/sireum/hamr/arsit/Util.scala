@@ -23,14 +23,6 @@ object Util {
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
 
-  def createExeResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B): Resource = {
-    return Resource(pathAppend(rootDir, path), content, overwrite, T)
-  }
-
-  def createResource(rootDir: String, path: ISZ[String], content: ST, overwrite: B): Resource = {
-    return Resource(pathAppend(rootDir, path), content, overwrite, F)
-  }
-
   def pathAppend(outputDir: String, s: ISZ[String]): String = {
     if (s.isEmpty) {
       return outputDir

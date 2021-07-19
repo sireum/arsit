@@ -9,6 +9,7 @@ import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTabl
 import org.sireum.hamr.ir._
 import org.sireum.ops._
 import org.sireum.hamr.codegen.common.types._
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
 @record class BTSGen(directories: ProjectDirectories,
@@ -820,11 +821,11 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
   }
 
   def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createExeResource(baseDir, paths, content, overwrite)
+    resources = resources :+ ResourceUtil.createExeStResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ Util.createResource(baseDir, paths, content, overwrite)
+    resources = resources :+ ResourceUtil.createStResource(Util.pathAppend(baseDir, paths), content, overwrite)
   }
 }
 

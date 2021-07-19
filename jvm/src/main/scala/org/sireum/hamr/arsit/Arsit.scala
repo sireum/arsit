@@ -5,11 +5,9 @@ import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
-import org.sireum.hamr.codegen.common.properties.PropertyUtil
-import org.sireum.hamr.codegen.common.symbols.{SymbolResolver, SymbolTable}
-import org.sireum.hamr.codegen.common.transformers.Transformers
-import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeResolver, TypeUtil}
-import org.sireum.hamr.codegen.common.util.ExperimentalOptions
+import org.sireum.hamr.codegen.common.symbols.SymbolTable
+import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 import org.sireum.message._
 
@@ -55,7 +53,7 @@ object Arsit {
   private def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
     for ((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
-      val _c =
+      val _c: String =
         if (p.native.contains("Art.scala")) {
           val out = new StringBuilder()
           c.native.split("\n").map(s =>
@@ -74,7 +72,7 @@ object Arsit {
           c
         }
 
-      resources = resources :+ Util.createResource(outputDir, ISZ(p), st"${_c}", T)
+      resources = resources :+ ResourceUtil.createStringResource(Util.pathAppend(outputDir, ISZ(p)), _c, T)
     }
     return resources
   }
@@ -104,27 +102,27 @@ object Arsit {
     val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
     val proyekBuildContent = StringTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
-    ret = ret :+ Resource(proyekBuildDest.value, proyekBuildContent, F, T)
+    ret = ret :+ ResourceUtil.createExeStringResource(proyekBuildDest.value, ResourceUtil.makeCRLF(proyekBuildContent.render), F)
 
     val versionPropDest = options.outputDir / "versions.properties"
     val versionPropBuildContent = StringTemplate.proyekVersionProperties()
-    ret = ret :+ Resource(versionPropDest.value, versionPropBuildContent, F, F)
+    ret = ret :+ ResourceUtil.createStResource(versionPropDest.value, versionPropBuildContent, F)
 
     val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
     val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
-    ret = ret :+ Resource(millBuildDest.value, millBuildContent, F, F)
+    ret = ret :+ ResourceUtil.createStResource(millBuildDest.value, millBuildContent, F)
 
     val sbtBuildDest = options.outputDir / "build.sbt"
     val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
-    ret = ret :+ Resource(sbtBuildDest.value, sbtBuildContent, F, F)
+    ret = ret :+ ResourceUtil.createStResource(sbtBuildDest.value, sbtBuildContent, F)
 
     val buildPropertiesDest = options.outputDir / "project/build.properties"
-    ret = ret :+ Resource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F, F)
+    ret = ret :+ ResourceUtil.createStResource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F)
 
     val pluginsSbtDest = options.outputDir / "project" / "plugins.sbt"
-    ret = ret :+ Resource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F, F)
+    ret = ret :+ ResourceUtil.createStResource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F)
 
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
       StringTemplate.arsitSlangInstructionsMessage(options.outputDir.value).render)
