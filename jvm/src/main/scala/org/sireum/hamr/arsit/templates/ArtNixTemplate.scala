@@ -817,6 +817,8 @@ object ArtNixTemplate {
 
     val path_sep = s"$${PATH_SEP}"
 
+    val bs = "\\"
+
     val ret =
       st"""#!/usr/bin/env bash
           |#
@@ -837,19 +839,19 @@ object ArtNixTemplate {
           |${Util.SCRIPT_HOME}=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
           |OUTPUT_DIR="${cOutputDirRel}"
           |
-          |$${SIREUM_HOME}/bin/sireum slang transpilers c \
-          |  --sourcepath "${(projHomesRel, path_sep)}" \
-          |  --output-dir "$${OUTPUT_DIR}" \
-          |  --name "${opts.projectName.get}" \
-          |  --apps "${(opts.apps, ",")}" \
-          |  --fingerprint ${opts.fingerprint} \
-          |  --bits ${opts.bitWidth} \
-          |  --string-size ${opts.maxStringSize} \
-          |  --sequence-size ${opts.maxArraySize} \
-          |  --sequence "${(opts.customArraySizes, ";")}" \
-          |  --constants "${(opts.customConstants, ";")}" \
-          |  --forward "${(opts.forwarding, ",")}" \
-          |  --stack-size "${opts.stackSize.get}" \
+          |$${SIREUM_HOME}/bin/sireum slang transpilers c ${bs}
+          |  --sourcepath "${(projHomesRel, path_sep)}" ${bs}
+          |  --output-dir "$${OUTPUT_DIR}" ${bs}
+          |  --name "${opts.projectName.get}" ${bs}
+          |  --apps "${(opts.apps, ",")}" ${bs}
+          |  --fingerprint ${opts.fingerprint} ${bs}
+          |  --bits ${opts.bitWidth} ${bs}
+          |  --string-size ${opts.maxStringSize} ${bs}
+          |  --sequence-size ${opts.maxArraySize} ${bs}
+          |  --sequence "${(opts.customArraySizes, ";")}" ${bs}
+          |  --constants "${(opts.customConstants, ";")}" ${bs}
+          |  --forward "${(opts.forwarding, ",")}" ${bs}
+          |  --stack-size "${opts.stackSize.get}" ${bs}
           |  --stable-type-id"""
 
     var extras: ISZ[ST] = ISZ()
@@ -857,25 +859,25 @@ object ArtNixTemplate {
     if (opts.exts.nonEmpty) {
       val extsRel = opts.exts.map((s: String) => Util.relativizePaths(dirs.slangBinDir, s, script_home))
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --exts "${(extsRel, path_sep)}""""
     }
 
     if (opts.excludeBuild.nonEmpty) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --exclude-build "${(opts.excludeBuild, ",")}""""
     }
 
     if (opts.libOnly) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --lib-only"""
     }
 
     if (opts.verbose) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --verbose"""
     }
 
