@@ -55,7 +55,7 @@ object TranspilerTemplate {
                        extensions: ISZ[String],
                        excludes: ISZ[String],
                        buildApps: B,
-                       cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
+                       cmakeIncludes: ISZ[String]): ((ST, ST), TranspilerConfig) = {
 
     val _stackSizeInBytes: String = if (stackSizeInBytes < 0) {
       "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
@@ -96,7 +96,7 @@ object TranspilerTemplate {
   }
 
   @pure def transpilerX(opts: TranspilerConfig,
-                        binDir: String): ST = {
+                        binDir: String): (ST, ST) = {
 
     val script_home = s"$${${SCRIPT_HOME}}"
 
@@ -117,58 +117,148 @@ object TranspilerTemplate {
 
     val path_sep = s"$${PATH_SEP}"
 
+    val bs = "\\"
+
     def expand(optionName: String, elems: ISZ[String]): Option[ST] = {
-      return if (elems.nonEmpty) Some(st"""--${optionName} "${(elems, ";")}" \""")
+      return if (elems.nonEmpty) Some(st"""--${optionName} "${(elems, ";")}" ${bs}""")
       else None()
     }
 
-    val ret =
+    def slashExpand(optionName: String, elems: ISZ[String]): Option[ST] = {
+      return if (elems.nonEmpty) Some(st""""--${optionName}", s"${(elems, ";")}",""")
+      else None()
+    }
+
+    var slash =
+      st"""val ${opts.projectName.get}: ISZ[String] = ISZ(
+          |  "--sourcepath", s"${(projHomesRel, path_sep)}",
+          |  "--output-dir", s"${cOutputDirRel}",
+          |  "--name", "${opts.projectName.get}",
+          |  "--apps", "${(opts.apps, ",")}",
+          |  "--fingerprint", "${opts.fingerprint}",
+          |  "--bits", "${opts.bitWidth}",
+          |  "--string-size", "${opts.maxStringSize}",
+          |  "--sequence-size", "${opts.maxArraySize}",
+          |  ${slashExpand("sequence", opts.customArraySizes)}
+          |  ${slashExpand("constants", opts.customConstants)}
+          |  ${slashExpand("cmake-includes", cmakeIncludesRel)}
+          |  "--forward", "${(opts.forwarding, ",")}",
+          |  "--stack-size", "${opts.stackSize.get}",
+          |  "--stable-type-id""""
+
+    val bash =
       st"""OUTPUT_DIR="${cOutputDirRel}"
           |
-          |$${SIREUM_HOME}/bin/sireum slang transpilers c \
-          |  --sourcepath "${(projHomesRel, path_sep)}" \
-          |  --output-dir "$${OUTPUT_DIR}" \
-          |  --name "${opts.projectName.get}" \
-          |  --apps "${(opts.apps, ",")}" \
-          |  --fingerprint ${opts.fingerprint} \
-          |  --bits ${opts.bitWidth} \
-          |  --string-size ${opts.maxStringSize} \
-          |  --sequence-size ${opts.maxArraySize} \
+          |$${SIREUM_HOME}/bin/sireum slang transpilers c ${bs}
+          |  --sourcepath "${(projHomesRel, path_sep)}" ${bs}
+          |  --output-dir "$${OUTPUT_DIR}" ${bs}
+          |  --name "${opts.projectName.get}" ${bs}
+          |  --apps "${(opts.apps, ",")}" ${bs}
+          |  --fingerprint ${opts.fingerprint} ${bs}
+          |  --bits ${opts.bitWidth} ${bs}
+          |  --string-size ${opts.maxStringSize} ${bs}
+          |  --sequence-size ${opts.maxArraySize} ${bs}
           |  ${expand("sequence", opts.customArraySizes)}
           |  ${expand("constants", opts.customConstants)}
           |  ${expand("cmake-includes", cmakeIncludesRel)}
-          |  --forward "${(opts.forwarding, ",")}" \
-          |  --stack-size "${opts.stackSize.get}" \
+          |  --forward "${(opts.forwarding, ",")}" ${bs}
+          |  --stack-size "${opts.stackSize.get}" ${bs}
           |  --stable-type-id"""
 
+
     var extras: ISZ[ST] = ISZ()
+    var slashExtras: ISZ[ST] = ISZ()
 
     if (opts.exts.nonEmpty) {
       val extsRel = opts.exts.map((s: String) => Util.relativizePaths(binDir, s, script_home))
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --exts "${(extsRel, path_sep)}""""
+
+      slashExtras = slashExtras :+
+        st""",
+            |  "--exts", s"${(extsRel, path_sep)}""""
     }
 
     if (opts.excludeBuild.nonEmpty) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --exclude-build "${(opts.excludeBuild, ",")}""""
+
+      slashExtras = slashExtras :+
+        st""",
+            |  "--exclude-build", "${(opts.excludeBuild, ",")}""""
     }
 
     if (opts.libOnly) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --lib-only"""
+
+      slashExtras = slashExtras :+
+        st""",
+            |  "--lib-only""""
     }
 
     if (opts.verbose) {
       extras = extras :+
-        st""" \
+        st""" ${bs}
             |  --verbose"""
+
+      slashExtras = slashExtras :+
+        st""",
+            |  "--verbose""""
     }
 
-    return st"""${ret}${(extras, "")}"""
+    val bashRet = st"""${bash}${(extras, "")}"""
+    val slashRet = st"""${slash}${(slashExtras, "")})"""
+
+    return (bashRet, slashRet)
+  }
+
+  def transpilerSlashScriptPreamble(entries: ISZ[(String, ST)]): ST = {
+    val ret: ST =
+      st"""::#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+          |if [ -z $${SIREUM_HOME} ]; then                      #
+          |  echo "Please set SIREUM_HOME env var"             #
+          |  exit -1                                           #
+          |fi                                                  #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+          |:BOF
+          |setlocal
+          |if not defined SIREUM_HOME (
+          |  echo Please set SIREUM_HOME env var
+          |  exit /B -1
+          |)
+          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |exit /B %errorlevel%
+          |::!#
+          |// #Sireum
+          |
+          |import org.sireum._
+          |
+          |val SCRIPT_HOME: Os.Path = Os.slashDir
+          |val PATH_SEP: String = Os.pathSep
+          |
+          |${(entries.map(m => m._2), "\n\n")}
+          |
+          |val projects: ISZ[ISZ[String]] = ISZ(
+          |  ${(entries.map(m => m._1), ",\n")}
+          |)
+          |
+          |println("Initializing runtime library ...")
+          |Sireum.initRuntimeLibrary()
+          |
+          |for(p <- projects) {
+          |  Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ p)
+          |}
+          |
+          |//ops.ISZOps(projects).parMap(p =>
+          |//  Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ p)
+          |//)
+          |"""
+    return ret
   }
 
   def transpilerScriptPreamble(entries: ISZ[ST]): ST = {

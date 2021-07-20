@@ -162,7 +162,7 @@ object Arsit {
 
     if(options.platform == ArsitPlatform.SeL4) {
       val transpile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile-sel4.sh"))
+        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile-sel4.cmd"))
         if(x.nonEmpty) x(0).path
         else "??"
       }
