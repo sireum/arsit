@@ -241,10 +241,10 @@ object TranspilerTemplate {
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
           |
-          |${(entries.map(m => m._2), "\n\n")}
+          |${(entries.map((m : (String, ST)) => m._2), "\n\n")}
           |
           |val projects: ISZ[ISZ[String]] = ISZ(
-          |  ${(entries.map(m => m._1), ",\n")}
+          |  ${(entries.map((m : (String, ST)) => m._1), ",\n")}
           |)
           |
           |println("Initializing runtime library ...")
