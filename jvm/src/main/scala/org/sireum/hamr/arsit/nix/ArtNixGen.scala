@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.SeL4NixTemplate
+import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -292,9 +292,9 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       ISZ()
     }
 
-    val transpileScriptName = "transpile.sh"
+    val slashTranspileScriptName = "transpile.cmd"
+    val bashTranspileScriptName = "transpile.sh"
     val buildApps: B = T
-    val additionalInstructions: Option[ST] = None()
 
     val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
 
@@ -330,9 +330,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val _extensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val transpiler = ArtNixTemplate.transpiler(
-      apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
+    val transpiler: ((ST, ST), TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
+      libraryName = "main",
+      sourcepaths = ISZ(dirs.mainDir),
+      outputDir = Os.path(dirs.cNixDir),
+      binDir = dirs.slangBinDir.value,
+      apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       numBits = arsitOptions.bitWidth,
       maxSequenceSize = maxArraySize,
@@ -343,11 +347,15 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       extensions = _extensions,
       excludes = excludes,
       buildApps = buildApps,
-      additionalInstructions = additionalInstructions,
-      dirs = dirs
+      cmakeIncludes = ISZ()
     )
 
     transpilerOptions = transpilerOptions :+ transpiler._2
-    addExeResource(dirs.slangBinDir, ISZ(transpileScriptName), transpiler._1, T)
+
+    val bashTranspileScript = TranspilerTemplate.transpilerScriptPreamble(ISZ(transpiler._1._1))
+    addExeResource(dirs.slangBinDir, ISZ(bashTranspileScriptName), bashTranspileScript, T)
+
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(ISZ(("main", transpiler._1._2)))
+    addExeResource(dirs.slangBinDir, ISZ(slashTranspileScriptName), slashTranspileScript, T)
   }
 }
