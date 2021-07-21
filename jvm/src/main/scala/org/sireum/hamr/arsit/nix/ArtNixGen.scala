@@ -328,12 +328,12 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val _extensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val transpiler: ((ST, ST), TranspilerConfig) = TranspilerTemplate.transpiler(
+    val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
       outputDir = Os.path(dirs.cNixDir),
-      binDir = dirs.slangBinDir.value,
+      binDir = dirs.slangBinDir,
       apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       numBits = arsitOptions.bitWidth,
@@ -350,13 +350,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val slashTranspileScriptName = "transpile.cmd"
-    val bashTranspileScriptName = "transpile.sh"
-
-    val bashTranspileScript = TranspilerTemplate.transpilerScriptPreamble(ISZ(transpiler._1._1))
-    addExeResource(dirs.slangBinDir, ISZ(bashTranspileScriptName), bashTranspileScript, T)
-
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(ISZ(("main", transpiler._1._2)))
-    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ(slashTranspileScriptName)), slashTranspileScript, T)
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(ISZ(("main", transpiler._1)))
+    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
   }
 }

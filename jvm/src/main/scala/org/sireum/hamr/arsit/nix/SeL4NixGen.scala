@@ -64,7 +64,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
       .map(m => m.asInstanceOf[AadlThreadOrDevice])
 
-    var transpilerScripts: Map[String, ((ST, ST), TranspilerConfig)] = Map.empty
+    var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
 
     val typeTouches = genTypeTouches(types, basePackage)
 
@@ -257,13 +257,10 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     } // end slang type library
 
-    val scripts: ISZ[(String, (ST, ST))] = transpilerScripts.entries.map((m: (String, ((ST, ST), TranspilerConfig))) => (m._1, m._2._1))
-    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: ((ST, ST), TranspilerConfig)) => m._2)
+    val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, TranspilerConfig))) => (m._1, m._2._1))
+    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
-    val bashTranspileScript = TranspilerTemplate.transpilerScriptPreamble(scripts.map(m => m._2._1))
-    addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.sh"), bashTranspileScript, T)
-
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(scripts.map(m => (m._1, m._2._2)))
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(scripts.map(m => (m._1, m._2)))
     addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.cmd"), slashTranspileScript, T)
 
   }
@@ -399,7 +396,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
                         extensions: ISZ[Os.Path],
                         excludes: ISZ[String],
 
-                        cmakeIncludes: ISZ[String]): ((ST, ST), TranspilerConfig) = {
+                        cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
     val packageName = s"${basePackage}/${instanceName}"
     val appName = s"${basePackage}.${instanceName}.${identifier}"
 
@@ -443,7 +440,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
                     numComponentOutPorts: Z,
                     cOutputDir: Os.Path,
                     cExtensions: ISZ[Os.Path],
-                    cmakeIncludes: ISZ[String]): ((ST, ST), TranspilerConfig) = {
+                    cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
 
     val components = symbolTable.airComponentMap.entries.filter(p =>
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))
