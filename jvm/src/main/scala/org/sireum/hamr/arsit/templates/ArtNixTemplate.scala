@@ -5,9 +5,8 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.StringTemplate
-import org.sireum.hamr.arsit.util.ArsitPlatform
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.TranspilerConfig
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
 import org.sireum.hamr.ir.FeatureEnd
@@ -649,6 +648,87 @@ object ArtNixTemplate {
           |
           |  def time(): Art.Time = halt("stub")
           |}"""
+    return ret
+  }
+
+  @pure def compileSlash(dirs: ProjectDirectories): ST = {
+    val script_home = "home"
+    val cOutputDirRel = Util.relativizePaths(dirs.cBinDir.value, dirs.cNixDir, "")
+
+    val ret =
+      st"""::#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+          |if [ -z $${SIREUM_HOME} ]; then                      #
+          |  echo "Please set SIREUM_HOME env var"             #
+          |  exit -1                                           #
+          |fi                                                  #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+          |:BOF
+          |setlocal
+          |if not defined SIREUM_HOME (
+          |  echo Please set SIREUM_HOME env var
+          |  exit /B -1
+          |)
+          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |exit /B %errorlevel%
+          |::!#
+          |// #Sireum
+          |// @formatter:off
+          |
+          |// This file is auto-generated from compileCli.sc
+          |
+          |import org.sireum._
+          |import Cli._
+          |
+          |val home = Os.slashDir
+          |
+          |Cli(Os.pathSepChar).parseCompile(Os.cliArgs, 0) match {
+          |  case Some(o: Cli.CompileOption) if o.args.size == 0 =>
+          |    var cmake: ISZ[String] = ISZ("cmake")
+          |    if(o.boundCheck) { cmake = cmake :+ "-DBOUND_CHECK=ON" }
+          |    if(o.noPrint) { cmake = cmake :+ "-DNO_PRINT=ON" }
+          |    if(o.rangeCheck) { cmake = cmake :+ "-DRANGE_CHECK=ON" }
+          |    if(o.withLoc) { cmake = cmake :+ " -DWITH_LOC=ON" }
+          |    cmake = (cmake :+ "-DCMAKE_BUILD_TYPE=Release") :+ ".."
+          |
+          |    val nixDir = home / "${cOutputDirRel}/slang-build"
+          |    if(!nixDir.up.exists){
+          |      eprintln(s"Directory does not exist, have your run the transpiler? $${nixDir.up}")
+          |      Os.exit(-1)
+          |    }
+          |    nixDir.mkdir()
+          |
+          |    if(Os.proc(cmake).at(nixDir).console.run().ok) {
+          |      val MAKE_ARGS: String = Os.env("MAKE_ARGS") match {
+          |        case Some(o) => o
+          |        case _ => ""
+          |      }
+          |      if(proc"make $${MAKE_ARGS}".at(nixDir).console.run().ok) {
+          |        val binDir = home / "slang-build"
+          |        binDir.mkdir()
+          |
+          |        if(Os.isWin) {
+          |          nixDir.list.filter(p => p.ext == "exe").foreach((f: Os.Path) => f.moveTo(binDir / f.name))
+          |        } else {
+          |          nixDir.list.filter(p => ops.StringOps(p.name).endsWith("_App")).foreach((f: Os.Path) => f.moveTo(binDir / f.name))
+          |          (nixDir / "Main").moveTo(binDir / "Main")
+          |        }
+          |        Os.exit(0)
+          |      }
+          |    }
+          |  case Some(o: Cli.CompileOption) =>
+          |    println(o.help)
+          |    Os.exit(0)
+          |  case Some(o: Cli.HelpOption) => Os.exit(0)
+          |  case _ =>
+          |    eprintln("Could not recognize arguments")
+          |}
+          |
+          |Os.exit(-1)
+          |
+          |${ArsitLibrary.getCompileCli}
+          |"""
+
     return ret
   }
 

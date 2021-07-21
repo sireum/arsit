@@ -51,7 +51,7 @@ import org.sireum._
 
 def usage(): Unit = {
   println("Arsit /build")
-  println("Usage: ( compile | test | clean )+")
+  println("Usage: ( compile | test | clean | regen-clis)+")
 }
 
 
@@ -130,6 +130,13 @@ def clean(): Unit = {
   }
 }
 
+def regenClis(): Unit = {
+  val compileConfig = home / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util" / "compileCli.sc"
+  val destDir = home / "resources" / "util" / "compileCli.cmd"
+  compileConfig.chmod("700")
+  proc"$sireum tools cligen -s compileCli.cmd ${compileConfig}".at(destDir.up).console.run()
+}
+
 for (i <- 0 until Os.cliArgs.size) {
   Os.cliArgs(i) match {
     case string"clean" => clean()
@@ -139,6 +146,8 @@ for (i <- 0 until Os.cliArgs.size) {
     case string"test" =>
       cloneProjects()
       test()
+    case string"regen-clis" =>
+      regenClis()
     case cmd =>
       usage()
       eprintln(s"Unrecognized command: $cmd")

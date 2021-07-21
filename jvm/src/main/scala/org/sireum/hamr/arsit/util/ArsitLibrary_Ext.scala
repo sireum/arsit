@@ -14,6 +14,9 @@ object ArsitLibrary_Ext {
     ISZ(map.toSeq.map(p => (String(p._1.mkString("/")), String(p._2))): _*)
   }
 
+  def getCompileCli: String = {
+    return getFiles.filter(p => Os.path(p._1).name.native == "compileCli.cmd")(0)._2
+  }
 
   def getBuildSbtProperties(): java.util.Properties = {
     val str = Map(getFiles).get("buildSbt.properties").get
@@ -57,4 +60,5 @@ object ArsitLibrary_Ext {
   def getInspectorVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.inspector.version")
   }
+
 }

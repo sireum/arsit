@@ -6,6 +6,8 @@ import org.sireum._
 @ext object ArsitLibrary {
   def getFiles: ISZ[(String, String)] = $
 
+  def getCompileCli: String = $
+
   def getArtVersion(): String = $
 
   def getKekinianVersion(): String = $

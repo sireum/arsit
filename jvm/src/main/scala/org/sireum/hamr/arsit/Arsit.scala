@@ -139,7 +139,7 @@ object Arsit {
       }
 
       val compile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/compile-"))
+        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/compile.cmd"))
         if (x.nonEmpty) x(0).path
         else "??"
       }
