@@ -102,7 +102,7 @@ object Arsit {
     val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
     val proyekBuildContent = StringTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
-    ret = ret :+ ResourceUtil.createExeStringResource(proyekBuildDest.value, ResourceUtil.makeCRLF(proyekBuildContent.render), F)
+    ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
 
     val versionPropDest = options.outputDir / "versions.properties"
     val versionPropBuildContent = StringTemplate.proyekVersionProperties()
@@ -133,7 +133,7 @@ object Arsit {
       val devDir = projDirs.cExt_c_Dir
 
       val transpile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile.sh"))
+        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile.cmd"))
         if (x.nonEmpty) x(0).path
         else "??"
       }

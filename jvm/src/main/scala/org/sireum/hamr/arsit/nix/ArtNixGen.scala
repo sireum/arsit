@@ -292,8 +292,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       ISZ()
     }
 
-    val slashTranspileScriptName = "transpile.cmd"
-    val bashTranspileScriptName = "transpile.sh"
     val buildApps: B = T
 
     val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
@@ -352,10 +350,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
+    val slashTranspileScriptName = "transpile.cmd"
+    val bashTranspileScriptName = "transpile.sh"
+
     val bashTranspileScript = TranspilerTemplate.transpilerScriptPreamble(ISZ(transpiler._1._1))
     addExeResource(dirs.slangBinDir, ISZ(bashTranspileScriptName), bashTranspileScript, T)
 
     val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(ISZ(("main", transpiler._1._2)))
-    addExeResource(dirs.slangBinDir, ISZ(slashTranspileScriptName), slashTranspileScript, T)
+    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ(slashTranspileScriptName)), slashTranspileScript, T)
   }
 }
