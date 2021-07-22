@@ -145,7 +145,7 @@ object Arsit {
       }
 
       val run: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/run-"))
+        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/run.sh"))
         if (x.nonEmpty) x(0).path
         else "??"
       }

@@ -115,10 +115,7 @@ trait ArsitTest extends TestSuite {
       assert(F, "Arsit reported errors")
     }
 
-    val resultMap = TestResult(Map.empty ++ (results.resources.map(m => {
-      val key = resultsDir.relativize(Os.path(m.path)).value
-      (key, TestResource(m.content.render, m.overwrite, m.makeExecutable))
-    })))
+    val resultMap = TestUtil.convertToTestResult(results.resources, resultsDir)
 
     writeOutTestResults(resultMap, resultsDir)
 

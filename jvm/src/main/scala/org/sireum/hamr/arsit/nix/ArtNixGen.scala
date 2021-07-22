@@ -270,10 +270,12 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.cBinDir.value, ISZ("compile.cmd")), ArtNixTemplate.compileSlash(dirs), T)
 
-    for(plat <- ISZ(ArsitPlatform.Linux, ArsitPlatform.MacOS, ArsitPlatform.Cygwin)) {
-      val platName = ops.StringOps(plat.name).firstToLower
-      addExeResource(dirs.cBinDir.value, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, plat), T)
-    }
+    addExeResource(dirs.cBinDir.value, ISZ(s"run.sh"), ArtNixTemplate.runS(appNames), T)
+
+    //for(plat <- ISZ(ArsitPlatform.Linux, ArsitPlatform.MacOS, ArsitPlatform.Cygwin)) {
+    //  val platName = ops.StringOps(plat.name).firstToLower
+    //  addExeResource(dirs.cBinDir.value, ISZ(s"run-${platName}.sh"), ArtNixTemplate.run(appNames, plat), T)
+    //}
 
     addExeResource(dirs.cBinDir.value, ISZ("stop.sh"), ArtNixTemplate.stop(appNames), T)
 
