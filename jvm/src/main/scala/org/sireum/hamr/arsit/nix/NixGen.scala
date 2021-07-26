@@ -22,6 +22,52 @@ object NixGen{
   val EXT_C: String = "ext.c"
 
   val KNOWN_HAMR_PROVIDED_FILES: ISZ[String] = ISZ(IPC_C, EXT_H, EXT_C)
+
+  def willTranspile(platform: ArsitPlatform.Type): B = {
+    val ret : B = platform match {
+      case ArsitPlatform.Linux => T
+      case ArsitPlatform.MacOS => T
+      case ArsitPlatform.Cygwin => T
+      case ArsitPlatform.SeL4 => T
+      case _ => F
+    }
+    return ret
+  }
+
+  def genTypeTouches(types: AadlTypes, basePackage: String): ISZ[ST] = {
+    var a: ISZ[ST] = ISZ()
+    var counter: Z = z"0"
+    val _types: ISZ[AadlType] = if (types.rawConnections) {
+      // TODO all types in typesMap should be BitTypes that optionally link
+      // back to their originating type
+      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None(), None()))
+    } else {
+      types.typeMap.entries.map((x: (String, AadlType)) => x._2)
+    }
+
+    for (typ <- _types) {
+      val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
+      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.example()))
+      counter = counter + z"1"
+    }
+    a = a :+ SeL4NixTemplate.touchType("art.Empty", None())
+    return a
+  }
+
+  def genApiTouches(types: AadlTypes, basePackage: String, threadOrDevices: ISZ[AadlThreadOrDevice]): ISZ[ST] = {
+    val sts: ISZ[ST] = threadOrDevices.map(threadOrDevice => {
+      val component = threadOrDevice.component
+
+      val names: Names = Names(component, basePackage)
+      val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
+
+      st"""{
+          |  ${(SeL4NixTemplate.apiTouches(names, ports), "\n")}
+          |}"""
+    })
+    return sts
+  }
+
 }
 
 @msig trait NixGen {
@@ -665,26 +711,6 @@ object NixGen{
       ISZ()
     }
     return ret
-  }
-
-  def genTypeTouches(types: AadlTypes, basePackage: String): ISZ[ST] = {
-    var a: ISZ[ST] = ISZ()
-    var counter: Z = z"0"
-    val _types: ISZ[AadlType] = if (types.rawConnections) {
-      // TODO all types in typesMap should be BitTypes that optionally link
-      // back to their originating type
-      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None(), None()))
-    } else {
-      types.typeMap.entries.map((x: (String, AadlType)) => x._2)
-    }
-
-    for (typ <- _types) {
-      val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
-      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.example()))
-      counter = counter + z"1"
-    }
-    a = a :+ SeL4NixTemplate.touchType("art.Empty", None())
-    return a
   }
 
 }

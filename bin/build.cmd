@@ -131,10 +131,20 @@ def clean(): Unit = {
 }
 
 def regenClis(): Unit = {
-  val compileConfig = home / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util" / "compileCli.sc"
-  val destDir = home / "resources" / "util" / "compileCli.cmd"
+  val utilDir = home / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util"
+  val compileConfig =  utilDir / "cliCompile.sc"
+  val runConfig = utilDir / "cliRun.sc"
+  val transpileConfig = utilDir / "cliTranspile.sc"
+  val transpileAltConfig = utilDir / "cliTranspile-alt.sc"
+  val destDir = home / "resources" / "util"
   compileConfig.chmod("700")
-  proc"$sireum tools cligen -s compileCli.cmd ${compileConfig}".at(destDir.up).console.run()
+  runConfig.chmod("700")
+  transpileConfig.chmod("700")
+  transpileAltConfig.chmod("700")
+  proc"$sireum tools cligen -s cliCompile.cmd ${compileConfig}".at(destDir).console.run()
+  proc"$sireum tools cligen -s cliRun.cmd ${runConfig}".at(destDir).console.run()
+  proc"$sireum tools cligen -s cliTranspile.cmd ${transpileConfig}".at(destDir).console.run()
+  proc"$sireum tools cligen -s cliTranspile-alt.cmd ${transpileAltConfig}".at(destDir).console.run()
 }
 
 for (i <- 0 until Os.cliArgs.size) {

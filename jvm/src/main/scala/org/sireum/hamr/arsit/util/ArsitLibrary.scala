@@ -8,6 +8,12 @@ import org.sireum._
 
   def getCompileCli: String = $
 
+  def getTranspileSeL4Cli: String = $
+
+  def getTranspileSlashCli: String = $
+
+  def getRunCli: String = $
+
   def getArtVersion(): String = $
 
   def getKekinianVersion(): String = $

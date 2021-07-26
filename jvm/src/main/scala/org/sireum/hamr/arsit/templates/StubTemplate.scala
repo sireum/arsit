@@ -226,14 +226,6 @@ object StubTemplate {
     }
   }
 
-  @pure def demo(): ST = {
-    val ret: ST =
-      st"""object Demo extends App {
-          |  art.Art.run(Arch.ad)
-          |}"""
-    return ret
-  }
-
   @pure def addId(s: String): String = {
     return s"${s}_Id"
   }

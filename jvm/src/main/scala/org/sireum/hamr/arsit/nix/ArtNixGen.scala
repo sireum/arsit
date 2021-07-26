@@ -4,8 +4,8 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, TranspilerTemplate}
-import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
+import org.sireum.hamr.arsit.templates.{SchedulerTemplate, SeL4NixTemplate, TranspilerTemplate}
+import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -155,7 +155,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       appNames = appNames :+ App_Id
 
       val transpilerToucher = SeL4NixTemplate.transpilerToucher(basePackage)
-      val transpilerToucherMethodCall = SeL4NixTemplate.callTranspilerToucher()
 
       addResource(
         dirs.componentDir,
@@ -164,7 +163,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         F) // don't overwrite since user may add contents to this file
 
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
-      val touchMethod = SeL4NixTemplate.genTouchMethod(genTypeTouches(types, basePackage), apiTouches)
+      val touchMethod = SeL4NixTemplate.genTouchMethod(NixGen.genTypeTouches(types, basePackage), apiTouches)
 
       val stApp = ArtNixTemplate.app(
         packageName = basePackage,
@@ -191,7 +190,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       // dir will be passed to the transpiler rather than the individual resources
       val (paths, extResources) = genExtensionFiles(component, names, ports)
 
-      resources = resources ++ extResources
+      resources = resources ++ extResources ++ genSchedulerFiles(basePackage)
     }
 
     {
@@ -329,9 +328,9 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       s"art.Art.maxPorts=${numPorts}"
     )
 
-    val _extensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
+    val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
+    val legacyTranspiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
@@ -339,6 +338,30 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       binDir = dirs.slangBinDir,
       apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
+      numBits = arsitOptions.bitWidth,
+      maxSequenceSize = maxArraySize,
+      maxStringSize = arsitOptions.maxStringSize,
+      customArraySizes = customSequenceSizes,
+      customConstants = customConstants,
+      stackSizeInBytes = maxStackSize,
+      extensions = _legacyextensions,
+      excludes = excludes,
+      buildApps = buildApps,
+      cmakeIncludes = ISZ()
+    )
+
+    transpilerOptions = transpilerOptions :+ legacyTranspiler._2
+
+    val _extensions: ISZ[String] = ISZ(dirs.cExt_schedule_Dir, dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
+
+    val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
+      verbose = arsitOptions.verbose,
+      libraryName = "main",
+      sourcepaths = ISZ(dirs.mainDir),
+      outputDir = Os.path(dirs.cNixDir),
+      binDir = dirs.slangBinDir,
+      apps = ISZ(s"${basePackage}.Demo"),
+      forwards = ISZ(s"art.ArtNative=art.ArtNativeSlang"),
       numBits = arsitOptions.bitWidth,
       maxSequenceSize = maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
@@ -353,7 +376,16 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(ISZ(("main", transpiler._1)))
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1)
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
+  }
+
+  def genSchedulerFiles(packageName: String): ISZ[Resource] = {
+    val ret: ISZ[Resource] =
+      ISZ(ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("legacy.c")), SchedulerTemplate.c_legacy(), T),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("round_robin.c")), SchedulerTemplate.c_roundRobin(packageName), F),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("static_scheduler.c")), SchedulerTemplate.c_static_schedule(packageName), T),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("process.c")), SchedulerTemplate.c_process(), T))
+     return ret
   }
 }

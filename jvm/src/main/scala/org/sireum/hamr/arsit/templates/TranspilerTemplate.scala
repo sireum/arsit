@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util
+import org.sireum.hamr.arsit.util.ArsitLibrary
 import org.sireum.hamr.codegen.common.containers.TranspilerConfig
 import org.sireum.hamr.codegen.common.types.TypeUtil
 
@@ -173,7 +174,8 @@ object TranspilerTemplate {
     return slashRet
   }
 
-  def transpilerSlashScriptPreamble(entries: ISZ[(String, ST)]): ST = {
+  def transpilerSel4Preamble(entries: ISZ[(String, ST)]): ST = {
+
     val ret: ST =
       st"""::#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
@@ -198,10 +200,10 @@ object TranspilerTemplate {
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
           |
-          |${(entries.map((m : (String, ST)) => m._2), "\n\n")}
+          |${(entries.map((m: (String, ST)) => m._2), "\n\n")}
           |
           |val projects: ISZ[ISZ[String]] = ISZ(
-          |  ${(entries.map((m : (String, ST)) => m._1), ",\n")}
+          |  ${(entries.map((m: (String, ST)) => m._1), ",\n")}
           |)
           |
           |println("Initializing runtime library ...")
@@ -214,6 +216,61 @@ object TranspilerTemplate {
           |//ops.ISZOps(projects).parMap(p =>
           |//  Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ p)
           |//)
+          |"""
+    return ret
+  }
+
+  def transpilerSlashScriptPreamble(legacy: ST, demo: ST): ST = {
+    val ret: ST =
+      st"""::#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+          |if [ -z $${SIREUM_HOME} ]; then                      #
+          |  echo "Please set SIREUM_HOME env var"             #
+          |  exit -1                                           #
+          |fi                                                  #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+          |:BOF
+          |setlocal
+          |if not defined SIREUM_HOME (
+          |  echo Please set SIREUM_HOME env var
+          |  exit /B -1
+          |)
+          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |exit /B %errorlevel%
+          |::!#
+          |// #Sireum
+          |
+          |import org.sireum._
+          |
+          |val SCRIPT_HOME: Os.Path = Os.slashDir
+          |val PATH_SEP: String = Os.pathSep
+          |
+          |var project: ISZ[String] = Cli(Os.pathSepChar).parseTranspile(Os.cliArgs, 0) match {
+          |  case Some(o: Cli.TranspileOption) =>
+          |    if(o.legacy) {
+          |      println("Using Legacy Scheduler")
+          |
+          |      ${legacy}
+          |      main
+          |    } else {
+          |      ${demo}
+          |      main
+          |    }
+          |  case Some(o: Cli.HelpOption) =>
+          |    Os.exit(0);
+          |    halt("")
+          |  case _ =>
+          |    eprintln("Could not recognize arguments")
+          |    Os.exit(-1)
+          |    halt("")
+          |}
+          |
+          |println("Initializing runtime library ...")
+          |Sireum.initRuntimeLibrary()
+          |
+          |Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ project)
+          |
+          |${ArsitLibrary.getTranspileSlashCli}
           |"""
     return ret
   }

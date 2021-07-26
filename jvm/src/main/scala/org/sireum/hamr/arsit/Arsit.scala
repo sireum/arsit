@@ -38,7 +38,7 @@ object Arsit {
 
     var artResources: ISZ[Resource] = ISZ()
     if (!o.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, projectDirectories.mainDir)
+      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.mainDir}/art")
     }
 
     artResources = artResources ++ createBuildArtifacts(

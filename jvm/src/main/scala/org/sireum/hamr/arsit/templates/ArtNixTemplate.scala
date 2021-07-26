@@ -155,7 +155,7 @@ object ArtNixTemplate {
           st"""
               |${(receiveOnInPorts, "\n")}
               |entryPoints.compute()
-              |Process.sleep($period)"""
+              |${basePackage}.Process.sleep($period)"""
         } else {
 
           st"""var dispatch = F
@@ -163,9 +163,9 @@ object ArtNixTemplate {
               |${(receiveOnInPorts, "\n")}
               |if (dispatch) {
               |  entryPoints.compute()
-              |  Process.sleep($period)
+              |  ${basePackage}.Process.sleep($period)
               |} else {
-              |  Process.sleep(10)
+              |  ${basePackage}.Process.sleep(10)
               |}"""
         }
       }
@@ -192,6 +192,7 @@ object ArtNixTemplate {
           |
           |import org.sireum._
           |import art._
+          |import art.scheduling.nop.NopScheduler
           |
           |${StringTemplate.doNotEditComment(None())}
           |
@@ -202,7 +203,7 @@ object ArtNixTemplate {
           |  def initialiseArchitecture(seed: Z): Unit = {
           |    ${(inits, "\n")}
           |
-          |    Art.run(Arch.ad)
+          |    Art.run(Arch.ad, NopScheduler())
           |  }
           |
           |  def initialise(): Unit = {
@@ -705,13 +706,20 @@ object ArtNixTemplate {
           |      }
           |      if(proc"make $${MAKE_ARGS}".at(nixDir).console.run().ok) {
           |        val binDir = home / "slang-build"
+          |        binDir.removeAll()
           |        binDir.mkdir()
           |
           |        if(Os.isWin) {
           |          nixDir.list.filter(p => p.ext == "exe").foreach((f: Os.Path) => f.moveTo(binDir / f.name))
           |        } else {
           |          nixDir.list.filter(p => ops.StringOps(p.name).endsWith("_App")).foreach((f: Os.Path) => f.moveTo(binDir / f.name))
-          |          (nixDir / "Main").moveTo(binDir / "Main")
+          |          val candidates: ISZ[Os.Path] = ISZ[String]("Demo", "Main").map((m: String) => nixDir / m)
+          |          val main: ISZ[Os.Path] = candidates.filter((p: Os.Path) => p.exists)
+          |          if(main.isEmpty || main.size > 1) {
+          |            eprintln(s"Found $${main.size} possible main programs.  There should be only one of the following: $${candidates}")
+          |            Os.exit(1)
+          |          }
+          |          main(0).moveTo(binDir / main(0).name)
           |        }
           |        Os.exit(0)
           |      }
@@ -796,25 +804,48 @@ object ArtNixTemplate {
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
           |cd $$SCRIPT_HOME
           |
-          |# Uncomment the following to prevent terminal from closing if app crashes
+          |# Uncomment the following to prevent terminal from closing when the app shuts down or crashes
           |#PREVENT_CLOSE="; bash -i"
           |
-          |if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
+          |function launch {
+          |  arr=( "$$@" )
+          |  if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
+          |    for app in "$${arr[@]}"; do
+          |      cygstart mintty /bin/bash "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    done
+          |  elif [[ "$$(uname)" == "Darwin" ]]; then
+          |    for app in "$${arr[@]}"; do
+          |      open -a Terminal "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    done
+          |  elif [[ "$$(expr substr $$(uname -s) 1 5)" == "Linux" ]]; then
+          |    for app in "$${arr[@]}"; do
+          |      x-terminal-emulator -T BuildingControl -e sh -c "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    done
+          |  else
+          |    >&2 echo "Platform not support: $$(uname)."
+          |    exit 1
+          |  fi
+          |}
           |
-          |  ${buildApp(ArsitPlatform.Cygwin)}
+          |if [ -f ./slang-build/RunStaticScheduleDemo ]; then
+          |  array=("RunStaticScheduleDemo");
+          |  launch "$${array[@]}";
+          |elif [ -f ./slang-build/RunRoundRobinDemo ]; then
+          |  array=("RunRoundRobinDemo");
+          |  launch "$${array[@]}";
+          |elif [ -f ./slang-build/Main ]; then
+          |  array=(${(apps.map(m => s"\"${m}\""), " ")})
+          |  launch "$${array[@]}";
           |
-          |elif [[ "$$(uname)" == "Darwin" ]]; then
-          |
-          |  ${buildApp(ArsitPlatform.MacOS)}
-          |
-          |elif [[ "$$(expr substr $$(uname -s) 1 5)" == "Linux" ]]; then
-          |
-          |  ${buildApp(ArsitPlatform.Linux)}
-          |
+          |  read -p "Press enter to initialise components ..."
+          |  slang-build/Main
+          |  read -p "Press enter again to start ..."
+          |  slang-build/Main
           |else
-          |  >&2 echo "Platform not support: $$(uname)."
+          |  >&2 echo "Couldn't find main program"
           |  exit 1
           |fi
+          |
           |"""
     return ret
   }

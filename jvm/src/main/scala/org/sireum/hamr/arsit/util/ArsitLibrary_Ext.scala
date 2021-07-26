@@ -14,8 +14,29 @@ object ArsitLibrary_Ext {
     ISZ(map.toSeq.map(p => (String(p._1.mkString("/")), String(p._2))): _*)
   }
 
+  def trimCli(s: String): String = {
+    val w = ops.StringOps(s)
+    return w.substring(w.stringIndexOf("import org.sireum._"), s.size)
+  }
+
   def getCompileCli: String = {
-    return getFiles.filter(p => Os.path(p._1).name.native == "compileCli.cmd")(0)._2
+    val compileCli = getFiles.filter(p => Os.path(p._1).name.native == "cliCompile.cmd")(0)._2
+    return trimCli(compileCli)
+  }
+
+  def getRunCli: String = {
+    val runCli = getFiles.filter(p => Os.path(p._1).name.native == "cliRun.cmd")(0)._2
+    return trimCli(runCli)
+  }
+
+  def getTranspileSeL4Cli: String = {
+    val transpileCli = getFiles.filter(p => Os.path(p._1).name.native == "cliTranspile.cmd")(0)._2
+    return trimCli(transpileCli)
+  }
+
+  def getTranspileSlashCli: String = {
+    val transpileCli = getFiles.filter(p => Os.path(p._1).name.native == "cliTranspile-alt.cmd")(0)._2
+    return trimCli(transpileCli)
   }
 
   def getBuildSbtProperties(): java.util.Properties = {

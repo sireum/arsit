@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
@@ -54,6 +55,14 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
 
+    val touchMethod: Option[ST] =
+      if(NixGen.willTranspile(arsitOptions.platform)) {
+        val typeTouches = NixGen.genTypeTouches(types, basePackage)
+        val apiTouches = NixGen.genApiTouches(types, basePackage, symbolTable.getThreadOrDevices())
+        Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches))
+      }
+      else { None() }
+
     val arch = ArchitectureTemplate.architectureDescription(
       packageName = basePackage,
       imports = ISZ(),
@@ -61,13 +70,20 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       architectureDescriptionName = architectureDescriptionName,
       bridges = bridges,
       components = components,
-      connections = connections
+      connections = connections,
+      touchMethod = touchMethod
     )
 
     addResource(directories.architectureDir, ISZ(basePackage, "Arch.scala"), arch, T)
 
     val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
     addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
+
+    val schedulers = SchedulerTemplate.schedulers(basePackage, components)
+    addResource(directories.architectureDir, ISZ(basePackage, "Schedulers.scala"), schedulers, T)
+
+    val scheduleProvider = SchedulerTemplate.scheduleProvider(basePackage)
+    addResource(directories.architectureDir, ISZ(basePackage, "ScheduleProvider.scala"), scheduleProvider, T)
 
     val inspectorDemo = InspectorTemplate.inspectorDemo(basePackage)
     addResource(directories.inspectorDir, ISZ(basePackage, "InspectorDemo.scala"), inspectorDemo, T)

@@ -66,7 +66,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
 
-    val typeTouches = genTypeTouches(types, basePackage)
+    val typeTouches = NixGen.genTypeTouches(types, basePackage)
 
     for (component <- components) {
 
@@ -260,7 +260,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, TranspilerConfig))) => (m._1, m._2._1))
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(scripts.map(m => (m._1, m._2)))
+    val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)))
     addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.cmd"), slashTranspileScript, T)
 
   }

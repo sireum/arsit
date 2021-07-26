@@ -283,6 +283,8 @@ object HAMR {
 
   val cExt_c_Dir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("ext-c"))
 
+  val cExt_schedule_Dir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("ext-schedule"))
+
   val cEtcDir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("etc"))
 
 

@@ -30,13 +30,111 @@ object ArchitectureTemplate {
   @pure def demo(packageName: String,
                  architectureName: String,
                  architectureDescriptionName: String): ST = {
+    val ad = s"${architectureName}.${architectureDescriptionName}"
+
     val ret: ST =
-      st"""${StringTemplate.doNotEditComment(None())}
+      st"""// #Sireum
+          |
           |package $packageName
           |
+          |import org.sireum._
+          |import art.scheduling.Scheduler
+          |
+          |${StringTemplate.safeToEditComment()}
+          |
           |object Demo extends App {
-          |  art.Art.run(${architectureName}.${architectureDescriptionName})
-          |}"""
+          |
+          |  /** the scheduler to use for JVM based simulation as well as the
+          |    * 'default' scheduler that will be used when taking this program
+          |    * down to C/Linux.  Refer to 'bin/run.sh -h' if you want to use a
+          |    * specific scheduler for C.  If the scheduler accepts a schedule
+          |    * and you want to provide that in C then just pass None()
+          |    *
+          |    * If you want to use the legacy scheduler for C then you must use
+          |    *   transpile.cmd --legacy
+          |    * and
+          |    *   run --legacy
+          |    */
+          |  def defaultScheduler(): Scheduler = {
+          |    return Schedulers.getRoundRobinScheduler(None())
+          |  }
+          |
+          |  def main(args: ISZ[String]): Z = {
+          |    val scheduler: Scheduler = Cli(' ').parseRun(args, 0) match {
+          |      case Some(o: Cli.RunOption) =>
+          |        o.scheduler match {
+          |          case Cli.RunChoice.Default => defaultScheduler()
+          |          case Cli.RunChoice.RoundRobin => Schedulers.getRoundRobinScheduler(None())
+          |          case Cli.RunChoice.Static => Schedulers.getStaticScheduler(None())
+          |          case Cli.RunChoice.Legacy => Schedulers.getLegacyScheduler()
+          |        }
+          |      case Some(o: Cli.HelpOption) =>
+          |        Os.exit(0)
+          |        halt("")
+          |      case _ =>
+          |        eprintln("Could not recognize arguments")
+          |        Os.exit(-1)
+          |        halt("")
+          |    }
+          |
+          |    art.Art.run(Arch.ad, scheduler)
+          |
+          |    return 0
+          |  }
+          |}
+          |
+          |object Cli {
+          |
+          |  @datatype trait RunTopOption
+          |
+          |  @datatype class HelpOption extends RunTopOption
+          |
+          |  @enum object RunChoice {
+          |    'Default
+          |    'RoundRobin
+          |    'Static
+          |    'Legacy
+          |  }
+          |
+          |  @datatype class RunOption(
+          |                             val help: String,
+          |                             val args: ISZ[String],
+          |                             val scheduler: RunChoice.Type
+          |                           ) extends RunTopOption
+          |}
+          |
+          |import Cli._
+          |
+          |@record class Cli(val pathSep: C) {
+          |  val help: String = ""
+          |
+          |  def parseRun(args: ISZ[String], i: Z): Option[RunTopOption] = {
+          |    if (args.isEmpty) {
+          |      return Some(Cli.RunOption(help = help, args = args, scheduler = RunChoice.Default))
+          |    } else if (args.size == 2) {
+          |      if (args(0) == "-s" || args(0) == "--scheduler") {
+          |        val runChoice: RunChoice.Type = args(1) match {
+          |          case "default" => RunChoice.Default
+          |          case "roundRobin" => RunChoice.RoundRobin
+          |          case "static" => RunChoice.Static
+          |          case "legacy" => RunChoice.Legacy
+          |          case x =>
+          |            eprintln(s"Unknown scheduler: $${x}")
+          |            Os.exit(1)
+          |            halt("")
+          |        }
+          |        return Some(Cli.RunOption(help = "", args = args, scheduler = runChoice))
+          |      } else {
+          |        eprintln(s"Unknown option: $${args(0)}")
+          |        Os.exit(1)
+          |      }
+          |      halt("")
+          |    } else {
+          |      halt("Invalid")
+          |    }
+          |  }
+          |}
+          |"""
     return ret
   }
 
@@ -112,8 +210,20 @@ object ArchitectureTemplate {
                                     architectureDescriptionName: String,
                                     bridges: ISZ[ST],
                                     components: ISZ[String],
-                                    connections: ISZ[ST]): ST = {
+                                    connections: ISZ[ST],
+                                    touchMethod: Option[ST]): ST = {
     val _imports = imports.map((m: String) => st"import ${m}")
+
+    val touches: (Option[String], Option[ST]) =
+      if(touchMethod.nonEmpty)
+        (Some("TranspilerUtil.touch()"), Some(
+          st"""
+              |object TranspilerUtil {
+              |  ${touchMethod.get}
+              |}
+              |"""
+        ))
+      else (None(), None())
 
     val ret: ST =
       st"""// #Sireum
@@ -132,6 +242,7 @@ object ArchitectureTemplate {
           |  ${(bridges, "\n")}
           |
           |  val $architectureDescriptionName : ArchitectureDescription = {
+          |    ${touches._1}
           |
           |    ArchitectureDescription(
           |      components = ISZ (${(components, ", ")}),
@@ -139,7 +250,9 @@ object ArchitectureTemplate {
           |      connections = ISZ (${(connections, ",\n")})
           |    )
           |  }
-          |}"""
+          |}
+          |${touches._2}
+          |"""
     return ret
   }
 }

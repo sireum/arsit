@@ -1,60 +1,84 @@
+::#! 2> /dev/null                                   #
+@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+if [ -z ${SIREUM_HOME} ]; then                      #
+  echo "Please set SIREUM_HOME env var"             #
+  exit -1                                           #
+fi                                                  #
+exec ${SIREUM_HOME}/bin/sireum slang run "$0" "$@"  #
+:BOF
+setlocal
+if not defined SIREUM_HOME (
+  echo Please set SIREUM_HOME env var
+  exit /B -1
+)
+%SIREUM_HOME%\bin\sireum.bat slang run "%0" %*
+exit /B %errorlevel%
+::!#
 // #Sireum
 // @formatter:off
 
-// This file is auto-generated from compileCli.sc
+// This file is auto-generated from cliTranspile.sc
 
 import org.sireum._
-import Cli._
-
-Cli(Os.pathSepChar).parseCompile(Os.cliArgs, 0) match {
-  case Some(o: Cli.CompileOption) if o.args.size == 0 =>
-
-  case Some(o: Cli.CompileOption) =>
-    println(o.help)
-    Os.exit(0)
-  case Some(o: Cli.HelpOption) => Os.exit(0)
-  case _ =>
-    eprintln("Could not recognize arguments")
-    Os.exit(-1)
-}
 
 object Cli {
 
-  @datatype trait CompileTopOption
+  @datatype trait TranspileTopOption
 
-  @datatype class HelpOption extends CompileTopOption
+  @datatype class HelpOption extends TranspileTopOption
 
-  @datatype class CompileOption(
+  @enum object TranspileChoice {
+    'Default
+    'Roundrobin
+    'Static
+    'Legacy
+  }
+
+  @datatype class TranspileOption(
     val help: String,
     val args: ISZ[String],
-    val boundCheck: B,
-    val noPrint: B,
-    val rangeCheck: B,
-    val withLoc: B
-  ) extends CompileTopOption
+    val scheduler: TranspileChoice.Type
+  ) extends TranspileTopOption
 }
 
 import Cli._
 
 @record class Cli(val pathSep: C) {
 
-  def parseCompile(args: ISZ[String], i: Z): Option[CompileTopOption] = {
+  def parseTranspileChoiceH(arg: String): Option[TranspileChoice.Type] = {
+    arg.native match {
+      case "default" => return Some(TranspileChoice.Default)
+      case "roundrobin" => return Some(TranspileChoice.Roundrobin)
+      case "static" => return Some(TranspileChoice.Static)
+      case "legacy" => return Some(TranspileChoice.Legacy)
+      case s =>
+        eprintln(s"Expecting one of the following: { default, roundrobin, static, legacy }, but found '$s'.")
+        return None()
+    }
+  }
+
+  def parseTranspileChoice(args: ISZ[String], i: Z): Option[TranspileChoice.Type] = {
+    if (i >= args.size) {
+      eprintln("Expecting one of the following: { default, roundrobin, static, legacy }, but none found.")
+      return None()
+    }
+    val r = parseTranspileChoiceH(args(i))
+    return r
+  }
+
+  def parseTranspile(args: ISZ[String], i: Z): Option[TranspileTopOption] = {
     val help =
-      st"""Compile Slang Embedded Programs
+      st"""Transpile Slang Embedded Programs
           |
           |Usage: <option>*
           |
           |Available Options:
-          |-b, --bound-check        Build the program with sequence bound checking
-          |-p, --no-print           Build the program without console output
-          |-r, --range-check        Build the program with range checking
-          |-l, --with-loc           Build the program with Slang location info
+          |-s, --scheduler          The scheduler to use.  See Demo.scala for information
+          |                           on 'default' (expects one of { default, roundrobin,
+          |                           static, legacy }; default: default)
           |-h, --help               Display this information""".render
 
-    var boundCheck: B = false
-    var noPrint: B = false
-    var rangeCheck: B = false
-    var withLoc: B = false
+    var scheduler: TranspileChoice.Type = TranspileChoice.Default
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -63,28 +87,10 @@ import Cli._
         if (args(j) == "-h" || args(j) == "--help") {
           println(help)
           return Some(HelpOption())
-        } else if (arg == "-b" || arg == "--bound-check") {
-           val o: Option[B] = { j = j - 1; Some(!boundCheck) }
+        } else if (arg == "-s" || arg == "--scheduler") {
+           val o: Option[TranspileChoice.Type] = parseTranspileChoice(args, j + 1)
            o match {
-             case Some(v) => boundCheck = v
-             case _ => return None()
-           }
-         } else if (arg == "-p" || arg == "--no-print") {
-           val o: Option[B] = { j = j - 1; Some(!noPrint) }
-           o match {
-             case Some(v) => noPrint = v
-             case _ => return None()
-           }
-         } else if (arg == "-r" || arg == "--range-check") {
-           val o: Option[B] = { j = j - 1; Some(!rangeCheck) }
-           o match {
-             case Some(v) => rangeCheck = v
-             case _ => return None()
-           }
-         } else if (arg == "-l" || arg == "--with-loc") {
-           val o: Option[B] = { j = j - 1; Some(!withLoc) }
-           o match {
-             case Some(v) => withLoc = v
+             case Some(v) => scheduler = v
              case _ => return None()
            }
          } else {
@@ -96,7 +102,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(CompileOption(help, parseArguments(args, j), boundCheck, noPrint, rangeCheck, withLoc))
+    return Some(TranspileOption(help, parseArguments(args, j), scheduler))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {
@@ -262,4 +268,5 @@ import Cli._
 // @formatter:on
 
 // BEGIN USER CODE
+
 // END USER CODE
