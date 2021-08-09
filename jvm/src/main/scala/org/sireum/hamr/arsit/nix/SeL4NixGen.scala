@@ -462,10 +462,10 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
 
     var customSequenceSizes: ISZ[String] = ISZ(
-      s"IS[Z,art.Bridge]=1",
+      //s"IS[Z,art.Bridge]=1", // no bridges
       s"MS[Z,Option[art.Bridge]]=1",
-      s"IS[Z,art.UPort]=${numComponentPorts}",
-      s"IS[Z,art.UConnection]=1" // no connetions, but arg has to be > 0
+      s"IS[Z,art.UPort]=${numComponentPorts}"
+      //s"IS[Z,art.UConnection]=1" // no connections
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"

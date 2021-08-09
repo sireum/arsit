@@ -252,11 +252,7 @@ object SeL4NixTemplate {
           |  ${sendOutput}
           |
           |  def initialiseArchitecture(): Unit = {
-          |    val ad = ArchitectureDescription(
-          |      components = ISZ (${bridgeIdentifier}),
-          |      connections = ISZ ()
-          |    )
-          |    Art.run(ad)
+          |    // nothing to do - CAmkES is responsible for initialization
           |  }
           |
           |  def initialiseEntryPoint(): Unit = { entryPoints.initialise() }
@@ -281,19 +277,19 @@ object SeL4NixTemplate {
           |  ${touchMethod}
           |
           |  def logInfo(title: String, msg: String): Unit = {
-          |    print(title)
+          |    print(${bridgeIdentifier}.name)
           |    print(": ")
           |    println(msg)
           |  }
           |
           |  def logError(title: String, msg: String): Unit = {
-          |    eprint(title)
+          |    eprint(${bridgeIdentifier}.name)
           |    eprint(": ")
           |    eprintln(msg)
           |  }
           |
           |  def logDebug(title: String, msg: String): Unit = {
-          |    print(title)
+          |    print(${bridgeIdentifier}.name)
           |    print(": ")
           |    println(msg)
           |  }
