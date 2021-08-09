@@ -155,7 +155,13 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def genTouchMethod(typeTouches: ISZ[ST], apiTouches: ISZ[ST]): ST = {
+  def genTouchMethod(typeTouches: ISZ[ST], apiTouches: ISZ[ST], scheduleTouches: ISZ[ST]): ST = {
+    val sts: Option[ST] =
+      if(scheduleTouches.nonEmpty) Some(st"""// touch process/thread timing properties
+                                            |${(scheduleTouches, "\n")}
+                                            """)
+      else None()
+
     val ret: ST =
       st"""def touch(): Unit = {
           |  if(F) {
@@ -165,6 +171,7 @@ object SeL4NixTemplate {
           |    val mbox2Boolean_Payload: MBox2[Art.PortId, DataContent] = MBox2(0, Base_Types.Boolean_Payload(T))
           |    val mbox2OptionDataContent: MBox2[Art.PortId, Option[DataContent]] = MBox2(0, None())
           |
+          |    ${sts}
           |    ${touchTypes(typeTouches)}
           |
           |    ${(apiTouches, "\n")}

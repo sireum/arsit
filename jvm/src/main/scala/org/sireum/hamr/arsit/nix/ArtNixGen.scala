@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SchedulerTemplate, SeL4NixTemplate, TranspilerTemplate}
-import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
+import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -163,7 +163,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         F) // don't overwrite since user may add contents to this file
 
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
-      val touchMethod = SeL4NixTemplate.genTouchMethod(NixGen.genTypeTouches(types, basePackage), apiTouches)
+      val touchMethod = SeL4NixTemplate.genTouchMethod(NixGen.genTypeTouches(types, basePackage), apiTouches, ISZ())
 
       val stApp = ArtNixTemplate.app(
         packageName = basePackage,

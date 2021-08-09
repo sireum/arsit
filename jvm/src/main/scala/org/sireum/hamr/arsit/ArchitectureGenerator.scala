@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates._
-import org.sireum.hamr.arsit.util.ArsitOptions
+import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
@@ -59,7 +59,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       if(NixGen.willTranspile(arsitOptions.platform)) {
         val typeTouches = NixGen.genTypeTouches(types, basePackage)
         val apiTouches = NixGen.genApiTouches(types, basePackage, symbolTable.getThreadOrDevices())
-        Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches))
+        val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable)
+        Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, scheduleTouches))
       }
       else { None() }
 
@@ -79,7 +80,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
     addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
 
-    val schedulers = SchedulerTemplate.schedulers(basePackage, components)
+    val schedulers = SchedulerTemplate.schedulers(basePackage, components,
+      SchedulerUtil.getProcessorTimingProperties(symbolTable),
+      SchedulerUtil.getThreadTimingProperties(symbolTable, arsitOptions.devicesAsThreads),
+      SchedulerUtil.getFramePeriod(symbolTable))
     addResource(directories.architectureDir, ISZ(basePackage, "Schedulers.scala"), schedulers, T)
 
     val scheduleProvider = SchedulerTemplate.scheduleProvider(basePackage)

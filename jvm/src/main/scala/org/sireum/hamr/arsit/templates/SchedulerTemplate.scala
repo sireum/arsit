@@ -6,9 +6,12 @@ import org.sireum._
 
 object SchedulerTemplate {
   def schedulers(packageName: String,
-                 bridges: ISZ[String]): ST = {
-    val ids = bridges.map(b => s"val ${b}_id: Art.PortId = Arch.${b}.id")
-    val slots = bridges.map(b => s"Slot(${b}_id, maxExecutionTime)")
+                 bridges: ISZ[String],
+                 processorTimingProperties: ISZ[ST],
+                 threadTimingProperties: ISZ[ST],
+                 framePeriod: Z): ST = {
+    val ids = bridges.map((b: String) => s"val ${b}_id: Art.PortId = Arch.${b}.id")
+    val slots = bridges.map((b: String) => s"Slot(${b}_id, maxExecutionTime)")
     val ret = st"""// #Sireum
                   |package ${packageName}
                   |
@@ -21,14 +24,26 @@ object SchedulerTemplate {
                   |
                   |${StringTemplate.doNotEditComment(None())}
                   |
+                  |@datatype class ProcessorTimingProperties(val clockPeriod: Option[Z],
+                  |                                          val framePeriod: Option[Z],
+                  |                                          val maxDomain: Option[Z],
+                  |                                          val slotTime: Option[Z])
+                  |
+                  |@datatype class ThreadTimingProperties(val domain: Option[Z],
+                  |                                       val computeExecutionTime: Option[(Z, Z)])
+                  |
                   |object Schedulers {
                   |
                   |  ${(ids, "\n")}
                   |
+                  |  ${(processorTimingProperties, "\n\n")}
+                  |
+                  |  ${(threadTimingProperties, "\n\n")}
+                  |
                   |  // roundRobinSchedule represents the component dispatch order
                   |  val roundRobinSchedule: ISZ[art.Bridge] = Arch.ad.components
                   |
-                  |  val framePeriod: Z = 1000
+                  |  val framePeriod: Z = ${framePeriod}
                   |  val numComponents: Z = Arch.ad.components.size
                   |  val maxExecutionTime: Z = numComponents / framePeriod
                   |

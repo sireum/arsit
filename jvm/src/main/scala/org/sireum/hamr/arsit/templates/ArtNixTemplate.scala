@@ -403,12 +403,21 @@ object ArtNixTemplate {
           |    println(msg)
           |  }
           |
-          |  def run(): Unit = {
-          |  }
-          |
           |  def time(): Art.Time = {
           |    return Process.time()
           |  }
+          |
+          |  def run(): Unit = {}
+          |
+          |  def tearDownSystemState(): Unit = {}
+          |
+          |  def setUpSystemState(): Unit = {}
+          |
+          |  def initializePhase(): Unit = {}
+          |
+          |  def computePhase(): Unit = {}
+          |
+          |  def finalizePhase(): Unit = {}
           |}
           |"""
     return ret
@@ -795,6 +804,8 @@ object ArtNixTemplate {
                  |${buildDir}/Main${ext}"""
     }
 
+    val sq: String = "\""
+
     val ret: ST =
       st"""#!/usr/bin/env bash
           |#
@@ -807,45 +818,100 @@ object ArtNixTemplate {
           |# Uncomment the following to prevent terminal from closing when the app shuts down or crashes
           |#PREVENT_CLOSE="; bash -i"
           |
-          |function launch {
-          |  arr=( "$$@" )
+          |
+          |OPTIONS=s:
+          |LONGOPTS=schedule:
+          |
+          |function usage {
+          |  echo ""
+          |  echo "Usage: <option>*"
+          |  echo ""
+          |  echo "Available Options:"
+          |  echo "-s, --scheduler        The scheduler to use (expects one of"
+          |  echo "                         { default, roundRobin, static, legacy};"
+          |  echo "                         default: default)"
+          |  exit 2
+          |}
+          |
+          |! PARSED=$$(getopt --options=$$OPTIONS --longoptions=$$LONGOPTS --name "$$0" -- "$$@")
+          |if [[ $${PIPESTATUS[0]} -ne 0 ]]; then
+          |    usage
+          |fi
+          |
+          |eval set -- "$$PARSED"
+          |
+          |SCHEDULER="default"
+          |while true; do
+          |  case "$$1" in
+          |    -s|--schedule)
+          |      case "$$2" in
+          |        default|roundRobin|static|legacy)
+          |          SCHEDULER="$$2"
+          |          ;;
+          |        *)
+          |          echo "Invalid scheduler: $${2}"
+          |          exit 1
+          |          ;;
+          |      esac
+          |      shift 2
+          |      ;;
+          |    --) shift; break;
+          |      ;;
+          |  esac
+          |done
+          |
+          |# handle non-option arguments
+          |if [[ $$# -ne 0 ]]; then
+          |  echo "$$0: Unexpected non-option arguments"
+          |  usage
+          |fi
+          |
+          |function launch() {
+          |  if [ "$$2" ]; then SCHEDULER_ARG=" -s $${2}"; fi
           |  if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
-          |    for app in "$${arr[@]}"; do
-          |      cygstart mintty /bin/bash "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    for APP in $$1; do
+          |      cygstart mintty /bin/bash "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
           |    done
           |  elif [[ "$$(uname)" == "Darwin" ]]; then
-          |    for app in "$${arr[@]}"; do
-          |      open -a Terminal "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    for APP in $$1; do
+          |      open -a Terminal "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
           |    done
           |  elif [[ "$$(expr substr $$(uname -s) 1 5)" == "Linux" ]]; then
-          |    for app in "$${arr[@]}"; do
-          |      x-terminal-emulator -T BuildingControl -e sh -c "slang-build/$${app}$${PREVENT_CLOSE}" &
+          |    for APP in $$1; do
+          |      x-terminal-emulator -T $${APP} -e sh -i -c "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
           |    done
           |  else
-          |    >&2 echo "Platform not support: $$(uname)."
+          |    >&2 echo "Platform not supported: $$(uname)."
           |    exit 1
           |  fi
           |}
           |
-          |if [ -f ./slang-build/RunStaticScheduleDemo ]; then
-          |  array=("RunStaticScheduleDemo");
-          |  launch "$${array[@]}";
-          |elif [ -f ./slang-build/RunRoundRobinDemo ]; then
-          |  array=("RunRoundRobinDemo");
-          |  launch "$${array[@]}";
-          |elif [ -f ./slang-build/Main ]; then
-          |  array=(${(apps.map(m => s"\"${m}\""), " ")})
-          |  launch "$${array[@]}";
+          |EXT=""
+          |if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then EXT=".exe"; fi
           |
-          |  read -p "Press enter to initialise components ..."
-          |  slang-build/Main
-          |  read -p "Press enter again to start ..."
-          |  slang-build/Main
-          |else
-          |  >&2 echo "Couldn't find main program"
-          |  exit 1
-          |fi
+          |case "$${SCHEDULER}" in
+          |  legacy)
+          |    if [ ! -f ./slang-build/Main$${EXT} ]; then
+          |      echo "Expected program not found: ./slang-build/Main$${EXT}"
+          |      exit 1
+          |    fi
           |
+          |    launch "${(apps.map((m: String) => s"${m}$${EXT}"), " ")}";
+          |
+          |    read -p "Press enter to initialise components ..."
+          |    slang-build/Main$${EXT}
+          |    read -p "Press enter again to start ..."
+          |    slang-build/Main$${EXT}
+          |    ;;
+          |  *)
+          |    if [ ! -f ./slang-build/Demo$${EXT} ]; then
+          |      echo "Expected program not found: ./slang-build/Demo$${EXT}"
+          |      exit 1
+          |    fi
+          |
+          |    launch "Demo" $${SCHEDULER};
+          |    ;;
+          |esac
           |"""
     return ret
   }
