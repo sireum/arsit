@@ -126,18 +126,18 @@ object SchedulerTemplate {
                       |
                       |void ${methodName}(STACK_FRAME IS_7E8796 result) {
                       |
-                      |    if(${symbol}) {
-                      |        IS_7E8796 order = ${symbol}();
-                      |        memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
-                      |        result->size = order->size;
+                      |  if(${symbol}) {
+                      |    IS_7E8796 order = ${symbol}();
+                      |    memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
+                      |    result->size = order->size;
                       |
-                      |        printf("Using the round robin order provided in Schedulers. Edit method \n");
-                      |        printf("  ${methodName}\n");
-                      |        printf("to supply your own\n");
-                      |    } else {
-                      |        printf("Schedulers.roundRobinSchedule not found.  You'll need to supply your own order in C\n");
-                      |        exit(-1);
-                      |    }
+                      |    printf("Using the round robin order provided in Schedulers. Edit method \n");
+                      |    printf("  ${methodName}\n");
+                      |    printf("to supply your own\n");
+                      |  } else {
+                      |    printf("Schedulers.roundRobinSchedule not found.  You'll need to supply your own order in C\n");
+                      |    exit(-1);
+                      |  }
                       |}
                       |
                       |void sigHandler(int signo) {
@@ -148,7 +148,7 @@ object SchedulerTemplate {
                       |  int sigs[] = {SIGINT, SIGTERM, SIGQUIT};
                       |  for(int i = 0; i < sizeof(sigs) / sizeof(int); i++){
                       |    if(signal(sigs[i], sigHandler) == SIG_ERR) {
-                      |      printf("Error occurred while setting signal handler for %i\\n", sigs[i]);
+                      |      printf("Error occurred while setting signal handler for %i\n", sigs[i]);
                       |      exit(-1);
                       |    }
                       |  }
@@ -162,7 +162,7 @@ object SchedulerTemplate {
   }
 
   def c_static_schedule(packageName: String): ST = {
-    val methodName = s"${packageName}_StaticScheduleProvider_getStaticSchedule"
+    val methodName = s"${packageName}_ScheduleProviderI_getStaticSchedule"
     val symbol = s"${packageName}_Schedulers_staticSchedule"
 
     val ret:ST = st"""#include <all.h>
@@ -171,20 +171,19 @@ object SchedulerTemplate {
                      |
                      |void ${methodName}(STACK_FRAME art_scheduling_static_Schedule_DScheduleSpec result){
                      |
-                     |    if(${symbol}) {
-                     |        art_scheduling_static_Schedule_DScheduleSpec schedule = ${symbol}();
-                     |        result->hyperPeriod = schedule->hyperPeriod;
-                     |        result->maxDomain = schedule->maxDomain;
-                     |        memcpy(&result->schedule, &schedule->schedule, sizeof(struct art_scheduling_static_Schedule_DSchedule));
+                     |  if(${symbol}) {
+                     |    art_scheduling_static_Schedule_DScheduleSpec schedule = ${symbol}();
+                     |    result->hyperPeriod = schedule->hyperPeriod;
+                     |    result->maxDomain = schedule->maxDomain;
+                     |    memcpy(&result->schedule, &schedule->schedule, sizeof(struct art_scheduling_static_Schedule_DSchedule));
                      |
-                     |        printf("Using the static schedule provided Schedulers. Edit method \n");
-                     |        printf("  ${methodName}\n");
-                     |        printf("to supply your own\n");
-                     |    } else {
-                     |        printf("Schedulers.staticSchedule not found.  You'll need to supply your own order in C\n");
-                     |        exit(-1);
-                     |    }
-                     |
+                     |    printf("Using the static schedule provided Schedulers. Edit method \n");
+                     |    printf("  ${methodName}\n");
+                     |    printf("to supply your own\n");
+                     |  } else {
+                     |    printf("Schedulers.staticSchedule not found.  You'll need to supply your own order in C\n");
+                     |    exit(-1);
+                     |  }
                      |}"""
     return ret
   }

@@ -259,7 +259,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     addResource(dirs.slangNixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
 
     val stMain = ArtNixTemplate.main(basePackage, mainSends)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Main.scala"), stMain, T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, "LegacyDemo.scala"), stMain, T)
 
     addResource(dirs.slangNixDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
     addResource(dirs.slangNixDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
@@ -336,7 +336,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       sourcepaths = ISZ(dirs.mainDir),
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
-      apps = (appNames :+ "Main").map(s => s"${basePackage}.${s}"),
+      apps = (appNames :+ "LegacyDemo").map(s => s"${basePackage}.${s}"),
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       numBits = arsitOptions.bitWidth,
       maxSequenceSize = maxArraySize,

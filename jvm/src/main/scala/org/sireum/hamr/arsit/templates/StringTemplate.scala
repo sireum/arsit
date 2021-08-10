@@ -108,8 +108,11 @@ object StringTemplate {
                   |// The following commands should be executed in the parent of the 'bin' directory.
                   |//
                   |// Command Line:
-                  |//   To run the demo from the command line:
+                  |//   To run the demo from the command line using the default scheduler:
                   |//     sireum proyek run . ${basePackageName}.Demo
+                  |//
+                  |//   To see the available CLI options:
+                  |//     sireum proyek run . ${basePackageName}.Demo -h
                   |//
                   |//   To run the example unit tests from the command line:
                   |//     sireum proyek test .
@@ -224,8 +227,11 @@ object StringTemplate {
           |//
           |// sbt can be obtained from https://www.scala-sbt.org/download.html
           |//
-          |// To run the demo from the command line:
+          |// To run the demo from the command line using the default scheduler:
           |//   sbt run
+          |//
+          |// To see the available CLI options:
+          |//   sbt "run -h"
           |//
           |// To run the example unit tests from the command line:
           |//   sbt test

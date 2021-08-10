@@ -57,9 +57,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val touchMethod: Option[ST] =
       if(NixGen.willTranspile(arsitOptions.platform)) {
+        val components: ISZ[AadlThreadOrDevice] =
+          if(arsitOptions.devicesAsThreads) symbolTable.getThreadOrDevices()
+          else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
+
         val typeTouches = NixGen.genTypeTouches(types, basePackage)
-        val apiTouches = NixGen.genApiTouches(types, basePackage, symbolTable.getThreadOrDevices())
-        val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable)
+        val apiTouches = NixGen.genApiTouches(types, basePackage, components)
+        val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable, arsitOptions.devicesAsThreads)
         Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, scheduleTouches))
       }
       else { None() }
@@ -78,7 +82,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     addResource(directories.architectureDir, ISZ(basePackage, "Arch.scala"), arch, T)
 
     val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
-    addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, T)
+    addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, F)
 
     val schedulers = SchedulerTemplate.schedulers(basePackage, components,
       SchedulerUtil.getProcessorTimingProperties(symbolTable),

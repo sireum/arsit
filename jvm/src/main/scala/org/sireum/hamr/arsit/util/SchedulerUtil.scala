@@ -2,11 +2,11 @@
 package org.sireum.hamr.arsit.util
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, SymbolTable}
+import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, AadlThreadOrDevice, SymbolTable}
 
 object SchedulerUtil {
 
-  def getThreadTimingPropertiesName(thread: AadlThread): String = {
+  def getThreadTimingPropertiesName(thread: AadlThreadOrDevice): String = {
     return s"${thread.path}_timingProperties"
   }
 
@@ -14,20 +14,27 @@ object SchedulerUtil {
     return s"${processor.path}_timingProperties"
   }
 
-  def getSchedulerTouches(symbolTable: SymbolTable): ISZ[ST] = {
+  def getSchedulerTouches(symbolTable: SymbolTable, devicesAsThreads: B): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
-    ret = ret ++ (for(p <- symbolTable.getAllBoundProcessors()) yield {
-      st"println(Schedulers.${getProcessorTimingPropertiesName(p)})"
-    })
-    ret = ret ++ (for(t <- symbolTable.getThreads()) yield {
-      st"println(Schedulers.${getThreadTimingPropertiesName(t)})"
-    })
+    ret = ret ++ getThreadReachableProcessors(symbolTable).map((p: AadlProcessor) =>
+      st"println(Schedulers.${getProcessorTimingPropertiesName(p)})")
+
+    val components: ISZ[AadlThreadOrDevice] =
+      if(devicesAsThreads) symbolTable.getThreadOrDevices()
+      else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
+
+    ret = ret ++ components.map((t: AadlThreadOrDevice) =>
+      st"println(Schedulers.${getThreadTimingPropertiesName(t)})")
+
     return ret
   }
 
   def getThreadTimingProperties(symbolTable: SymbolTable, devicesAsThreads: B): ISZ[ST] = {
+    val components: ISZ[AadlThreadOrDevice] =
+      if(devicesAsThreads) symbolTable.getThreadOrDevices()
+      else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
 
-    return for(t <- symbolTable.getThreads()) yield {
+    return components.map((t: AadlThreadOrDevice) => {
       val computeExecutionTime: String = t.getComputeExecutionTime() match {
         case Some((low, high)) => s"Some((${low}, ${high}))"
         case _ => "None()"
@@ -40,11 +47,22 @@ object SchedulerUtil {
       st"""val ${name}: ThreadTimingProperties = ThreadTimingProperties(
           |  computeExecutionTime = ${computeExecutionTime},
           |  domain = ${domain})"""
+    })
+  }
+
+  def getThreadReachableProcessors(symbolTable: SymbolTable): ISZ[AadlProcessor] = {
+    var processors: Set[AadlProcessor] = Set.empty
+    for(process <- symbolTable.getThreads().map((t: AadlThread) => t.getParent(symbolTable))) {
+      process.getBoundProcessor(symbolTable) match {
+        case Some(processor) => processors = processors + processor
+        case _ =>
+      }
     }
+    return processors.elements
   }
 
   def getProcessorTimingProperties(symbolTable: SymbolTable): ISZ[ST] = {
-    return for(p <- symbolTable.getAllBoundProcessors()) yield {
+    return getThreadReachableProcessors(symbolTable).map((p: AadlProcessor) => {
       val clockPeriod: String = p.getClockPeriod() match {
         case Some(z) => s"Some(${z})"
         case _ => "None()"
@@ -67,24 +85,15 @@ object SchedulerUtil {
           |  framePeriod = ${framePeriod},
           |  maxDomain = ${maxDomain},
           |  slotTime = ${slotTime})"""
-    }
+    })
   }
 
   val defaultFramePeriod: Z = 1000 // 1000 ms
 
 
   def getFramePeriod(symbolTable: SymbolTable): Z = {
-    var processors:ISZ[AadlProcessor] = ISZ()
-    var singleProcessor: B = T
-    for(p <- symbolTable.getThreads().map(m => m.getParent(symbolTable))) {
-      p.getBoundProcessor(symbolTable) match {
-        case Some(processor) =>
-          if(processors.isEmpty) processors = processors :+ processor
-          else singleProcessor = singleProcessor & processors(0) == processor
-        case _ =>
-      }
-    }
-    if(singleProcessor) {
+    val processors: ISZ[AadlProcessor] = getThreadReachableProcessors(symbolTable)
+    if(processors.size == 1) {
       processors(0).getFramePeriod() match {
         case Some(z) => return z
         case _ =>
