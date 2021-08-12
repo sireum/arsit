@@ -350,7 +350,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       cmakeIncludes = ISZ()
     )
 
-    transpilerOptions = transpilerOptions :+ legacyTranspiler._2
+    // don't have arsit automatically run transpiler on legacy scheduler as
+    // legacy and slang schedulers projects are saved to the same nix directory
+    // so there can be only one
+    //transpilerOptions = transpilerOptions :+ legacyTranspiler._2
 
     val _extensions: ISZ[String] = ISZ(dirs.cExt_schedule_Dir, dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 

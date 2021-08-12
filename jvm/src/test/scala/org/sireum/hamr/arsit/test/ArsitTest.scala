@@ -11,6 +11,7 @@ import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
 import org.sireum.hamr.arsit.test.ArsitTest._
 import org.sireum.hamr.codegen.common.util.{CodeGenConfig, CodeGenIpcMechanism, CodeGenPlatform, ExperimentalOptions, ModelUtil}
+import org.sireum.ops.ISZOps
 
 trait ArsitTest extends TestSuite {
 
@@ -18,6 +19,8 @@ trait ArsitTest extends TestSuite {
 
   def testMode: ArsitTestMode.Type = ArsitTestMode.Base
   def timeoutInSeconds: Z = 7
+
+  def ignoreBuildDefChanges: B = F // temporarily ignore build.sbt and build.sc changes due to build.properties updates
 
   val (expectedJsonDir, baseModelsDir) = getDirectories()
 
@@ -161,7 +164,32 @@ trait ArsitTest extends TestSuite {
 
     writeOutTestResults(expectedMap, expectedDir)
 
-    testPass = testPass && resultMap.map == expectedMap.map
+    var allEqual = T
+    for(r <- resultMap.map.entries) {
+      if(expectedMap.map.contains(r._1)) {
+        val e = expectedMap.map.get(r._1).get
+        allEqual &= {
+          val ignores = ISZOps(ISZ("build.sbt", "build.sc", "versions.properties", "project.cmd"))
+          val ignoreFile = ignoreBuildDefChanges && ignores.exists(p => r._1.native.endsWith(p))
+          val sameContents = r._2 == e
+          if(!sameContents) {
+            var reason: ISZ[String] = ISZ()
+            if(r._2.content != e.content) reason = reason :+ "content is not the same"
+            if(r._2.overwrite != e.overwrite) reason = reason :+ "overwrite flag is not the same"
+            if(r._2.makeExecutable != e.makeExecutable) reason = reason :+ "makeExecutable flag is not the same"
+            if(r._2.makeCRLF != e.makeCRLF) reason = reason :+ "makeCRLF flag is not the same"
+            eprintln(st"${r._1} ${(reason, ", ")}".render)
+          }
+          ignoreFile || sameContents
+        }
+      } else if(!generateExpected) {
+        allEqual = F
+        expectedMap.map.keySet.elements.foreach(p => println(p))
+        eprintln(s"Expected missing: ${r._1}")
+      }
+    }
+
+    testPass = testPass && allEqual
 
     assert(testPass, s"Test fail in ${rootTestOutputDir.canon.toUri}")
   }
