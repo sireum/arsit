@@ -212,11 +212,11 @@ object TranspilerTemplate {
           |Sireum.initRuntimeLibrary()
           |
           |for(p <- projects) {
-          |  Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ p)
+          |  Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
           |}
           |
           |//ops.ISZOps(projects).parMap(p =>
-          |//  Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ p)
+          |//  Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
           |//)
           |"""
     return ret
@@ -272,7 +272,7 @@ object TranspilerTemplate {
           |println("Initializing runtime library ...")
           |Sireum.initRuntimeLibrary()
           |
-          |Sireum.run(ISZ[String]("slang", "transpilers", "c", "--verbose") ++ project)
+          |Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ project)
           |
           |${ArsitLibrary.getTranspileSlashCli}
           |"""
