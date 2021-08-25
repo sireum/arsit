@@ -818,7 +818,7 @@ object ArtNixTemplate {
           |
           |
           |OPTIONS=s:
-          |LONGOPTS=schedule:
+          |LONGOPTS=scheduler:
           |
           |function usage {
           |  echo ""
@@ -841,7 +841,7 @@ object ArtNixTemplate {
           |SCHEDULER="default"
           |while true; do
           |  case "$$1" in
-          |    -s|--schedule)
+          |    -s|--scheduler)
           |      case "$$2" in
           |        default|roundRobin|static|legacy)
           |          SCHEDULER="$$2"
