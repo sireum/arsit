@@ -197,7 +197,7 @@ object StringTemplate {
                      |# Scala compiler plugin for Slang
                      |org.sireum%%scalac-plugin%=${sireumScalacVersion}
                      |
-                     |org.sireum.kekinian%%library%kekinianVersion%=${kekinianVersion}
+                     |org.sireum.kekinian%%library%=${kekinianVersion}
                      |
                      |org.scala-lang%scala-library%=${scalaVersion}
                      |org.scalatest%%scalatest%%=${scalaTestVersion}

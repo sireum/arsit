@@ -190,8 +190,14 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       // dir will be passed to the transpiler rather than the individual resources
       val (paths, extResources) = genExtensionFiles(component, names, ports)
 
-      resources = resources ++ extResources ++ genSchedulerFiles(basePackage)
+      resources = resources ++ extResources
     }
+
+    val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) => {
+      val names = Names(c.component, basePackage)
+      s"${basePackage}_Arch_${names.instanceName}"
+     })
+    resources = resources ++ genSchedulerFiles(basePackage, archBridgeInstanceNames)
 
     {
       val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
@@ -383,11 +389,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
   }
 
-  def genSchedulerFiles(packageName: String): ISZ[Resource] = {
+  def genSchedulerFiles(packageName: String, archBridgeInstanceNames: ISZ[String]): ISZ[Resource] = {
+    val roundRobinFile = "round_robin.c"
+    val staticSchedulerFile = "static_scheduler.c"
     val ret: ISZ[Resource] =
       ISZ(ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("legacy.c")), SchedulerTemplate.c_legacy(), T),
-        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("round_robin.c")), SchedulerTemplate.c_roundRobin(packageName), F),
-        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("static_scheduler.c")), SchedulerTemplate.c_static_schedule(packageName), T),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(roundRobinFile)), SchedulerTemplate.c_roundRobin(packageName, archBridgeInstanceNames, roundRobinFile), F),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(staticSchedulerFile)), SchedulerTemplate.c_static_schedule(packageName, archBridgeInstanceNames, staticSchedulerFile), T),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("process.c")), SchedulerTemplate.c_process(), T))
      return ret
   }

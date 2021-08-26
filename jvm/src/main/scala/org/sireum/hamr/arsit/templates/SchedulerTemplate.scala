@@ -10,8 +10,7 @@ object SchedulerTemplate {
                  processorTimingProperties: ISZ[ST],
                  threadTimingProperties: ISZ[ST],
                  framePeriod: Z): ST = {
-    val ids = bridges.map((b: String) => s"val ${b}_id: Art.PortId = Arch.${b}.id")
-    val slots = bridges.map((b: String) => s"Slot(${b}_id, maxExecutionTime)")
+    val slots = bridges.map((b: String) => s"Slot(Arch.${b}.id, maxExecutionTime)")
     val ret = st"""// #Sireum
                   |package ${packageName}
                   |
@@ -33,8 +32,6 @@ object SchedulerTemplate {
                   |                                       val computeExecutionTime: Option[(Z, Z)])
                   |
                   |object Schedulers {
-                  |
-                  |  ${(ids, "\n")}
                   |
                   |  ${(processorTimingProperties, "\n\n")}
                   |
@@ -113,37 +110,71 @@ object SchedulerTemplate {
     return ret
   }
 
-  def c_roundRobin(packageName: String): ST = {
-    val methodName = s"${packageName}_ScheduleProviderI_getRoundRobinOrder"
+  def c_roundRobin(packageName: String,
+                   bridges: ISZ[String],
+                   filepath: String): ST = {
+    val slangPath = s"architecture/${packageName}/Schedulers.scala"
+    val slangMethodName = s"${packageName}.ScheduleProviderI.getRoundRobinOrder"
+    val cMethodName = s"${packageName}_ScheduleProviderI_getRoundRobinOrder"
+    val slangSymbol = s"${packageName}.Schedulers.roundRobinSchedule"
     val symbol = s"${packageName}_Schedulers_roundRobinSchedule"
+    val iszUpdates = bridges.map((m: String) => s"IS_7E8796_up(result, i++, (art_Bridge) ${m}(SF_LAST));")
 
     val ret: ST = st"""#include <all.h>
                       |#include <signal.h>
                       |
+                      |// Transpiled signature of the Slang variable ${slangSymbol}
+                      |// in ${slangPath}.  This weak function declaration allows
+                      |// ${cMethodName} to detect whether the Slang variable was deleted
                       |__attribute__((weak)) IS_7E8796 ${symbol}(STACK_FRAME_ONLY);
                       |
                       |volatile sig_atomic_t shouldStop = 0;
                       |
-                      |void ${methodName}(STACK_FRAME IS_7E8796 result) {
+                      |/*!
+                      | * Example C implementation of the Slang extension method ${slangMethodName}()
+                      | * defined in ${slangPath}
+                      | *
+                      | * @param result an empty schedule.  Add components in the order you want them to be dispatched.
+                      | *               IS_7E8796=ISZ[art.Bridge], i.e. an immutable sequence of art.Bridge
+                      | */
+                      |void ${cMethodName}(STACK_FRAME IS_7E8796 result) {
                       |
                       |  if(${symbol}) {
+                      |    printf("Using the round robin order provided in ${slangPath}. Edit method \n");
+                      |    printf("  ${cMethodName} located in ${filepath}\n");
+                      |    printf("to supply your own\n");
+                      |
                       |    IS_7E8796 order = ${symbol}();
                       |    memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
                       |    result->size = order->size;
                       |
-                      |    printf("Using the round robin order provided in Schedulers. Edit method \n");
-                      |    printf("  ${methodName}\n");
-                      |    printf("to supply your own\n");
                       |  } else {
-                      |    printf("Schedulers.roundRobinSchedule not found.  You'll need to supply your own order in C\n");
-                      |    exit(-1);
+                      |    printf("Transpiled Slang variable ${slangSymbol} not found.  Using an example schedule from method");
+                      |    printf("  ${cMethodName} located in ${filepath}\n");
+                      |
+                      |    // example schedule
+                      |    int i = 0;
+                      |    ${(iszUpdates, "\n")}
+                      |
+                      |    result->size = i;
                       |  }
                       |}
                       |
+                      |/*!
+                      | * signal handler that sets shouldStop to true when invoked
+                      | */
                       |void sigHandler(int signo) {
                       |  shouldStop = 1;
                       |}
                       |
+                      |/*!
+                      | * Example C implementation of Slang extension method art.scheduling.roundrobin.RoundRobinExtensions.init()
+                      | * defined in art/scheduling/roundrobin/RoundRobin.scala.  The scheduler calls this
+                      | * during the initialization phase
+                      | *
+                      | * It registers a signal handler that is used to shut down the demo when it receives
+                      | * SIGINT (CTRL+C), SIGTERM, or SIGQUIT
+                      | */
                       |Unit art_scheduling_roundrobin_RoundRobinExtensions_init(STACK_FRAME_ONLY){
                       |  int sigs[] = {SIGINT, SIGTERM, SIGQUIT};
                       |  for(int i = 0; i < sizeof(sigs) / sizeof(int); i++){
@@ -154,6 +185,11 @@ object SchedulerTemplate {
                       |  }
                       |}
                       |
+                      |/*!
+                      | * Example C implementation of Slang extension method art.scheduling.roundrobin.RoundRobinExtensions.shouldStop()
+                      | * defined in art/scheduling/roundrobin/RoundRobin.scala.  The scheduler calls this
+                      | * during the compute phase to determine when it should transition to the finalize phase
+                      | */
                       |B art_scheduling_roundrobin_RoundRobinExtensions_shouldStop(STACK_FRAME_ONLY){
                       |    return shouldStop == 1;
                       |}
@@ -161,30 +197,72 @@ object SchedulerTemplate {
     return ret
   }
 
-  def c_static_schedule(packageName: String): ST = {
-    val methodName = s"${packageName}_ScheduleProviderI_getStaticSchedule"
+  def c_static_schedule(packageName: String,
+                        bridges: ISZ[String],
+                        filepath: String): ST = {
+    val slangPath = s"architecture/${packageName}/Schedulers.scala"
+    val slangMethodName = s"${packageName}.ScheduleProviderI.getStaticSchedule"
+    val cMethodName = s"${packageName}_ScheduleProviderI_getStaticSchedule"
+    val slangSymbol = s"${packageName}.Schedulers.staticSchedule"
     val symbol = s"${packageName}_Schedulers_staticSchedule"
+    val slotSequences = bridges.map((m: String) => s"fillInSlot(&slotSequence, i++, ${m}(SF_LAST)->id, length);")
 
     val ret:ST = st"""#include <all.h>
                      |
+                     |// Transpiled signature of the Slang variable ${slangSymbol}
+                     |// in ${slangPath}.  This weak function declaration allows
+                     |// ${cMethodName} to detect whether the Slang variable was deleted
                      |__attribute__((weak)) art_scheduling_static_Schedule_DScheduleSpec ${symbol}(STACK_FRAME_ONLY);
                      |
-                     |void ${methodName}(STACK_FRAME art_scheduling_static_Schedule_DScheduleSpec result){
+                     |// helper method
+                     |void fillInSlot(IS_5AA467 slotSequence, int index, Z bridgeId, int length);
+                     |
+                     |/*!
+                     | * Example C implementation of the Slang extension method ${slangMethodName}()
+                     | * defined in ${slangPath}
+                     | *
+                     | * @param result an empty schedule. Add slots in the order you want components to be dispatched.
+                     | */
+                     |void ${cMethodName}(STACK_FRAME art_scheduling_static_Schedule_DScheduleSpec result){
                      |
                      |  if(${symbol}) {
-                     |    art_scheduling_static_Schedule_DScheduleSpec schedule = ${symbol}();
+                     |    printf("Using the static schedule provided in ${slangPath}. Edit method \n");
+                     |    printf("  ${cMethodName} located in ${filepath}\n");
+                     |    printf("to supply your own\n");
+                     |
+                     |    art_scheduling_static_Schedule_DScheduleSpec schedule = ${symbol}(SF_LAST);
                      |    result->hyperPeriod = schedule->hyperPeriod;
                      |    result->maxDomain = schedule->maxDomain;
                      |    memcpy(&result->schedule, &schedule->schedule, sizeof(struct art_scheduling_static_Schedule_DSchedule));
                      |
-                     |    printf("Using the static schedule provided Schedulers. Edit method \n");
-                     |    printf("  ${methodName}\n");
-                     |    printf("to supply your own\n");
                      |  } else {
-                     |    printf("Schedulers.staticSchedule not found.  You'll need to supply your own order in C\n");
-                     |    exit(-1);
+                     |    printf("Transpiled Slang variable ${slangSymbol} not found.  Using an example schedule from method");
+                     |    printf("  ${cMethodName} located in ${filepath}\n");
+                     |
+                     |    // IS_5AA467=IS[Z, art.scheduling.static.Schedule.Slot], i.e. an immutable sequence of art.scheduling.static.Schedule.Slot
+                     |    DeclNewIS_5AA467(slotSequence);
+                     |
+                     |    Z length = 1000 / ${bridges.size};
+                     |
+                     |    int i = 0;
+                     |    ${(slotSequences, "\n")}
+                     |    slotSequence.size = i;
+                     |
+                     |    DeclNewart_scheduling_static_Schedule_DSchedule(dschedule);
+                     |    art_scheduling_static_Schedule_DSchedule_apply(SF &dschedule, &slotSequence);
+                     |
+                     |    Z maxDomain = 100;
+                     |    Z hyperPeriod = 1000;
+                     |
+                     |    art_scheduling_static_Schedule_DScheduleSpec_apply(SF result, maxDomain, hyperPeriod, &dschedule);
                      |  }
-                     |}"""
+                     |}
+                     |
+                     |void fillInSlot(IS_5AA467 slotSequence, int index, Z bridgeId, int length) {
+                     |  slotSequence->value[index].bridgeId = bridgeId;
+                     |  slotSequence->value[index].length = length;
+                     |}
+                     |"""
     return ret
   }
 
