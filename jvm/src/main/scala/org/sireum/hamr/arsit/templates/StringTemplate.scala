@@ -83,6 +83,9 @@ object StringTemplate {
       else
         (None(), Some(st""""org.sireum.slang-embedded-art::slang-embedded-art:", """))
 
+    // removed from ivy deps the following from
+    //, "com.intellij:forms_rt:"
+
     val ret = st"""::#! 2> /dev/null                                   #
                   |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
                   |if [ -z $${SIREUM_HOME} ]; then                      #
@@ -149,7 +152,7 @@ object StringTemplate {
                   |  subPathOpt = None(),
                   |  deps = ISZ(),
                   |  targets = ISZ(Target.Jvm),
-                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:", "com.intellij:forms_rt:"),
+                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
                   |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
                   |  resources = ISZ(),
                   |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
@@ -182,13 +185,13 @@ object StringTemplate {
     val inspectorVersion = ArsitLibrary.getInspectorVersion()
     val artVersion = ArsitLibrary.getArtVersion()
 
+    // remove the following from version.properties
+    // |com.intellij%forms_rt%=${formsRtVersion}
     val ret:ST = st"""org.sireum.slang-embedded-art%%slang-embedded-art%=${artVersion}
                      |
                      |org.sireum%inspector-capabilities%=${inspectorVersion}
                      |org.sireum%inspector-gui%=${inspectorVersion}
                      |org.sireum%inspector-services-jvm%=${inspectorVersion}
-                     |
-                     |com.intellij%forms_rt%=${formsRtVersion}
                      |
                      |
                      |# remove the following entries if you want to use the versions

@@ -189,16 +189,16 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       transpilerScripts = transpilerScripts + (instanceSingletonName ~> trans)
     }
 
-    val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(basePackage, components)
-    ext_h_entries = ext_h_entries ++ _ext_h_entries
-    ext_c_entries = ext_c_entries ++ _ext_c_entries
-
     {
-      val _ext_c_entries: ISZ[ST] = (Set.empty[String] ++ ext_c_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
-      val _ext_h_entries: ISZ[ST] = (Set.empty[String] ++ ext_h_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
+      val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(basePackage, components)
+      ext_h_entries = ext_h_entries ++ _ext_h_entries
+      ext_c_entries = ext_c_entries ++ _ext_c_entries
 
-      addResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(_ext_c_entries), F)
-      addResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(_ext_h_entries), F)
+      val unique_ext_c_entries: ISZ[ST] = (Set.empty[String] ++ ext_c_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
+      val unique_ext_h_entries: ISZ[ST] = (Set.empty[String] ++ ext_h_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")
+
+      addResource(extC.up.value, ISZ(extC.name), SeL4NixTemplate.ext_c(unique_ext_c_entries), F)
+      addResource(extH.up.value, ISZ(extH.name), SeL4NixTemplate.ext_h(unique_ext_h_entries), F)
     }
 
     { // Slang Type Library
