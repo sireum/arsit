@@ -84,7 +84,7 @@ object NixGen{
 
   def generate(): ArsitResult
 
-  def genExtensionEntries(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[ST], ISZ[ST]) = {
+  def genExtensionEntries(basePackage: String, components: ISZ[AadlThreadOrDevice]): (ISZ[ST], ISZ[ST]) = {
     var extHEntries: ISZ[ST] = ISZ()
     var extCEntries: ISZ[ST] = ISZ()
 
@@ -99,36 +99,46 @@ object NixGen{
       }
 
       var seenTypes: Set[AadlType] = Set.empty
-      for(p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
-        val originatingType: AadlType = p._portType match {
-          case BitType(_, _, _, Some(o)) => o
-          case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
-        }
-        if(!seenTypes.contains(originatingType)) {
 
-          val bitSize: Z = originatingType.bitSize match {
-            case Some(z) => z
-            case _ =>
-              val msg = s"${originatingType.name} does not specify a bit size, assuming max bit size or ${maxBitSize}. Used by port ${p.parentName}.${p.name}"
-              reporter.warn(None(), Util.toolName, msg)
+      for(threadOrDevice <- components) {
+        val names: Names = Names(threadOrDevice.component, basePackage)
+        val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
-              maxBitSize
+        for (p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
+          val originatingType: AadlType = p._portType match {
+            case BitType(_, _, _, Some(o)) => o
+            case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
           }
+          if (!seenTypes.contains(originatingType)) {
+            seenTypes = seenTypes + originatingType
 
-          seenTypes = seenTypes + originatingType
+            val (bitSize, optionalMessage): (Z, Option[String]) = originatingType.bitSize match {
+              case Some(z) => (z, None())
+              case _ =>
+                if (symbolTable.isConnected(p.feature)) {
+                  // symbol checking should mean this is infeasible
+                  halt(s"${originatingType.name} is used by connected port ${p.parentName}.${p.name} but it doesn't have a bit size specified")
+                }
+                val msg = s"${originatingType.name} does not specify a bit size, assuming max bit size of ${maxBitSize}. Used by unconnected port ${p.parentName}.${p.name}"
+                reporter.warn(None(), Util.toolName, msg)
 
-          val originatingTypeNames: DataTypeNames = Util.getDataTypeNames(originatingType, names.basePackage)
+                (maxBitSize, Some(s"// ${msg}"))
+            }
 
-          val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
-          val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+            val originatingTypeNames: DataTypeNames = Util.getDataTypeNames(originatingType, names.basePackage)
 
-          extHEntries = extHEntries :+
-            st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
-                |#define ${numBitsName} ${bitSize}
-                |#define ${numBytesName} ((${numBitsName} - 1) / 8 + 1)"""
+            val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
+            val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+
+            extHEntries = extHEntries :+
+              st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
+                  |${optionalMessage}
+                  |#define ${numBitsName} ${bitSize}
+                  |#define ${numBytesName} ((${numBitsName} - 1) / 8 + 1)"""
+
+          }
         }
       }
-
       extHEntries = extHEntries :+ SeL4NixTemplate.bitCodecExtHEnties()
       extCEntries = extCEntries :+ SeL4NixTemplate.bitCodecExtCEnties()
     }

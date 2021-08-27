@@ -30,7 +30,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
   val defaultMaxStackSizeInBytes: Z = z"16" * z"1024" * z"1024"
 
-  val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine())
+  val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine(symbolTable))
 
   def generate(): ArsitResult = {
     assert(arsitOptions.platform == ArsitPlatform.SeL4)
@@ -159,10 +159,6 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
       val cOutputDir: Os.Path = dirs.cOutputPlatformDir / instanceSingletonName
 
-      val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component.component, names, ports)
-      ext_h_entries = ext_h_entries ++ _ext_h_entries
-      ext_c_entries = ext_c_entries ++ _ext_c_entries
-
       val (paths, extResources) = genExtensionFiles(component.component, names, ports)
       resources = resources ++ extResources
 
@@ -192,6 +188,10 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
       transpilerScripts = transpilerScripts + (instanceSingletonName ~> trans)
     }
+
+    val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(basePackage, components)
+    ext_h_entries = ext_h_entries ++ _ext_h_entries
+    ext_c_entries = ext_c_entries ++ _ext_c_entries
 
     {
       val _ext_c_entries: ISZ[ST] = (Set.empty[String] ++ ext_c_entries.map((s: ST) => s.render)).elements.map((s: String) => st"${s}")

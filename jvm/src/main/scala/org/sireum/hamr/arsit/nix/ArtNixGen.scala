@@ -182,16 +182,16 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
       addResource(dirs.slangNixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
 
-      val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(component, names, ports)
-      ext_h_entries = ext_h_entries ++ _ext_h_entries
-      ext_c_entries = ext_c_entries ++ _ext_c_entries
-
       // don't care about paths since the root directory containing the 'ext-c'
       // dir will be passed to the transpiler rather than the individual resources
       val (paths, extResources) = genExtensionFiles(component, names, ports)
 
       resources = resources ++ extResources
     }
+
+    val (_ext_h_entries, _ext_c_entries) = genExtensionEntries(basePackage, components)
+    ext_h_entries = ext_h_entries ++ _ext_h_entries
+    ext_c_entries = ext_c_entries ++ _ext_c_entries
 
     val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) => {
       val names = Names(c.component, basePackage)
