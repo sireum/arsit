@@ -184,7 +184,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
       // don't care about paths since the root directory containing the 'ext-c'
       // dir will be passed to the transpiler rather than the individual resources
-      val (paths, extResources) = genExtensionFiles(component, names, ports)
+      val (paths, extResources) = genExtensionFiles(threadOrDevice, names, ports)
 
       resources = resources ++ extResources
     }

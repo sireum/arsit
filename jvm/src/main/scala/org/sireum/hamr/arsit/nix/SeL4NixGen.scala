@@ -159,7 +159,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
       val cOutputDir: Os.Path = dirs.cOutputPlatformDir / instanceSingletonName
 
-      val (paths, extResources) = genExtensionFiles(component.component, names, ports)
+      val (paths, extResources) = genExtensionFiles(component, names, ports)
       resources = resources ++ extResources
 
       val transpilerExtensions: ISZ[Os.Path] = (extC +: (extH +: paths)) ++ genSel4Adapters(names)

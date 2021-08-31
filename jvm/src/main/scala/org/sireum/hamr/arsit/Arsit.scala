@@ -87,8 +87,8 @@ object Arsit {
     val root = options.outputDir
 
     val demoScalaPath: String = {
-      val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.path).endsWith("Demo.scala"))
-      if(candidate.nonEmpty) root.relativize(Os.path(candidate(0).path)).value
+      val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.dstPath).endsWith("Demo.scala"))
+      if(candidate.nonEmpty) root.relativize(Os.path(candidate(0).dstPath)).value
       else "??"
     }
 
@@ -133,26 +133,26 @@ object Arsit {
       val devDir = projDirs.cExt_c_Dir
 
       val transpile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile.cmd"))
-        if (x.nonEmpty) x(0).path
+        val x = resources.filter(p => ops.StringOps(p.dstPath).endsWith("bin/transpile.cmd"))
+        if (x.nonEmpty) x(0).dstPath
         else "??"
       }
 
       val compile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/compile.cmd"))
-        if (x.nonEmpty) x(0).path
+        val x = resources.filter(p => ops.StringOps(p.dstPath).contains("bin/compile.cmd"))
+        if (x.nonEmpty) x(0).dstPath
         else "??"
       }
 
       val run: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).contains("bin/run.sh"))
-        if (x.nonEmpty) x(0).path
+        val x = resources.filter(p => ops.StringOps(p.dstPath).contains("bin/run.sh"))
+        if (x.nonEmpty) x(0).dstPath
         else "??"
       }
 
       val stop: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/stop.sh"))
-        if (x.nonEmpty) x(0).path
+        val x = resources.filter(p => ops.StringOps(p.dstPath).endsWith("bin/stop.sh"))
+        if (x.nonEmpty) x(0).dstPath
         else "??"
       }
 
@@ -162,8 +162,8 @@ object Arsit {
 
     if(options.platform == ArsitPlatform.SeL4) {
       val transpile: String = {
-        val x = resources.filter(p => ops.StringOps(p.path).endsWith("bin/transpile-sel4.cmd"))
-        if(x.nonEmpty) x(0).path
+        val x = resources.filter(p => ops.StringOps(p.dstPath).endsWith("bin/transpile-sel4.cmd"))
+        if(x.nonEmpty) x(0).dstPath
         else "??"
       }
 

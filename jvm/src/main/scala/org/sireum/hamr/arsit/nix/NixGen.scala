@@ -145,14 +145,15 @@ object NixGen{
     return (extHEntries, extCEntries)
   }
 
-  def genExtensionFiles(c: ir.Component, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
+  def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
+    val c: ir.Component = threadOrDevice.component
 
     val rootExtDir = Os.path(dirs.cExt_c_Dir)
 
     var extensionFiles: ISZ[Os.Path] = ISZ()
     var resources: ISZ[Resource] = ISZ()
 
-    if (arsitOptions.excludeImpl) {
+    if (arsitOptions.excludeImpl || symbolTable.hasCakeMLComponents()) {
 
       val componentName = names.cComponentType
       val extRoot = rootExtDir / names.componentSingletonType
@@ -168,7 +169,7 @@ object NixGen{
 
       val logInfo = NixSeL4NameUtil.apiHelperMethodName("logInfo", names)
 
-      { // add entrypoint stubs
+      if(arsitOptions.excludeImpl) { // add entrypoint stubs
         var entrypointSignatures: ISZ[ST] = ISZ()
 
         val params: ISZ[ST] = ISZ()
@@ -437,7 +438,9 @@ object NixGen{
         }
       }
 
-      { // api helper methods
+      // api helper methods (cakeml ffi's link against the c helper apis)
+      if(arsitOptions.excludeImpl || threadOrDevice.isCakeMLComponent()) {
+
         var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
 
@@ -574,7 +577,7 @@ object NixGen{
 
         val headerContents = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
-        val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods, ISZ(s"<${userHeaderFile.name}>"))
+        val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods, ISZ())
 
         extensionFiles = extensionFiles :+ apiHeaderFile
         extensionFiles = extensionFiles :+ apiImplFile

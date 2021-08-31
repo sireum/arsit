@@ -5,7 +5,7 @@ import org.sireum.$internal.RC
 import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
-import org.sireum.hamr.codegen.common.util.test.{TestJSON, TestOs, TestResource, TestResult, TestUtil}
+import org.sireum.hamr.codegen.common.util.test.{ETestResource, ITestResource, TestJSON, TestOs, TestResource, TestResult, TestUtil}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
@@ -174,10 +174,16 @@ trait ArsitTest extends TestSuite {
           val sameContents = r._2 == e
           if(!sameContents) {
             var reason: ISZ[String] = ISZ()
-            if(r._2.content != e.content) reason = reason :+ "content is not the same"
-            if(r._2.overwrite != e.overwrite) reason = reason :+ "overwrite flag is not the same"
-            if(r._2.makeExecutable != e.makeExecutable) reason = reason :+ "makeExecutable flag is not the same"
-            if(r._2.makeCRLF != e.makeCRLF) reason = reason :+ "makeCRLF flag is not the same"
+            (r._2, e) match {
+              case ((ri: ITestResource, ei: ITestResource)) =>
+                if(ri.content != ei.content) reason = reason :+ "content is not the same"
+                if(ri.overwrite != ei.overwrite) reason = reason :+ "overwrite flag is not the same"
+                if(ri.makeExecutable != ei.makeExecutable) reason = reason :+ "makeExecutable flag is not the same"
+                if(ri.makeCRLF != ei.makeCRLF) reason = reason :+ "makeCRLF flag is not the same"
+              case ((re: ETestResource, ee: ETestResource)) =>
+                if(re.content != ee.content) reason = reason :+ "content is not the same"
+                if(re.symlink != ee.symlink) reason = reason :+ "symlink flag is not the same"
+            }
             eprintln(st"${r._1} ${(reason, ", ")}".render)
           }
           ignoreFile || sameContents
@@ -281,15 +287,20 @@ object ArsitTest {
 
   def writeOutTestResults(testResults: TestResult, dir: Os.Path, verbose: B = F): Os.Path = {
     for(result <- testResults.map.entries) {
-      val r = (dir / result._1).canon
-      if(result._2.overwrite || !r.exists) {
-        r.writeOver(result._2.content)
-        if(verbose) {
-          println(s"Wrote: ${r}")
-        }
-        if(result._2.makeExecutable) {
-          r.chmodAll("700")
-        }
+      val dstPath = (dir / result._1).canon
+      result._2 match {
+        case i: ITestResource =>
+          if(i.overwrite || !dstPath.exists) {
+            dstPath.writeOver(i.content)
+            if(verbose) {
+              println(s"Wrote: ${dstPath}")
+            }
+            if(i.makeExecutable) {
+              dstPath.chmodAll("700")
+            }
+          }
+        case e: ETestResource =>
+
       }
     }
     return dir
