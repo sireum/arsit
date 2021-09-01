@@ -103,6 +103,8 @@ object SchedulerTemplate {
   def c_legacy(): ST = {
     val ret: ST = st"""#include <all.h>
                       |
+                      |${StringTemplate.safeToEditComment()}
+                      |
                       |Unit art_scheduling_legacy_LegacyInterface_computePhase(STACK_FRAME IS_7E8796 bridges) {
                       |  printf("Infeasible.  You should not get here in C");
                       |  exit(1);
@@ -122,6 +124,8 @@ object SchedulerTemplate {
 
     val ret: ST = st"""#include <all.h>
                       |#include <signal.h>
+                      |
+                      |${StringTemplate.safeToEditComment()}
                       |
                       |// Transpiled signature of the Slang variable ${slangSymbol}
                       |// in ${slangPath}.  This weak function declaration allows
@@ -209,6 +213,8 @@ object SchedulerTemplate {
 
     val ret:ST = st"""#include <all.h>
                      |
+                     |${StringTemplate.safeToEditComment()}
+                     |
                      |// Transpiled signature of the Slang variable ${slangSymbol}
                      |// in ${slangPath}.  This weak function declaration allows
                      |// ${cMethodName} to detect whether the Slang variable was deleted
@@ -271,6 +277,8 @@ object SchedulerTemplate {
                       |
                       |#include <sys/time.h>
                       |#include <time.h>
+                      |
+                      |${StringTemplate.doNotEditComment(None())}
                       |
                       |/** Returns current system time in milliseconds
                       |  * NOTE: this requires returning 64bit ints

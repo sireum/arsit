@@ -393,9 +393,9 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val roundRobinFile = "round_robin.c"
     val staticSchedulerFile = "static_scheduler.c"
     val ret: ISZ[Resource] =
-      ISZ(ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("legacy.c")), SchedulerTemplate.c_legacy(), T),
+      ISZ(ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("legacy.c")), SchedulerTemplate.c_legacy(), F),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(roundRobinFile)), SchedulerTemplate.c_roundRobin(packageName, archBridgeInstanceNames, roundRobinFile), F),
-        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(staticSchedulerFile)), SchedulerTemplate.c_static_schedule(packageName, archBridgeInstanceNames, staticSchedulerFile), T),
+        ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(staticSchedulerFile)), SchedulerTemplate.c_static_schedule(packageName, archBridgeInstanceNames, staticSchedulerFile), F),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("process.c")), SchedulerTemplate.c_process(), T))
      return ret
   }
