@@ -286,6 +286,7 @@ object ArsitTest {
   }
 
   def writeOutTestResults(testResults: TestResult, dir: Os.Path, verbose: B = F): Os.Path = {
+    // arsit run outside of codegen so need to write out the results ala codegen's writeOutResources
     for(result <- testResults.map.entries) {
       val dstPath = (dir / result._1).canon
       result._2 match {
@@ -300,7 +301,14 @@ object ArsitTest {
             }
           }
         case e: ETestResource =>
-
+          if(e.symlink) {
+            halt("sym linking not yet supported")
+          } else {
+            dstPath.writeOver(e.content)
+            if(verbose) {
+              println(s"Copied to ${dstPath}")
+            }
+          }
       }
     }
     return dir
