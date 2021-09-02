@@ -578,7 +578,7 @@ object NixGen{
 
         val headerContents = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
-        val (apiGlobalVars, apiInitMethod): (ISZ[ST], ST) = SeL4NixTemplate.initialize_apis(names)
+        val (apiGlobalVars, apiInitMethod): (ISZ[ST], ST) = SeL4NixTemplate.initialize_apis(names, userImplFile.name)
         implMethods = apiInitMethod +: implMethods
 
         val includes: ISZ[String] = if(arsitOptions.excludeImpl) ISZ(s"<${userHeaderFile.name}>") else ISZ()

@@ -314,7 +314,8 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def initialize_apis(names: Names): (ISZ[ST], ST) = {
+  def initialize_apis(names: Names,
+                      filename: String): (ISZ[ST], ST) = {
     val initApiType = names.cInitializationApi
     val initApiId = names.cInitializationApi_Id
 
@@ -335,8 +336,12 @@ object SeL4NixTemplate {
       st"""// ${operOptionSig} = Option[${operApi}]
           |${operOptionSig}_get_(${StackFrameTemplate.SF} (${operApiType}) &operational_api, ${operApiId}(${StackFrameTemplate.SF_LAST}));"""
 
+    val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, filename, "", "initialize_apis", 0)
+
     val method: ST =
-      st"""static void initialize_apis() {
+      st"""static void initialize_apis(${StackFrameTemplate.STACK_FRAME_ONLY_ST}) {
+          |  ${declNewStackFrame};
+          |
           |  ${initApiSt}
           |  ${operApiSt}
           |  apis_initialized = true;
@@ -387,7 +392,7 @@ object SeL4NixTemplate {
       st"""${signature}{
           |  ${declNewStackFrame};
           |
-          |  if(!apis_initialized) { initialize_apis(); }
+          |  if(!apis_initialized) { initialize_apis(${StackFrameTemplate.SF_LAST_ST}); }
           |
           |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
@@ -444,7 +449,7 @@ object SeL4NixTemplate {
       st"""${signature}{
           |  ${declNewStackFrame};
           |
-          |  if(!apis_initialized) { initialize_apis(); }
+          |  if(!apis_initialized) { initialize_apis(${StackFrameTemplate.SF_LAST_ST}); }
           |
           |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
@@ -479,7 +484,7 @@ object SeL4NixTemplate {
       st"""${signature} {
           |  ${declNewStackFrame};
           |
-          |  if(!apis_initialized) { initialize_apis(); }
+          |  if(!apis_initialized) { initialize_apis(${StackFrameTemplate.SF_LAST_ST}); }
           |
           |  ${apiSetMethodName}(
           |    ${StackFrameTemplate.SF}
@@ -505,7 +510,7 @@ object SeL4NixTemplate {
           |  sfAssert(${StackFrameTemplate.SF} (Z) numBits >= 0, "numBits must be non-negative for IS[Z, B].");
           |  sfAssert(${StackFrameTemplate.SF} (Z) numBits <= MaxIS_C4F575, "numBits too large for IS[Z, B].");
           |
-          |  if(!apis_initialized) { initialize_apis(); }
+          |  if(!apis_initialized) { initialize_apis(${StackFrameTemplate.SF_LAST_ST}); }
           |
           |  DeclNewIS_C4F575(t_0);
           |
@@ -529,7 +534,7 @@ object SeL4NixTemplate {
       st"""${signature} {
           |  ${declNewStackFrame};
           |
-          |  if(!apis_initialized) { initialize_apis(); }
+          |  if(!apis_initialized) { initialize_apis(${StackFrameTemplate.SF_LAST_ST}); }
           |
           |  ${apiLogMethodName}(
           |    ${StackFrameTemplate.SF}

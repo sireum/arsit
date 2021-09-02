@@ -692,13 +692,6 @@ object ArtNixTemplate {
           |
           |Cli(Os.pathSepChar).parseCompile(Os.cliArgs, 0) match {
           |  case Some(o: Cli.CompileOption) if o.args.size == 0 =>
-          |    var cmake: ISZ[String] = ISZ("cmake")
-          |    if(o.boundCheck) { cmake = cmake :+ "-DBOUND_CHECK=ON" }
-          |    if(o.noPrint) { cmake = cmake :+ "-DNO_PRINT=ON" }
-          |    if(o.rangeCheck) { cmake = cmake :+ "-DRANGE_CHECK=ON" }
-          |    if(o.withLoc) { cmake = cmake :+ " -DWITH_LOC=ON" }
-          |    cmake = (cmake :+ "-DCMAKE_BUILD_TYPE=Release") :+ ".."
-          |
           |    val nixDir = home / "${cOutputDirRel}" / "slang-build"
           |    if(!nixDir.up.exists){
           |      eprintln(s"Directory does not exist, have your run the transpiler? $${nixDir.up}")
@@ -706,12 +699,24 @@ object ArtNixTemplate {
           |    }
           |    nixDir.mkdir()
           |
+          |    if((nixDir / "CMakeCache.txt").exists) {
+          |      // remove cached transpiler variables
+          |      proc"cmake -U BOUND_CHECK -U NO_PRINT -U RANGE_CHECK -U WITH_LOC ..".at(nixDir).console.run()
+          |    }
+          |
+          |    var cmake: ISZ[String] = ISZ("cmake")
+          |    if(o.boundCheck) { cmake = cmake :+ "-D" :+ "BOUND_CHECK=ON" }
+          |    if(o.noPrint) { cmake = cmake :+ "-D" :+ "NO_PRINT=ON" }
+          |    if(o.rangeCheck) { cmake = cmake :+ "-D" :+ "RANGE_CHECK=ON" }
+          |    if(o.withLoc) { cmake = cmake :+ "-D" :+ "WITH_LOC=ON" }
+          |    cmake = (cmake :+ "-D" :+ "CMAKE_BUILD_TYPE=Release") :+ ".."
+          |
           |    if(Os.proc(cmake).at(nixDir).console.run().ok) {
           |      val MAKE_ARGS: String = Os.env("MAKE_ARGS") match {
           |        case Some(o) => o
           |        case _ => ""
           |      }
-          |      if(proc"make $${MAKE_ARGS}".at(nixDir).console.run().ok) {
+          |      if(proc"make --jobs $${o.jobs} $${MAKE_ARGS}".at(nixDir).console.run().ok) {
           |        val binDir = home / "slang-build"
           |        binDir.removeAll()
           |        binDir.mkdir()
@@ -817,8 +822,8 @@ object ArtNixTemplate {
           |#PREVENT_CLOSE="; bash -i"
           |
           |
-          |OPTIONS=s:
-          |LONGOPTS=scheduler:
+          |OPTIONS=s:h
+          |LONGOPTS=scheduler:,help
           |
           |function usage {
           |  echo ""
@@ -828,12 +833,13 @@ object ArtNixTemplate {
           |  echo "-s, --scheduler        The scheduler to use (expects one of"
           |  echo "                         { default, roundRobin, static, legacy};"
           |  echo "                         default: default)"
-          |  exit 2
+          |  echo "-h, --help             Display this information"
           |}
           |
           |! PARSED=$$(getopt --options=$$OPTIONS --longoptions=$$LONGOPTS --name "$$0" -- "$$@")
           |if [[ $${PIPESTATUS[0]} -ne 0 ]]; then
           |    usage
+          |    exit 1
           |fi
           |
           |eval set -- "$$PARSED"
@@ -841,20 +847,17 @@ object ArtNixTemplate {
           |SCHEDULER="default"
           |while true; do
           |  case "$$1" in
+          |    -h|--help) usage; exit 0 ;;
           |    -s|--scheduler)
           |      case "$$2" in
           |        default|roundRobin|static|legacy)
-          |          SCHEDULER="$$2"
-          |          ;;
+          |          SCHEDULER="$$2" ;;
           |        *)
           |          echo "Invalid scheduler: $${2}"
-          |          exit 1
-          |          ;;
+          |          exit 2 ;;
           |      esac
-          |      shift 2
-          |      ;;
-          |    --) shift; break;
-          |      ;;
+          |      shift 2 ;;
+          |    --) shift; break ;;
           |  esac
           |done
           |
@@ -862,6 +865,7 @@ object ArtNixTemplate {
           |if [[ $$# -ne 0 ]]; then
           |  echo "$$0: Unexpected non-option arguments"
           |  usage
+          |  exit 3
           |fi
           |
           |function launch() {
@@ -894,7 +898,7 @@ object ArtNixTemplate {
           |        echo "Error: Found program for Slang based schedulers.  Pass '--legacy' to the"
           |        echo "transpiler script in order to use the legacy scheduler"
           |      else
-          |        echo "Expected program not found: $${SCRIPT_HOME}/slang-build/LegacyDemo$${EXT}."
+          |        echo "Expected program not found, have you compiled? $${SCRIPT_HOME}/slang-build/LegacyDemo$${EXT}"
           |      fi
           |      exit 1
           |    fi
@@ -913,7 +917,7 @@ object ArtNixTemplate {
           |        echo "run script if you want to use the legacy scheduler, or, do not pass"
           |        echo "'--legacy' to the transpiler script if you want to use a Slang based scheduler"
           |      else
-          |        echo "Expected program not found: $${SCRIPT_HOME}/slang-build/Demo$${EXT}"
+          |        echo "Expected program not found, have you compiled? $${SCRIPT_HOME}/slang-build/Demo$${EXT}"
           |      fi
           |      exit 1
           |    fi

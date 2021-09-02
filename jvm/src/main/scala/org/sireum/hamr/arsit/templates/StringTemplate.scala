@@ -47,7 +47,7 @@ object StringTemplate {
           |
           |  $lng
           |
-          |  Execute the following scripts to build/run the system:
+          |  Execute the following scripts to build/run the system. Pass '-h' to see a script's options.
           |
           |    ${transpileScript}
           |    ${compileScript}

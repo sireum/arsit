@@ -33,7 +33,8 @@ object Cli {
     val boundCheck: B,
     val noPrint: B,
     val rangeCheck: B,
-    val withLoc: B
+    val withLoc: B,
+    val jobs: Z
   ) extends CompileTopOption
 }
 
@@ -52,12 +53,15 @@ import Cli._
           |-p, --no-print           Build the program without console output
           |-r, --range-check        Build the program with range checking
           |-l, --with-loc           Build the program with Slang location info
+          |-j, --jobs               Number of make jobs to run in parallel (expects an
+          |                           integer; default is 4)
           |-h, --help               Display this information""".render
 
     var boundCheck: B = false
     var noPrint: B = false
     var rangeCheck: B = false
     var withLoc: B = false
+    var jobs: Z = 4
     var j = i
     var isOption = T
     while (j < args.size && isOption) {
@@ -90,6 +94,12 @@ import Cli._
              case Some(v) => withLoc = v
              case _ => return None()
            }
+         } else if (arg == "-j" || arg == "--jobs") {
+           val o: Option[Z] = parseNum(args, j + 1, Some(1), None())
+           o match {
+             case Some(v) => jobs = v
+             case _ => return None()
+           }
          } else {
           eprintln(s"Unrecognized option '$arg'.")
           return None()
@@ -99,7 +109,7 @@ import Cli._
         isOption = F
       }
     }
-    return Some(CompileOption(help, parseArguments(args, j), boundCheck, noPrint, rangeCheck, withLoc))
+    return Some(CompileOption(help, parseArguments(args, j), boundCheck, noPrint, rangeCheck, withLoc, jobs))
   }
 
   def parseArguments(args: ISZ[String], i: Z): ISZ[String] = {

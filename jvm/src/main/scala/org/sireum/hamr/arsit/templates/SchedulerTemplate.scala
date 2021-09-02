@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 
 object SchedulerTemplate {
   def schedulers(packageName: String,
@@ -122,6 +123,8 @@ object SchedulerTemplate {
     val symbol = s"${packageName}_Schedulers_roundRobinSchedule"
     val iszUpdates = bridges.map((m: String) => s"IS_7E8796_up(result, i++, (art_Bridge) ${m}(SF_LAST));")
 
+    val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, filepath, "", cMethodName, 0)
+
     val ret: ST = st"""#include <all.h>
                       |#include <signal.h>
                       |
@@ -142,13 +145,14 @@ object SchedulerTemplate {
                       | *               IS_7E8796=ISZ[art.Bridge], i.e. an immutable sequence of art.Bridge
                       | */
                       |void ${cMethodName}(STACK_FRAME IS_7E8796 result) {
+                      |  ${declNewStackFrame};
                       |
                       |  if(${symbol}) {
                       |    printf("Using the round robin order provided in ${slangPath}. Edit method \n");
                       |    printf("  ${cMethodName} located in ${filepath}\n");
                       |    printf("to supply your own\n");
                       |
-                      |    IS_7E8796 order = ${symbol}();
+                      |    IS_7E8796 order = ${symbol}(SF_LAST);
                       |    memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
                       |    result->size = order->size;
                       |
@@ -211,6 +215,8 @@ object SchedulerTemplate {
     val symbol = s"${packageName}_Schedulers_staticSchedule"
     val slotSequences = bridges.map((m: String) => s"fillInSlot(&slotSequence, i++, ${m}(SF_LAST)->id, length);")
 
+    val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, filepath, "", cMethodName, 0)
+
     val ret:ST = st"""#include <all.h>
                      |
                      |${StringTemplate.safeToEditComment()}
@@ -230,6 +236,7 @@ object SchedulerTemplate {
                      | * @param result an empty schedule. Add slots in the order you want components to be dispatched.
                      | */
                      |void ${cMethodName}(STACK_FRAME art_scheduling_static_Schedule_DScheduleSpec result){
+                     |  ${declNewStackFrame};
                      |
                      |  if(${symbol}) {
                      |    printf("Using the static schedule provided in ${slangPath}. Edit method \n");

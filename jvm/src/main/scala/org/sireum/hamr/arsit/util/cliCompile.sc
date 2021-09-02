@@ -18,6 +18,8 @@ val compileTool: Tool = Tool(
       tpe = Type.Flag(F), description = "Build the program with range checking"),
     Opt(name = "withLoc", longKey = "with-loc", shortKey = Some('l'),
       tpe = Type.Flag(F), description = "Build the program with Slang location info"),
+    Opt(name = "jobs", longKey = "jobs", shortKey = Some('j'),
+      tpe = Type.Num(None(), 4, Some(1), None()), description = "Number of make jobs to run in parallel")
   ),
   groups = ISZ()
 )
