@@ -571,13 +571,15 @@ object NixGen{
           }
         }
 
+        // entrypointAdapters will be empty if not excluding slang component impls
         implMethods = implMethods ++ entrypointAdapters
 
         val macroName = StringUtil.toUpperCase(s"${apiFilename}_h")
 
         val headerContents = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
-        val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods, ISZ())
+        val includes: ISZ[String] = if(arsitOptions.excludeImpl) ISZ(s"<${userHeaderFile.name}>") else ISZ()
+        val implContents = SeL4NixTemplate.cImplFile(apiFilename, implMethods, includes)
 
         extensionFiles = extensionFiles :+ apiHeaderFile
         extensionFiles = extensionFiles :+ apiImplFile
