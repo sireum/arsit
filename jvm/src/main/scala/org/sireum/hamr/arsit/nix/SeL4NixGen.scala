@@ -554,7 +554,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       headerMethods = headerMethods :+ st"${signature};"
     }
 
-    val impl = SeL4NixTemplate.cImplFile(fileName, implMethods, ISZ())
+    val impl = SeL4NixTemplate.cImplFile(fileName, ISZ(), ISZ(), implMethods)
     val header = SeL4NixTemplate.cHeaderFile(macroName, headerMethods)
 
     addResource(implFile.up.value, ISZ(implFile.name), impl, T)

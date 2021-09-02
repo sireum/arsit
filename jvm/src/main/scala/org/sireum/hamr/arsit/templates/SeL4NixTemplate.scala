@@ -314,32 +314,40 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def getInitializationApi(names: Names): ST = {
-    val apiType = names.cInitializationApi
-    val apiId = names.cInitializationApi_Id
+  def initialize_apis(names: Names): (ISZ[ST], ST) = {
+    val initApiType = names.cInitializationApi
+    val initApiId = names.cInitializationApi_Id
 
-    val api = s"${names.packageName}.${names.apiInitialization}"
-    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(api)
+    val initApi = s"${names.packageName}.${names.apiInitialization}"
+    val (initOptionSig, initSomeSig, initNoneSig) = TypeUtil.getOptionTypeFingerprints(initApi)
 
-    val ret: ST =
-      st"""// ${optionSig} = Option[${api}]
-          |DeclNew${apiType}(api);
-          |${optionSig}_get_(${StackFrameTemplate.SF} (${apiType}) &api, ${apiId}(${StackFrameTemplate.SF_LAST}));"""
-   return ret
-  }
+    val initApiSt: ST =
+      st"""// ${initOptionSig} = Option[${initApi}]
+          |${initOptionSig}_get_(${StackFrameTemplate.SF} (${initApiType}) &initialization_api, ${initApiId}(${StackFrameTemplate.SF_LAST}));"""
 
-  def getOperationalApi(names: Names): ST = {
-    val apiType = names.cOperationalApi
-    val apiId = names.cOperationalApi_Id
+    val operApiType = names.cOperationalApi
+    val operApiId = names.cOperationalApi_Id
 
-    val api = s"${names.packageName}.${names.apiOperational}"
-    val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(api)
+    val operApi = s"${names.packageName}.${names.apiOperational}"
+    val (operOptionSig, operSomeSig, operNoneSig) = TypeUtil.getOptionTypeFingerprints(operApi)
 
-    val ret: ST =
-      st"""// ${optionSig} = Option[${api}]
-          |DeclNew${apiType}(api);
-          |${optionSig}_get_(${StackFrameTemplate.SF} (${apiType}) &api, ${apiId}(${StackFrameTemplate.SF_LAST}));"""
-    return ret
+    val operApiSt: ST =
+      st"""// ${operOptionSig} = Option[${operApi}]
+          |${operOptionSig}_get_(${StackFrameTemplate.SF} (${operApiType}) &operational_api, ${operApiId}(${StackFrameTemplate.SF_LAST}));"""
+
+    val method: ST =
+      st"""static void initialize_apis() {
+          |  ${initApiSt}
+          |  ${operApiSt}
+          |  apis_initialized = true;
+          |}"""
+
+    val variables: ISZ[ST] = ISZ(
+      st"static bool apis_initialized = false",
+      st"static struct ${initApiType} initialization_api",
+      st"static struct ${operApiType} operational_api")
+
+    return (variables, method)
   }
 
   def apiGet(names: Names,
@@ -375,13 +383,11 @@ object SeL4NixTemplate {
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
-    val api = getOperationalApi(names)
-
     val ret: ST =
       st"""${signature}{
           |  ${declNewStackFrame};
           |
-          |  ${api}
+          |  if(!apis_initialized) { initialize_apis(); }
           |
           |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
@@ -389,7 +395,7 @@ object SeL4NixTemplate {
           |  ${apiGetMethodName}(
           |    SF
           |    (${optionSig}) &t_0,
-          |    &api);
+          |    &operational_api);
           |
           |  if(t_0.type == T${someSig}){
           |    ${typeAssign}
@@ -434,22 +440,20 @@ object SeL4NixTemplate {
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
-    val api = getOperationalApi(names)
-
     val ret: ST =
       st"""${signature}{
           |  ${declNewStackFrame};
+          |
+          |  if(!apis_initialized) { initialize_apis(); }
           |
           |  // ${optionSig} = Option[${qualifiedNameForFingerprinting}]
           |  // ${someSig} = Some[${qualifiedNameForFingerprinting}]
           |  DeclNew${optionSig}(t_0);
           |
-          |  ${api}
-          |
           |  ${apiGetMethodName}(
           |    ${StackFrameTemplate.SF}
           |    (${optionSig}) &t_0,
-          |    &api);
+          |    &operational_api);
           |
           |  if(t_0.type == T${someSig}){
           |    *numBits = t_0.Some_8D03B1.value.size;
@@ -466,18 +470,16 @@ object SeL4NixTemplate {
   }
 
   def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
-    var args: ISZ[ST] = ISZ(st"&api")
+    var args: ISZ[ST] = ISZ(st"&initialization_api")
     if (!isEventPort) {
       args = args :+ st"value"
     }
-
-    val api = getInitializationApi(names)
 
     val ret: ST =
       st"""${signature} {
           |  ${declNewStackFrame};
           |
-          |  ${api}
+          |  if(!apis_initialized) { initialize_apis(); }
           |
           |  ${apiSetMethodName}(
           |    ${StackFrameTemplate.SF}
@@ -492,11 +494,9 @@ object SeL4NixTemplate {
                               apiSetMethodName: String): ST = {
 
     var args: ISZ[ST] = ISZ(
-      st"&api",
+      st"&initialization_api",
       st"&t_0"
     )
-
-    val api = getInitializationApi(names)
 
     val ret: ST =
       st"""${signature} {
@@ -504,6 +504,8 @@ object SeL4NixTemplate {
           |
           |  sfAssert(${StackFrameTemplate.SF} (Z) numBits >= 0, "numBits must be non-negative for IS[Z, B].");
           |  sfAssert(${StackFrameTemplate.SF} (Z) numBits <= MaxIS_C4F575, "numBits too large for IS[Z, B].");
+          |
+          |  if(!apis_initialized) { initialize_apis(); }
           |
           |  DeclNewIS_C4F575(t_0);
           |
@@ -513,8 +515,6 @@ object SeL4NixTemplate {
           |    memcpy(&t_0.value, byteArray, numBytes);
           |  }
           |
-          |  ${api}
-          |
           |  ${apiSetMethodName}(
           |    ${StackFrameTemplate.SF}
           |    ${(args, ",\n")});
@@ -523,15 +523,13 @@ object SeL4NixTemplate {
   }
 
   def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
-    var args: ISZ[ST] = ISZ(st"&api", st"str")
-
-    val api = getInitializationApi(names)
+    val args: ISZ[ST] = ISZ(st"&initialization_api", st"str")
 
     val ret: ST =
       st"""${signature} {
           |  ${declNewStackFrame};
           |
-          |  ${api}
+          |  if(!apis_initialized) { initialize_apis(); }
           |
           |  ${apiLogMethodName}(
           |    ${StackFrameTemplate.SF}
@@ -556,13 +554,24 @@ object SeL4NixTemplate {
   }
 
   def cImplFile(fileName: String,
-                implMethods: ISZ[ST],
-                includes: ISZ[String]): ST = {
-    val _includes = ops.ISZOps(includes).map((s: String) => s"#include ${s}")
+                includes: ISZ[String],
+                globalVars: ISZ[ST],
+                implMethods: ISZ[ST]): ST = {
+    val _includes: Option[ST] =
+      if(includes.isEmpty) None()
+      else Some(st"${(ops.ISZOps(includes).map((s: String) => s"#include ${s}"), "\n")}")
+
+    val _globals: Option[ST] =
+      if(globalVars.isEmpty) None()
+      else Some(
+        st"""${(globalVars.map((s: ST) => st"${s};"), "\n")}
+            |""")
+
     val ret: ST =
       st"""#include <${fileName}.h>
-          |${(_includes, "\n")}
+          |${_includes}
           |
+          |${_globals}
           |${(implMethods, "\n\n")}
           |"""
     return ret
