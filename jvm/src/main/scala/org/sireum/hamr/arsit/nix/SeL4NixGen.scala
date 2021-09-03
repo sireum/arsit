@@ -88,7 +88,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
       val period: Z = CommonUtil.getPeriod(component)
 
-      val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(component.component).get
+      val dispatchProtocol: Dispatch_Protocol.Type = component.dispatchProtocol
       val dispatchStatus = genDispatchStatus(names, ports, dispatchProtocol)
 
       val _ports = ports.map((p: Port) => ArchitectureTemplate.genPort(p))

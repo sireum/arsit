@@ -248,8 +248,8 @@ object NixGen{
                         |
                         |${(exampleApiUsage, "\n\n")}""")
 
-        PropertyUtil.getDispatchProtocol(c) match {
-          case Some(Dispatch_Protocol.Periodic) =>
+        threadOrDevice.dispatchProtocol match {
+          case Dispatch_Protocol.Periodic =>
             // timetriggered
             val apiMethodName = s"${componentName}_timeTriggered"
             val userMethodName = s"${apiMethodName}_"
@@ -286,7 +286,7 @@ object NixGen{
 
             entrypointAdapters = entrypointAdapters :+ apiAdapterMethod
 
-          case Some(Dispatch_Protocol.Sporadic) =>
+          case Dispatch_Protocol.Sporadic =>
             val inEventPorts = ports.filter(f => CommonUtil.isEventPort(f.feature) && CommonUtil.isInFeature(f.feature))
 
             var dumpedExampleGetterApiUsageAlready: B = F

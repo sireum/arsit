@@ -81,15 +81,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       val names: Names = Names(component, basePackage)
       val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
-      val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(component) match {
-        case Some(x) => x
-        case _ =>
-          if (CommonUtil.isDevice(component)) {
-            Dispatch_Protocol.Periodic
-          } else {
-            halt("HAMR codegen only supports Periodic or Sporadic threads")
-          }
-      }
+      val dispatchProtocol: Dispatch_Protocol.Type = threadOrDevice.dispatchProtocol
 
       val isPeriodic: B = dispatchProtocol == Dispatch_Protocol.Periodic
 

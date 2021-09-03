@@ -504,7 +504,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 
   def visitBTSDispatchCondition(condition: BTSDispatchCondition): ST = {
     if(condition.dispatchTriggers.isEmpty) {
-      assert(CommonUtil.isPeriodic(this.component))
+      assert(CommonUtil.isPeriodic(aadlComponent))
 
       return st"T"
     } else {

@@ -118,15 +118,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       return
     }
 
-    val dispatchProtocol: Dispatch_Protocol.Type = PropertyUtil.getDispatchProtocol(m.component) match {
-      case Some(x) => x
-      case x =>
-        if (CommonUtil.isDevice(m.component)) {
-          Dispatch_Protocol.Periodic
-        } else {
-          halt(s"HAMR codegen only supports Periodic or Sporadic threads: ${x}")
-        }
-    }
+    val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
 
     val btsAnnexes : ISZ[AnnexInfo] =
       symbolTable.annexInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
