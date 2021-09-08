@@ -209,7 +209,7 @@ object NixGen{
                     |size_t ${bitsName};
                     |if(${getter}(${StackFrameTemplate.SF} &${bitsName}, ${t})) {
                     |  // sanity check
-                    |  sfAssert(${StackFrameTemplate.SF} (Z) ${bitsName} == ${numBits}, "numBits received does not match expected");
+                    |  ${StackFrameTemplate.sfAssert(s"(Z) ${bitsName} == ${numBits}", "numBits received does not match expected")}
                     |
                     |  DeclNewString(${str});
                     |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
