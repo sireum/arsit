@@ -6,13 +6,13 @@ import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
-import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, SchedulerUtil}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.containers.Resource
-import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common._
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate.{SF, SF_LAST}
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 
@@ -190,6 +190,13 @@ object NixGen{
         for(p <- ports.filter(f => CommonUtil.isInPort(f.feature))) {
           val getter = NixSeL4NameUtil.apiHelperGetterMethodName(p.name, names)
           val str = s"${p.name}_str"
+          val portType: String = {
+            if(CommonUtil.isAadlDataPort(p.feature)) { "data" }
+            else if(CommonUtil.isAadlEventDataPort(p.feature)) { "event data" }
+            else if(CommonUtil.isAadlEventPort(p.feature)) { "event" }
+            else { halt(s"Unexpected port type: ${p}")}
+          }
+
           val s: ST = if(CommonUtil.isDataPort(p.feature)) {
             val t = s"t$tindex"
             tindex = tindex + 1
@@ -207,14 +214,19 @@ object NixGen{
 
                 st"""uint8_t ${t}[${numBytes}];
                     |size_t ${bitsName};
-                    |if(${getter}(${StackFrameTemplate.SF} &${bitsName}, ${t})) {
+                    |if(${getter}(${SF} &${bitsName}, ${t})) {
                     |  // sanity check
                     |  ${StackFrameTemplate.sfAssert(s"(Z) ${bitsName} == ${numBits}", "numBits received does not match expected")}
                     |
+                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                    |  hex_dump(${SF} ${t}, ${numBytes});
+                    |
+                    |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                     |  DeclNewString(${str});
-                    |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
-                    |  byte_array_string(${StackFrameTemplate.SF} (String) &${str}, ${t}, ${numBytes});
-                    |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
+                    |  String__append(${SF} (String) &${str}, string("Received data on ${portType} port ${p.name}: "));
+                    |  byte_array_string(${SF} (String) &${str}, ${t}, ${numBytes});
+                    |  ${logInfo}(${SF} (String) &${str});
+                    |  */
                     |}"""
               }
               else {
@@ -224,19 +236,27 @@ object NixGen{
                   (s"&$t", st"DeclNew${p.getPortTypeNames.qualifiedCTypeName}($t);")
                 }
                 st"""${decl}
-                    |if(${getter}(${StackFrameTemplate.SF} &${t})) {
+                    |if(${getter}(${SF} &${t})) {
+                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                    |
+                    |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                     |  DeclNewString(${str});
-                    |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("Received on ${p.name}: "));
-                    |  ${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &${str}, ${refName});
-                    |  ${logInfo}(${StackFrameTemplate.SF} (String) &${str});
+                    |  String__append(${SF} (String) &${str}, string("Received data on ${portType} port ${p.name}: "));
+                    |  ${p.getPortTypeNames.qualifiedCTypeName}_string_(${SF} (String) &${str}, ${refName});
+                    |  ${logInfo}(${SF} (String) &${str});
+                    |  */
                     |}"""
               }
             }
             entry
           } else {
-            st"""if(${getter}(${StackFrameTemplate.SF_LAST} )){
-                |  String ${str} = string("Received event on ${p.name}");
-                |  ${logInfo}(${StackFrameTemplate.SF} ${str});
+            st"""if(${getter}(${SF_LAST} )){
+                |  printf("%s: Received event on ${p.name}\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                |
+                |  /* alternative using logInfo.  Commented out as the constructed String may be too large
+                |  String ${str} = string("Received event on ${portType} port ${p.name}");
+                |  ${logInfo}(${SF} ${str});
+                |  */
                 |}"""
           }
           exampleApiUsage = exampleApiUsage :+ s
@@ -281,7 +301,7 @@ object NixGen{
               st"""${apiMethodSig} {
                   |  ${apiDeclNewStackFrame};
                   |
-                  |  ${userMethodName}(${StackFrameTemplate.SF_LAST});
+                  |  ${userMethodName}(${SF_LAST});
                   |}"""
 
             entrypointAdapters = entrypointAdapters :+ apiAdapterMethod
@@ -291,7 +311,13 @@ object NixGen{
 
             var dumpedExampleGetterApiUsageAlready: B = F
             for (p <- inEventPorts) {
-              val isEventData: B = p.feature.category == ir.FeatureCategory.EventDataPort
+              val portType: String = {
+                if(CommonUtil.isAadlDataPort(p.feature)) { "data" }
+                else if(CommonUtil.isAadlEventDataPort(p.feature)) { "event data" }
+                else if(CommonUtil.isAadlEventPort(p.feature)) { "event" }
+                else { halt(s"Unexpected port type: ${p}")}
+              }
+              val isEventData: B = CommonUtil.isAadlEventDataPort(p.feature)
               val handlerName = s"${componentName}_handle_${p.name}"
               val apiMethodName = handlerName
               val handlerMethodName = s"${handlerName}_"
@@ -311,7 +337,7 @@ object NixGen{
                 name = handlerMethodName,
                 line = 0)
 
-              if (types.rawConnections && p.feature.category == ir.FeatureCategory.EventDataPort) {
+              if (types.rawConnections && isEventData) {
                 val rawHandlerMethodName = s"${handlerName}_raw"
                 val numBits = "numBits"
                 val byteArray = "byteArray"
@@ -332,10 +358,16 @@ object NixGen{
                       |  ${declNewStackFrameRaw};
                       |
                       |  size_t numBytes = ${numBits} == 0 ? 0 : (${numBits} - 1) / 8 + 1;
+                      |
+                      |  printf("%s: ${rawHandlerMethodName} called with payload: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |  hex_dump(${SF} ${byteArray}, numBytes);
+                      |
+                      |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                       |  DeclNewString(${p.name}String);
-                      |  String__append(${StackFrameTemplate.SF} (String) &${str}, string("${rawHandlerMethodName} called"));
-                      |  byte_array_string(${StackFrameTemplate.SF} (String) &${str}, ${byteArray}, numBytes);
-                      |  ${logInfo} (${StackFrameTemplate.SF} (String) &${str});
+                      |  String__append(${SF} (String) &${str}, string("${rawHandlerMethodName} called with payload: "));
+                      |  byte_array_string(${SF} (String) &${str}, ${byteArray}, numBytes);
+                      |  ${logInfo} (${SF} (String) &${str});
+                      |  */
                       |}"""
 
                 val __exampleApiUsage: Option[ST] =
@@ -350,20 +382,28 @@ object NixGen{
                   st"""${handlerSig} {
                       |  ${declNewStackFrame};
                       |
-                      |  ${rawHandlerMethodName}(${StackFrameTemplate.SF} value->size, value->value);
+                      |  ${rawHandlerMethodName}(${SF} value->size, value->value);
                       |
                       |  ${__exampleApiUsage}
                       |}"""
               }
               else {
                 val printValue: ST = if(isEventData) {
-                  st"""DeclNewString(_str);
-                      |String__append(${StackFrameTemplate.SF} (String) &_str, string("Received on ${p.name}: "));
-                      |${p.getPortTypeNames.qualifiedCTypeName}_string_(${StackFrameTemplate.SF} (String) &_str, value);
-                      |${logInfo}(${StackFrameTemplate.SF} (String) &_str);"""
+                  st"""printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |
+                      |/* alternative using logInfo.  Commented out as the constructed String may be too large
+                      |DeclNewString(_str);
+                      |String__append(${SF} (String) &_str, string("Received on ${p.name}: "));
+                      |${p.getPortTypeNames.qualifiedCTypeName}_string_(${SF} (String) &_str, value);
+                      |${logInfo}(${SF} (String) &_str);
+                      |*/"""
                 } else {
-                  st"""String str = string("Received event on ${p.name}");
-                      |${logInfo}(${StackFrameTemplate.SF} str);"""
+                  st"""printf("%s: Received event on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |
+                      |/* alternative using logInfo.  Commented out as the constructed String may be too large
+                      |String str = string("Received event on ${p.name}");
+                      |${logInfo}(${SF} str);
+                      |*/"""
                 }
 
                 val __exampleApiUsage: Option[ST] =
@@ -378,9 +418,13 @@ object NixGen{
                   st"""${handlerSig} {
                       |  ${declNewStackFrame};
                       |
+                      |  printf("%s: ${handlerName} called\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |
+                      |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                       |  DeclNewString(${p.name}String);
-                      |  String__append(${StackFrameTemplate.SF} (String) &${p.name}String, string("${handlerName} called"));
-                      |  ${logInfo} (${StackFrameTemplate.SF} (String) &${p.name}String);
+                      |  String__append(${SF} (String) &${p.name}String, string("${handlerName} called"));
+                      |  ${logInfo} (${SF} (String) &${p.name}String);
+                      |  */
                       |
                       |  ${printValue}
                       |
@@ -397,7 +441,7 @@ object NixGen{
                 name = apiMethodName,
                 line = 0)
 
-              val valueArg: String = if(isEventData) s"${StackFrameTemplate.SF} value" else StackFrameTemplate.SF_LAST
+              val valueArg: String = if(isEventData) s"${SF} value" else SF_LAST
 
               val apiAdapterMethod: ST =
                 st"""${apiMethodSig} {
@@ -621,25 +665,25 @@ object NixGen{
             val numBytes = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
 
             st"""uint8_t ${result}[${numBytes}];
-                |byte_array_default(${StackFrameTemplate.SF} ${result}, ${numBits}, ${numBytes});
-                |${setterName}(${StackFrameTemplate.SF} ${numBits}, ${result});"""
+                |byte_array_default(${SF} ${result}, ${numBits}, ${numBytes});
+                |${setterName}(${SF} ${numBits}, ${result});"""
 
           } else {
             if (p.getPortTypeNames.isEnum()) {
               st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()};
-                  |${setterName}(${StackFrameTemplate.SF} ${result});"""
+                  |${setterName}(${SF} ${result});"""
             } else if(p.getPortTypeNames.isBaseType()){
-              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()}(${StackFrameTemplate.SF_LAST});
-                  |${setterName}(${StackFrameTemplate.SF} ${result});"""
+              st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()}(${SF_LAST});
+                  |${setterName}(${SF} ${result});"""
             } else {
               st"""DeclNew${p.getPortTypeNames.qualifiedCTypeName}(${result});
-                  |${p.getPortTypeNames.example_C_Name()}(${StackFrameTemplate.SF} &${result});
-                  |${setterName}(${StackFrameTemplate.SF} &${result});"""
+                  |${p.getPortTypeNames.example_C_Name()}(${SF} &${result});
+                  |${setterName}(${SF} &${result});"""
             }
           }
         decl
       } else {
-        st"${setterName}(${StackFrameTemplate.SF_LAST});"
+        st"${setterName}(${SF_LAST});"
       }
 
       statements = statements :+ u
@@ -647,10 +691,10 @@ object NixGen{
 
     val loggers: ISZ[ST] = ISZ[String]("logInfo", "logDebug", "logError").map((l: String) => {
       val mname = NixSeL4NameUtil.apiHelperMethodName(l, names)
-      st"""${mname}(${StackFrameTemplate.SF} string("Example ${l}"));"""
+      st"""${mname}(${SF} string("Example ${l}"));"""
     })
 
-    statements = statements ++ loggers
+    //statements = statements ++ loggers
 
     val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(
       caller = T,
@@ -663,9 +707,15 @@ object NixGen{
       st"""${initialiseMethodSig} {
           |  ${declNewStackFrame};
           |
-          |  // examples of api setter and logging usage
+          |  printf("%s: ${userMethodName} called\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+          |
+          |  // example usage of api setters
           |
           |  ${(statements, "\n\n")}
+          |
+          |  /* example usage of api loggers. Commented out as the constructed String may be too long
+          |  ${(loggers, "\n\n")}
+          |  */
           |}"""
 
     val api_params = ISZ(st"${names.cInitializationApi} api")
@@ -680,7 +730,7 @@ object NixGen{
       st"""${apiMethodSig} {
           |  ${apiDeclNewStackFrame};
           |
-          |  ${userMethodName}(${StackFrameTemplate.SF_LAST});
+          |  ${userMethodName}(${SF_LAST});
           |}"""
     return (initialiseMethodSig, initMethodImpl, apiMethodImpl)
   }
@@ -715,7 +765,7 @@ object NixGen{
       st"""${apiMethodSig} {
           |  ${apiDeclNewStackFrame};
           |
-          |  ${userMethodName}(${StackFrameTemplate.SF_LAST});
+          |  ${userMethodName}(${SF_LAST});
           |}"""
     return (finaliseMethodSig, ret, adapterMethod)
   }

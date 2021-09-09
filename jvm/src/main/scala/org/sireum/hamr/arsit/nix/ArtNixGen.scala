@@ -185,10 +185,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     ext_h_entries = ext_h_entries ++ _ext_h_entries
     ext_c_entries = ext_c_entries ++ _ext_c_entries
 
-    val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) => {
-      val names = Names(c.component, basePackage)
-      s"${basePackage}_Arch_${names.instanceName}"
-     })
+    val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) =>
+      Names(c.component, basePackage).cArchInstanceName)
     resources = resources ++ genSchedulerFiles(basePackage, archBridgeInstanceNames)
 
     {
