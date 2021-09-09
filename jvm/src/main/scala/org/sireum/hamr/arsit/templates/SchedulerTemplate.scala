@@ -181,10 +181,10 @@ object SchedulerTemplate {
                       | * during the initialization phase
                       | *
                       | * It registers a signal handler that is used to shut down the demo when it receives
-                      | * SIGINT (CTRL+C), SIGTERM, or SIGQUIT
+                      | * SIGINT (CTRL+C), SIGTERM
                       | */
                       |Unit art_scheduling_roundrobin_RoundRobinExtensions_init(STACK_FRAME_ONLY){
-                      |  int sigs[] = {SIGINT, SIGTERM, SIGQUIT};
+                      |  int sigs[] = {SIGINT, SIGTERM};
                       |  for(int i = 0; i < sizeof(sigs) / sizeof(int); i++){
                       |    if(signal(sigs[i], sigHandler) == SIG_ERR) {
                       |      printf("Error occurred while setting signal handler for %i\n", sigs[i]);
