@@ -146,7 +146,6 @@ object NixGen{
   }
 
   def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
-    val c: ir.Component = threadOrDevice.component
 
     val rootExtDir = Os.path(dirs.cExt_c_Dir)
 
@@ -218,7 +217,7 @@ object NixGen{
                     |  // sanity check
                     |  ${StackFrameTemplate.sfAssert(s"(Z) ${bitsName} == ${numBits}", "numBits received does not match expected")}
                     |
-                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", component_id);
                     |  hex_dump(${SF} ${t}, ${numBytes});
                     |
                     |  /* alternative using logInfo.  Commented out as the constructed String may be too large
@@ -237,7 +236,7 @@ object NixGen{
                 }
                 st"""${decl}
                     |if(${getter}(${SF} &${t})) {
-                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                    |  printf("%s: Received data on ${portType} port ${p.name}: \n", component_id);
                     |
                     |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                     |  DeclNewString(${str});
@@ -251,7 +250,7 @@ object NixGen{
             entry
           } else {
             st"""if(${getter}(${SF_LAST} )){
-                |  printf("%s: Received event on ${p.name}\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                |  printf("%s: Received event on ${p.name}\n", component_id);
                 |
                 |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                 |  String ${str} = string("Received event on ${portType} port ${p.name}");
@@ -359,7 +358,7 @@ object NixGen{
                       |
                       |  size_t numBytes = ${numBits} == 0 ? 0 : (${numBits} - 1) / 8 + 1;
                       |
-                      |  printf("%s: ${rawHandlerMethodName} called with payload: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |  printf("%s: ${rawHandlerMethodName} called with payload: \n", component_id);
                       |  hex_dump(${SF} ${byteArray}, numBytes);
                       |
                       |  /* alternative using logInfo.  Commented out as the constructed String may be too large
@@ -389,7 +388,7 @@ object NixGen{
               }
               else {
                 val printValue: ST = if(isEventData) {
-                  st"""printf("%s: Received data on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                  st"""printf("%s: Received data on ${portType} port ${p.name}: \n", component_id);
                       |
                       |/* alternative using logInfo.  Commented out as the constructed String may be too large
                       |DeclNewString(_str);
@@ -398,7 +397,7 @@ object NixGen{
                       |${logInfo}(${SF} (String) &_str);
                       |*/"""
                 } else {
-                  st"""printf("%s: Received event on ${portType} port ${p.name}: \n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                  st"""printf("%s: Received event on ${portType} port ${p.name}: \n", component_id);
                       |
                       |/* alternative using logInfo.  Commented out as the constructed String may be too large
                       |String str = string("Received event on ${p.name}");
@@ -418,7 +417,7 @@ object NixGen{
                   st"""${handlerSig} {
                       |  ${declNewStackFrame};
                       |
-                      |  printf("%s: ${handlerName} called\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+                      |  printf("%s: ${handlerName} called\n", component_id);
                       |
                       |  /* alternative using logInfo.  Commented out as the constructed String may be too large
                       |  DeclNewString(${p.name}String);
@@ -470,6 +469,8 @@ object NixGen{
               |#include <${NixGen.EXT_H}>
               |
               |${StringTemplate.safeToEditComment()}
+              |
+              |static char* component_id = "${names.instanceName}";
               |
               |${(methods, "\n\n")}
               |"""
@@ -707,7 +708,7 @@ object NixGen{
       st"""${initialiseMethodSig} {
           |  ${declNewStackFrame};
           |
-          |  printf("%s: ${userMethodName} called\n", ${names.cArchInstanceName}(${SF_LAST})->name.value);
+          |  printf("%s: ${userMethodName} called\n", component_id);
           |
           |  // example usage of api setters
           |
