@@ -140,14 +140,13 @@ object Util {
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
     var ports: ISZ[Port] = ISZ()
-    for(f <- m.ports.filter(_f => CommonUtil.isPort(_f.feature))) {
-      val feature = f.feature.asInstanceOf[ir.FeatureEnd]
-      val portName = CommonUtil.getLastName(feature.identifier)
+    for(f <- m.getPorts()) {
+      val portName = f.identifier
       val isTrigger: B =
         if (dispatchTriggers.isEmpty) T
         else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
 
-      ports = ports :+ getPort(f, feature, component, types, basePackage, isTrigger, _counter)
+      ports = ports :+ getPort(f, f.feature, component, types, basePackage, isTrigger, _counter)
 
       _counter = _counter + 1
     }

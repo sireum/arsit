@@ -104,23 +104,21 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         case _ =>
       }
 
-      val featureEnds = Util.getFeatureEnds(threadOrDevice.ports)
-      val portSize = featureEnds.filter(f => CommonUtil.isInFeature(f.feature) || CommonUtil.isOutFeature(f.feature)).size
-      if (portSize > maxPortsForComponents) {
-        maxPortsForComponents = portSize
+      val aadlPorts: ISZ[AadlPort] = threadOrDevice.getPorts()
+      if (aadlPorts.size > maxPortsForComponents) {
+        maxPortsForComponents = aadlPorts.size
       }
 
       val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
-      for (p <- featureEnds if CommonUtil.isInFeature(p.feature)) {
-        assert(CommonUtil.isPort(p.feature))
+      for (p <- aadlPorts if CommonUtil.isInFeature(p.feature)) {
 
         val portName = p.identifier
         val isTrigger: B =
           if (dispatchTriggers.isEmpty) T
           else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
 
-        val port = Util.getPort(p, p.feature.asInstanceOf[FeatureEnd], component, types, basePackage, isTrigger, z"-1000")
+        val port = Util.getPort(p, p.feature, component, types, basePackage, isTrigger, z"-1000")
 
         val portIdName: String = s"${port.name}PortId"
         val portOptName: String = s"${port.name}Opt"

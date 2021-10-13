@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
+import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
 import org.sireum.hamr.ir.FeatureEnd
 
@@ -105,12 +105,12 @@ object ArtNixTemplate {
     }
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component.component)
-    val inPorts: ISZ[Port] = Util.getFeatureEnds(component.ports).filter((p: AadlFeature) => CommonUtil.isInPort(p.feature)).map((f: AadlFeature) => {
+    val inPorts: ISZ[Port] = component.getPorts().filter((p: AadlPort) => CommonUtil.isInPort(p.feature)).map((f: AadlPort) => {
       val portName = f.identifier
       val isTrigger: B =
         if (dispatchTriggers.isEmpty) T
         else dispatchTriggers.get.filter(triggerName => triggerName == portName).nonEmpty
-      Util.getPort(f, f.feature.asInstanceOf[FeatureEnd], component.component, types, basePackage, isTrigger, z"-1000")
+      Util.getPort(f, f.feature, component.component, types, basePackage, isTrigger, z"-1000")
     })
 
     var globals: ISZ[ST] = ISZ(
