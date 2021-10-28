@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.util
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, AadlThreadOrDevice, SymbolTable}
+import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, AadlThreadOrDevice, AadlVirtualProcessor, SymbolTable}
 
 object SchedulerUtil {
 
@@ -54,7 +54,8 @@ object SchedulerUtil {
     var processors: Set[AadlProcessor] = Set.empty
     for(process <- symbolTable.getThreads().map((t: AadlThread) => t.getParent(symbolTable))) {
       process.getBoundProcessor(symbolTable) match {
-        case Some(processor) => processors = processors + processor
+        case Some(processor: AadlProcessor) => processors = processors + processor
+        case Some(processor: AadlVirtualProcessor) => processors = processors + symbolTable.getActualBoundProcess(processor).get
         case _ =>
       }
     }
