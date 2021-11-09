@@ -100,32 +100,32 @@ object Arsit {
     }
 
     val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
-    val proyekBuildContent = StringTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
+    val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
 
     val versionPropDest = options.outputDir / "versions.properties"
-    val versionPropBuildContent = StringTemplate.proyekVersionProperties()
+    val versionPropBuildContent = ProjectTemplate.proyekVersionProperties()
     ret = ret :+ ResourceUtil.createResource(versionPropDest.value, versionPropBuildContent, F)
 
     val millBuildDest = options.outputDir / "build.sc"
     val outputDirSimpleName = millBuildDest.up.name
-    val millBuildContent = StringTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
+    val millBuildContent = ProjectTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
     ret = ret :+ ResourceUtil.createResource(millBuildDest.value, millBuildContent, F)
 
     val sbtBuildDest = options.outputDir / "build.sbt"
-    val sbtBuildContent = StringTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
+    val sbtBuildContent = ProjectTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ ResourceUtil.createResource(sbtBuildDest.value, sbtBuildContent, F)
 
     val buildPropertiesDest = options.outputDir / "project/build.properties"
-    ret = ret :+ ResourceUtil.createResource(buildPropertiesDest.value, StringTemplate.sbtBuildPropertiesContents(), F)
+    ret = ret :+ ResourceUtil.createResource(buildPropertiesDest.value, ProjectTemplate.sbtBuildPropertiesContents(), F)
 
     val pluginsSbtDest = options.outputDir / "project" / "plugins.sbt"
-    ret = ret :+ ResourceUtil.createResource(pluginsSbtDest.value, StringTemplate.sbtPluginsSbtContents(), F)
+    ret = ret :+ ResourceUtil.createResource(pluginsSbtDest.value, ProjectTemplate.sbtPluginsSbtContents(), F)
 
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-      StringTemplate.arsitSlangInstructionsMessage(options.outputDir.value).render)
+      ProjectTemplate.arsitSlangInstructionsMessage(options.outputDir.value).render)
 
     if(isNixProject(options.platform)) {
       val cmakeDir: String = projDirs.cNixDir
@@ -157,7 +157,7 @@ object Arsit {
       }
 
       reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-        StringTemplate.arsitCInstructionsMessage(cmakeDir, devDir, transpile, compile, run, stop).render)
+        ProjectTemplate.arsitCInstructionsMessage(cmakeDir, devDir, transpile, compile, run, stop).render)
     }
 
     if(options.platform == ArsitPlatform.SeL4) {
@@ -168,7 +168,7 @@ object Arsit {
       }
 
       reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-        StringTemplate.arsitCAmkESInstructionsMessage(projDirs.cExt_c_Dir, transpile).render)
+        ProjectTemplate.arsitCAmkESInstructionsMessage(projDirs.cExt_c_Dir, transpile).render)
     }
 
     return ret
