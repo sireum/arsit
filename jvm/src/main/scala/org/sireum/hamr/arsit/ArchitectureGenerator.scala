@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
@@ -240,7 +241,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
 
-        TypeTemplate.dataType(typeNames, flds, fldInits, None[ST]())
+        TypeTemplate.dataType(typeNames, flds, fldInits, GumboGen.processInvariants(e, symbolTable))
 
       case e: ArrayType =>
         val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
@@ -257,10 +258,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
         val flds = ISZ(st"value : ISZ[${baseTypeNames.qualifiedReferencedTypeName}]")
 
-        val optChecks: Option[ST] = if (dims.nonEmpty) {
-          Some(st"//{  assert (value.size == ${dims(0)}) }")
+        val optChecks: ISZ[ST] = if (dims.nonEmpty) {
+          ISZ(st"//{  assert (value.size == ${dims(0)}) }")
         } else {
-          None[ST]()
+          ISZ()
         }
 
         TypeTemplate.dataType(typeNames, flds, ISZ(emptyInit), optChecks)

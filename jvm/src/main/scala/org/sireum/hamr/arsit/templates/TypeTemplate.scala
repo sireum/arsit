@@ -114,7 +114,10 @@ object TypeTemplate {
   @pure def dataType(typeNames: DataTypeNames,
                      fields: ISZ[ST],
                      paramInits: ISZ[String],
-                     optChecks: Option[ST]): ST = {
+                     invariants: ISZ[ST]): ST = {
+    val optInvariants: Option[ST] = if(invariants.isEmpty) None()
+
+    else Some(st"${(invariants, "\n\n")}")
     val ret: ST =
       st"""object ${typeNames.typeName} {
           |  def example(): ${typeNames.qualifiedTypeName} = {
@@ -124,7 +127,7 @@ object TypeTemplate {
           |
           |@datatype class ${typeNames.typeName}(
           |  ${(fields, ",\n")}) {
-          |  $optChecks
+          |  $optInvariants
           |}
           |"""
     return ret
