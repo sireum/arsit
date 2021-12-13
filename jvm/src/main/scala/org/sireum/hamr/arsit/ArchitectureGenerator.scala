@@ -8,7 +8,6 @@ import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.Resource
-import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
@@ -225,6 +224,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     var canOverwrite: B = T
 
+    var requireLogika: B = F
+
     val body: ST = t match {
       case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
 
@@ -241,7 +242,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
 
-        TypeTemplate.dataType(typeNames, flds, fldInits, GumboGen.processInvariants(e, symbolTable))
+        val contracts = GumboGen.processInvariants(e, symbolTable)
+        requireLogika = contracts.nonEmpty
+
+        TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 
       case e: ArrayType =>
         val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
@@ -277,6 +281,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val ts = TypeTemplate.typeS(
       basePackage,
       typeNames.qualifiedPackageName,
+      requireLogika,
       body,
       TypeTemplate.payloadType(typeNames),
       canOverwrite)

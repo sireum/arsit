@@ -75,28 +75,90 @@ object TypeTemplate {
           |
           |  @datatype class Bits_Payload(value: ISZ[B]) extends art.DataContent
           |
-          |  def Boolean_example(): Boolean = { return F }
+          |  def Boolean_example(): Boolean = {
+          |    Contract(Ensures(Res == F))
+          |    return F
+          |  }
           |
-          |  def Integer_example(): Integer = { return z"0" }
           |
-          |  def Integer_8_example(): Integer_8 = { return s8"0" }
-          |  def Integer_16_example(): Integer_16 = { return s16"0" }
-          |  def Integer_32_example(): Integer_32 = { return s32"0" }
-          |  def Integer_64_example(): Integer_64 = { return s64"0" }
+          |  def Integer_example(): Integer = {
+          |    Contract(Ensures(Res == z"0"))
+          |    return z"0"
+          |  }
           |
-          |  def Unsigned_8_example(): Unsigned_8 = { return u8"0" }
-          |  def Unsigned_16_example(): Unsigned_16 = { return u16"0" }
-          |  def Unsigned_32_example(): Unsigned_32 = { return u32"0" }
-          |  def Unsigned_64_example(): Unsigned_64 = { return u64"0" }
+          |  def Integer_8_example(): Integer_8 = {
+          |    Contract(Ensures(Res == s8"0"))
+          |    return s8"0"
+          |  }
           |
-          |  def Float_example(): Float = { return r"0" }
-          |  def Float_32_example(): Float_32 = { return f32"0" }
-          |  def Float_64_example(): Float_64 = { return f64"0" }
+          |  def Integer_16_example(): Integer_16 = {
+          |    Contract(Ensures(Res == s16"0"))
+          |    return s16"0"
+          |  }
           |
-          |  def Character_example(): Character = { return ' ' }
-          |  def String_example(): String = { return "" }
+          |  def Integer_32_example(): Integer_32 = {
+          |    Contract(Ensures(Res == s32"0"))
+          |    return s32"0"
+          |  }
           |
-          |  def Bits_example(): Bits = { return ISZ() }
+          |  def Integer_64_example(): Integer_64 = {
+          |    Contract(Ensures(Res == s64"0"))
+          |    return s64"0"
+          |  }
+          |
+          |
+          |  def Unsigned_8_example(): Unsigned_8 = {
+          |    Contract(Ensures(Res == u8"0"))
+          |    return u8"0"
+          |  }
+          |
+          |  def Unsigned_16_example(): Unsigned_16 = {
+          |    Contract(Ensures(Res == u16"0"))
+          |    return u16"0"
+          |  }
+          |
+          |  def Unsigned_32_example(): Unsigned_32 = {
+          |    Contract(Ensures(Res == u32"0"))
+          |    return u32"0"
+          |  }
+          |
+          |  def Unsigned_64_example(): Unsigned_64 = {
+          |    Contract(Ensures(Res == u64"0"))
+          |    return u64"0"
+          |  }
+          |
+          |
+          |  def Float_example(): Float = {
+          |    Contract(Ensures(Res == r"0"))
+          |    return r"0"
+          |  }
+          |
+          |  def Float_32_example(): Float_32 = {
+          |    Contract(Ensures(Res == f32"0"))
+          |    return f32"0"
+          |  }
+          |
+          |  def Float_64_example(): Float_64 = {
+          |    Contract(Ensures(Res == f64"0"))
+          |    return f64"0"
+          |  }
+          |
+          |
+          |  def Character_example(): Character = {
+          |    Contract(Ensures(Res == ' '))
+          |    return ' '
+          |  }
+          |
+          |  def String_example(): String = {
+          |    Contract(Ensures(Res == ""))
+          |    return ""
+          |  }
+          |
+          |
+          |  def Bits_example(): Bits = {
+          |    Contract(Ensures(Res == ISZ[B]()))
+          |    return ISZ[B]()
+          |  }
           |}"""
     return ret
   }
@@ -164,6 +226,7 @@ object TypeTemplate {
 
   @pure def typeS(topLevelPackageName: String,
                   packageName: String,
+                  requireLogika: B,
                   body: ST,
                   payload: ST,
                   canOverwrite: B): ST = {
@@ -175,8 +238,12 @@ object TypeTemplate {
       st""
     }
 
+    val logika: Option[ST] =
+      if(requireLogika) Some(st" #Logika")
+      else None()
+
     val ret: ST =
-      st"""// #Sireum
+      st"""// #Sireum${logika}
           |
           |package $packageName
           |
