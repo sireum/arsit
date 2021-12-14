@@ -226,7 +226,6 @@ object TypeTemplate {
 
   @pure def typeS(topLevelPackageName: String,
                   packageName: String,
-                  requireLogika: B,
                   body: ST,
                   payload: ST,
                   canOverwrite: B): ST = {
@@ -238,12 +237,8 @@ object TypeTemplate {
       st""
     }
 
-    val logika: Option[ST] =
-      if(requireLogika) Some(st" #Logika")
-      else None()
-
     val ret: ST =
-      st"""// #Sireum${logika}
+      st"""// #Sireum
           |
           |package $packageName
           |

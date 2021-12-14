@@ -16,6 +16,7 @@ object GumboGen {
       case GclBinaryOp.Lte => "<="
       case GclBinaryOp.Lt => "<"
       case GclBinaryOp.Eq => "=="
+      case GclBinaryOp.Neq => "!="
 
       case GclBinaryOp.Plus => "+"
       case GclBinaryOp.Minus => "-"
@@ -60,7 +61,16 @@ object GumboGen {
   }
 
   def convertToMethodName(s: String): String = {
-    return ops.StringOps(s).replaceAllLiterally(" ", "_")
+    import org.sireum.C._
+
+    def isInt(c: C): B = { return c >= c"1" && c <= c"9" }
+    def isChar(c: C) : B = { return (c >= c"A" && c <= c"Z") || (c >= c"a" && c <= c"z") }
+
+    var cis = ops.ISZOps(conversions.String.toCis(s)).map((c: C) => if(isInt(c) || isChar(c)) c else c"_")
+    if(isInt(cis(0))) {
+      cis = c"_" +: cis
+    }
+    return conversions.String.fromCis(cis)
   }
 }
 
@@ -98,8 +108,6 @@ object GumboGen {
         e match {
           case "true" => st"T"
           case "false" => st"F"
-          case "t" => st"T"
-          case "f" => st"F"
           case x => halt(s"$x")
         }
     }

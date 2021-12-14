@@ -215,6 +215,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       s"${dstComponentId}.${dstComponentFeatureId}")
   }
 
+
   def emitType(t: AadlType): Unit = {
     if (t.isInstanceOf[BaseType]) {
       return
@@ -223,8 +224,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val typeNames: DataTypeNames = Util.getDataTypeNames(t, basePackage)
 
     var canOverwrite: B = T
-
-    var requireLogika: B = F
 
     val body: ST = t match {
       case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
@@ -243,7 +242,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         }
 
         val contracts = GumboGen.processInvariants(e, symbolTable)
-        requireLogika = contracts.nonEmpty
 
         TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 
@@ -281,7 +279,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val ts = TypeTemplate.typeS(
       basePackage,
       typeNames.qualifiedPackageName,
-      requireLogika,
       body,
       TypeTemplate.payloadType(typeNames),
       canOverwrite)
