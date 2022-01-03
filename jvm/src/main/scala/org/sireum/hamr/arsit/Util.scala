@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
@@ -153,6 +154,13 @@ object Util {
     return ports
   }
 
+  @pure def getEtcFile(packageName: String): ST = {
+    val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
+    val lib = Util.getLibraryFile(NixGen.ETC_C).render
+    val c = StringUtil.replaceAll(lib, PACKAGE_PLACEHOLDER, packageName)
+    return st"${c}"
+  }
+
   @pure def getIpc(ipcmech: IpcMechanism.Type, packageName: String): ST = {
     val PACKAGE_PLACEHOLDER = "PACKAGE_NAME"
     val r: String = ipcmech match {
@@ -242,35 +250,75 @@ object HAMR {
 
   val slangOutputDir: String = options.outputDir.value
 
+  val slangBinDir: String = Util.pathAppend(slangOutputDir, ISZ("bin"))
+
   val slangSrcDir: String = Util.pathAppend(slangOutputDir, ISZ("src"))
 
-  /* Slang dirs */
-  val mainDir: String = Util.pathAppend(slangSrcDir, ISZ("main"))
 
-  val architectureDir: String = Util.pathAppend(mainDir, ISZ("architecture"))
+  //
+  // Common
+  //
+  val commonModulesDir: String = Util.pathAppend(slangSrcDir, ISZ("common"))
 
-  val bridgeDir: String = Util.pathAppend(mainDir, ISZ("bridge"))
+  val dataModuleMainDir: String = Util.pathAppend(commonModulesDir, ISZ("data", "main"))
 
-  val dataDir: String = Util.pathAppend(mainDir, ISZ("data"))
+  val libraryModuleMainDir: String = Util.pathAppend(commonModulesDir, ISZ("library", "main"))
 
-  val componentDir: String = Util.pathAppend(mainDir, ISZ("component"))
 
-  val inspectorDir: String= Util.pathAppend(mainDir, ISZ("inspector"))
+  //
+  // Infrastructure
+  //
+  val infrastructureModulesDir: String = Util.pathAppend(slangSrcDir, ISZ("infrastructure"))
 
-  /* Testing dirs */
-  val testDir: String = Util.pathAppend(slangSrcDir, ISZ("test"))
+  val artModuleDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("art"))
 
-  val testBridgeDir: String = Util.pathAppend(testDir, ISZ("bridge"))
+  val apisModuleDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("apis"))
 
-  val testUtilDir: String = Util.pathAppend(testDir, ISZ("util"))
+  val architectureModuleMainDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("architecture", "main"))
+
+  val bridgesModuleDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("bridges"))
+
+  val schedulersModuleMainDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("schedulers", "main"))
+
+  val slangNixModuleMainDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("nix", "main"))
+
+  val seL4NixModuleMainDir: String = Util.pathAppend(infrastructureModulesDir, ISZ("seL4Nix", "main"))
+
+
+
+  //
+  // Components
+  //
+  val componentModuleDir: String = Util.pathAppend(slangSrcDir, ISZ("components"))
+
+
+  //
+  // Apps
+  //
+
+  val appModuleDir: String= Util.pathAppend(slangSrcDir, ISZ("app"))
+
+  val appModuleSharedMainDir: String= Util.pathAppend(appModuleDir, ISZ("shared", "src", "main", "scala"))
+  val appModuleJvmMainDir: String= Util.pathAppend(appModuleDir, ISZ("jvm", "src", "main", "scala"))
+  val appModuleJsMainDir: String= Util.pathAppend(appModuleDir, ISZ("js", "src", "main", "scala"))
+
+  //val appJsModuleMainDir: String= Util.pathAppend(slangSrcDir, ISZ("appJs", "main"))
+
+
+  //
+  // Test
+  //
+  val testModuleDir: String = Util.pathAppend(slangSrcDir, ISZ("test"))
+
+  val testBridgeDir: String = Util.pathAppend(testModuleDir, ISZ("bridge"))
+
+  val testUtilDir: String = Util.pathAppend(testModuleDir, ISZ("util"))
+
+
+  val inspectorSrcDir: String = Util.pathAppend(slangSrcDir, ISZ("inspector"))
 
   val auxCodeDir: ISZ[String] = options.auxCodeDirs
 
-  val slangBinDir: String = Util.pathAppend(slangOutputDir, ISZ("bin"))
-
-  val slangNixDir: String = Util.pathAppend(mainDir, ISZ("nix"))
-
-  val seL4NixDir: String = Util.pathAppend(mainDir, ISZ("seL4Nix"))
 
 
   /* C dirs */
@@ -305,8 +353,10 @@ object HAMR {
 }
 
 @datatype class PhaseResult(val resources: ISZ[Resource],
+                            val componentModules: Set[ISZ[String]],
                             val maxPort: Z,
-                            val maxComponent: Z) extends Result
+                            val maxComponent: Z,
+                            val transpilerOptions: ISZ[TranspilerConfig]) extends Result
 
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,

@@ -4,14 +4,15 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
-import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
+import org.sireum.hamr.arsit.nix.NixGen
+import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, ModuleType, Names}
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
@@ -20,22 +21,47 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
-                            previousPhase: Result) {
+                            previousPhase: PhaseResult) {
 
   var toImpl: ISZ[(ST, ST)] = ISZ()
   val basePackage: String = arsitOptions.packageName
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
-
   val processBTSNodes: B = ExperimentalOptions.processBtsNodes(arsitOptions.experimentalOptions)
 
-  def generate(): Result = {
+  var componentModules: Set[ISZ[String]] = Set.empty
+  var appPlatformEntries: ISZ[ST] = ISZ()
+  var appPlatformSetupEntries: ISZ[ST] = ISZ()
+
+  def generate(): PhaseResult = {
+    assert(previousPhase.componentModules.isEmpty)
 
     gen(rootSystem)
 
-    return PhaseResult(previousPhase.resources() ++ resources,
-      previousPhase.maxPort,
-      previousPhase.maxComponent)
+    val willTranspile: B = NixGen.willTranspile(arsitOptions.platform)
+
+    val appPlatform = StubTemplate.appPlatform(basePackage, ISZ(), appPlatformEntries, appPlatformSetupEntries)
+    addResource(dirs.appModuleSharedMainDir, ISZ(basePackage, "AppPlaform.scala"), appPlatform, T)
+
+    val appPlatformJvm = StubTemplate.appPlatformPlatform(basePackage, F, willTranspile)
+    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", s"${StubTemplate.AppPlatformJvmId}.scala"), appPlatformJvm, T)
+
+    val appPlatformJvmExt = StubTemplate.appPlatformExt(basePackage, F)
+    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJvmId}.scala"), appPlatformJvmExt, T)
+
+    val appPlatformJs = StubTemplate.appPlatformPlatform(basePackage, T, F)
+    addResource(dirs.appModuleJsMainDir, ISZ(basePackage, "config", s"${StubTemplate.AppPlatformJsId}.scala"), appPlatformJs, T)
+
+    val appPlatformJsExt = StubTemplate.appPlatformExt(basePackage, T)
+    addResource(dirs.appModuleJsMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJsId}.scala"), appPlatformJsExt, T)
+
+    return PhaseResult(
+      resources = previousPhase.resources() ++ resources,
+      componentModules = componentModules,
+      maxPort = previousPhase.maxPort,
+      maxComponent = previousPhase.maxComponent,
+      transpilerOptions = previousPhase.transpilerOptions
+    )
   }
 
   def gen(m: AadlComponent): Unit = {
@@ -98,13 +124,16 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     var imports: ISZ[ST] = ISZ()
 
     val names = Names(m.component, basePackage)
-    val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
+
+    componentModules = componentModules + names.modulePath
+
+    val filename: String = Util.pathAppend(dirs.componentModuleDir, names.moduleMainPath(ModuleType.shared) ++ ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
 
     val componentName: String = "component"
 
-    imports = imports :+ st"${names.packageName}.{${names.componentSingletonType} => component}"
+    imports = imports :+ st"${names.packageName}.{${names.componentEntryPointSingletonName} => component}"
 
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
@@ -125,6 +154,24 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 
+    val entryPointsObject = EntryPointTemplate.genEntryPointObject(
+      topLevelPackageName = basePackage,
+      packageName = names.packageName,
+      names = names,
+      ports = ports,
+      dispatchProtocol = dispatchProtocol)
+    addResource(dirs.apisModuleDir, names.singleModuleMainPath ++ ISZ(names.packagePath, s"${names.componentEntryPointSingletonName}.scala"), entryPointsObject, T)
+
+
+    val entryPointImpl = EntryPointTemplate.genEntryPointImpl(
+      names = names,
+      ports = ports,
+      dispatchProtocol = dispatchProtocol)
+    appPlatformEntries = appPlatformEntries :+ entryPointImpl
+
+    appPlatformSetupEntries = appPlatformSetupEntries :+ EntryPointTemplate.assignEntryPointImpl(names)
+
+
     val bridge = StubTemplate.bridge(
       topLevelPackageName = basePackage,
       packageName = names.packageName,
@@ -139,7 +186,9 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       names = names,
       isBless = genBlessEntryPoints)
 
-    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
+    componentModules = componentModules + names.modulePath
+
+    addResource(dirs.bridgesModuleDir, names.singleModuleMainPath ++ ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
     val api = ApiTemplate.api(
       names.packageName,
@@ -147,7 +196,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       names,
       ports)
 
-    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
+    addResource(dirs.apisModuleDir, names.singleModuleMainPath ++ ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
     var blocks: ISZ[ST] = ISZ()
 
@@ -199,6 +248,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       blocks = blocks)
 
     addResource(filename, ISZ(), componentImpl, genBlessEntryPoints)
+    addResource(dirs.componentModuleDir, names.moduleMainPath(ModuleType.jvm) :+ ".placeholder", st"", F)
+    addResource(dirs.componentModuleDir, names.moduleMainPath(ModuleType.js) :+ ".placeholder", st"", F)
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
@@ -250,7 +301,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
       if (!CommonUtil.isThread(m)) {
         val a = StubTemplate.slangPreamble(T, basePackage, names.packageName, ISZ(body))
-        addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}.scala"), a, T)
+        addResource(dirs.componentModuleDir, ISZ(names.packagePath, s"${objectName}.scala"), a, T)
       }
 
       val b = StubTemplate.slangPreamble(
@@ -261,7 +312,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
           slangAnnotation = "",
           objectName = s"${objectName}_Ext",
           body = subprograms.map(m => m._2))))
-      addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}_Ext.scala"), b, F)
+      addResource(dirs.componentModuleDir, ISZ(names.packagePath, s"${objectName}_Ext.scala"), b, F)
 
       return Some(body)
     } else {

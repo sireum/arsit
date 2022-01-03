@@ -155,6 +155,23 @@ object SeL4NixTemplate {
     return ret
   }
 
+  def getTranspilerUtil(basePackage: String, touchMethod: ST): ST = {
+    val ret: ST =
+      st"""// #Sireum
+          |
+          |package ${basePackage}.config
+          |
+          |import org.sireum._
+          |import art.DataContent
+          |import ${basePackage}._
+          |
+          |object TranspilerUtil {
+          |  ${touchMethod}
+          |}
+          |"""
+        return ret
+  }
+
   def genTouchMethod(typeTouches: ISZ[ST], apiTouches: ISZ[ST], scheduleTouches: ISZ[ST]): ST = {
     val sts: Option[ST] =
       if(scheduleTouches.nonEmpty) Some(st"""// touch process/thread timing properties
@@ -168,8 +185,8 @@ object SeL4NixTemplate {
           |    ${callTranspilerToucher()}
           |
           |    // add types used in Platform.receive and Platform.receiveAsync
-          |    val mbox2Boolean_Payload: MBox2[Art.PortId, DataContent] = MBox2(0, Base_Types.Boolean_Payload(T))
-          |    val mbox2OptionDataContent: MBox2[Art.PortId, Option[DataContent]] = MBox2(0, None())
+          |    val mbox2Boolean_Payload: MBox2[art.Art.PortId, DataContent] = MBox2(0, Base_Types.Boolean_Payload(T))
+          |    val mbox2OptionDataContent: MBox2[art.Art.PortId, Option[DataContent]] = MBox2(0, None())
           |
           |    ${sts}
           |    ${touchTypes(typeTouches)}
@@ -218,7 +235,10 @@ object SeL4NixTemplate {
           putValue: ST,
           sendOutput: ST,
           touchMethod: ST,
-          transpilerToucher: ST): ST = {
+          transpilerToucher: ST,
+
+          entryPointImplAssignments: ISZ[ST],
+          dataTypeDefs: ISZ[ST]): ST = {
     val ret: ST =
       st"""// #Sireum
           |
@@ -252,7 +272,7 @@ object SeL4NixTemplate {
           |  ${sendOutput}
           |
           |  def initialiseArchitecture(): Unit = {
-          |    // nothing to do - CAmkES is responsible for initialization
+          |    ${(entryPointImplAssignments, "\n")}
           |  }
           |
           |  def initialiseEntryPoint(): Unit = { entryPoints.initialise() }
@@ -261,6 +281,9 @@ object SeL4NixTemplate {
           |
           |  def finaliseEntryPoint(): Unit = { entryPoints.finalise() }
           |
+          |  // main is not invoked by the CAmkES component. It instead serves
+          |  // as the entrypoint for the transpiler, i.e. anything reachable
+          |  // via main will be included in the slang-embedded library.
           |  def main(args: ISZ[String]): Z = {
           |
           |    // need to touch the following for transpiler
@@ -295,8 +318,9 @@ object SeL4NixTemplate {
           |  }
           |
           |  def run(): Unit = {}
-          |
           |}
+          |
+          |${(dataTypeDefs, "\n\n")}
           |"""
     return ret
   }

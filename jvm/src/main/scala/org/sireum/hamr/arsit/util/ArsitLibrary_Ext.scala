@@ -9,7 +9,7 @@ object ArsitLibrary_Ext {
 
   def getFiles: ISZ[(String, String)] = {
     val map = RC.text(Vector(
-      "../../../../../../../../../resources/art/shared/src/main/scala/",
+      "../../../../../../../../../resources/art/",
       "../../../../../../../../../resources/util")) { (p, f) => true }
     ISZ(map.toSeq.map(p => (String(p._1.mkString("/")), String(p._2))): _*)
   }
@@ -82,4 +82,11 @@ object ArsitLibrary_Ext {
     return getBuildSbtProperties().getProperty("org.sireum.inspector.version")
   }
 
+  def getScalaJsCompilerVersion(): String = {
+    return getBuildSbtProperties().getProperty("org.scala-js.scalajs-compiler")
+  }
+
+  def getScalaJsDomVersion(): String = {
+    return getBuildSbtProperties().getProperty("org.scala-js.scalajs-dom_sjs1")
+  }
 }

@@ -21,7 +21,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
                         val arsitOptions: ArsitOptions,
                         val symbolTable: SymbolTable,
                         val types: AadlTypes,
-                        val previousPhase: Result
+                        val previousPhase: PhaseResult
                        ) extends NixGen {
 
   val basePackage: String = arsitOptions.packageName
@@ -42,16 +42,20 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     return r
   }
 
-  def generate(): ArsitResult = {
+  def generate(): PhaseResult = {
     assert(Util.isNix(arsitOptions.platform))
 
     gen(root)
 
-    return ArsitResult(
-      previousPhase.resources() ++ resources,
-      portId,
-      previousPhase.maxComponent,
-      transpilerOptions)
+    val transpilerUtil = genTranspilerUtil(basePackage)
+    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", "TranspilerUtil.scala"), transpilerUtil, T)
+
+    return PhaseResult(
+      resources = previousPhase.resources() ++ resources,
+      componentModules = previousPhase.componentModules,
+      maxPort = portId,
+      maxComponent = previousPhase.maxComponent,
+      transpilerOptions = transpilerOptions)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -147,7 +151,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       val transpilerToucher = SeL4NixTemplate.transpilerToucher(basePackage)
 
       addResource(
-        dirs.componentDir,
+        dirs.libraryModuleMainDir,
         ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
         transpilerToucher,
         F) // don't overwrite since user may add contents to this file
@@ -170,7 +174,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         basePackage = basePackage
       )
 
-      addResource(dirs.slangNixDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
+      addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, s"${App_Id}.scala"), stApp, T)
 
       // don't care about paths since the root directory containing the 'ext-c'
       // dir will be passed to the transpiler rather than the individual resources
@@ -186,6 +190,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) =>
       Names(c.component, basePackage).cArchInstanceName)
     resources = resources ++ genSchedulerFiles(basePackage, archBridgeInstanceNames)
+
+    ext_c_entries = ext_c_entries :+ ArtNixTemplate.platformExternal_Setup(basePackage)
 
     {
       val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
@@ -235,13 +241,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     arsitOptions.ipc match {
       case IpcMechanism.SharedMemory =>
-        addResource(dirs.slangNixDir, ISZ(basePackage, "SharedMemory.scala"), ArtNixTemplate.SharedMemory(basePackage), T)
-        addResource(dirs.slangNixDir, ISZ(basePackage, "SharedMemory_Ext.scala"), ArtNixTemplate.SharedMemory_Ext(basePackage), T)
+        addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "SharedMemory.scala"), ArtNixTemplate.SharedMemory(basePackage), T)
+        addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "SharedMemory_Ext.scala"), ArtNixTemplate.SharedMemory_Ext(basePackage), T)
       case x => halt(s"Unexpected IPC ${x}")
     }
 
     val stIPC = ArtNixTemplate.ipc(basePackage, platformPorts)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "IPC.scala"), stIPC, T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "IPC.scala"), stIPC, T)
 
     val artNixCases: ISZ[ST] = artNixCasesM.entries.map(k => ArtNixTemplate.artNixCases(k._1, k._2))
     val stArtNix = ArtNixTemplate.artNix(
@@ -250,16 +256,16 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       inPorts.filter(p => CommonUtil.isEventPort(p.feature)).map(p => s"Arch.${p.parentPath}.${p.name}.id")
     )
 
-    addResource(dirs.slangNixDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "ArtNix.scala"), stArtNix, T)
 
     val stMain = ArtNixTemplate.main(basePackage, mainSends)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "LegacyDemo.scala"), stMain, T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "LegacyDemo.scala"), stMain, T)
 
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "PlatformNix.scala"), ArtNixTemplate.PlatformNix(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "PlatformNix.scala"), ArtNixTemplate.PlatformNix(basePackage), T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
+    addResource(dirs.slangNixModuleMainDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
 
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.cBinDir.value, ISZ("compile.cmd")), ArtNixTemplate.compileSlash(dirs), T)
 
@@ -274,10 +280,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     addResource(dirs.cEtcDir, ISZ(NixGen.IPC_C), Util.getIpc(arsitOptions.ipc, basePackage), T)
 
-    var outputPaths: ISZ[String] = ISZ(dirs.mainDir)
-    if (!org.sireum.ops.StringOps(dirs.slangNixDir).contains(dirs.mainDir)) {
-      outputPaths = outputPaths :+ dirs.slangNixDir
-    }
+    addResource(dirs.cEtcDir, ISZ(NixGen.ETC_C), Util.getEtcFile(basePackage), T)
+
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map((m: AadlThreadOrDevice) => {
@@ -327,7 +331,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val legacyTranspiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
-      sourcepaths = ISZ(dirs.mainDir),
+      sourcepaths = ISZ(),
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
       apps = (appNames :+ "LegacyDemo").map(s => s"${basePackage}.${s}"),
@@ -354,7 +358,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
-      sourcepaths = ISZ(dirs.mainDir),
+      sourcepaths = ISZ(),
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
       apps = ISZ(s"${basePackage}.Demo"),
@@ -373,8 +377,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1)
-    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
+    val modules = previousPhase.componentModules.elements
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1, modules)
+    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")),
+      slashTranspileScript, T)
   }
 
   def genSchedulerFiles(packageName: String, archBridgeInstanceNames: ISZ[String]): ISZ[Resource] = {

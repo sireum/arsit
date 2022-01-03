@@ -42,11 +42,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     }
 
     val baseTypes = TypeTemplate.Base_Types(basePackage)
-    addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
+    addResource(directories.dataModuleMainDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
+
+    addResource(directories.libraryModuleMainDir, ISZ(basePackage, "Library.scala"), st"", F)
 
     generateInternal()
 
-    return PhaseResult(resources, portId, componentId)
+    return PhaseResult(resources, Set.empty, portId, componentId, ISZ())
   }
 
   def generateInternal(): Unit = {
@@ -55,19 +57,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val architectureName = "Arch"
     val architectureDescriptionName = "ad"
 
-    val touchMethod: Option[ST] =
-      if(NixGen.willTranspile(arsitOptions.platform)) {
-        val components: ISZ[AadlThreadOrDevice] =
-          if(arsitOptions.devicesAsThreads) symbolTable.getThreadOrDevices()
-          else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
-
-        val typeTouches = NixGen.genTypeTouches(types, basePackage)
-        val apiTouches = NixGen.genApiTouches(types, basePackage, components)
-        val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable, arsitOptions.devicesAsThreads)
-        Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, scheduleTouches))
-      }
-      else { None() }
-
     val arch = ArchitectureTemplate.architectureDescription(
       packageName = basePackage,
       imports = ISZ(),
@@ -75,29 +64,33 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       architectureDescriptionName = architectureDescriptionName,
       bridges = bridges,
       components = components,
-      connections = connections,
-      touchMethod = touchMethod
+      connections = connections
     )
 
-    addResource(directories.architectureDir, ISZ(basePackage, "Arch.scala"), arch, T)
+    addResource(directories.architectureModuleMainDir, ISZ(basePackage, "Arch.scala"), arch, T)
 
-    val demo = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName)
-    addResource(directories.architectureDir, ISZ(basePackage, "Demo.scala"), demo, F)
+    val jvmPlaformConfig = s"config.${StubTemplate.AppPlatformJvmId}"
+    val demoJvm = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName, jvmPlaformConfig)
+    addResource(directories.appModuleJvmMainDir, ISZ(basePackage, "Demo.scala"), demoJvm, F)
+
+    val jsPlaformConfig = s"config.${StubTemplate.AppPlatformJsId}"
+    val demoJs = ArchitectureTemplate.demo(basePackage, architectureName, architectureDescriptionName, jsPlaformConfig)
+    addResource(directories.appModuleJsMainDir, ISZ(basePackage, "Demo.scala"), demoJs, F)
 
     val schedulers = SchedulerTemplate.schedulers(basePackage, components,
       SchedulerUtil.getProcessorTimingProperties(symbolTable),
       SchedulerUtil.getThreadTimingProperties(symbolTable, arsitOptions.devicesAsThreads),
       SchedulerUtil.getFramePeriod(symbolTable))
-    addResource(directories.architectureDir, ISZ(basePackage, "Schedulers.scala"), schedulers, T)
+    addResource(directories.schedulersModuleMainDir, ISZ(basePackage, "Schedulers.scala"), schedulers, T)
 
     val scheduleProvider = SchedulerTemplate.scheduleProvider(basePackage)
-    addResource(directories.architectureDir, ISZ(basePackage, "ScheduleProvider.scala"), scheduleProvider, T)
+    addResource(directories.schedulersModuleMainDir, ISZ(basePackage, "ScheduleProvider.scala"), scheduleProvider, T)
 
     val inspectorDemo = InspectorTemplate.inspectorDemo(basePackage)
-    addResource(directories.inspectorDir, ISZ(basePackage, "InspectorDemo.scala"), inspectorDemo, T)
+    addResource(directories.inspectorSrcDir, ISZ(basePackage, "InspectorDemo.scala"), inspectorDemo, T)
 
     val genSerializers = InspectorTemplate.genSeralizersScript()
-    addExeResource(directories.dataDir, ISZ(basePackage, "sergen.sh"), genSerializers, T)
+    addExeResource(directories.dataModuleMainDir, ISZ(basePackage, "sergen.sh"), genSerializers, T)
   }
 
   def getComponentId(): Z = {
@@ -283,7 +276,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       TypeTemplate.payloadType(typeNames),
       canOverwrite)
 
-    addResource(directories.dataDir, ISZ(typeNames.filePath), ts, canOverwrite)
+    addResource(directories.dataModuleMainDir, ISZ(typeNames.filePath), ts, canOverwrite)
   }
 
   def allowConnection(c: ConnectionInstance, srcComponent: ir.Component): B = {

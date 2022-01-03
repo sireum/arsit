@@ -29,7 +29,8 @@ object ArchitectureTemplate {
 
   @pure def demo(packageName: String,
                  architectureName: String,
-                 architectureDescriptionName: String): ST = {
+                 architectureDescriptionName: String,
+                 configImpl: String): ST = {
     val ad = s"${architectureName}.${architectureDescriptionName}"
 
     val ret: ST =
@@ -38,6 +39,7 @@ object ArchitectureTemplate {
           |package ${packageName}
           |
           |import org.sireum._
+          |import art.Art
           |import art.scheduling.Scheduler
           |
           |${StringTemplate.safeToEditComment()}
@@ -67,7 +69,11 @@ object ArchitectureTemplate {
           |          case Cli.RunChoice.Static => Schedulers.getStaticScheduler(None())
           |          case Cli.RunChoice.Legacy => Schedulers.getLegacyScheduler()
           |        }
-          |        art.Art.run(Arch.ad, scheduler)
+          |
+          |        AppPlatform.setup(${configImpl}())
+          |
+          |        Art.run(Arch.ad, scheduler)
+          |
           |      case Some(o: Cli.HelpOption) =>
           |      case _ => return 1
           |    }
@@ -234,20 +240,8 @@ object ArchitectureTemplate {
                                     architectureDescriptionName: String,
                                     bridges: ISZ[ST],
                                     components: ISZ[String],
-                                    connections: ISZ[ST],
-                                    touchMethod: Option[ST]): ST = {
+                                    connections: ISZ[ST]): ST = {
     val _imports = imports.map((m: String) => st"import ${m}")
-
-    val touches: (Option[String], Option[ST]) =
-      if(touchMethod.nonEmpty)
-        (Some("TranspilerUtil.touch()"), Some(
-          st"""
-              |object TranspilerUtil {
-              |  ${touchMethod.get}
-              |}
-              |"""
-        ))
-      else (None(), None())
 
     val ret: ST =
       st"""// #Sireum
@@ -266,7 +260,6 @@ object ArchitectureTemplate {
           |  ${(bridges, "\n")}
           |
           |  val $architectureDescriptionName : ArchitectureDescription = {
-          |    ${touches._1}
           |
           |    ArchitectureDescription(
           |      components = ISZ (${(components, ", ")}),
@@ -275,7 +268,6 @@ object ArchitectureTemplate {
           |    )
           |  }
           |}
-          |${touches._2}
           |"""
     return ret
   }

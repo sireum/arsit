@@ -8,8 +8,8 @@ import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
-import org.sireum.hamr.ir.FeatureEnd
 
 object ArtNixTemplate {
 
@@ -995,4 +995,12 @@ object ArtNixTemplate {
           |"""
     return ret
   }
+
+  def platformExternal_Setup(basePackage: String): ST = {
+    val ret =
+      st"""Unit ${basePackage}_PlatformExternal_setup(${StackFrameTemplate.STACK_FRAME_ONLY_ST}) {
+          |}"""
+    return ret
+  }
+
 }

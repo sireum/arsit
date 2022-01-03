@@ -38,11 +38,16 @@ object Arsit {
 
     var artResources: ISZ[Resource] = ISZ()
     if (!o.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.mainDir}/art")
+      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.artModuleDir}")
     }
 
     artResources = artResources ++ createBuildArtifacts(
-      CommonUtil.getLastName(model.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
+      projectName = CommonUtil.getLastName(model.components(0).identifier),
+      options = o,
+      projDirs = projectDirectories,
+      resources = nixPhase.resources,
+      processes = nixPhase.componentModules.elements,
+      reporter = ReporterUtil.reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
@@ -81,6 +86,7 @@ object Arsit {
                            options: ArsitOptions,
                            projDirs: ProjectDirectories,
                            resources: ISZ[Resource],
+                           processes: ISZ[ISZ[String]],
                            reporter: Reporter): ISZ[Resource] = {
 
     var ret: ISZ[Resource] = ISZ()
@@ -100,9 +106,13 @@ object Arsit {
     }
 
     val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
-    val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
+    val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, processes, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
+
+    val scalaJsScriptDest = options.outputDir / "bin" / "scalajs.cmd"
+    val scalaJsScriptContent = ScalaJsTemplate.scalaJsScript(s"${options.packageName}.Demo")
+    ret = ret :+ ResourceUtil.createExeCrlfResource(scalaJsScriptDest.value, scalaJsScriptContent, F)
 
     val versionPropDest = options.outputDir / "versions.properties"
     val versionPropBuildContent = ProjectTemplate.proyekVersionProperties()

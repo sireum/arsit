@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
+import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, EntryPointTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
@@ -19,7 +19,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
                          val arsitOptions: ArsitOptions,
                          val symbolTable: SymbolTable,
                          val types: AadlTypes,
-                         val previousPhase: Result
+                         val previousPhase: PhaseResult
                         ) extends NixGen {
 
   val basePackage: String = arsitOptions.packageName
@@ -32,16 +32,20 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
   val useArm: B = ops.ISZOps(symbolTable.getProcesses()).exists(p => p.toVirtualMachine(symbolTable))
 
-  def generate(): ArsitResult = {
+  def generate(): PhaseResult = {
     assert(arsitOptions.platform == ArsitPlatform.SeL4)
 
     gen(root)
 
-    return ArsitResult(
-      previousPhase.resources() ++ resources,
-      previousPhase.maxPort,
-      previousPhase.maxComponent,
-      transpilerOptions)
+    val transpilerUtil = genTranspilerUtil(basePackage)
+    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", "TranspilerUtil.scala"), transpilerUtil, T)
+
+    return PhaseResult(
+      resources = previousPhase.resources() ++ resources,
+      componentModules = previousPhase.componentModules,
+      maxPort = previousPhase.maxPort,
+      maxComponent = previousPhase.maxComponent,
+      transpilerOptions = transpilerOptions)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -108,7 +112,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       val transpilerToucherMethodCall = SeL4NixTemplate.callTranspilerToucher()
 
       addResource(
-        dirs.componentDir,
+        dirs.libraryModuleMainDir,
         ISZ(basePackage, s"${SeL4NixTemplate.TRANSPILER_TOUCHER_OBJECT_NAME}.scala"),
         transpilerToucher,
         F) // DON'T overwrite as user's will add contents to this file
@@ -116,24 +120,30 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
       val touchMethod = SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, ISZ())
 
+      val entryPointImplAssignment: ST = EntryPointTemplate.assignEntryPointImpl(names)
+      val dataTypeDef: ST = EntryPointTemplate.genEntryPointImpl(names, ports, dispatchProtocol)
+
       val app = SeL4NixTemplate.app(
-        basePackage,
-        instanceSingletonName,
-        ISZ(s"import ${names.basePackage}._", s"import ${names.packageName}.${names.sel4SlangExtensionName}"),
-        names.identifier,
-        bridge,
-        names.bridgeIdentifier,
-        dispatchStatus,
-        globals,
-        receiveInput,
-        getValue,
-        putValue,
-        sendOutput,
-        touchMethod,
-        transpilerToucherMethodCall)
+        packageName = basePackage,
+        instanceName = instanceSingletonName,
+        imports = ISZ(s"import ${names.basePackage}._", s"import ${names.packageName}.${names.sel4SlangExtensionName}"),
+        identifier = names.identifier,
+        bridge = bridge,
+        bridgeIdentifier = names.bridgeIdentifier,
+        dispatchStatus = dispatchStatus,
+        globals = globals,
+        receiveInput = receiveInput,
+        getValue = getValue,
+        putValue = putValue,
+        sendOutput = sendOutput,
+        touchMethod = touchMethod,
+        transpilerToucher = transpilerToucherMethodCall,
+        entryPointImplAssignments = ISZ(entryPointImplAssignment),
+        dataTypeDefs = ISZ(dataTypeDef)
+      )
 
       addResource(
-        dirs.seL4NixDir,
+        dirs.seL4NixModuleMainDir,
         ISZ(basePackage, instanceSingletonName, s"${names.identifier}.scala"),
         app,
         T)
@@ -143,7 +153,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
         val slangExtensionObject: ST = genSlangSel4ExtensionObject(ports, names)
 
         addResource(
-          dirs.seL4NixDir,
+          dirs.seL4NixModuleMainDir,
           ISZ(names.packagePath, s"${names.sel4SlangExtensionName}.scala"),
           slangExtensionObject,
           T)
@@ -151,7 +161,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
         val slangExtensionObjectStub: ST = genSlangSel4ExtensionObjectStub(ports, basePackage, names)
 
         addResource(
-          dirs.seL4NixDir,
+          dirs.seL4NixModuleMainDir,
           ISZ(names.packagePath, s"${names.sel4SlangExtensionStubName}.scala"),
           slangExtensionObjectStub,
           T)
@@ -210,7 +220,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
       val typeApp = SeL4NixTemplate.typeApp(basePackage, id, id, typeTouches)
 
-      addResource(dirs.seL4NixDir,
+      addResource(dirs.seL4NixModuleMainDir,
         ISZ(basePackage, id, s"${id}.scala"),
         typeApp,
         T
@@ -260,7 +270,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, TranspilerConfig))) => (m._1, m._2._1))
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)))
+    val moodules = previousPhase.componentModules.elements
+
+    val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)), moodules)
     addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.cmd"), slashTranspileScript, T)
 
   }
@@ -406,9 +418,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val buildApps = F
 
     val _sourcePaths = sourcePaths ++ ISZ(
-      Util.pathAppend(dirs.mainDir, ISZ("art")),
-      Util.pathAppend(dirs.mainDir, ISZ("data")),
-      Util.pathAppend(dirs.seL4NixDir, ISZ(packageName)))
+      Util.pathAppend(dirs.artModuleDir, ISZ("POINT TO SHARED")),
+      dirs.dataModuleMainDir,
+      Util.pathAppend(dirs.seL4NixModuleMainDir, ISZ(packageName)))
 
     val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
 
@@ -446,9 +458,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))
 
     val sourcePaths: ISZ[String] = ISZ(
-      Util.pathAppend(dirs.mainDir, ISZ("bridge")),
-      Util.pathAppend(dirs.mainDir, ISZ("component")),
-      Util.pathAppend(dirs.seL4NixDir, names.path))
+      //Util.pathAppend(dirs.mainDir, ISZ("bridge")),
+      //Util.pathAppend(dirs.mainDir, ISZ("component")),
+      Util.pathAppend(dirs.seL4NixModuleMainDir, names.path))
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map(c => {

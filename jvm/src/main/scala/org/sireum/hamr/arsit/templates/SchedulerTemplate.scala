@@ -106,7 +106,7 @@ object SchedulerTemplate {
                       |
                       |${StringTemplate.safeToEditComment()}
                       |
-                      |Unit art_scheduling_legacy_LegacyInterface_computePhase(STACK_FRAME IS_7E8796 bridges) {
+                      |Unit art_scheduling_legacy_LegacyExtensions_computePhase(STACK_FRAME IS_7E8796 bridges) {
                       |  printf("Infeasible.  You should not get here in C");
                       |  exit(1);
                       |}"""
@@ -181,10 +181,10 @@ object SchedulerTemplate {
                       | * during the initialization phase
                       | *
                       | * It registers a signal handler that is used to shut down the demo when it receives
-                      | * SIGINT (CTRL+C), SIGTERM
+                      | * SIGINT (CTRL+C), SIGTERM, or SIGQUIT
                       | */
                       |Unit art_scheduling_roundrobin_RoundRobinExtensions_init(STACK_FRAME_ONLY){
-                      |  int sigs[] = {SIGINT, SIGTERM};
+                      |  int sigs[] = {SIGINT, SIGTERM, SIGQUIT};
                       |  for(int i = 0; i < sizeof(sigs) / sizeof(int); i++){
                       |    if(signal(sigs[i], sigHandler) == SIG_ERR) {
                       |      printf("Error occurred while setting signal handler for %i\n", sigs[i]);
@@ -193,13 +193,10 @@ object SchedulerTemplate {
                       |  }
                       |}
                       |
-                      |/*!
-                      | * Example C implementation of Slang extension method art.scheduling.roundrobin.RoundRobinExtensions.shouldStop()
-                      | * defined in art/scheduling/roundrobin/RoundRobin.scala.  The scheduler calls this
-                      | * during the compute phase to determine when it should transition to the finalize phase
-                      | */
-                      |B art_scheduling_roundrobin_RoundRobinExtensions_shouldStop(STACK_FRAME_ONLY){
-                      |    return shouldStop == 1;
+                      |Unit art_scheduling_roundrobin_RoundRobinExtensions_loop(STACK_FRAME art_scheduling_roundrobin_RoundRobin roundRobin) {
+                      |  while(shouldStop != 1) {
+                      |    art_scheduling_roundrobin_RoundRobin_hyperPeriod_(SF_LAST roundRobin);
+                      |  }
                       |}
                       |"""
     return ret

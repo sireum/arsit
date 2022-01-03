@@ -31,4 +31,8 @@ import org.sireum._
   def getInspectorVersion(): String = $
 
   def getFormsRtVersion(): String = $
+
+  def getScalaJsCompilerVersion(): String = $
+
+  def getScalaJsDomVersion(): String = $
 }

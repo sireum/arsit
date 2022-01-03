@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
-import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
@@ -17,11 +17,12 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 
 object NixGen{
+  val ETC_C: String = "etc.c"
   val IPC_C: String = "ipc.c"
   val EXT_H: String = "ext.h"
   val EXT_C: String = "ext.c"
 
-  val KNOWN_HAMR_PROVIDED_FILES: ISZ[String] = ISZ(IPC_C, EXT_H, EXT_C)
+  val KNOWN_HAMR_PROVIDED_FILES: ISZ[String] = ISZ(ETC_C, IPC_C, EXT_H, EXT_C)
 
   def willTranspile(platform: ArsitPlatform.Type): B = {
     val ret : B = platform match {
@@ -80,9 +81,9 @@ object NixGen{
 
   def types: AadlTypes
 
-  def previousPhase: Result
+  def previousPhase: PhaseResult
 
-  def generate(): ArsitResult
+  def generate(): PhaseResult
 
   def genExtensionEntries(basePackage: String, components: ISZ[AadlThreadOrDevice]): (ISZ[ST], ISZ[ST]) = {
     var extHEntries: ISZ[ST] = ISZ()
@@ -782,6 +783,18 @@ object NixGen{
     return ret
   }
 
+  def genTranspilerUtil(basePackage: String): ST = {
+    val components: ISZ[AadlThreadOrDevice] =
+      if(arsitOptions.devicesAsThreads) symbolTable.getThreadOrDevices()
+      else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
+    val typeTouches = NixGen.genTypeTouches(types, basePackage)
+    val apiTouches = NixGen.genApiTouches(types, basePackage, components)
+    val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable, arsitOptions.devicesAsThreads)
+
+    val method = SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, scheduleTouches)
+
+    return SeL4NixTemplate.getTranspilerUtil(basePackage, method)
+  }
 }
 
 object NixGenDispatch {
@@ -791,9 +804,9 @@ object NixGenDispatch {
                arsitOptions: ArsitOptions,
                symbolTable: SymbolTable,
                types: AadlTypes,
-               previousPhase: Result): ArsitResult = {
+               previousPhase: PhaseResult): PhaseResult = {
 
-    val ret: ArsitResult = arsitOptions.platform match {
+    val ret: PhaseResult = arsitOptions.platform match {
       case ArsitPlatform.Linux =>
         ArtNixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case ArsitPlatform.Cygwin =>
@@ -803,11 +816,12 @@ object NixGenDispatch {
       case ArsitPlatform.SeL4 =>
         SeL4NixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case _ =>
-        ArsitResult(
-          previousPhase.resources,
-          previousPhase.maxPort,
-          previousPhase.maxComponent,
-          ISZ()
+        PhaseResult(
+          resources = previousPhase.resources,
+          componentModules = previousPhase.componentModules,
+          maxPort = previousPhase.maxPort,
+          maxComponent = previousPhase.maxComponent,
+          transpilerOptions = previousPhase.transpilerOptions
         )
     }
     return ret

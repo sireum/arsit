@@ -27,6 +27,7 @@ class BridgeTestSuite[+T <: Bridge](val bridge: T) extends AnyFunSuite with OneI
    * Automatically called before each test. Currently calls Art.initTest for the given bridge. Override as needed.
    */
   override protected def beforeEach(): Unit = {
+    AppPlatform.setup(config.AppPlatformJvm())
     Art.initTest(bridge)
   }
 

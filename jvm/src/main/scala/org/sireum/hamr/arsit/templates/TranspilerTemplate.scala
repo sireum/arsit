@@ -101,8 +101,6 @@ object TranspilerTemplate {
 
     val script_home = s"$${${SCRIPT_HOME}}"
 
-    val projHomesRel = opts.sourcepath.map((s: String) => Util.relativizePaths(binDir, s, script_home))
-
     val cOutputDirRel = Util.relativizePaths(binDir, opts.output.get, script_home)
 
     val cmakeIncludesRel: ISZ[String] = opts.cmakeIncludes.map((s: String) => {
@@ -127,7 +125,7 @@ object TranspilerTemplate {
 
     val slash =
       st"""val ${opts.projectName.get}: ISZ[String] = ISZ(
-          |  "--sourcepath", s"${(projHomesRel, path_sep)}",
+          |  "--sourcepath", sources,
           |  "--output-dir", s"${cOutputDirRel}",
           |  "--name", "${opts.projectName.get}",
           |  "--apps", "${(opts.apps, ",")}",
@@ -174,7 +172,13 @@ object TranspilerTemplate {
     return slashRet
   }
 
-  def transpilerSel4Preamble(entries: ISZ[(String, ST)]): ST = {
+  def transpilerSel4Preamble(entries: ISZ[(String, ST)],
+                             processes: ISZ[ISZ[String]]): ST = {
+
+    val _processes = processes.map((m: ISZ[String]) => {
+      val quote = m.map((n: String) => st""""${n}"""")
+      st"""ISZ(${(quote, ",")})"""
+    })
 
     val ret: ST =
       st"""::#! 2> /dev/null                                   #
@@ -201,6 +205,31 @@ object TranspilerTemplate {
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
+          |val srcDir: Os.Path = SCRIPT_HOME.up / "src"
+          |
+          |val processes: ISZ[ISZ[String]] = ISZ(
+          |  ${(_processes, ",\n")}
+          |)
+          |
+          |var modules: ISZ[Os.Path] = ISZ(
+          |  srcDir / "common" / "data" / "main",
+          |  srcDir / "common" / "library" / "main",
+          |  srcDir / "infrastructure" / "architecture" / "main",
+          |  srcDir / "infrastructure" / "art" / "shared" / "src" / "main",
+          |  srcDir / "infrastructure" / "seL4Nix" / "main"
+          |)
+          |
+          |for(p <- processes) {
+          |  modules = modules :+ ((srcDir / "components") /+ p / "shared" / "main")
+          |  modules = modules :+ ((srcDir / "infrastructure" / "apis") /+ p / "main")
+          |  modules = modules :+ ((srcDir / "infrastructure" / "bridges") /+ p / "main")
+          |}
+          |
+          |for(m <- modules) {
+          |  assert(m.exists, s"$${m} doesn't exist")
+          |}
+          |
+          |val sources = st"$${(modules.map((m: Os.Path) => m.string), Os.pathSep)}".render
           |
           |${(entries.map((m: (String, ST)) => m._2), "\n\n")}
           |
@@ -222,7 +251,14 @@ object TranspilerTemplate {
     return ret
   }
 
-  def transpilerSlashScriptPreamble(legacy: ST, demo: ST): ST = {
+  def transpilerSlashScriptPreamble(legacy: ST,
+                                    demo: ST,
+                                    processes: ISZ[ISZ[String]]): ST = {
+    val _processes = processes.map((m: ISZ[String]) => {
+      val quote = m.map((n: String) => st""""${n}"""")
+      st"""ISZ(${(quote, ",")})"""
+    })
+
     val ret: ST =
       st"""::#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
@@ -248,6 +284,34 @@ object TranspilerTemplate {
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
+          |val srcDir: Os.Path = SCRIPT_HOME.up / "src"
+          |
+          |val processes: ISZ[ISZ[String]] = ISZ(
+          |  ${(_processes, ",\n")}
+          |)
+          |
+          |var modules: ISZ[Os.Path] = ISZ(
+          |  srcDir / "common" / "data" / "main",
+          |  srcDir / "common" / "library" / "main",
+          |  srcDir / "infrastructure" / "architecture" / "main",
+          |  srcDir / "infrastructure" / "art" / "shared" / "src" / "main",
+          |  srcDir / "infrastructure" / "nix" / "main",
+          |  srcDir / "infrastructure" / "schedulers" / "main",
+          |  srcDir / "app" / "shared" / "src" / "main" / "scala",
+          |  srcDir / "app" / "jvm" / "src" / "main" / "scala"
+          |)
+          |
+          |for(p <- processes) {
+          |  modules = modules :+ ((srcDir / "components") /+ p / "shared" / "main")
+          |  modules = modules :+ ((srcDir / "infrastructure" / "apis") /+ p / "main")
+          |  modules = modules :+ ((srcDir / "infrastructure" / "bridges") /+ p / "main")
+          |}
+          |
+          |for(m <- modules) {
+          |  assert(m.exists, s"$${m} doesn't exist")
+          |}
+          |
+          |val sources = st"$${(modules.map((m: Os.Path) => m.string), Os.pathSep)}".render
           |
           |var project: ISZ[String] = Cli(Os.pathSepChar).parseTranspile(Os.cliArgs, 0) match {
           |  case Some(o: Cli.TranspileOption) =>

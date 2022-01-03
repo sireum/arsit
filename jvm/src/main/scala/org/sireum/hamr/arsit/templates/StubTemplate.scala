@@ -9,8 +9,6 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
-  // @formatter:off
-
 
   @pure def bridge(topLevelPackageName: String,
                    packageName: String,
@@ -467,6 +465,105 @@ object StubTemplate {
     return ret
   }
 
-  // @formatter:on
+  val AppPlatformJvmId: String = "AppPlatformJvm"
+  val ExternalConfigJvmId: String = "ExternalConfigJvm"
+
+  val AppPlatformJsId: String = "AppPlatformJs"
+  val ExternalConfigJsId: String = "ExternalConfigJs"
+
+  @pure def appPlatformPlatform(basePackage: String,
+                           isJs: B,
+                                willTranspile: B): ST = {
+    val clsName: String =
+      if(isJs) AppPlatformJsId
+      else AppPlatformJvmId
+
+    val extName: String =
+      if(isJs) ExternalConfigJsId
+      else ExternalConfigJvmId
+
+    val transpilerUtil: Option[ST] =
+      if(willTranspile) Some(st"TranspilerUtil.touch()")
+      else None()
+
+    val ret: ST =
+      st"""// #Sireum
+          |
+          |package ${basePackage}.config
+          |
+          |import org.sireum._
+          |import ${basePackage}._
+          |
+          |@record class ${clsName} extends PlatformConfig {
+          |  def setup(): Unit = {
+          |    ExternalConfig.setup()
+          |    $transpilerUtil
+          |  }
+          |}
+          |
+          |@ext("${extName}") object ExternalConfig {
+          |  def setup(): Unit = $$
+          |}
+          |"""
+    return ret
+  }
+
+  @pure def appPlatformExt(basePackage: String,
+                              isJs: B): ST = {
+    val objectName: String =
+      if(isJs) ExternalConfigJsId
+      else ExternalConfigJvmId
+
+    val platform: String =
+      if(isJs) "Js"
+      else "Jvm"
+
+    val ret: ST =
+      st"""package ${basePackage}.config
+          |
+          |import org.sireum._
+          |import art.scheduling.roundrobin.RoundRobin${platform}Interface
+          |import art.scheduling.roundrobin.RoundRobinExtensions_Ext
+          |
+          |object ${objectName} {
+          |  def setup(): Unit = {
+          |    RoundRobinExtensions_Ext.roundRobinInterface = new RoundRobin${platform}Interface()
+          |  }
+          |}
+          |"""
+    return ret
+  }
+
+  @pure def appPlatform(basePackage: String,
+                        imports: ISZ[ST],
+                        entries: ISZ[ST],
+                        setupEntries: ISZ[ST]): ST = {
+
+    val ret: ST =
+      st"""// #Sireum
+          |
+          |package ${basePackage}
+          |
+          |import org.sireum._
+          |import ${basePackage}._
+          |${(imports, "\n")}
+          |
+          |@msig trait PlatformConfig {
+          |  def setup(): Unit
+          |}
+          |
+          |object AppPlatform {
+          |
+          |  def setup(config: PlatformConfig): Unit = {
+          |    ${(setupEntries, "\n")}
+          |
+          |    config.setup()
+          |  }
+          |
+          |  ${(entries, "\n\n")}
+          |}
+          |"""
+    return ret
+  }
 }
 
