@@ -497,7 +497,7 @@
         "building_control_gen_mixed--JVM\/versions.properties",
         {
           "type" : "ITestResource",
-          "content" : "org.sireum.slang-embedded-art%%slang-embedded-art%=734902f\n\norg.sireum%inspector-capabilities%=0.6-SNAPSHOT\norg.sireum%inspector-gui%=0.6-SNAPSHOT\norg.sireum%inspector-services-jvm%=0.6-SNAPSHOT\n\n\n# remove the following entries if you want to use the versions\n# that ship with sireum (i.e. $SIREUM_HOME\/bin\/sireum --version)\n\n# Scala compiler plugin for Slang\norg.sireum%%scalac-plugin%=4.20220111.440c8fa\n\norg.sireum.kekinian%%library%=4.20211223.c717627\n\norg.scala-lang%scala-library%=2.13.8\norg.scalatest%%scalatest%%=3.2.10\n",
+          "content" : "org.sireum.slang-embedded-art%%slang-embedded-art%=2a2b989\n\norg.sireum%inspector-capabilities%=0.6-SNAPSHOT\norg.sireum%inspector-gui%=0.6-SNAPSHOT\norg.sireum%inspector-services-jvm%=0.6-SNAPSHOT\n\n\n# remove the following entries if you want to use the versions\n# that ship with sireum (i.e. $SIREUM_HOME\/bin\/sireum --version)\n\n# Scala compiler plugin for Slang\norg.sireum%%scalac-plugin%=4.20220111.440c8fa\n\norg.sireum.kekinian%%library%=4.20211223.c717627\n\norg.scala-lang%scala-library%=2.13.8\norg.scalatest%%scalatest%%=3.2.10\n",
           "overwrite" : false,
           "makeExecutable" : false,
           "makeCRLF" : false
