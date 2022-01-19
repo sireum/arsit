@@ -20,10 +20,11 @@ exit /B %errorlevel%
 // #Sireum
 
 import org.sireum._
+import org.sireum.project.DependencyManager
 
 val SIREUM_HOME = Os.path(Os.env("SIREUM_HOME").get)
 val sireum = SIREUM_HOME / "bin" / "sireum"
-val sireumProps = (SIREUM_HOME / "versions.properties").properties
+val versions = (SIREUM_HOME / "versions.properties").properties
 val mill = SIREUM_HOME / "bin" / "mill"
 
 def runGit(args: ISZ[String], path: Os.Path): String = {
@@ -41,9 +42,9 @@ val kekinianVersion: String = runGit(ISZ("git", "describe", "--abbrev=0", "--tag
 
 val artVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/art")
 val artEmbeddedVersion = runGit(ISZ("git", "log", "-n", "1", "--pretty=format:%h"), SIREUM_HOME / "hamr/codegen/arsit/resources/art")
-val scalaVersion = sireumProps.get("org.scala-lang%scala-library%").get
-val scalacPluginVersion = sireumProps.get("org.sireum%%scalac-plugin%").get
-val scalaTestVersion = sireumProps.get("org.scalatest%%scalatest%%").get
+val scalaVersion = versions.get("org.scala-lang%scala-library%").get
+val scalacPluginVersion = versions.get("org.sireum%%scalac-plugin%").get
+val scalaTestVersion = versions.get("org.scalatest%%scalatest%%").get
 
 if(artVersion != artEmbeddedVersion) {
   for(i <- 0 to 10) println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -64,26 +65,21 @@ def update(key: String, currentVersion: String): B = {
 }
 
 def jitpack(): Unit = {
-  val jitpacks: ISZ[(String, String, String)] = ISZ(("kekinian", "library", kekinianVersion), ("slang-embedded-art", "slang-embedded-art", artVersion))
+  val library = s"org.sireum.kekinian::library:$kekinianVersion"
+  val art = s"org.sireum.slang-embedded-art::slang-embedded-art:$artVersion"
 
-  for(j <- jitpacks) {
-    println(s"Triggering jitpack on https://github.com/sireum/${j._1}/tree/${j._3} ...")
-    val r = mill.call(ISZ("jitPack", "--owner", "sireum", "--repo", j._1, "--lib", j._2, "--hash", j._3)).at(SIREUM_HOME).console.run()
-    r match {
-      case r: Os.Proc.Result.Normal =>
-        println(r.out)
-        println(r.err)
-        if (!r.ok) {
-          eprintln(s"Exit code: ${r.exitCode}")
-        }
-      case r: Os.Proc.Result.Exception =>
-        eprintln(s"Exception: ${r.err}")
-      case _: Os.Proc.Result.Timeout =>
-        eprintln("Timeout")
-        eprintln()
-    }
-  }
-  println()
+  val scalaVer = versions.get("org.scala-lang%scala-library%").get
+  val sc = Os.tempFix("", ".sc")
+  sc.writeOver(
+    st"""import org.sireum._
+        |Coursier.setScalaVersion("$scalaVer")
+        |for (cif <- Coursier.fetch(ISZ(s"$library", s"$art"))) {
+        |  println(cif.path)
+        |}""".render
+  )
+  sc.removeOnExit()
+  println("Jitpacking ...")
+  proc"$sireum slang run $sc".console.runCheck()
 }
 
 jitpack()
