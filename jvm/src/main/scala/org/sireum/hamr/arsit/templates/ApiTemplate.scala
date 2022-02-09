@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
+import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir._
 
@@ -18,7 +19,8 @@ object ApiTemplate {
   def api(packageName: String,
           basePackageName: String,
           names: Names,
-          ports: ISZ[Port]): ST = {
+          ports: ISZ[Port],
+          integrationContracts: Map[AadlPort, (ST, ST)]): ST = {
 
     val portDefs: ISZ[ST] = st"id: Art.BridgeId" +:
       ops.ISZOps(ports).map((p: Port) => st"${p.name}_Id : Art.PortId")
@@ -29,8 +31,17 @@ object ApiTemplate {
     val inPorts = ports.filter((p: Port) => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter((p: Port) => !CommonUtil.isInPort(p.feature))
 
-    val getters = inPorts.map((p: Port) => getterApi(p))
-    val setters = outPorts.map((p: Port) => setterApi(p))
+    def getContract(f: AadlFeature): Option[(ST, ST)] = {
+      val ret: Option[(ST,ST)] = f match {
+        case i: AadlPort => integrationContracts.get(i)
+        case _ => None()
+      }
+      return ret
+    }
+
+    val getters = inPorts.map((p: Port) => getterApi(p, getContract(p.aadlFeature)))
+
+    val setters = outPorts.map((p: Port) => setterApi(p, getContract(p.aadlFeature)))
 
     val ret: ST =
       st"""// #Sireum
@@ -120,20 +131,32 @@ object ApiTemplate {
     return st"""Art.putValue(${addId(p.name)}, ${q}${if (isEmpty) "()" else "(value)"})"""
   }
 
-  def setterApi(p: Port): ST = {
+  def setterApi(p: Port, integrationContracts: Option[(ST, ST)]): ST = {
     val q = p.getPortTypeNames.qualifiedReferencedTypeName
     val isEmpty = p.getPortTypeNames.isEmptyType()
+
+    val (integrationMethods, integrationContract): (Option[ST], Option[ST]) = integrationContracts match {
+      case Some((s1, s2)) => (Some(s1), Some(s2))
+      case _ => (None(),None())
+    }
+
     val ret: ST = p.feature.category match {
       case FeatureCategory.DataPort =>
-        st"""def put_${p.name}(value : ${q}) : Unit = {
+        st"""${integrationMethods}
+            |def put_${p.name}(value : ${q}) : Unit = {
+            |  ${integrationContract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventPort =>
-        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+        st"""${integrationMethods}
+            |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+            |  ${integrationContract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventDataPort =>
-        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+        st"""${integrationMethods}
+            |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+            |  ${integrationContract}
             |  ${putValue(p)}
             |}"""
       case _ => halt("Unexpected: $p")
@@ -141,15 +164,22 @@ object ApiTemplate {
     return ret
   }
 
-  @pure def getterApi(p: Port): ST = {
+  @pure def getterApi(p: Port, integrationContracts: Option[(ST, ST)]): ST = {
     val isEvent = CommonUtil.isAadlEventPort(p.feature)
     val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
     val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
     val _match: String = if (isEvent) "Empty()" else s"${payloadType}(v)"
     val value: String = if (isEvent) "Empty()" else "v"
 
+    val (integrationMethods, integrationContract): (Option[ST], Option[ST]) = integrationContracts match {
+      case Some((s1, s2)) => (Some(s1), Some(s2))
+      case _ => (None(),None())
+    }
+
     val ret: ST =
-      st"""def get_${p.name}() : Option[${typeName}] = {
+      st"""${integrationMethods}
+          |def get_${p.name}() : Option[${typeName}] = {
+          |  ${integrationContract}
           |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
           |    case Some(${_match}) => Some(${value})
           |    case Some(v) =>

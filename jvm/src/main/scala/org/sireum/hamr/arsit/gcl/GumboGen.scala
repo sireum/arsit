@@ -3,12 +3,14 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.symbols.{GclAnnexInfo, GclSymbolTable, SymbolTable}
-import org.sireum.hamr.codegen.common.types.RecordType
-import org.sireum.hamr.ir.{GclAccessExp, GclBinaryExp, GclBinaryOp, GclExp, GclInvariant, GclLiteralExp, GclLiteralType, GclNameExp, GclSubclause, GclUnaryExp, GclUnaryOp}
+import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlPort, AadlThreadOrDevice, GclAnnexInfo, GclSymbolTable, SymbolTable}
+import org.sireum.hamr.codegen.common.types.{AadlType, RecordType}
+import org.sireum.hamr.ir.{Direction, GclAccessExp, GclBinaryExp, GclBinaryOp, GclExp, GclIntegration, GclInvariant, GclLiteralExp, GclLiteralType, GclNameExp, GclSubclause, GclUnaryExp, GclUnaryOp}
 
 object GumboGen {
+
   def convertBinaryOp(op: GclBinaryOp.Type): String = {
     val ret: String = op match {
       case GclBinaryOp.Gte => ">="
@@ -43,7 +45,7 @@ object GumboGen {
     return annexInfos
   }
 
-  def processInvariants(e: RecordType, symbolTable: SymbolTable): ISZ[ST] = {
+  def processInvariants(e: RecordType, symbolTable: SymbolTable, basePackageName: String): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
 
     val ais = getGclAnnexInfos(e.name, symbolTable)
@@ -53,11 +55,29 @@ object GumboGen {
       val sc = ai.annex.asInstanceOf[GclSubclause]
       val gclSymTable = ai.gclSymbolTable
 
-      ret = ret ++ GumboGen(sc, gclSymTable, symbolTable).processInvariants(sc.invariants)
+      ret = ret ++ GumboGen(sc, gclSymTable, symbolTable, basePackageName).processInvariants(sc.invariants)
 
     }
 
     return ret
+  }
+
+  def processIntegrationContract(m: AadlThreadOrDevice, symbolTable: SymbolTable, basePackageName: String): Map[AadlPort, (ST, ST)] = {
+    val ais = getGclAnnexInfos(m.path, symbolTable)
+    assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
+
+    if(ais.nonEmpty) {
+      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val gclSymbolTable = ais(0).gclSymbolTable
+
+      val ret: Map[AadlPort, (ST, ST)] = sc.integration match {
+        case Some(gclIntegration) => GumboGen(sc, gclSymbolTable, symbolTable, basePackageName).processIntegrationContract(gclIntegration)
+        case _ => Map.empty
+      }
+      return ret
+    } else {
+      return Map.empty
+    }
   }
 
   def convertToMethodName(s: String): String = {
@@ -76,7 +96,8 @@ object GumboGen {
 
 @record class GumboGen(subClause: GclSubclause,
                        gclSymbolTable: GclSymbolTable,
-                       symbolTable: SymbolTable) {
+                       symbolTable: SymbolTable,
+                       basePackageName: String) {
 
   def processBinaryExp(be: GclBinaryExp): ST = {
     val lhs = processExp(be.lhs)
@@ -145,6 +166,58 @@ object GumboGen {
             |  ${processExp(i.exp)}
             |)"""
     }
+    return ret
+  }
+
+  def processIntegrationContract(gclIntegration: GclIntegration): Map[AadlPort, (ST, ST)] = {
+    var ret: Map[AadlPort, (ST, ST)] = Map.empty
+    for(spec <- gclIntegration.specs) {
+      val port: AadlPort = gclSymbolTable.integrationPort.get(spec).get
+
+      val methodName = GumboGen.convertToMethodName(spec.name)
+
+      val aadlType: AadlType = port match {
+        case i: AadlDataPort => i.aadlType
+        case i: AadlEventDataPort => i.aadlType
+        case _ => halt("Symbol resolver should have prevented this")
+      }
+
+      val dataTypeNames = Util.getDataTypeNames(aadlType, basePackageName)
+
+      val function: ST =
+        st"""@strictpure def $methodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
+            |  ${processExp(spec.exp)}
+            |
+            |@spec var ${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName} = $$ // Logika spec var representing port state
+            |@spec def ${port.identifier}_Inv = Invariant(
+            |  ${methodName}(${port.identifier})
+            |)
+            |
+            |"""
+
+      val contract: ST = {
+        if(port.direction == Direction.In) {
+          st"""Contract(
+              |  Ensures(${methodName}(${port.identifier}),
+              |    Res == Some(${port.identifier})
+              |  )
+              |)"""
+        } else {
+          st"""Contract(
+              |  Requires(${methodName}(value)),
+              |  Modifies(${port.identifier}),
+              |  Ensures(${port.identifier} == value)
+              |)
+              |Spec {
+              |  ${port.identifier} = value
+              |}
+              |"""
+        }
+      }
+
+      ret = ret + (port ~> ((function, contract)))
+    }
+
     return ret
   }
 }

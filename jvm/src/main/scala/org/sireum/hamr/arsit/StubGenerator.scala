@@ -4,10 +4,10 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
+import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
-import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
@@ -141,11 +141,14 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
+    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, basePackage)
+
     val api = ApiTemplate.api(
       names.packageName,
       basePackage,
       names,
-      ports)
+      ports,
+      integrationContracts)
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
