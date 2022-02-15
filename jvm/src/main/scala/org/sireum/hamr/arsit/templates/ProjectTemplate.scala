@@ -429,6 +429,7 @@ object ProjectTemplate {
                      |
                      |# scalajs-compiler need to match the stand-alone version
                      |org.scala-js%%%scalajs-compiler%=${scalaJsCompilerVersion}
+                     |org.scala-js%%scalajs-dom%%=${scalaJsDomVersion}
                      |org.scala-js%%scalajs-dom_sjs1%=${scalaJsDomVersion}
                      |
                      |# remove the following entries if you want to use the versions

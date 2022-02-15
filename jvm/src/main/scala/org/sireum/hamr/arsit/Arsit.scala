@@ -111,7 +111,7 @@ object Arsit {
     ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
 
     val scalaJsScriptDest = options.outputDir / "bin" / "scalajs.cmd"
-    val scalaJsScriptContent = ScalaJsTemplate.scalaJsScript(s"${options.packageName}.Demo")
+    val scalaJsScriptContent = ScalaJsTemplate.scalaJsScript(s"${options.packageName}.Demo.main")
     ret = ret :+ ResourceUtil.createExeCrlfResource(scalaJsScriptDest.value, scalaJsScriptContent, F)
 
     val versionPropDest = options.outputDir / "versions.properties"

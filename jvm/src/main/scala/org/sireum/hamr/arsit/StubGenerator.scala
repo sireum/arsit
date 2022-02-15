@@ -47,13 +47,13 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", s"${StubTemplate.AppPlatformJvmId}.scala"), appPlatformJvm, T)
 
     val appPlatformJvmExt = StubTemplate.appPlatformExt(basePackage, F)
-    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJvmId}.scala"), appPlatformJvmExt, T)
+    addResource(dirs.appModuleJvmMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJvmId}.scala"), appPlatformJvmExt, F)
 
     val appPlatformJs = StubTemplate.appPlatformPlatform(basePackage, T, F)
     addResource(dirs.appModuleJsMainDir, ISZ(basePackage, "config", s"${StubTemplate.AppPlatformJsId}.scala"), appPlatformJs, T)
 
     val appPlatformJsExt = StubTemplate.appPlatformExt(basePackage, T)
-    addResource(dirs.appModuleJsMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJsId}.scala"), appPlatformJsExt, T)
+    addResource(dirs.appModuleJsMainDir, ISZ(basePackage, "config", s"${StubTemplate.ExternalConfigJsId}.scala"), appPlatformJsExt, F)
 
     return PhaseResult(
       resources = previousPhase.resources() ++ resources,
