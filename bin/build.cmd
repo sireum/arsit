@@ -93,8 +93,7 @@ def tipe(): Unit = {
 
   println("Slang type checking ...")
   val excludes = "jvm/src/test/results"
-  Os.proc(ISZ(sireum.string, "slang", "tipe", "--verbose", "-r", "-x", excludes, "-s", home.string)).
-    at(home).console.runCheck()
+  proc"$sireum proyek tipe --project ${project.string} --par --strict-aliasing -r -x ${excludes}".at(home).console.runCheck()
   println()
 }
 
