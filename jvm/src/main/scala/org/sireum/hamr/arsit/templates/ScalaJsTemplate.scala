@@ -42,14 +42,14 @@ object ScalaJsTemplate {
           |val jsOutputDir = home / "js"
           |
           |
-          |val sireum = Os.path(Os.env("SIREUM_HOME").get) / "bin" / "sireum"
+          |val sireum = Os.path(Os.env("SIREUM_HOME").get) / "bin" / (if(Os.isWin) "sireum.bat" else "sireum")
           |
           |
           |println("Tipe checking ...")
-          |proc"$${sireum.string} proyek tipe --par $${home.value}".at(home).console.runCheck()
+          |proc"$${sireum.string} proyek tipe --par $${home.string}".at(home).console.runCheck()
           |
           |println("Proyek JS compiling project ...")
-          |proc"$${sireum.string} proyek compile --par --js $${home.value}".at(home).console.runCheck()
+          |proc"$${sireum.string} proyek compile --par --js $${home.string}".at(home).console.runCheck()
           |
           |val jsDir = home / "out" / s"$${home.name}-js"
           |val proyek_json = jsDir / "proyek.json"
@@ -87,7 +87,7 @@ object ScalaJsTemplate {
           |    if(!classes.exists) {
           |      halt(s"classes directory not found for JS module $${m.id}")
           |    }
-          |    cps = cps :+ classes.canon.value
+          |    cps = cps :+ classes.canon.string
           |  }
           |}
           |
@@ -113,8 +113,9 @@ object ScalaJsTemplate {
           |
           |assert(scalajsAssembly.exists && scalaJsLibrary.exists, s"Fetching scalaJS standalone failed")
           |
-          |val jsClasspath = st"$${scalaJsDomJsLib.value} $${macroJsLib.value} $${libSharedJsLib.value} $${(cps, " ")}"
-          |val s = st"scala -classpath $${scalajsAssembly.value} org.scalajs.cli.Scalajsld --stdlib $${scalaJsLibrary.value} --$${optType} --mainMethod $${mainMethod} --outputDir $${jsOutputDir.value} $${jsClasspath}"
+          |val scalaExe = sireum.up / "scala" / "bin" / (if(Os.isWin) "scala.bat" else "scala")
+          |val jsClasspath = st"$${scalaJsDomJsLib.string} $${macroJsLib.string} $${libSharedJsLib.string} $${(cps, " ")}"
+          |val s = st"$${scala.string} -classpath $${scalajsAssembly.string} org.scalajs.cli.Scalajsld --stdlib $${scalaJsLibrary.string} --$${optType} --mainMethod $${mainMethod} --outputDir $${jsOutputDir.string} $${jsClasspath}"
           |
           |jsOutputDir.mkdir()
           |
@@ -122,13 +123,13 @@ object ScalaJsTemplate {
           |proc"$${s.render}".at(home).console.runCheck()
           |
           |val mainJs = jsOutputDir / "main.js"
-          |assert(mainJs.exists, s"JS file not generated: $${mainJs.value}")
-          |println(s"Generated: $${mainJs.value}. Size is $${mainJs.size} bytes")
+          |assert(mainJs.exists, s"JS file not generated: $${mainJs.string}")
+          |println(s"Generated: $${mainJs.string}. Size is $${mainJs.size} bytes")
           |
           |if(runViaNodeJs) {
           |  println("Running app using nodejs ...")
           |
-          |  proc"node $${mainJs.value}".console.runCheck()
+          |  proc"node $${mainJs.string}".console.runCheck()
           |}
           |"""
     return ret
