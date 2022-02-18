@@ -115,7 +115,7 @@ object ScalaJsTemplate {
           |
           |val scalaExe = sireum.up / "scala" / "bin" / (if(Os.isWin) "scala.bat" else "scala")
           |val jsClasspath = st"$${scalaJsDomJsLib.string} $${macroJsLib.string} $${libSharedJsLib.string} $${(cps, " ")}"
-          |val s = st"$${scala.string} -classpath $${scalajsAssembly.string} org.scalajs.cli.Scalajsld --stdlib $${scalaJsLibrary.string} --$${optType} --mainMethod $${mainMethod} --outputDir $${jsOutputDir.string} $${jsClasspath}"
+          |val s = st"$${scalaExe.string} -classpath $${scalajsAssembly.string} org.scalajs.cli.Scalajsld --stdlib $${scalaJsLibrary.string} --$${optType} --mainMethod $${mainMethod} --outputDir $${jsOutputDir.string} $${jsClasspath}"
           |
           |jsOutputDir.mkdir()
           |
