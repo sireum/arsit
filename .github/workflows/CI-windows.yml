@@ -53,8 +53,8 @@ jobs:
           set CXX=c++.exe
           cd /d %GITHUB_WORKSPACE%
           
-          echo Need to add back 'compile' mode once github actions issue is resolved
-          set ArsitTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
+          echo Need to add back 'LinuxCompile' mode once github actions issue is resolved
+          set ArsitTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun
           echo ArsitTestModes=%ArsitTestModes%
 
           bin\build.cmd test
