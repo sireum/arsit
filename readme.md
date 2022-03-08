@@ -1,7 +1,5 @@
 # Arsit: AADL to Slang-Embedded Translator
 
-# hamr-codegen
-
 <table>
 <tr><td>Master</td>
 <td> 
@@ -14,17 +12,10 @@
 </td></tr>
 </table>
 
-## Building Arsit's CLI
+## Available Option
 
-1. Build Arsit's Uber-Jar
+Run the following to see the available options
 
-    ```bash
-    git clone --recursive git@github.com:santoslab/arsit.git
-    ./arsit/bin/test.sh
-    ```
-
-2. Display Arsit's CLI options
-
-    ```bash
-    ./arsit/bin/arsit -h
-    ```
+```
+./bin/build.cmd
+```
