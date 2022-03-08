@@ -12,6 +12,16 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 
 object Arsit {
+
+  //=================================================================
+  //  A r s i t    C o d e    G e n e r a t i o n   P i p e l i n e
+  //
+  //   Primary methods for invoke pipeline phases.
+  //   Phase results accumulated and held in memory using the PhaseResult structure,
+  //   which is threaded through phases (intermedidate versions are
+  //   named according to the associated phase).
+  //=================================================================
+
   def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
     val ret = runInternal(model, o, aadlTypes, symbolTable)
@@ -28,27 +38,71 @@ object Arsit {
 
     assert(model.components.size == 1, "Expecting a single root component")
 
+    // --- Set up the canonical output direction structure ---
+    // given output directory roots as specified in options o,
+    // build a ProjectDirectories record whose fields provide the name/path of
+    // subdirectories that will be populated with generated code
     val projectDirectories = ProjectDirectories(o)
 
-    val nixPhase =
-      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
-        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
-          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes).generate()
-        ).generate())
+    // --- Slang/JVM/JS Phase ---
 
+    // generate application's architecture description, launcher ("demo"), scheduling artifacts
+    val jvmjsPhaseArch = ArchitectureGenerator(projectDirectories, symbolTable.rootSystem,
+                                               o, symbolTable, aadlTypes).generate()
+
+    // generate application component infrastructure code and skeletons
+    val jvmjsPhaseAppCode = StubGenerator(projectDirectories, symbolTable.rootSystem,
+                                          o, symbolTable, aadlTypes, jvmjsPhaseArch).generate()
+
+    // --- nix Phase ---
+
+    // generate C artifacts  ??? Jason ???  is this just C application code, or does it include platform aspects?
+    val nixPhase =
+      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem,
+                                  o, symbolTable, aadlTypes, jvmjsPhaseAppCode)
+
+//    val nixPhase =
+//      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
+//        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
+//          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes).generate()
+//        ).generate())
+
+    // --- include HAMR/AADL platform code ---
+    //
+    //  include application-independent HAMR AADL run-time platform/infrastructure code
     var artResources: ISZ[Resource] = ISZ()
     if (!o.noEmbedArt) {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.mainDir}/art")
     }
 
+    // --- create build artifacts ---
+    //
+    //  create build artifacts that application developer will use to build the generated system
     artResources = artResources ++ createBuildArtifacts(
       CommonUtil.getLastName(model.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
+    // return generated code represented as in-memory resources
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
       nixPhase.maxComponent,
       nixPhase.transpilerOptions)
   }
+
+  //=================================================================
+  //
+  //   P h a s e    H e l p e r s
+  //
+  //=================================================================
+
+  //----------------------------------------------------------------
+  //  c o p y A r t F i l e s    P h a s e
+  //
+  //   Retrieves and represents as in-memory Resources the
+  //   application-independent HAMR/AADL platform code held in the
+  //   arsit / codegen / resources folder.   Slight modifications
+  //   to art files are performed to inject application-specific
+  //   static declarations of max component id (BridgeId) and max port id.
+  //----------------------------------------------------------------
 
   private def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
