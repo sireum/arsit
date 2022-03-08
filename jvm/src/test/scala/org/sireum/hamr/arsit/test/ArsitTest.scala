@@ -17,12 +17,13 @@ trait ArsitTest extends TestSuite {
 
   def generateExpected: B = F
 
-  def testModes: ISZ[ArsitTestMode.Type] = Os.env("HarmTestModes") match {
+  def testModes: ISZ[ArsitTestMode.Type] = Os.env("HamrTestModes") match {
     case Some(list) => ops.StringOps(list).split((c: C) => c == C(',')).map((m: String) => ArsitTestMode.byName(m).get)
     case _ =>
       ISZ(ArsitTestMode.Base)
+      ISZ(ArsitTestMode.ProyekTipe)
       //ISZ(ArsitTestMode.LinuxCompile)
-      //ISZ(ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
+      //ISZ(ArsitTestMode.Tipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
   }
 
   def timeoutInSeconds: Z = 60
@@ -156,6 +157,12 @@ trait ArsitTest extends TestSuite {
 
     for(testMode <- testModes if(testPass)) {
       envTest(testMode) match {
+        case ArsitTestMode.ProyekTipe =>
+          val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          println("Type checking via proyek tipe ...")
+          val results = proc"${sireum.value} proyek tipe --par ${dir.value}".run()
+          check(results, "Type checking failed")
+
         case ArsitTestMode.ProyekCompile =>
           val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
           println("Compiling Slang project via proyek compile ...")

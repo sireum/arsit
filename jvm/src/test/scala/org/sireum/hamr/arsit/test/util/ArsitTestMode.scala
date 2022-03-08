@@ -14,6 +14,8 @@ import org.sireum._
 
   "ProyekRun"
 
+  "ProyekTipe"
+
   "LinuxCompile"
 
   // everything in Base + compiles the generated sbt project
