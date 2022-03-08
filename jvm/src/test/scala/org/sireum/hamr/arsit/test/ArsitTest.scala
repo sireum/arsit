@@ -21,7 +21,6 @@ trait ArsitTest extends TestSuite {
     case Some(list) => ops.StringOps(list).split((c: C) => c == C(',')).map((m: String) => ArsitTestMode.byName(m).get)
     case _ =>
       ISZ(ArsitTestMode.Base)
-      ISZ(ArsitTestMode.ProyekTipe)
       //ISZ(ArsitTestMode.LinuxCompile)
       //ISZ(ArsitTestMode.Tipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
   }
@@ -158,10 +157,12 @@ trait ArsitTest extends TestSuite {
     for(testMode <- testModes if(testPass)) {
       envTest(testMode) match {
         case ArsitTestMode.ProyekTipe =>
-          val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
-          println("Type checking via proyek tipe ...")
-          val results = proc"${sireum.value} proyek tipe --par ${dir.value}".run()
-          check(results, "Type checking failed")
+          if(!testOps.noEmbedArt) { // need ART source code for Tipe checking
+            val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+            println("Type checking via proyek tipe ...")
+            val results = proc"${sireum.value} proyek tipe --par ${dir.value}".run()
+            check(results, "Type checking failed")
+          }
 
         case ArsitTestMode.ProyekCompile =>
           val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory

@@ -54,7 +54,7 @@ jobs:
           cd /d %GITHUB_WORKSPACE%
           
           echo Need to add back 'compile' mode once github actions issue is resolved
-          set HamrTestModes=ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
+          set HamrTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
           echo HamrTestModes=%HamrTestModes%
 
           bin\build.cmd test
