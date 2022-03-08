@@ -17,8 +17,15 @@ trait ArsitTest extends TestSuite {
 
   def generateExpected: B = F
 
-  def testMode: ArsitTestMode.Type = ArsitTestMode.Base
-  def timeoutInSeconds: Z = 7
+  def testModes: ISZ[ArsitTestMode.Type] = Os.env("HarmTestModes") match {
+    case Some(list) => ops.StringOps(list).split((c: C) => c == C(',')).map((m: String) => ArsitTestMode.byName(m).get)
+    case _ =>
+      ISZ(ArsitTestMode.Base)
+      //ISZ(ArsitTestMode.LinuxCompile)
+      //ISZ(ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
+  }
+
+  def timeoutInSeconds: Z = 60
 
   def ignoreBuildDefChanges: B = F // temporarily ignore build.sbt and build.sc changes due to build.properties updates
 
@@ -124,27 +131,90 @@ trait ArsitTest extends TestSuite {
 
     var testPass = T
 
-    envTest(testMode) match {
-      case ArsitTestMode.SbtCompile =>
-        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
-        val args: ISZ[String] = ISZ("sbt", "compile")
-        val results = Os.proc(args).at(sbtDir).console.run()
-        testPass = testPass && results.ok
+    val sireum = Os.cwd / "bin" / (if(Os.isWin) "sireum.bat" else "sireum")
 
-      case ArsitTestMode.SbtTest =>
-        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
-        val args: ISZ[String] = ISZ("sbt", "test")
-        val results = Os.proc(args).at(sbtDir).console.run()
-        testPass = testPass && results.ok
+    def check(results: OsProto.Proc.Result, failMsg: String): Unit = {
+      if(!results.ok) {
+        println(s"${testName}: ${failMsg}")
+        println("out:")
+        println(results.out)
+        println("err:")
+        println(results.err)
+      }
+      testPass = testPass && results.ok
+    }
 
-      case ArsitTestMode.SbtRun =>
-        val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
-        val args: ISZ[String] = ISZ("sbt", "run")
-        val p = Os.proc(args).timeout(timeoutInSeconds * z"1000").at(sbtDir).console()
-        val results = TestOs.proc2(p, Some("[info] Done compiling."), Some("\n"))
-        testPass = testPass && results.ok
+    def isLinux(p: ArsitPlatform.Type): B = {
+      val ret: B = p match {
+        case ArsitPlatform.Linux => T
+        case ArsitPlatform.Cygwin => T
+        case ArsitPlatform.MacOS => T
+        case _ => F
+      }
+      return ret
+    }
 
-      case ArsitTestMode.Base =>
+    for(testMode <- testModes if(testPass)) {
+      envTest(testMode) match {
+        case ArsitTestMode.ProyekCompile =>
+          val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          println("Compiling Slang project via proyek compile ...")
+          val results = proc"${sireum.value} proyek compile --par ${dir.value}".run()
+          check(results, "Proyek compilation failed")
+
+        case ArsitTestMode.ProyekTest =>
+          val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          println("Running generated unit tests via proyek test ...")
+          val results = proc"${sireum.value} proyek test --par ${dir.value}".run()
+          check(results, "Proyek test failed")
+
+        case ArsitTestMode.ProyekRun =>
+          val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          val app = s"${testOps.packageName}.Demo"
+          println(s"Running demo via proyek run for ${timeoutInSeconds} seconds ...")
+          val results = proc"${sireum.value} proyek run ${dir.value} ${app}".timeout(timeoutInSeconds * z"1000").console.run()
+
+          // TODO: get newline injector working again
+          //check(results, "Proyek run failed")
+
+        case ArsitTestMode.LinuxCompile =>
+          if (isLinux(testOps.platform)) {
+            val dir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+            val transpileScript = testOps.outputDir / "bin" / "transpile.cmd"
+            val compileScript = testOps.outputPlatformCDir / "bin" / "compile.cmd"
+
+            println(s"Transpiling via ${transpileScript.value} ...")
+            var results = proc"${transpileScript.value}".run()
+            check(results, "Transpiling failed")
+
+            if (testPass) {
+              println(s"Compiling C code via ${compileScript.value} ...")
+              results = proc"${compileScript.value}".run()
+              check(results, "C compilation failed")
+            }
+          }
+
+        case ArsitTestMode.SbtCompile =>
+          val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          val args: ISZ[String] = ISZ("sbt", "compile")
+          val results = Os.proc(args).at(sbtDir).console.run()
+          check(results, "SBT compilation failed")
+
+        case ArsitTestMode.SbtTest =>
+          val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          val args: ISZ[String] = ISZ("sbt", "test")
+          val results = Os.proc(args).at(sbtDir).console.run()
+          check(results, "SBT test failed")
+
+        case ArsitTestMode.SbtRun =>
+          val sbtDir = writeOutTestResults(resultMap, Os.tempDir()) / testName // don't pollute results directory
+          val args: ISZ[String] = ISZ("sbt", "run")
+          val p = Os.proc(args).timeout(timeoutInSeconds * z"1000").at(sbtDir).console()
+          val results = TestOs.proc2(p, Some("[info] Done compiling."), Some("\n"))
+          check(results, "SBT run failed")
+
+        case ArsitTestMode.Base =>
+      }
     }
 
     val expectedMap: TestResult =

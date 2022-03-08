@@ -1,14 +1,18 @@
 # Arsit: AADL to Slang-Embedded Translator
 
+# hamr-codegen
 
-| [![Actions Status](https://github.com/sireum/arsit/workflows/CI/badge.svg)](https://github.com/sireum/arsit/actions) | 
-| :---: | 
-| <sub><sup>amd64: mac, linux, windows</sup></sub> | 
-
-* **master** branch:
-
-Arsit generates [Slang-Embedded](https://github.com/santoslab/slang-embedded) projects from AADL instance models 
-represented in [AIR](https://github.com/sireum/air).
+<table>
+<tr><td>Master</td>
+<td> 
+  <a href="https://github.com/sireum/arsit/actions/workflows/CI-macOS.yml?query=branch%3Amaster">
+    <img src="https://github.com/sireum/arsit/actions/workflows/CI-macOS.yml/badge.svg" alt="macOS"> </a>
+  <a href="https://github.com/sireum/arsit/actions/workflows/CI-linux.yml?query=branch%3Amaster">
+    <img src="https://github.com/sireum/arsit/actions/workflows/CI-linux.yml/badge.svg" alt="Linux"></a>
+  <a href="https://github.com/sireum/arsit/actions/workflows/CI-windows.yml?query=branch%3Amaster">
+    <img src="https://github.com/sireum/arsit/actions/workflows/CI-windows.yml/badge.svg" alt="Windows"></a>
+</td></tr>
+</table>
 
 ## Building Arsit's CLI
 

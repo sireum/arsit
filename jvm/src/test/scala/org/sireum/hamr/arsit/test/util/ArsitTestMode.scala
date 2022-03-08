@@ -6,14 +6,22 @@ import org.sireum._
 
 @enum object ArsitTestMode {
   // structural comparison b/w expected and results map
-  'Base
+  "Base"
+
+  "ProyekCompile"
+
+  "ProyekTest"
+
+  "ProyekRun"
+
+  "LinuxCompile"
 
   // everything in Base + compiles the generated sbt project
-  'SbtCompile
+  "SbtCompile"
 
   // everything in SbtCompile + runs demo
-  'SbtRun
+  "SbtRun"
 
   // everything in SbtCompile + runs unit tests
-  'SbtTest
+  "SbtTest"
 }
