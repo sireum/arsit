@@ -16,7 +16,7 @@ public
 		properties
 			Actual_Processor_Binding => (reference (proc)) applies to tcp;
 		annex resolute {**
-			check CASE_Tools
+			check HAMR_Guidelines
 		**};
 
 	end BuildingControlDemo.i;

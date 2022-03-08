@@ -39,7 +39,7 @@ jobs:
           export COURSIER_CACHE=$GITHUB_WORKSPACE/cache/coursier
           cd $GITHUB_WORKSPACE
                     
-          export HamrTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
-          echo "HamrTestModes=${HamrTestModes}"
+          export ArsitTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
+          echo "ArsitTestModes=${ArsitTestModes}"
           
           bin/build.cmd test
