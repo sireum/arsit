@@ -25,7 +25,7 @@ trait ArsitTest extends TestSuite {
       //ISZ(ArsitTestMode.Tipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
   }
 
-  def timeoutInSeconds: Z = 45
+  def timeoutInSeconds: Z = 30
 
   def ignoreBuildDefChanges: B = F // temporarily ignore build.sbt and build.sc changes due to build.properties updates
 
@@ -208,7 +208,7 @@ trait ArsitTest extends TestSuite {
 
               if (testPass) {
                 println(s"Compiling C code via ${compileScript.value} ...")
-                results = proc"${compileScript.value}".run()
+                results = proc"${compileScript.value} -b -r -l".run()
                 check(results, "C compilation failed")
               }
             }
