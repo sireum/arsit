@@ -166,12 +166,12 @@ object Util {
 }
 
 @enum object EntryPoints {
-  'activate
+//'activate  -- omit until this concept is operational
   'compute
-  'deactivate
+//'deactivate -- omit until this concept is operational
   'finalise
   'initialise
-  'recover
+//'recover -- omit until this concept is operational
 }
 
 // see property set in HAMR.aadl

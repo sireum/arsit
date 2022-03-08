@@ -25,7 +25,17 @@ object StubTemplate {
                    names: Names,
                    isBless: B): ST = {
 
-    val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
+    val _entryPoints = ISZ(EntryPoints.initialise, EntryPoints.finalise)
+//  omit full set of entry points until these concepts are fully operational
+//  val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
+
+//  Also, the code below controls the generation of code for entry points in a component bridge.
+//    see componentImplBlock method for generation of corresponding application code entry points that
+//    are called by the generated bridge methods below.   When entry points are added or deleted, both
+//    sections of code need to be changed.
+//  Note: when add/removing entry points, arsit must also be changed in
+//    - Util.scala - enumerated type listing entry points
+//    - art/ArchitectureDescription.scala - object Bridge / trait EntryPoints
 
     val entryPoints: ISZ[ST] = _entryPoints.map((m: EntryPoints.Type) => {
       val isInitialize = m == EntryPoints.initialise
@@ -40,6 +50,10 @@ object StubTemplate {
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
 
+      // generate bridge code for entry points other than compute.
+      // Note: see componentImplBlock method for generation of corresponding application code entry points that
+      //  are called by the generated bridge methods below.   When entry points are added or deleted, both
+      //  sections of code need to be changed.
       st"""def ${m.string}(): Unit = {
           |  // implement the following method in '${componentName}':  def ${m.string}(api: ${apiType}): Unit = {}
           |  $body
@@ -353,7 +367,7 @@ object StubTemplate {
     }
 
     val initSig: String = s"${EntryPoints.initialise.string}(api: ${names.apiInitialization})"
-    val init: ST =
+    val initializeEP: ST =
       if(excludeComponentImpl) { genMethod(initSig, None()) }
       else {
         val o: Option[ST] =
@@ -375,7 +389,7 @@ object StubTemplate {
                  |
                  |${(inPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
       }
-    val eventHandlers: ISZ[ST] =
+    val computeEP: ISZ[ST] =
       if (dispatchProtocol == Dispatch_Protocol.Periodic) {
         val ttsig: String = s"timeTriggered(api: ${names.apiOperational})"
         ISZ(if(excludeComponentImpl) genMethod(ttsig, None())
@@ -420,9 +434,21 @@ object StubTemplate {
       st"""${StringTemplate.safeToEditComment()}
           |object $componentType {
           |
-          |  ${init}
+          |  //=================================================
+          |  //  I n i t i a l i z e     E n t r y   P o i n t
+          |  //=================================================
           |
-          |  ${(eventHandlers, "\n\n")}
+          |  ${initializeEP}
+          |
+          |  //=================================================
+          |  //  C o m p u t e    E n t r y    P o i n t
+          |  //=================================================
+          |
+          |  ${(computeEP, "\n\n")}
+          |
+          |  //=================================================
+          |  //  Other   E n t r y    P o i n t s
+          |  //=================================================
           |
           |  ${(entryPoints, "\n\n")}
           |}"""
