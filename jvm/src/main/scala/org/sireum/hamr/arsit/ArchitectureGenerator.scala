@@ -241,7 +241,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
 
-        val contracts = GumboGen.processInvariants(e, symbolTable, basePackage)
+        val contracts = GumboGen.processInvariants(e, symbolTable, types, basePackage)
 
         TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 

@@ -334,7 +334,8 @@ object StubTemplate {
                                dispatchProtocol: Dispatch_Protocol.Type,
                                ports: ISZ[Port],
                                isBless: B,
-                               excludeComponentImpl: B): ST = {
+                               excludeComponentImpl: B,
+                               entryPointContracts: Map[EntryPoints.Type, ST]): ST = {
 
     val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter(p => CommonUtil.isOutPort(p.feature))
@@ -354,13 +355,14 @@ object StubTemplate {
 
     val initSig: String = s"${EntryPoints.initialise.string}(api: ${names.apiInitialization})"
     val init: ST =
-      if(excludeComponentImpl) { genMethod(initSig, None()) }
+      if(excludeComponentImpl) { genMethod(initSig, entryPointContracts.get(EntryPoints.initialise)) }
       else {
         val o: Option[ST] =
           if(outPorts.nonEmpty) Some(st"""
                                          |${(outPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
           else None()
-        genMethod(initSig, Some(st"""// example api usage
+        genMethod(initSig, Some(st"""${entryPointContracts.get(EntryPoints.initialise)}
+                                    |// example api usage
                                     |
                                     |api.logInfo("Example info logging")
                                     |api.logDebug("Example debug logging")

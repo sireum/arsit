@@ -265,6 +265,7 @@ trait ArsitTest extends TestSuite {
                 if(ri.overwrite != ei.overwrite) reason = reason :+ "overwrite flag is not the same"
                 if(ri.makeExecutable != ei.makeExecutable) reason = reason :+ "makeExecutable flag is not the same"
                 if(ri.makeCRLF != ei.makeCRLF) reason = reason :+ "makeCRLF flag is not the same"
+                if(ri.markers != ei.markers) reason = reason :+ "markers is not the same"
               case ((re: ETestResource, ee: ETestResource)) =>
                 if(re.content != ee.content) reason = reason :+ "content is not the same"
                 if(re.symlink != ee.symlink) reason = reason :+ "symlink flag is not the same"

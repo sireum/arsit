@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
@@ -141,7 +141,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
-    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, basePackage)
+    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
 
     val api = ApiTemplate.api(
       names.packageName,
@@ -153,6 +153,24 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
     var blocks: ISZ[ST] = ISZ()
+    var markers: ISZ[Marker] = ISZ()
+
+    // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
+    GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
+      case Some((st, marker)) =>
+        blocks = blocks :+ st
+        markers = markers :+ marker
+      case _ =>
+    }
+
+    var entryPointContracts: Map[EntryPoints.Type, ST] = Map.empty
+
+    GumboGen.processInitialzes(m, symbolTable, types, basePackage) match {
+      case Some((st, _markers)) =>
+        entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> st)
+        markers = markers ++ _markers
+      case _ =>
+    }
 
     if(!genBlessEntryPoints) {
       val componentImplBlock = StubTemplate.componentImplBlock(
@@ -162,7 +180,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         dispatchProtocol = dispatchProtocol,
         ports = ports,
         isBless = genBlessEntryPoints,
-        excludeComponentImpl = arsitOptions.excludeImpl
+        excludeComponentImpl = arsitOptions.excludeImpl,
+        entryPointContracts = entryPointContracts
       )
       blocks = blocks :+ componentImplBlock
     } else {
@@ -201,7 +220,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       topLevelPackageName = basePackage,
       blocks = blocks)
 
-    addResource(filename, ISZ(), componentImpl, genBlessEntryPoints)
+    addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
@@ -273,6 +292,10 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   }
 
   def addResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {
-    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(baseDir, paths), content, overwrite)
+    addResourceWithMarkers(baseDir, paths, content, ISZ(), overwrite)
+  }
+
+  def addResourceWithMarkers(baseDir: String, paths: ISZ[String], content: ST, markers: ISZ[Marker], overwrite: B): Unit = {
+    resources = resources :+ ResourceUtil.createResourceWithMarkers(Util.pathAppend(baseDir, paths), content, markers, overwrite)
   }
 }
