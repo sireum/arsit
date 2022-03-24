@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.Util
 import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlPort, AadlThreadOrDevice, GclAnnexInfo, GclSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, RecordType}
 import org.sireum.hamr.ir.{Direction, GclAccessExp, GclBinaryExp, GclBinaryOp, GclExp, GclIntegration, GclInvariant, GclLiteralExp, GclLiteralType, GclNameExp, GclSubclause, GclUnaryExp, GclUnaryOp}
@@ -35,7 +36,7 @@ object GumboGen {
     return ret
   }
 
-  @strictpure def getGclAnnexInfos(componentPath: String, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
+  @strictpure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
     val aadlComponent = symbolTable.componentMap.get(componentPath).get
     val annexInfos: ISZ[GclAnnexInfo] = symbolTable.annexInfos.get(aadlComponent) match {
       case Some(annexInfos) =>
@@ -48,7 +49,8 @@ object GumboGen {
   def processInvariants(e: RecordType, symbolTable: SymbolTable, basePackageName: String): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
 
-    val ais = getGclAnnexInfos(e.name, symbolTable)
+    val FIXME = ISZ(e.name)
+    val ais = getGclAnnexInfos(FIXME, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
 
     for(ai <- ais) {
