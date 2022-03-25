@@ -24,6 +24,8 @@ import org.sireum._
 
   def getScalaTestVersion(): String = $
 
+  def getScalaCheckVersion(): String = $
+
   def getSBTVersion(): String = $
 
   def getSbtAssemblyVersion(): String = $

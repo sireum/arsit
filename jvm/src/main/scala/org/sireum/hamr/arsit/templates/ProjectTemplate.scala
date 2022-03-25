@@ -142,7 +142,7 @@ object ProjectTemplate {
                   |  subPathOpt = None(),
                   |  deps = ISZ(),
                   |  targets = ISZ(Target.Jvm),
-                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
+                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:", "org.scalacheck::scalacheck:"),
                   |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
                   |  resources = ISZ(),
                   |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
@@ -170,6 +170,7 @@ object ProjectTemplate {
     val kekinianVersion = ArsitLibrary.getKekinianVersion()
     val sireumScalacVersion = ArsitLibrary.getSireumScalacVersionVersion()
     val scalaTestVersion = ArsitLibrary.getScalaTestVersion()
+    val scalaCheckVersion = ArsitLibrary.getScalaCheckVersion()
     val scalaVersion = ArsitLibrary.getScalaVersion()
     val formsRtVersion = ArsitLibrary.getFormsRtVersion()
     val inspectorVersion = ArsitLibrary.getInspectorVersion()
@@ -182,7 +183,7 @@ object ProjectTemplate {
                      |org.sireum%inspector-capabilities%=${inspectorVersion}
                      |org.sireum%inspector-gui%=${inspectorVersion}
                      |org.sireum%inspector-services-jvm%=${inspectorVersion}
-                     |
+                     |org.scalacheck%%scalacheck%=${scalaCheckVersion}
                      |
                      |# remove the following entries if you want to use the versions
                      |# that ship with sireum (i.e. $$SIREUM_HOME/bin/sireum --version)

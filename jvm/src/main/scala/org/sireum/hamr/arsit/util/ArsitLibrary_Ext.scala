@@ -66,6 +66,10 @@ object ArsitLibrary_Ext {
     return getBuildSbtProperties().getProperty("org.sireum.version.scalatest")
   }
 
+  def getScalaCheckVersion(): String = {
+    return getBuildSbtProperties().getProperty("org.scalacheck.scalacheck")
+  }
+
   def getSBTVersion(): String = {
     return getBuildSbtProperties().getProperty("org.sireum.version.sbt")
   }
