@@ -56,7 +56,9 @@ object Arsit {
 
     // --- nix Phase ---
 
-    // generate C artifacts  ??? Jason ???  is this just C application code, or does it include platform aspects?
+    // Add
+    //   - Slang files to be compiled to C
+    //   - C files necessary for non-Slang derived infrastructure (such as low-level communication, etc)
     val nixPhase =
       nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem,
                                   o, symbolTable, aadlTypes, jvmjsPhaseAppCode)

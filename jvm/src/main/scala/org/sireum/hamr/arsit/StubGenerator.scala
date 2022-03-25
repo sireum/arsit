@@ -95,19 +95,20 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   def genThread(m: AadlThreadOrDevice): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
-    var imports: ISZ[ST] = ISZ()
-
+    // get/form component naming used to generate file names and program identifiers for component code
     val names = Names(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
+    val componentName: String = "component" // Jason: What is this used for ???
 
-    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
-
-    val componentName: String = "component"
-
+    var imports: ISZ[ST] = ISZ()
     imports = imports :+ st"${names.packageName}.{${names.componentSingletonType} => component}"
 
+    // get model port information needed to generate APIs
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
+    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
 
+    // -------  g e n e r a t e    c o m p o n e n t    u n i t    t e s t s  ----------
+    // -- Jason: why is this here?  Can we locate it with the unit test infrastructure code below
     val bridgeTestApis: ST = TestTemplate.bridgeTestApis(basePackage, names, ports)
     addResource(dirs.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala"), bridgeTestApis, T)
 
@@ -118,13 +119,16 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       return
     }
 
+    // ------- component infrastructure:  g e n e r a t e    b r i d g e   f i l e  -------------------
+
     val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
 
+    // experimental code used to generate component structures dedicated to BLESS/BA state transition systems
     val btsAnnexes : ISZ[AnnexInfo] =
       symbolTable.annexInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
-
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 
+    // generate code for component bridge (container)
     val bridge = StubTemplate.bridge(
       topLevelPackageName = basePackage,
       packageName = names.packageName,
@@ -141,8 +145,18 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
+    // -------- component infrastructure: g e n e r a t e    p o r t    A P I s   f i l e  -------------
+
+    // generate contract information for *integration constraints* on ports.
+    //  Integration constraints are invariants on port values.
+    //  They apply to all entry points and
+    //  they are independent of the component dispatch mode and
+    //  structure of compute entry points.
+    //  Therefore these types of contracts are represented as invariants on ports instead of
+    //  pre/post-conditions on thread entry points.
     val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, basePackage)
 
+    // generate port API file for component
     val api = ApiTemplate.api(
       names.packageName,
       basePackage,
@@ -152,9 +166,13 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
+    //---- component application logic:  g e n e r a t e   e n t r y    p o i n t    s k e l e t o n s   ----
+
+    // --- BLESS version of entry points
     var blocks: ISZ[ST] = ISZ()
 
     if(!genBlessEntryPoints) {
+      // --- generate HAMR syle entry points
       val componentImplBlock = StubTemplate.componentImplBlock(
         componentType = names.componentSingletonType,
         bridgeName = names.bridge,
@@ -166,6 +184,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       )
       blocks = blocks :+ componentImplBlock
     } else {
+      // --- generate BLESS style entry points
       assert(btsAnnexes.size == 1, s"Expecting exactly one BTS annex but found ${btsAnnexes.size}")
 
       val btsAnnexInfo = btsAnnexes(0).asInstanceOf[BTSAnnexInfo]
@@ -203,9 +222,28 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     addResource(filename, ISZ(), componentImpl, genBlessEntryPoints)
 
+    //---- g e n e r a t e   u n i t    t e s t    i n f r a s t r u c t u r e  ----
+
+    // add BridgeTestSuite class in test/util directory.
+    // The unit test skeleton file for each thread inherits from this class.
+    // BridgeTestSuite adds test set and tear down infrastructure (e.g., to initial the
+    //  state of a particular thread component) that will be called before and after the
+    //  user code in each unit test.
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
     addResource(dirs.testUtilDir, ISZ(basePackage, "BridgeTestSuite.scala"), st"${testSuite}", T)
+
+    // add GUMBOCheck library file in test/util directory to hold value generators for each AADL Base Type
+    // GUMBOCheck auto-generated and developer-supplied generators use these.
+    var baseTypeGen = Util.getLibraryFile("BaseTypeGen.scala").render
+    baseTypeGen = ops.StringOps(baseTypeGen).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
+    addResource(dirs.testUtilDir, ISZ(basePackage, "BaseTypeGen.scala"), st"${baseTypeGen}", T)
+
+    // add GUMBOCheck library file in test/util directory to statically configurable bounds and
+    //  profiles for configuring GUMBOCheck
+    var gumboCheck = Util.getLibraryFile("GUMBOCheck.scala").render
+    gumboCheck = ops.StringOps(gumboCheck).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
+    addResource(dirs.testUtilDir, ISZ(basePackage, "GUMBOCheck.scala"), st"${gumboCheck}", T)
 
     seenComponents = seenComponents + filename
   }

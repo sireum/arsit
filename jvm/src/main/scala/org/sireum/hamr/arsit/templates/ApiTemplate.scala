@@ -16,18 +16,54 @@ object ApiTemplate {
   val apiInitializationId: String = "initialization_api"
   val apiInitializationBridgeId: String = "c_initialization_api"
 
+  def portScalaDocDirection(port: Port) : String = {
+    if (CommonUtil.isInPort(port.feature)) {
+      return "in"
+    } else if (CommonUtil.isOutPort(port.feature)) {
+      return "out"
+    } else {
+      halt(s"Unexpected feature in port: ${port}")
+    }
+  }
+
+  def portScalaDocCategory(port: Port) : String = {
+    val categoryString: String = port.feature.category match {
+      case FeatureCategory.DataPort =>
+        "data"
+      case FeatureCategory.EventPort =>
+        "event"
+      case FeatureCategory.EventDataPort =>
+        "event data"
+      case _ =>
+        halt(s"Unexpected feature category in port: ${port}")
+    }
+    return categoryString
+  }
+
+  // construct a string suitable for describing the AADL port declaration to which the
+  //  Scala/Slang code pertains.
+  def portScalaDocNameCategoryType(port: Port) : String = {
+    val directionString = portScalaDocDirection(port)
+    val categoryString = portScalaDocCategory(port)
+    val docScalaString = s"${port.name} : $directionString $categoryString ${port.getPortTypeNames.qualifiedTypeName}"
+    return docScalaString
+  }
+
   def api(packageName: String,
           basePackageName: String,
           names: Names,
           ports: ISZ[Port],
           integrationContracts: Map[AadlPort, (ST, ST)]): ST = {
 
+    // build code for declarations of unique Art identifiers for the component bridge and ports
+    //  ...first generate the id : type text
     val portDefs: ISZ[ST] = st"id: Art.BridgeId" +:
       ops.ISZOps(ports).map((p: Port) => st"${p.name}_Id : Art.PortId")
-
+    //  ...then form two different sets of decls, one declared as "def", the other as "val"
     val portTraitDefs: ISZ[ST] = ops.ISZOps(portDefs).map((s: ST) => st"def ${s}")
     val portParams: ISZ[ST] = ops.ISZOps(portDefs).map((s: ST) => st"val ${s}")
 
+    // create separate lists of in ports and out ports, to support code gen
     val inPorts = ports.filter((p: Port) => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter((p: Port) => !CommonUtil.isInPort(p.feature))
 
@@ -39,8 +75,9 @@ object ApiTemplate {
       return ret
     }
 
+    // create code for getter APIs for in ports
     val getters = inPorts.map((p: Port) => getterApi(p, getContract(p.aadlFeature)))
-
+    // create code for setter APIs for out ports
     val setters = outPorts.map((p: Port) => setterApi(p, getContract(p.aadlFeature)))
 
     val ret: ST =
@@ -70,9 +107,11 @@ object ApiTemplate {
           |  }
           |}
           |
+          |// APIs available for developer code in INITIALIZE Entry Point
           |@datatype class ${names.apiInitialization} (
           |  ${(portParams, ",\n")}) extends ${names.api}
           |
+          |// APIs available for developer code in COMPUTE Entry Point
           |@datatype class ${names.apiOperational} (
           |  ${(portParams, ",\n")}) extends ${names.api} {
           |
@@ -143,18 +182,21 @@ object ApiTemplate {
     val ret: ST = p.feature.category match {
       case FeatureCategory.DataPort =>
         st"""${integrationMethods}
+            |// PUT VALUE AADL RTS for ${portScalaDocNameCategoryType(p)}
             |def put_${p.name}(value : ${q}) : Unit = {
             |  ${integrationContract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventPort =>
         st"""${integrationMethods}
+            |// PUT VALUE AADL RTS for ${portScalaDocNameCategoryType(p)}
             |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
             |  ${integrationContract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventDataPort =>
         st"""${integrationMethods}
+            |// PUT VALUE AADL RTS for ${portScalaDocNameCategoryType(p)}
             |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
             |  ${integrationContract}
             |  ${putValue(p)}
@@ -178,6 +220,7 @@ object ApiTemplate {
 
     val ret: ST =
       st"""${integrationMethods}
+          |// GET VALUE AADL RTS for ${portScalaDocNameCategoryType(p)}
           |def get_${p.name}() : Option[${typeName}] = {
           |  ${integrationContract}
           |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {

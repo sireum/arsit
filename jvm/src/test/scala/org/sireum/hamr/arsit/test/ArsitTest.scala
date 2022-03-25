@@ -20,9 +20,11 @@ trait ArsitTest extends TestSuite {
   def testModes: ISZ[ArsitTestMode.Type] = Os.env("ArsitTestModes") match {
     case Some(list) => ops.StringOps(list).split((c: C) => c == C(',')).map((m: String) => ArsitTestMode.byName(m).get)
     case _ =>
-      ISZ()
+      // Run Tipe (parser and type-checker) only on results
+      ISZ(ArsitTestMode.ProyekTipe, ArsitTestMode.ProyekTest)
       //ISZ(ArsitTestMode.LinuxCompile)
-      //ISZ(ArsitTestMode.Tipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
+      // ISZ(ArsitTestMode.ProyekTipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekRun)
+    //ISZ(ArsitTestMode.Tipe, ArsitTestMode.ProyekCompile, ArsitTestMode.ProyekTest, ArsitTestMode.ProyekRun, ArsitTestMode.LinuxCompile)
   }
 
   def timeoutInSeconds: Z = 30
