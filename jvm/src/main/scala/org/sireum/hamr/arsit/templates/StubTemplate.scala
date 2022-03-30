@@ -335,6 +335,7 @@ object StubTemplate {
                                ports: ISZ[Port],
                                isBless: B,
                                excludeComponentImpl: B,
+                               preBlocks: ISZ[ST],
                                entryPointContracts: Map[EntryPoints.Type, ST]): ST = {
 
     val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
@@ -418,10 +419,15 @@ object StubTemplate {
       st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
     })
 
+    val preBlocksOpt: Option[ST] = if(preBlocks.isEmpty) None()
+    else Some(st"""${(preBlocks, "\n")}
+                  |""")
+
     val ret: ST =
       st"""${StringTemplate.safeToEditComment()}
           |object $componentType {
           |
+          |  ${preBlocksOpt}
           |  ${init}
           |
           |  ${(eventHandlers, "\n\n")}

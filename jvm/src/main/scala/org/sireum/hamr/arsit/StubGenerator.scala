@@ -154,11 +154,12 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     var blocks: ISZ[ST] = ISZ()
     var markers: ISZ[Marker] = ISZ()
+    var preBlocks: ISZ[ST] = ISZ()
 
     // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
     GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
       case Some((st, marker)) =>
-        blocks = blocks :+ st
+        preBlocks = preBlocks :+ st
         markers = markers :+ marker
       case _ =>
     }
@@ -181,6 +182,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         ports = ports,
         isBless = genBlessEntryPoints,
         excludeComponentImpl = arsitOptions.excludeImpl,
+        preBlocks = preBlocks,
         entryPointContracts = entryPointContracts
       )
       blocks = blocks :+ componentImplBlock
