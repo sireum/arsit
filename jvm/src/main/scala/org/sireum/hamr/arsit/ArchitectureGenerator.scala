@@ -225,6 +225,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     var canOverwrite: B = T
 
+    var imports: ISZ[ST] = ISZ()
+
     val body: ST = t match {
       case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
 
@@ -242,6 +244,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         }
 
         val contracts = GumboGen.processInvariants(e, symbolTable, types, basePackage)
+        imports = imports ++ GumboGen.imports
 
         TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 
@@ -279,6 +282,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val ts = TypeTemplate.typeS(
       basePackage,
       typeNames.qualifiedPackageName,
+      imports,
       body,
       TypeTemplate.payloadType(typeNames),
       canOverwrite)

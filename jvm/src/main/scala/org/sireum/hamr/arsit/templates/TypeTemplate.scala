@@ -226,6 +226,7 @@ object TypeTemplate {
 
   @pure def typeS(topLevelPackageName: String,
                   packageName: String,
+                  imports: ISZ[ST],
                   body: ST,
                   payload: ST,
                   canOverwrite: B): ST = {
@@ -244,6 +245,7 @@ object TypeTemplate {
           |
           |import org.sireum._
           |import $topLevelPackageName._
+          |${StubTemplate.addImports(imports)}
           |$overwrite
           |$body
           |$payload

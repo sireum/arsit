@@ -166,7 +166,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     var entryPointContracts: Map[EntryPoints.Type, ST] = Map.empty
 
-    GumboGen.processInitialzes(m, symbolTable, types, basePackage) match {
+    GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
       case Some((st, _markers)) =>
         entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> st)
         markers = markers ++ _markers
@@ -220,6 +220,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       inSlang = T,
       packageName = names.packageName,
       topLevelPackageName = basePackage,
+      GumboGen.imports,
       blocks = blocks)
 
     addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)
@@ -273,7 +274,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         body = subprograms.map(m => m._1))
 
       if (!CommonUtil.isThread(m)) {
-        val a = StubTemplate.slangPreamble(T, basePackage, names.packageName, ISZ(body))
+        val a = StubTemplate.slangPreamble(T, basePackage, names.packageName, ISZ(), ISZ(body))
         addResource(dirs.componentDir, ISZ(names.packagePath, s"${objectName}.scala"), a, T)
       }
 
@@ -281,6 +282,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         F,
         basePackage,
         names.packageName,
+        ISZ(),
         ISZ(StubTemplate.slangBody(
           slangAnnotation = "",
           objectName = s"${objectName}_Ext",

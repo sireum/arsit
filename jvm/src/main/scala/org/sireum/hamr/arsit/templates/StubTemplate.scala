@@ -12,7 +12,12 @@ object StubTemplate {
   // @formatter:off
 
 
-  @pure def bridge(topLevelPackageName: String,
+  def addImports(imports: ISZ[ST]): Option[ST] = {
+    val s: Set[String] = Set.empty ++ (imports.map((m: ST) => s"import ${m.render}"))
+    return if(s.nonEmpty) Some(st"${(s.elements, "\n")}") else None()
+  }
+
+@pure def bridge(topLevelPackageName: String,
                    packageName: String,
                    imports: ISZ[ST],
                    bridgeName: String,
@@ -82,7 +87,7 @@ object StubTemplate {
           |import org.sireum._
           |import art._
           |import ${topLevelPackageName}._
-          |${(imports.map((m: ST) => st"import $m"), "\n")}
+          |${addImports(imports)}
           |
           |${StringTemplate.doNotEditComment(None())}
           |
@@ -452,12 +457,14 @@ object StubTemplate {
   @pure def slangPreamble(inSlang: B,
                           packageName: String,
                           topLevelPackageName: String,
+                          imports: ISZ[ST],
                           blocks: ISZ[ST]): ST = {
     val ret: ST =
       st"""${if (inSlang) "// #Sireum\n\n" else ""}package $packageName
           |
           |import org.sireum._
           |import ${topLevelPackageName}._
+          |${addImports(imports)}
           |
           |${(blocks, "\n\n")}
           |"""

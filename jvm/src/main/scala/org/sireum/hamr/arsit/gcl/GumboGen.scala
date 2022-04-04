@@ -12,10 +12,13 @@ import org.sireum.hamr.ir.{Direction, GclGuarantee, GclIntegration, GclInvariant
 
 object GumboGen {
 
-
   val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
   val InitializesModifiesMarker: Marker = Marker("// BEGIN INITIALIZES MODIFIES", "// END INITIALIZES MODIFIES")
   val InitializesEnsuresMarker: Marker = Marker("// BEGIN INITIALIZES ENSURES", "// END INITIALIZES ENSURES")
+
+  var imports: ISZ[ST] = ISZ()
+  def resetImports(): Unit = { imports = ISZ() }
+  def addImports(gen: GumboGen): Unit = { imports = imports ++ gen.imports }
 
   @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
     val aadlComponent = symbolTable.componentMap.get(componentPath).get
@@ -27,7 +30,9 @@ object GumboGen {
     return annexInfos
   }
 
-  def processInitialzes(m: AadlThreadOrDevice, symbolTable: SymbolTable, types: AadlTypes, basePackage: String): Option[(ST, ISZ[Marker])] = {
+  def processInitializes(m: AadlThreadOrDevice, symbolTable: SymbolTable, types: AadlTypes, basePackage: String): Option[(ST, ISZ[Marker])] = {
+    resetImports()
+
     val ais = getGclAnnexInfos(m.path, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
 
@@ -38,6 +43,7 @@ object GumboGen {
       if(sc.initializes.nonEmpty) {
         val modifies: ISZ[ST] = ISZ() // TODO
         val inits: ISZ[ST] = sc.initializes.map((m: GclGuarantee) => {
+          imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
           st"""// guarantee "${m.name}"
               |${m.exp}"""
         })
@@ -64,6 +70,7 @@ object GumboGen {
   }
 
   def processInvariants(e: RecordType, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): ISZ[ST] = {
+    resetImports()
     var ret: ISZ[ST] = ISZ()
 
     val FIXME = ISZ(e.name)
@@ -73,15 +80,16 @@ object GumboGen {
     for(ai <- ais) {
       val sc = ai.annex.asInstanceOf[GclSubclause]
       val gclSymTable = ai.gclSymbolTable
-
-      ret = ret ++ GumboGen(sc, gclSymTable, symbolTable, aadlTypes, basePackageName).processInvariants(sc.invariants)
-
+      val gg = GumboGen(sc, gclSymTable, symbolTable, aadlTypes, basePackageName)
+      ret = ret ++ gg.processInvariants(sc.invariants)
+      addImports(gg)
     }
 
     return ret
   }
 
   def processIntegrationContract(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Map[AadlPort, (ST, ST)] = {
+    resetImports()
     val ais = getGclAnnexInfos(m.path, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
 
@@ -90,7 +98,11 @@ object GumboGen {
       val gclSymbolTable = ais(0).gclSymbolTable
 
       val ret: Map[AadlPort, (ST, ST)] = sc.integration match {
-        case Some(gclIntegration) => GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName).processIntegrationContract(gclIntegration)
+        case Some(gclIntegration) =>
+          val gg = GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+          val _contracts = gg.processIntegrationContract(gclIntegration)
+          addImports(gg)
+          _contracts
         case _ => Map.empty
       }
       return ret
@@ -137,6 +149,8 @@ object GumboGen {
                        aadlTypes: AadlTypes,
                        basePackageName: String) {
 
+  var imports: ISZ[ST] = ISZ()
+
   def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
     val svs: ISZ[ST] = stateVars.map((sv: GclStateVar) => {
       val typ = aadlTypes.typeMap.get(sv.classifier).get
@@ -153,6 +167,8 @@ object GumboGen {
     var ret: ISZ[ST] = ISZ()
     for(i <- invariants) {
       val methodName = GumboGen.convertToMethodName(i.name)
+
+      imports = imports ++ GumboUtil.resolveLitInterpolateImports(i.exp)
 
       ret = ret :+
         st"""@spec def ${methodName} = Invariant(
@@ -176,6 +192,8 @@ object GumboGen {
       }
 
       val dataTypeNames = Util.getDataTypeNames(aadlType, basePackageName)
+
+      imports = imports ++ GumboUtil.resolveLitInterpolateImports(spec.exp)
 
       val function: ST =
         st"""@strictpure def $methodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
