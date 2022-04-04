@@ -220,7 +220,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       inSlang = T,
       packageName = names.packageName,
       topLevelPackageName = basePackage,
-      GumboGen.imports,
+      imports = GumboGen.imports,
       blocks = blocks)
 
     addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)

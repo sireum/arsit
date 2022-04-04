@@ -13,7 +13,7 @@ object StubTemplate {
 
 
   def addImports(imports: ISZ[ST]): Option[ST] = {
-    val s: Set[String] = Set.empty ++ (imports.map((m: ST) => s"import ${m.render}"))
+    val s: Set[String] = Set.empty[String] ++ (imports.map((m: ST) => s"import ${m.render}"))
     return if(s.nonEmpty) Some(st"${(s.elements, "\n")}") else None()
   }
 
