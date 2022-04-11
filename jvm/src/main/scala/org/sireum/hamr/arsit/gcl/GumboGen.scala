@@ -9,6 +9,7 @@ import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlPort, AadlThreadOrDevice, GclAnnexInfo, GclSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType}
 import org.sireum.hamr.ir.{Direction, GclGuarantee, GclIntegration, GclInvariant, GclStateVar, GclSubclause}
+import org.sireum.lang.ast.Exp
 
 object GumboGen {
 
@@ -41,8 +42,9 @@ object GumboGen {
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if(sc.initializes.nonEmpty) {
-        val modifies: ISZ[ST] = ISZ() // TODO
-        val inits: ISZ[ST] = sc.initializes.map((m: GclGuarantee) => {
+        val modifies: ISZ[ST] = sc.initializes.get.modifies.map((m: Exp) => st"${m}")
+
+        val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
           imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
           st"""// guarantee "${m.name}"
               |${m.exp}"""
@@ -51,7 +53,9 @@ object GumboGen {
         val ret: ST =
           st"""Contract(
               |  Modifies(
-              |    // TODO: add modifies support to GCL grammar ...
+              |    ${InitializesModifiesMarker.beginMarker}
+              |    ${(modifies, ",\n")}
+              |    ${InitializesModifiesMarker.endMarker}
               |  ),
               |  Ensures(
               |    ${InitializesEnsuresMarker.beginMarker}
@@ -60,7 +64,7 @@ object GumboGen {
               |  )
               |)"""
 
-        return Some((ret, ISZ(InitializesEnsuresMarker)))
+        return Some((ret, ISZ(InitializesEnsuresMarker, InitializesModifiesMarker)))
       } else {
         return None()
       }
