@@ -92,7 +92,7 @@ object GumboGen {
     return ret
   }
 
-  def processIntegrationContract(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Map[AadlPort, (ST, ST)] = {
+  def processIntegrationContract(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Map[AadlPort, (ST, ST, ST)] = {
     resetImports()
     val ais = getGclAnnexInfos(m.path, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
@@ -101,7 +101,7 @@ object GumboGen {
       val sc = ais(0).annex.asInstanceOf[GclSubclause]
       val gclSymbolTable = ais(0).gclSymbolTable
 
-      val ret: Map[AadlPort, (ST, ST)] = sc.integration match {
+      val ret: Map[AadlPort, (ST, ST, ST)] = sc.integration match {
         case Some(gclIntegration) =>
           val gg = GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
           val _contracts = gg.processIntegrationContract(gclIntegration)
@@ -182,8 +182,8 @@ object GumboGen {
     return ret
   }
 
-  def processIntegrationContract(gclIntegration: GclIntegration): Map[AadlPort, (ST, ST)] = {
-    var ret: Map[AadlPort, (ST, ST)] = Map.empty
+  def processIntegrationContract(gclIntegration: GclIntegration): Map[AadlPort, (ST, ST, ST)] = {
+    var ret: Map[AadlPort, (ST, ST, ST)] = Map.empty
     for(spec <- gclIntegration.specs) {
       val port: AadlPort = gclSymbolTable.integrationPort.get(spec).get
 
@@ -199,11 +199,12 @@ object GumboGen {
 
       imports = imports ++ GumboUtil.resolveLitInterpolateImports(spec.exp)
 
-      val function: ST =
+      val strictPureFunction: ST =
         st"""@strictpure def $methodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
-            |  ${spec.exp}
-            |
-            |@spec var ${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName} = $$ // Logika spec var representing port state
+            |  ${spec.exp}"""
+
+      val specVar: ST =
+        st"""@spec var ${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName} = $$ // Logika spec var representing port state
             |@spec def ${port.identifier}_Inv = Invariant(
             |  ${methodName}(${port.identifier})
             |)
@@ -230,7 +231,7 @@ object GumboGen {
         }
       }
 
-      ret = ret + (port ~> ((function, contract)))
+      ret = ret + (port ~> ((strictPureFunction, specVar, contract)))
     }
 
     return ret
