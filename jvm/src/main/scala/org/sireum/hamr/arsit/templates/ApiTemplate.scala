@@ -54,7 +54,7 @@ object ApiTemplate {
     })
 
     def collect(name: String, v: ISZ[ST]) : Option[ST] = {
-      return if(v.nonEmpty) {
+      return if(v.nonEmpty)
         Some(
           st"""object ${name} {
               |  ${(v, "\n\n")}
@@ -62,8 +62,7 @@ object ApiTemplate {
               |
               |import ${name}._
               |""")
-      }
-      else { None() }
+      else None()
     }
 
     val ret: ST =
