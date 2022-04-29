@@ -100,6 +100,7 @@ trait ArsitTest extends TestSuite {
       noProyekIve = T,
       noEmbedArt = ops.noEmbedArt,
       devicesAsThreads = ops.devicesAsThreads,
+      genSbtMill = ops.genSbtMill,
       slangAuxCodeDirs = ISZ(),
       slangOutputCDir = None(),
       excludeComponentImpl = ops.excludeImpl,
@@ -247,9 +248,33 @@ trait ArsitTest extends TestSuite {
         TestResult(Map.empty)
       }
 
+
+    if (resultMap.map.size != expectedMap.map.size) {
+      val ekeys = expectedMap.map.keySet
+      val rkeys = resultMap.map.keySet
+
+      val missingEkeys = (ekeys.union(rkeys) -- ekeys.elements).elements
+      val missingRkeys = (ekeys.union(rkeys) -- rkeys.elements).elements
+
+      if (missingEkeys.nonEmpty) {
+        for (k <- missingEkeys) {
+          println(s"Expected missing entry ${k}")
+          //println(s"  - ${resultMap.map.get(k).get}")
+        }
+      } else {
+        for (k <- missingRkeys) {
+          println(s"Results missing entry ${k}")
+          //println(s"  - ${expectedMap.map.get(k)}")
+        }
+        //rkeys.elements.foreach(f => println(f))
+      }
+      testPass &= F
+    }
+
     writeOutTestResults(expectedMap, expectedDir)
 
     var allEqual = T
+
     for(r <- resultMap.map.entries) {
       if(expectedMap.map.contains(r._1)) {
         val e = expectedMap.map.get(r._1).get
@@ -297,6 +322,7 @@ object ArsitTest {
     bless = F,
     verbose = T,
     devicesAsThreads = T,
+    genSbtMill = T,
     ipc = IpcMechanism.SharedMemory,
     auxCodeDirs = ISZ(),
     outputSharedCDir = fakedir,

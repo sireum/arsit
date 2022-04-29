@@ -6,7 +6,12 @@ import org.sireum.hamr.arsit.util.ArsitLibrary
 
 object ProjectTemplate {
 
-  def arsitSlangInstructionsMessage(path: String): ST = {
+  def arsitSlangInstructionsMessage(path: String, includeSbtMill: B): ST = {
+    val sbtMillOpt: Option[ST] = if (includeSbtMill) Some(
+      st"""Alternatively, refer to the comments in build.sbt or build.sc for SBT or Mill
+          |based instructions.""")
+    else None()
+
     val ret: ST =
       st"""Slang Instructions:
           |-------------------
@@ -14,8 +19,7 @@ object ProjectTemplate {
           |
           |    Refer to the comments in bin/project.cmd for instructions on how to open the
           |    project in Sireum IVE and how to run the system/unit-tests from IVE or the command line.
-          |    Alternatively, refer to the comments in build.sbt or build.sc for sbt or mill
-          |    based instructions."""
+          |    ${sbtMillOpt}"""
     return ret
   }
 
@@ -68,7 +72,7 @@ object ProjectTemplate {
                   demoScalaPath: String,
                   bridgeTestPath: String): ST = {
     val (artDir, artIvy): (Option[ST], Option[ST]) =
-      if(embedArt)
+      if (embedArt)
         (Some(st""""art", """), None())
       else
         (None(), Some(st""""org.sireum.slang-embedded-art::slang-embedded-art:", """))
@@ -76,93 +80,94 @@ object ProjectTemplate {
     // removed from ivy deps the following from
     //, "com.intellij:forms_rt:"
 
-    val ret = st"""::#! 2> /dev/null                                   #
-                  |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
-                  |if [ -z $${SIREUM_HOME} ]; then                      #
-                  |  echo "Please set SIREUM_HOME env var"             #
-                  |  exit -1                                           #
-                  |fi                                                  #
-                  |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
-                  |:BOF
-                  |setlocal
-                  |if not defined SIREUM_HOME (
-                  |  echo Please set SIREUM_HOME env var
-                  |  exit /B -1
-                  |)
-                  |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
-                  |exit /B %errorlevel%
-                  |::!#
-                  |// #Sireum
-                  |
-                  |// Example Sireum Proyek build definitions -- the contents of this file will not be overwritten
-                  |//
-                  |// To install Sireum (Proyek and IVE) see https://github.com/sireum/kekinian#installing
-                  |//
-                  |// The following commands should be executed in the parent of the 'bin' directory.
-                  |//
-                  |// Command Line:
-                  |//   To run the demo from the command line using the default scheduler:
-                  |//     sireum proyek run . ${basePackageName}.Demo
-                  |//
-                  |//   To see the available CLI options:
-                  |//     sireum proyek run . ${basePackageName}.Demo -h
-                  |//
-                  |//   To run the example unit tests from the command line:
-                  |//     sireum proyek test .
-                  |//
-                  |//   To build an executable jar:
-                  |//     sireum proyek assemble --uber --main ${basePackageName}.Demo .
-                  |//
-                  |// Sireum IVE:
-                  |//
-                  |//   If you prevented HAMR from running Proyek IVE then first generate the IVE project:
-                  |//     sireum proyek ive .
-                  |//
-                  |//   Then in IVE select 'File > Open ...' and navigate to the parent of the
-                  |//   'bin' directory and click 'OK'.
-                  |//
-                  |//   To run the demo from within Sireum IVE:
-                  |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
-                  |//
-                  |//   To run the unit test cases from within Sireum IVE:
-                  |//     Right click the ${bridgeTestPath} and choose "Run ScalaTests in bridge"
-                  |//
-                  |//   NOTE: A ClassNotFoundException may be raised the first time you try to
-                  |//         run the demo or unit tests.  If this occurs simply delete the directory
-                  |//         named 'target' and retry
-                  |
-                  |import org.sireum._
-                  |import org.sireum.project.{Module, Project, Target}
-                  |
-                  |val home: Os.Path = Os.slashDir.up.canon
-                  |
-                  |val slangModule: Module = Module(
-                  |  id = "${projectName}",
-                  |  basePath = (home / "src").string,
-                  |  subPathOpt = None(),
-                  |  deps = ISZ(),
-                  |  targets = ISZ(Target.Jvm),
-                  |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
-                  |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
-                  |  resources = ISZ(),
-                  |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
-                  |  testResources = ISZ(),
-                  |  publishInfoOpt = None()
-                  |)
-                  |
-                  |val inspectorModule: Module = slangModule(
-                  |  sources = slangModule.sources :+ (Os.path("main") / "inspector").string,
-                  |  ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:")
-                  |)
-                  |
-                  |val slangProject: Project = Project.empty + slangModule
-                  |val inspectorProject: Project = Project.empty + inspectorModule
-                  |
-                  |val prj: Project = slangProject
-                  |//val prj: Project = inspectorProject()
-                  |
-                  |println(project.JSON.fromProject(prj, T))
-                  |"""
+    val ret =
+      st"""::#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+          |if [ -z $${SIREUM_HOME} ]; then                      #
+          |  echo "Please set SIREUM_HOME env var"             #
+          |  exit -1                                           #
+          |fi                                                  #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+          |:BOF
+          |setlocal
+          |if not defined SIREUM_HOME (
+          |  echo Please set SIREUM_HOME env var
+          |  exit /B -1
+          |)
+          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |exit /B %errorlevel%
+          |::!#
+          |// #Sireum
+          |
+          |// Example Sireum Proyek build definitions -- the contents of this file will not be overwritten
+          |//
+          |// To install Sireum (Proyek and IVE) see https://github.com/sireum/kekinian#installing
+          |//
+          |// The following commands should be executed in the parent of the 'bin' directory.
+          |//
+          |// Command Line:
+          |//   To run the demo from the command line using the default scheduler:
+          |//     sireum proyek run . ${basePackageName}.Demo
+          |//
+          |//   To see the available CLI options:
+          |//     sireum proyek run . ${basePackageName}.Demo -h
+          |//
+          |//   To run the example unit tests from the command line:
+          |//     sireum proyek test .
+          |//
+          |//   To build an executable jar:
+          |//     sireum proyek assemble --uber --main ${basePackageName}.Demo .
+          |//
+          |// Sireum IVE:
+          |//
+          |//   If you prevented HAMR from running Proyek IVE then first generate the IVE project:
+          |//     sireum proyek ive .
+          |//
+          |//   Then in IVE select 'File > Open ...' and navigate to the parent of the
+          |//   'bin' directory and click 'OK'.
+          |//
+          |//   To run the demo from within Sireum IVE:
+          |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
+          |//
+          |//   To run the unit test cases from within Sireum IVE:
+          |//     Right click the ${bridgeTestPath} and choose "Run ScalaTests in bridge"
+          |//
+          |//   NOTE: A ClassNotFoundException may be raised the first time you try to
+          |//         run the demo or unit tests.  If this occurs simply delete the directory
+          |//         named 'target' and retry
+          |
+          |import org.sireum._
+          |import org.sireum.project.{Module, Project, Target}
+          |
+          |val home: Os.Path = Os.slashDir.up.canon
+          |
+          |val slangModule: Module = Module(
+          |  id = "${projectName}",
+          |  basePath = (home / "src").string,
+          |  subPathOpt = None(),
+          |  deps = ISZ(),
+          |  targets = ISZ(Target.Jvm),
+          |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
+          |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
+          |  resources = ISZ(),
+          |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
+          |  testResources = ISZ(),
+          |  publishInfoOpt = None()
+          |)
+          |
+          |val inspectorModule: Module = slangModule(
+          |  sources = slangModule.sources :+ (Os.path("main") / "inspector").string,
+          |  ivyDeps = slangModule.ivyDeps ++ ISZ("org.sireum:inspector-capabilities:", "org.sireum:inspector-gui:", "org.sireum:inspector-services-jvm:")
+          |)
+          |
+          |val slangProject: Project = Project.empty + slangModule
+          |val inspectorProject: Project = Project.empty + inspectorModule
+          |
+          |val prj: Project = slangProject
+          |//val prj: Project = inspectorProject()
+          |
+          |println(project.JSON.fromProject(prj, T))
+          |"""
     return ret
   }
 
@@ -177,24 +182,25 @@ object ProjectTemplate {
 
     // remove the following from version.properties
     // |com.intellij%forms_rt%=${formsRtVersion}
-    val ret:ST = st"""org.sireum.slang-embedded-art%%slang-embedded-art%=${artVersion}
-                     |
-                     |org.sireum%inspector-capabilities%=${inspectorVersion}
-                     |org.sireum%inspector-gui%=${inspectorVersion}
-                     |org.sireum%inspector-services-jvm%=${inspectorVersion}
-                     |
-                     |
-                     |# remove the following entries if you want to use the versions
-                     |# that ship with sireum (i.e. $$SIREUM_HOME/bin/sireum --version)
-                     |
-                     |# Scala compiler plugin for Slang
-                     |org.sireum%%scalac-plugin%=${sireumScalacVersion}
-                     |
-                     |org.sireum.kekinian%%library%=${kekinianVersion}
-                     |
-                     |org.scala-lang%scala-library%=${scalaVersion}
-                     |org.scalatest%%scalatest%%=${scalaTestVersion}
-                     |"""
+    val ret: ST =
+    st"""org.sireum.slang-embedded-art%%slang-embedded-art%=${artVersion}
+        |
+        |org.sireum%inspector-capabilities%=${inspectorVersion}
+        |org.sireum%inspector-gui%=${inspectorVersion}
+        |org.sireum%inspector-services-jvm%=${inspectorVersion}
+        |
+        |
+        |# remove the following entries if you want to use the versions
+        |# that ship with sireum (i.e. $$SIREUM_HOME/bin/sireum --version)
+        |
+        |# Scala compiler plugin for Slang
+        |org.sireum%%scalac-plugin%=${sireumScalacVersion}
+        |
+        |org.sireum.kekinian%%library%=${kekinianVersion}
+        |
+        |org.scala-lang%scala-library%=${scalaVersion}
+        |org.scalatest%%scalatest%%=${scalaTestVersion}
+        |"""
     return ret
   }
 
