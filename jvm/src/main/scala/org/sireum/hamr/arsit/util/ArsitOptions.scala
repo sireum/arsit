@@ -22,6 +22,7 @@ import org.sireum._
                              bless: B,
                              verbose: B,
                              devicesAsThreads: B,
+                             genSbtMill: B,
                              ipc: IpcMechanism.Type,
                              auxCodeDirs: ISZ[String],
                              outputSharedCDir: Os.Path,

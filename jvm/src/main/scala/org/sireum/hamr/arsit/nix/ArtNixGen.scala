@@ -206,8 +206,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     var artNixCasesM: HashSMap[String, ISZ[ST]] = HashSMap.empty
     for (c <- symbolTable.connections) {
-      val dstComp = symbolTable.airComponentMap.get(CommonUtil.getName(c.dst.component)).get
-      val srcComp = symbolTable.airComponentMap.get(CommonUtil.getName(c.src.component)).get
+      val dstComp = symbolTable.airComponentMap.get(c.dst.component.name).get
+      val srcComp = symbolTable.airComponentMap.get(c.src.component.name).get
 
       if ((CommonUtil.isDevice(srcComp) || CommonUtil.isThread(srcComp)) &&
         (CommonUtil.isDevice(dstComp) || CommonUtil.isThread(dstComp))) {

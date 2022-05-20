@@ -3,37 +3,25 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.symbols.{GclAnnexInfo, GclSymbolTable, SymbolTable}
-import org.sireum.hamr.codegen.common.types.RecordType
-import org.sireum.hamr.ir.{GclAccessExp, GclBinaryExp, GclBinaryOp, GclExp, GclInvariant, GclLiteralExp, GclLiteralType, GclNameExp, GclSubclause, GclUnaryExp, GclUnaryOp}
+import org.sireum.hamr.arsit.Util
+import org.sireum.hamr.codegen.common.CommonUtil.IdPath
+import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
+import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlPort, AadlThreadOrDevice, GclAnnexInfo, GclSymbolTable, SymbolTable}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType}
+import org.sireum.hamr.ir.{Direction, GclGuarantee, GclIntegration, GclInvariant, GclStateVar, GclSubclause}
+import org.sireum.lang.ast.Exp
 
 object GumboGen {
-  def convertBinaryOp(op: GclBinaryOp.Type): String = {
-    val ret: String = op match {
-      case GclBinaryOp.Gte => ">="
-      case GclBinaryOp.Gt => ">"
-      case GclBinaryOp.Lte => "<="
-      case GclBinaryOp.Lt => "<"
-      case GclBinaryOp.Eq => "=="
-      case GclBinaryOp.Neq => "!="
 
-      case GclBinaryOp.Plus => "+"
-      case GclBinaryOp.Minus => "-"
-      case GclBinaryOp.Div => "/"
-      case GclBinaryOp.Mult => "*"
+  val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
+  val InitializesModifiesMarker: Marker = Marker("// BEGIN INITIALIZES MODIFIES", "// END INITIALIZES MODIFIES")
+  val InitializesEnsuresMarker: Marker = Marker("// BEGIN INITIALIZES ENSURES", "// END INITIALIZES ENSURES")
 
-      case GclBinaryOp.And => "&&"
-      case GclBinaryOp.AndThen => "&"
-      case GclBinaryOp.Or => "||"
-      case GclBinaryOp.OrElse => "|"
+  var imports: ISZ[ST] = ISZ()
+  def resetImports(): Unit = { imports = ISZ() }
+  def addImports(gen: GumboGen): Unit = { imports = imports ++ gen.imports }
 
-      case x => halt(s"Not yet $x")
-    }
-    return ret
-  }
-
-  @strictpure def getGclAnnexInfos(componentPath: String, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
+  @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
     val aadlComponent = symbolTable.componentMap.get(componentPath).get
     val annexInfos: ISZ[GclAnnexInfo] = symbolTable.annexInfos.get(aadlComponent) match {
       case Some(annexInfos) =>
@@ -43,21 +31,105 @@ object GumboGen {
     return annexInfos
   }
 
-  def processInvariants(e: RecordType, symbolTable: SymbolTable): ISZ[ST] = {
+  def processInitializes(m: AadlThreadOrDevice, symbolTable: SymbolTable, types: AadlTypes, basePackage: String): Option[(ST, ISZ[Marker])] = {
+    resetImports()
+
+    val ais = getGclAnnexInfos(m.path, symbolTable)
+    assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
+
+    if(ais.nonEmpty) {
+      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val gclSymbolTable = ais(0).gclSymbolTable
+
+      if(sc.initializes.nonEmpty) {
+        val modifies: ISZ[ST] = sc.initializes.get.modifies.map((m: Exp) => st"${m}")
+
+        val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
+          imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
+          st"""// guarantee "${m.name}"
+              |${m.exp}"""
+        })
+
+        val ret: ST =
+          st"""Contract(
+              |  Modifies(
+              |    ${InitializesModifiesMarker.beginMarker}
+              |    ${(modifies, ",\n")}
+              |    ${InitializesModifiesMarker.endMarker}
+              |  ),
+              |  Ensures(
+              |    ${InitializesEnsuresMarker.beginMarker}
+              |    ${(inits, ",\n")}
+              |    ${InitializesEnsuresMarker.endMarker}
+              |  )
+              |)"""
+
+        return Some((ret, ISZ(InitializesEnsuresMarker, InitializesModifiesMarker)))
+      } else {
+        return None()
+      }
+    } else {
+      return None()
+    }
+  }
+
+  def processInvariants(e: RecordType, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): ISZ[ST] = {
+    resetImports()
     var ret: ISZ[ST] = ISZ()
 
-    val ais = getGclAnnexInfos(e.name, symbolTable)
+    val FIXME = ISZ(e.name)
+    val ais = getGclAnnexInfos(FIXME, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
 
     for(ai <- ais) {
       val sc = ai.annex.asInstanceOf[GclSubclause]
       val gclSymTable = ai.gclSymbolTable
-
-      ret = ret ++ GumboGen(sc, gclSymTable, symbolTable).processInvariants(sc.invariants)
-
+      val gg = GumboGen(sc, gclSymTable, symbolTable, aadlTypes, basePackageName)
+      ret = ret ++ gg.processInvariants(sc.invariants)
+      addImports(gg)
     }
 
     return ret
+  }
+
+  def processIntegrationContract(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Map[AadlPort, (ST, ST, ST)] = {
+    resetImports()
+    val ais = getGclAnnexInfos(m.path, symbolTable)
+    assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
+
+    if(ais.nonEmpty) {
+      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val gclSymbolTable = ais(0).gclSymbolTable
+
+      val ret: Map[AadlPort, (ST, ST, ST)] = sc.integration match {
+        case Some(gclIntegration) =>
+          val gg = GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+          val _contracts = gg.processIntegrationContract(gclIntegration)
+          addImports(gg)
+          _contracts
+        case _ => Map.empty
+      }
+      return ret
+    } else {
+      return Map.empty
+    }
+  }
+
+  def processStateVars(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Option[(ST, Marker)] = {
+    val ais = getGclAnnexInfos(m.path, symbolTable)
+
+    if(ais.nonEmpty) {
+      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val gclSymbolTable = ais(0).gclSymbolTable
+
+      if(sc.state.nonEmpty) {
+        return Some(GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(sc.state))
+      } else {
+        return None()
+      }
+    } else {
+      return None()
+    }
   }
 
   def convertToMethodName(s: String): String = {
@@ -72,67 +144,27 @@ object GumboGen {
     }
     return conversions.String.fromCis(cis)
   }
+
 }
 
 @record class GumboGen(subClause: GclSubclause,
                        gclSymbolTable: GclSymbolTable,
-                       symbolTable: SymbolTable) {
+                       symbolTable: SymbolTable,
+                       aadlTypes: AadlTypes,
+                       basePackageName: String) {
 
-  def processBinaryExp(be: GclBinaryExp): ST = {
-    val lhs = processExp(be.lhs)
-    val rhs = processExp(be.rhs)
-    val op = GumboGen.convertBinaryOp(be.op)
+  var imports: ISZ[ST] = ISZ()
 
-    return st"($lhs $op $rhs)"
-  }
+  def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
+    val svs: ISZ[ST] = stateVars.map((sv: GclStateVar) => {
+      val typ = aadlTypes.typeMap.get(sv.classifier).get
+      val typeNames = Util.getDataTypeNames(typ, basePackageName)
+      st"var ${sv.name}: ${typeNames.qualifiedReferencedTypeName} = ${typeNames.example()}"
+    })
 
-  def processUnaryExp(ue: GclUnaryExp): ST = {
-    val e = processExp(ue.exp)
-
-    val ret : ST = ue.op match {
-      case GclUnaryOp.Neg => st"-$e"
-      case GclUnaryOp.Not => st"!($e)"
-      case x => halt(s"not yet $x")
-    }
-
-    return ret
-  }
-
-  def processLiteralExp(lit: GclLiteralExp): ST = {
-    val ret: ST = lit.typ match {
-      case GclLiteralType.Real => st"${lit.exp}f" // F32 for now
-      case GclLiteralType.Integer => st"${lit.exp}" // Z
-      case GclLiteralType.String => st""""${lit.exp}""""
-      case GclLiteralType.Boolean =>
-        val e = ops.StringOps(lit.exp).toLower
-        e match {
-          case "true" => st"T"
-          case "false" => st"F"
-          case x => halt(s"$x")
-        }
-    }
-    return ret
-  }
-
-  def processAccessExp(value: GclAccessExp): ST = {
-    val e = processExp(value.exp)
-    return st"${e}.${value.attributeName}"
-  }
-
-  def processNameExp(value: GclNameExp): ST = {
-    val n = CommonUtil.getName(value.name)
-    return st"${n}"
-  }
-
-  def processExp(e: GclExp): ST = {
-    val ret: ST = e match {
-      case be: GclBinaryExp => processBinaryExp(be)
-      case ue: GclUnaryExp => processUnaryExp(ue)
-      case lit: GclLiteralExp => processLiteralExp(lit)
-      case ne: GclNameExp => processNameExp(ne)
-      case ae: GclAccessExp => processAccessExp(ae)
-    }
-    return ret
+    return (st"""${GumboGen.StateVarMarker.beginMarker}
+                |${(svs, "\n\n")}
+                |${GumboGen.StateVarMarker.endMarker}""", GumboGen.StateVarMarker)
   }
 
   def processInvariants(invariants: ISZ[GclInvariant]): ISZ[ST] = {
@@ -140,11 +172,68 @@ object GumboGen {
     for(i <- invariants) {
       val methodName = GumboGen.convertToMethodName(i.name)
 
+      imports = imports ++ GumboUtil.resolveLitInterpolateImports(i.exp)
+
       ret = ret :+
         st"""@spec def ${methodName} = Invariant(
-            |  ${processExp(i.exp)}
+            |  ${i.exp}
             |)"""
     }
+    return ret
+  }
+
+  def processIntegrationContract(gclIntegration: GclIntegration): Map[AadlPort, (ST, ST, ST)] = {
+    var ret: Map[AadlPort, (ST, ST, ST)] = Map.empty
+    for(spec <- gclIntegration.specs) {
+      val port: AadlPort = gclSymbolTable.integrationPort.get(spec).get
+
+      val methodName = GumboGen.convertToMethodName(spec.name)
+
+      val aadlType: AadlType = port match {
+        case i: AadlDataPort => i.aadlType
+        case i: AadlEventDataPort => i.aadlType
+        case _ => halt("Symbol resolver should have prevented this")
+      }
+
+      val dataTypeNames = Util.getDataTypeNames(aadlType, basePackageName)
+
+      imports = imports ++ GumboUtil.resolveLitInterpolateImports(spec.exp)
+
+      val strictPureFunction: ST =
+        st"""@strictpure def $methodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
+            |  ${spec.exp}"""
+
+      val specVar: ST =
+        st"""@spec var ${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName} = $$ // Logika spec var representing port state
+            |@spec def ${port.identifier}_Inv = Invariant(
+            |  ${methodName}(${port.identifier})
+            |)
+            |
+            |"""
+
+      val contract: ST = {
+        if(port.direction == Direction.In) {
+          st"""Contract(
+              |  Ensures(${methodName}(${port.identifier}),
+              |    Res == Some(${port.identifier})
+              |  )
+              |)"""
+        } else {
+          st"""Contract(
+              |  Requires(${methodName}(value)),
+              |  Modifies(${port.identifier}),
+              |  Ensures(${port.identifier} == value)
+              |)
+              |Spec {
+              |  ${port.identifier} = value
+              |}
+              |"""
+        }
+      }
+
+      ret = ret + (port ~> ((strictPureFunction, specVar, contract)))
+    }
+
     return ret
   }
 }

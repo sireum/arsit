@@ -7,11 +7,11 @@ import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, AadlTh
 object SchedulerUtil {
 
   def getThreadTimingPropertiesName(thread: AadlThreadOrDevice): String = {
-    return s"${thread.path}_timingProperties"
+    return s"${thread.pathAsString("_")}_timingProperties"
   }
 
   def getProcessorTimingPropertiesName(processor: AadlProcessor): String = {
-    return s"${processor.path}_timingProperties"
+    return s"${processor.pathAsString("_")}_timingProperties"
   }
 
   def getSchedulerTouches(symbolTable: SymbolTable, devicesAsThreads: B): ISZ[ST] = {

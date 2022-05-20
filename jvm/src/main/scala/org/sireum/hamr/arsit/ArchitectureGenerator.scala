@@ -196,11 +196,11 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
   def processConnectionInstance(ci: ConnectionInstance): ST = {
     val srcComponentId = CommonUtil.getName(ci.src.component)
-    val srcFeatureId = CommonUtil.getName(ci.src.feature.get)
+    val srcFeatureId = ci.src.feature.get.name
     val srcComponentFeatureId = symbolTable.featureMap.get(srcFeatureId).get.identifier
 
     val dstComponentId = CommonUtil.getName(ci.dst.component)
-    val dstFeatureId = CommonUtil.getName(ci.dst.feature.get)
+    val dstFeatureId = ci.dst.feature.get.name
     val dstComponentFeatureId = symbolTable.featureMap.get(dstFeatureId).get.identifier
 
     return ArchitectureTemplate.connection(
@@ -234,7 +234,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
           flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
         }
 
-        val contracts = GumboGen.processInvariants(e, symbolTable)
+        val contracts = GumboGen.processInvariants(e, symbolTable, types, basePackage)
 
         TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 
@@ -296,8 +296,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       else ISZ(ir.ComponentCategory.Thread)
     }
 
-    val catSrc = symbolTable.airComponentMap.get(CommonUtil.getName(c.src.component)).get.category
-    val catDest = symbolTable.airComponentMap.get(CommonUtil.getName(c.dst.component)).get.category
+    val catSrc = symbolTable.airComponentMap.get(c.src.component.name).get.category
+    val catDest = symbolTable.airComponentMap.get(c.dst.component.name).get.category
 
     if (!ISZOps(allowedComponents).contains(catSrc) || !ISZOps(allowedComponents).contains(catDest)) {
       reporter.info(None(), Util.toolName, s"Skipping: connection between ${catSrc} to ${catDest}.  $str")
