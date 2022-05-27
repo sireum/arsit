@@ -996,11 +996,4 @@ object ArtNixTemplate {
     return ret
   }
 
-  def platformExternal_Setup(basePackage: String): ST = {
-    val ret =
-      st"""Unit ${basePackage}_PlatformExternal_setup(${StackFrameTemplate.STACK_FRAME_ONLY_ST}) {
-          |}"""
-    return ret
-  }
-
 }

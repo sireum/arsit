@@ -6,7 +6,7 @@
 
 // This file is auto-generated.  Do not edit
 
-static inline void sem_op(int sid, short val) {
+inline void sem_op(int sid, short val) {
     struct sembuf sem_op;
     sem_op.sem_num = 0;
     sem_op.sem_op = val;
@@ -14,15 +14,15 @@ static inline void sem_op(int sid, short val) {
     semop(sid, &sem_op, 1);
 }
 
-static inline void lock(int sid) {
+inline void lock(int sid) {
     sem_op(sid, -1);
 }
 
-static inline void unlock(int sid) {
+inline void unlock(int sid) {
     sem_op(sid, 1);
 }
 
-static inline int create_sem(Z msgid) {
+inline int create_sem(Z msgid) {
     unsigned int permission = 0666;
     unsigned int mask = IPC_CREAT;
     int sem_set_id = semget((key_t) msgid, 1, mask | permission);

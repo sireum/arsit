@@ -123,9 +123,15 @@ object TranspilerTemplate {
       else None()
     }
 
+    val sources = ops.ISZOps(opts.sourcepath.map((f: String) => Util.relativizePaths(binDir, f, script_home))
+      .map((f: String) => st"""s"${f}"""".render)).sortWith( (a: String, b: String) => a <= b)
+
     val slash =
-      st"""val ${opts.projectName.get}: ISZ[String] = ISZ(
-          |  "--sourcepath", sources,
+      st"""val sourcePaths: ISZ[String] = ISZ(
+          |  ${(sources, ",\n")})
+          |
+          |val ${opts.projectName.get}: ISZ[String] = ISZ(
+          |  "--sourcepath", st"$${(sourcePaths, PATH_SEP)}".render,
           |  "--output-dir", s"${cOutputDirRel}",
           |  "--name", "${opts.projectName.get}",
           |  "--apps", "${(opts.apps, ",")}",
@@ -259,31 +265,7 @@ object TranspilerTemplate {
       st"""ISZ(${(quote, ",")})"""
     })
 
-    val ret: ST =
-      st"""::#! 2> /dev/null                                   #
-          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
-          |if [ -z $${SIREUM_HOME} ]; then                      #
-          |  echo "Please set SIREUM_HOME env var"             #
-          |  exit -1                                           #
-          |fi                                                  #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
-          |:BOF
-          |setlocal
-          |if not defined SIREUM_HOME (
-          |  echo Please set SIREUM_HOME env var
-          |  exit /B -1
-          |)
-          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
-          |exit /B %errorlevel%
-          |::!#
-          |// #Sireum
-          |
-          |import org.sireum._
-          |
-          |${StringTemplate.doNotEditComment(None())}
-          |
-          |val SCRIPT_HOME: Os.Path = Os.slashDir
-          |val PATH_SEP: String = Os.pathSep
+    /*
           |val srcDir: Os.Path = SCRIPT_HOME.up / "src"
           |
           |val processes: ISZ[ISZ[String]] = ISZ(
@@ -312,6 +294,33 @@ object TranspilerTemplate {
           |}
           |
           |val sources = st"$${(modules.map((m: Os.Path) => m.string), Os.pathSep)}".render
+          |
+     */
+    val ret: ST =
+      st"""::#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
+          |if [ -z $${SIREUM_HOME} ]; then                      #
+          |  echo "Please set SIREUM_HOME env var"             #
+          |  exit -1                                           #
+          |fi                                                  #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+          |:BOF
+          |setlocal
+          |if not defined SIREUM_HOME (
+          |  echo Please set SIREUM_HOME env var
+          |  exit /B -1
+          |)
+          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |exit /B %errorlevel%
+          |::!#
+          |// #Sireum
+          |
+          |import org.sireum._
+          |
+          |${StringTemplate.doNotEditComment(None())}
+          |
+          |val SCRIPT_HOME: Os.Path = Os.slashDir
+          |val PATH_SEP: String = Os.pathSep
           |
           |var project: ISZ[String] = Cli(Os.pathSepChar).parseTranspile(Os.cliArgs, 0) match {
           |  case Some(o: Cli.TranspileOption) =>

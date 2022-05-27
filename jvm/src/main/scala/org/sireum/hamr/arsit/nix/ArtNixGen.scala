@@ -191,8 +191,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       Names(c.component, basePackage).cArchInstanceName)
     resources = resources ++ genSchedulerFiles(basePackage, archBridgeInstanceNames)
 
-    ext_c_entries = ext_c_entries :+ ArtNixTemplate.platformExternal_Setup(basePackage)
-
     {
       val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
       val extH = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_H
@@ -328,10 +326,33 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
+    val processes = previousPhase.componentModules.elements
+
+    val srcDir = arsitOptions.outputDir / "src"
+
+    var modules: ISZ[Os.Path] = ISZ(
+      srcDir / "common" / "data" / "main",
+      srcDir / "common" / "library" / "main",
+      srcDir / "infrastructure" / "architecture" / "main",
+      srcDir / "infrastructure" / "art" / "shared" / "src" / "main",
+      srcDir / "app" / "shared" / "src" / "main" / "scala",
+      srcDir / "app" / "jvm" / "src" / "main" / "scala",
+      srcDir / "infrastructure" / "nix" / "main",
+      srcDir / "infrastructure" / "schedulers" / "main"
+    )
+
+    for(p <- processes) {
+      modules = modules :+ ((srcDir / "components") /+ p / "shared" / "main")
+      modules = modules :+ ((srcDir / "infrastructure" / "apis") /+ p / "main")
+      modules = modules :+ ((srcDir / "infrastructure" / "bridges") /+ p / "main")
+    }
+
+    val nixSourcePaths = modules.map((f: Os.Path) => f.value)
+
     val legacyTranspiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
-      sourcepaths = ISZ(),
+      sourcepaths = nixSourcePaths,
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
       apps = (appNames :+ "LegacyDemo").map(s => s"${basePackage}.${s}"),
@@ -358,7 +379,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
       verbose = arsitOptions.verbose,
       libraryName = "main",
-      sourcepaths = ISZ(),
+      sourcepaths = nixSourcePaths,
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
       apps = ISZ(s"${basePackage}.Demo"),
@@ -377,8 +398,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val modules = previousPhase.componentModules.elements
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1, modules)
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1, processes)
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")),
       slashTranspileScript, T)
   }
