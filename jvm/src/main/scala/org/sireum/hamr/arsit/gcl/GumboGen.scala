@@ -46,7 +46,7 @@ object GumboGen {
 
         val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
           imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
-          st"""// guarantee "${m.name}"
+          st"""// guarantee "${m.id}"
               |${m.exp}"""
         })
 
@@ -170,7 +170,7 @@ object GumboGen {
   def processInvariants(invariants: ISZ[GclInvariant]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
     for(i <- invariants) {
-      val methodName = GumboGen.convertToMethodName(i.name)
+      val methodName = GumboGen.convertToMethodName(i.id)
 
       imports = imports ++ GumboUtil.resolveLitInterpolateImports(i.exp)
 
@@ -187,7 +187,7 @@ object GumboGen {
     for(spec <- gclIntegration.specs) {
       val port: AadlPort = gclSymbolTable.integrationPort.get(spec).get
 
-      val methodName = GumboGen.convertToMethodName(spec.name)
+      val methodName = GumboGen.convertToMethodName(spec.id)
 
       val aadlType: AadlType = port match {
         case i: AadlDataPort => i.aadlType
