@@ -47,7 +47,7 @@ object GumboGen {
         val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
           imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
           st"""// guarantee "${m.id}"
-              |${m.exp}"""
+              |${gclSymbolTable.rexprs.get(m.exp).get}"""
         })
 
         val ret: ST =
@@ -155,6 +155,10 @@ object GumboGen {
 
   var imports: ISZ[ST] = ISZ()
 
+  def getRExp(e: Exp): Exp = {
+    return gclSymbolTable.rexprs.get(e).get
+  }
+
   def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
     val svs: ISZ[ST] = stateVars.map((sv: GclStateVar) => {
       val typ = aadlTypes.typeMap.get(sv.classifier).get
@@ -176,7 +180,7 @@ object GumboGen {
 
       ret = ret :+
         st"""@spec def ${methodName} = Invariant(
-            |  ${i.exp}
+            |  ${getRExp(i.exp)}
             |)"""
     }
     return ret
@@ -199,9 +203,10 @@ object GumboGen {
 
       imports = imports ++ GumboUtil.resolveLitInterpolateImports(spec.exp)
 
+      // FIXME don't use resolved exp (or don't subst in resolver phase
       val strictPureFunction: ST =
         st"""@strictpure def $methodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
-            |  ${spec.exp}"""
+            |  ${getRExp(spec.exp)}"""
 
       val specVar: ST =
         st"""@spec var ${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName} = $$ // Logika spec var representing port state
