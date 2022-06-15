@@ -20,7 +20,7 @@ object ApiTemplate {
           basePackageName: String,
           names: Names,
           ports: ISZ[Port],
-          integrationContracts: Map[AadlPort, (ST, ST, ST)]): ST = {
+          integrationContracts: Map[AadlPort, (Option[ST], ST, ST)]): ST = {
 
     val portDefs: ISZ[ST] = st"id: Art.BridgeId" +:
       ops.ISZOps(ports).map((p: Port) => st"${p.name}_Id : Art.PortId")
@@ -31,8 +31,8 @@ object ApiTemplate {
     val inPorts = ports.filter((p: Port) => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter((p: Port) => !CommonUtil.isInPort(p.feature))
 
-    def getContract(f: AadlFeature): Option[(ST, ST, ST)] = {
-      val ret: Option[(ST, ST, ST)] = f match {
+    def getContract(f: AadlFeature): Option[(Option[ST], ST, ST)] = {
+      val ret: Option[(Option[ST], ST, ST)] = f match {
         case i: AadlPort => integrationContracts.get(i)
         case _ => None()
       }
@@ -42,19 +42,23 @@ object ApiTemplate {
     var traitSPFs: ISZ[ST] = ISZ()
     val getters = inPorts.map((p: Port) => {
       val g = getterApi(p, getContract(p.aadlFeature))
-      if(g._1.nonEmpty) { traitSPFs = traitSPFs :+ g._1.get }
+      if (g._1.nonEmpty) {
+        traitSPFs = traitSPFs :+ g._1.get
+      }
       g._2
     })
 
     var opSPFs: ISZ[ST] = ISZ()
     val setters = outPorts.map((p: Port) => {
       val s = setterApi(p, getContract(p.aadlFeature))
-      if(s._1.nonEmpty) { opSPFs = opSPFs :+ s._1.get}
+      if (s._1.nonEmpty) {
+        opSPFs = opSPFs :+ s._1.get
+      }
       s._2
     })
 
-    def collect(name: String, v: ISZ[ST]) : Option[ST] = {
-      return if(v.nonEmpty)
+    def collect(name: String, v: ISZ[ST]): Option[ST] = {
+      return if (v.nonEmpty)
         Some(
           st"""object ${name} {
               |  ${(v, "\n\n")}
@@ -107,7 +111,7 @@ object ApiTemplate {
   }
 
   def entryPointParams(names: Names): ISZ[ST] = {
-    var ret : ISZ[ST] = ISZ(
+    var ret: ISZ[ST] = ISZ(
       st"${apiInitializationId}: ${names.apiInitialization}",
       st"${apiOperationalId}: ${names.apiOperational}")
     return ret
@@ -118,7 +122,7 @@ object ApiTemplate {
                      ports: ISZ[Port],
                      isEntry: B): ST = {
     val (id, typ, companionId): (String, String, String) = {
-      if(isEntry) {
+      if (isEntry) {
         (apiInitializationId, names.apiInitialization, apiInitializationBridgeId)
       } else {
         (apiOperationalId, names.apiOperational, apiOperationalBridgeId)
@@ -146,7 +150,9 @@ object ApiTemplate {
     return ret
   }
 
-  def addId(s: String): String = { return s"${s}_Id" }
+  def addId(s: String): String = {
+    return s"${s}_Id"
+  }
 
   @pure def putValue(p: Port): ST = {
     val q = p.getPortTypeNames.qualifiedPayloadName
@@ -154,12 +160,13 @@ object ApiTemplate {
     return st"""Art.putValue(${addId(p.name)}, ${q}${if (isEmpty) "()" else "(value)"})"""
   }
 
-  def setterApi(p: Port, integrationContracts: Option[(ST, ST, ST)]): (Option[ST], ST) = {
+  def setterApi(p: Port, integrationContracts: Option[(Option[ST], ST, ST)]): (Option[ST], ST) = {
     val q = p.getPortTypeNames.qualifiedReferencedTypeName
     val isEmpty = p.getPortTypeNames.isEmptyType()
 
     val (strictPureFunction, integrationMethods, integrationContract): (Option[ST], Option[ST], Option[ST]) = integrationContracts match {
-      case Some((_strictPureFunction, _specVars, _contracts)) => (Some(_strictPureFunction), Some(_specVars), Some(_contracts))
+      case Some((_strictPureFunction, _specVars, _contracts)) =>
+        (_strictPureFunction, Some(_specVars), Some(_contracts))
       case _ => (None(), None(), None())
     }
 
@@ -188,7 +195,7 @@ object ApiTemplate {
     return ((strictPureFunction, ret))
   }
 
-  @pure def getterApi(p: Port, integrationContracts: Option[(ST, ST, ST)]): (Option[ST], ST) = {
+  @pure def getterApi(p: Port, integrationContracts: Option[(Option[ST], ST, ST)]): (Option[ST], ST) = {
     val isEvent = CommonUtil.isAadlEventPort(p.feature)
     val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
     val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
@@ -196,8 +203,8 @@ object ApiTemplate {
     val value: String = if (isEvent) "Empty()" else "v"
 
     val (strictPureFunction, specVars, integrationContract): (Option[ST], Option[ST], Option[ST]) = integrationContracts match {
-      case Some((_strictPureFunction, _specVars, _contract)) => (Some(_strictPureFunction), Some(_specVars), Some(_contract))
-      case _ => (None(), None(),None())
+      case Some((_strictPureFunction, _specVars, _contract)) => (_strictPureFunction, Some(_specVars), Some(_contract))
+      case _ => (None(), None(), None())
     }
 
     val ret: ST =

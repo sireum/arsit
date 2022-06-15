@@ -3,8 +3,10 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.arsit.gcl.GumboGen
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclComputeEventHolder, GclEntryPointInitialize, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.{EntryPoints, Port}
-import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
+import org.sireum.hamr.codegen.common.symbols.{AadlPort, Dispatch_Protocol, SymbolTable}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir.FeatureCategory
 
@@ -341,7 +343,8 @@ object StubTemplate {
                                isBless: B,
                                excludeComponentImpl: B,
                                preBlocks: ISZ[ST],
-                               entryPointContracts: Map[EntryPoints.Type, ST]): ST = {
+                               entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer],
+                               symbolTable: SymbolTable): ST = {
 
     val inPorts = ports.filter(p => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter(p => CommonUtil.isOutPort(p.feature))
@@ -360,14 +363,22 @@ object StubTemplate {
     }
 
     val initSig: String = s"${EntryPoints.initialise.string}(api: ${names.apiInitialization})"
+    val contract: Option[ST] = entryPointContracts.get(EntryPoints.initialise) match {
+      case Some(x: GclEntryPointInitialize) => Some(x.contract)
+      case Some(x) => halt(s"Infeasible ${x}")
+      case _ => None()
+    }
+
     val init: ST =
-      if(excludeComponentImpl) { genMethod(initSig, entryPointContracts.get(EntryPoints.initialise)) }
+      if(excludeComponentImpl) {
+        genMethod(initSig, contract)
+      }
       else {
         val o: Option[ST] =
           if(outPorts.nonEmpty) Some(st"""
                                          |${(outPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
           else None()
-        genMethod(initSig, Some(st"""${entryPointContracts.get(EntryPoints.initialise)}
+        genMethod(initSig, Some(st"""${contract}
                                     |// example api usage
                                     |
                                     |api.logInfo("Example info logging")
@@ -392,6 +403,8 @@ object StubTemplate {
         val inEventPorts = ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature))
         var first = T
         inEventPorts.map(p => {
+          val aadlPort = symbolTable.featureMap.get(p.feature.identifier.name).get.asInstanceOf[AadlPort]
+
           val handlerName: String = s"handle_${p.name}"
 
           val (eventSig, receivedFeedback) : (String, String) = p.feature.category match {
@@ -404,11 +417,24 @@ object StubTemplate {
             case _ => halt(s"Unexpected ${p.feature.category}")
           }
 
+          val optContract: Option[ST] = entryPointContracts.get(EntryPoints.compute) match {
+            case Some(g: GclEntryPointSporadicCompute) =>
+              val handler = g.handlers.get(aadlPort).get
+              def comma(oo: Option[ST]): Option[ST] = { return if (oo.isEmpty) None() else Some(st"${oo.get},")}
+              Some(st"""Contract(
+                       |  ${comma(handler.modifies)}
+                       |  ${comma(handler.requires)}
+                       |  ${handler.ensures}
+                       |)""")
+            case _ => None()
+          }
+
           if(excludeComponentImpl) {
-            genMethod(eventSig, None())
+            genMethod(eventSig, optContract)
           } else {
             val stringInterp: String = if(CommonUtil.isAadlEventPort(p.feature)) "" else "s"
-            var body = st"""api.logInfo("example $handlerName implementation")
+            var body = st"""${optContract}
+                           |api.logInfo("example $handlerName implementation")
                            |api.logInfo(${stringInterp}"received ${receivedFeedback}")"""
             if(first) { // only attach example api usage to first event handler
               first = F

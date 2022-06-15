@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.gcl.GumboGen
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
@@ -164,12 +165,22 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       case _ =>
     }
 
-    var entryPointContracts: Map[EntryPoints.Type, ST] = Map.empty
+    var entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer] = Map.empty
 
     GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
-      case Some((st, _markers)) =>
-        entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> st)
-        markers = markers ++ _markers
+      case Some(gepi) =>
+        entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> gepi)
+        markers = markers ++ gepi.markers
+      case _ =>
+    }
+
+    GumboGen.processCompute(m, symbolTable, types, basePackage) match {
+      case Some(t: GclEntryPointSporadicCompute) =>
+        entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
+        markers = markers ++ t.markers
+      case Some(t: GclEntryPointPeriodicCompute) =>
+        entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
+        markers = markers ++ t.markers
       case _ =>
     }
 
@@ -183,7 +194,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         isBless = genBlessEntryPoints,
         excludeComponentImpl = arsitOptions.excludeImpl,
         preBlocks = preBlocks,
-        entryPointContracts = entryPointContracts
+        entryPointContracts = entryPointContracts,
+        symbolTable = symbolTable
       )
       blocks = blocks :+ componentImplBlock
     } else {
