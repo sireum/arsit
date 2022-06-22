@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.gcl.GumboGen
-import org.sireum.hamr.arsit.gcl.GumboGen.{GclComputeEventHolder, GclEntryPointInitialize, GclEntryPointSporadicCompute}
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclComputeEventHolder, GclEntryPointInitialize, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, Dispatch_Protocol, SymbolTable}
 import org.sireum.hamr.codegen.common.{CommonUtil, Names}
@@ -394,11 +394,24 @@ object StubTemplate {
                  |
                  |${(inPorts.map((p: Port) => portApiUsage(p)), "\n")}""")
       }
+
+    def comma(oo: Option[ST]): Option[ST] = { return if (oo.isEmpty) None() else Some(st"${oo.get},")}
     val eventHandlers: ISZ[ST] =
       if (dispatchProtocol == Dispatch_Protocol.Periodic) {
+        val optContract: Option[ST] = entryPointContracts.get(EntryPoints.compute) match {
+          case Some(g: GclEntryPointPeriodicCompute) =>
+            Some(st"""Contract(
+                     |  ${comma(g.modifies)}
+                     |  ${comma(g.requires)}
+                     |  ${g.ensures}
+                     |)""")
+          case _ => None()
+        }
+
         val ttsig: String = s"timeTriggered(api: ${names.apiOperational})"
-        ISZ(if(excludeComponentImpl) genMethod(ttsig, None())
-            else genMethod(ttsig, exampleApiGetterUsage))
+        ISZ(if(excludeComponentImpl) genMethod(ttsig, optContract)
+            else genMethod(ttsig, Some(st"""$optContract
+                                           |$exampleApiGetterUsage""")))
       } else {
         val inEventPorts = ports.filter(p => CommonUtil.isInFeature(p.feature) && CommonUtil.isEventPort(p.feature))
         var first = T
@@ -420,7 +433,7 @@ object StubTemplate {
           val optContract: Option[ST] = entryPointContracts.get(EntryPoints.compute) match {
             case Some(g: GclEntryPointSporadicCompute) =>
               val handler = g.handlers.get(aadlPort).get
-              def comma(oo: Option[ST]): Option[ST] = { return if (oo.isEmpty) None() else Some(st"${oo.get},")}
+
               Some(st"""Contract(
                        |  ${comma(handler.modifies)}
                        |  ${comma(handler.requires)}
