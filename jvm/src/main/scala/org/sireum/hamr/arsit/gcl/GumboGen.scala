@@ -307,7 +307,7 @@ object GumboGen {
   def processDescriptor(descriptor: Option[String], pad: String): Option[ST] = {
     def getPipeLoc(cis: ISZ[C]): Z = {
       var firstNonSpace: Z = 0
-      while (cis(firstNonSpace) == ' ') {
+      while (cis(firstNonSpace) == ' ' || cis(firstNonSpace) == '\t') {
         firstNonSpace = firstNonSpace + 1
       }
       if (firstNonSpace < cis.size - 1 && cis(firstNonSpace) == '|') {
