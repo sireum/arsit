@@ -401,8 +401,8 @@ object StubTemplate {
         val optContract: Option[ST] = entryPointContracts.get(EntryPoints.compute) match {
           case Some(g: GclEntryPointPeriodicCompute) =>
             Some(st"""Contract(
-                     |  ${comma(g.modifies)}
                      |  ${comma(g.requires)}
+                     |  ${comma(g.modifies)}
                      |  ${g.ensures}
                      |)""")
           case _ => None()
@@ -435,8 +435,8 @@ object StubTemplate {
               val handler = g.handlers.get(aadlPort).get
 
               Some(st"""Contract(
-                       |  ${comma(handler.modifies)}
                        |  ${comma(handler.requires)}
+                       |  ${comma(handler.modifies)}
                        |  ${handler.ensures}
                        |)""")
             case _ => None()

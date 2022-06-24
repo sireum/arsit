@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util
-import org.sireum.hamr.arsit.gcl.GumboGen.{GclCaseHolder, GclComputeEventHolder, GclEnsuresHolder, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute, GclGeneralHolder, GclHolder, GclRequiresHolder}
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclCaseHolder, GclComputeEventHolder, GclEnsuresHolder, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute, GclGeneralHolder, GclHolder, GclRequiresHolder, addOutgoingEventPortRequires}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
@@ -117,6 +117,7 @@ object GumboGen {
   val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
   val InitializesModifiesMarker: Marker = Marker("// BEGIN INITIALIZES MODIFIES", "// END INITIALIZES MODIFIES")
   val InitializesEnsuresMarker: Marker = Marker("// BEGIN INITIALIZES ENSURES", "// END INITIALIZES ENSURES")
+  val InitializesRequiresMarker: Marker = Marker("// BEGIN INITIALIZES REQUIRES", "// END INITIALIZES REQUIRES")
 
   var imports: ISZ[ST] = ISZ()
 
@@ -186,8 +187,21 @@ object GumboGen {
             None()
           }
 
+        val generalRequires = addOutgoingEventPortRequires(m)
+        val optRequires: Option[ST] =
+          if(generalRequires.nonEmpty) {
+            markers = markers :+ InitializesRequiresMarker
+            Some(st"""Requires(
+                |  ${InitializesRequiresMarker.beginMarker}
+                |  ${generalRequires.map((m: GclHolder) => m.toSTMin)}
+                |  ${InitializesRequiresMarker.endMarker}
+                |),""")
+          } else {None()}
+
+
         val ret: ST =
           st"""Contract(
+              |  ${optRequires}
               |  ${optModifies}
               |  ${optEnsures}
               |)"""
@@ -283,7 +297,21 @@ object GumboGen {
     } else {
       return None()
     }
+  }
 
+  def addOutgoingEventPortRequires(context: AadlThreadOrDevice): ISZ[GclHolder] = {
+    val outgoingEventPorts = context.getPorts().filter((p: AadlPort) => p.isInstanceOf[AadlFeatureEvent] && p.direction == Direction.Out)
+
+    var ret: ISZ[GclHolder] = ISZ()
+    if(outgoingEventPorts.nonEmpty) {
+      val ensures: ISZ[ST] = outgoingEventPorts.map((m: AadlPort) => st"api.${m.identifier}.isEmpty")
+      ret = ret :+ GclRequiresHolder(
+        id = "AADL_Requirement",
+        descriptor = Some(st"//   All outgoing event data ports must be empty"),
+        requires = st"${(ensures, ",\n")}"
+      )
+    }
+    return ret
   }
 
   def convertToMethodName(s: String): String = {
@@ -356,7 +384,7 @@ object GumboGen {
   def processCompute(compute: GclCompute, context: AadlThreadOrDevice): GumboGen.GclEntryPointContainer = {
     var markers: Set[Marker] = Set.empty
 
-    def genComputeModifiesMarker(id: String, typ: String): Marker = {
+    def genComputeMarkerCreator(id: String, typ: String): Marker = {
       val m = Marker(
         s"// BEGIN_COMPUTE_${typ}_${id}",
         s"// END_COMPUTE ${typ}_${id}")
@@ -365,10 +393,11 @@ object GumboGen {
       return m
     }
 
-    val generalModifies: ISZ[ST] = compute.modifies.map((e: Exp) => st"${e}")
+    val generalModifies: Set[String] = Set(compute.modifies.map((e: Exp) => s"${e}"))
 
     var generalHolder: ISZ[GclHolder] = ISZ()
 
+    generalHolder = generalHolder ++ addOutgoingEventPortRequires(context)
 
     for (spec <- compute.specs) {
       val rspec = gclSymbolTable.rexprs.get(spec.exp).get
@@ -412,24 +441,36 @@ object GumboGen {
       val inEventPorts = context.getPorts().filter((p: AadlPort) => p.direction == Direction.In && p.isInstanceOf[AadlFeatureEvent])
       for (eventPort <- inEventPorts) {
 
+        var handlerRequires = generalRequires
+
+        if(eventPort.isInstanceOf[AadlEventDataPort]) {
+          handlerRequires = handlerRequires :+ GclRequiresHolder(
+            id = "HAMR-Guarantee",
+            descriptor = Some(
+              st"""//   passed in payload must be the same as the spec var's value
+                  |//   NOTE: this assumes the user never changes the param name""""),
+            requires = st"api.${eventPort.identifier} == value"
+          )
+        }
+
         fetchHandler(eventPort, compute.handlers) match {
           case Some(handler) => {
             val modifies: Option[ST] = if (generalModifies.nonEmpty || handler.modifies.nonEmpty) {
-              val modMarker = genComputeModifiesMarker(eventPort.identifier, "MODIFIES")
-              val handlerModifies = generalModifies ++ handler.modifies.map((m: Exp) => st"${m}")
+              val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
+              val handlerModifies = generalModifies ++ handler.modifies.map((m: Exp) => s"${m}")
               Some(
                 st"""Modifies(
                     |  ${modMarker.beginMarker}
-                    |  ${(handlerModifies, ",\n")}
+                    |  ${(handlerModifies.elements, ",\n")}
                     |  ${modMarker.endMarker}
                     |)""")
             } else {
               None()
             }
 
-            val requires: Option[ST] = if (generalRequires.nonEmpty) {
-              val marker = genComputeModifiesMarker(eventPort.identifier, "REQUIRES")
-              val elems = generalRequires.map((m: GclRequiresHolder) => m.toSTMin)
+            val requires: Option[ST] = if (handlerRequires.nonEmpty) {
+              val marker = genComputeMarkerCreator(eventPort.identifier, "REQUIRES")
+              val elems = handlerRequires.map((m: GclRequiresHolder) => m.toSTMin)
               Some(
                 st"""Requires(
                     |  ${marker.beginMarker}
@@ -452,7 +493,7 @@ object GumboGen {
                       |${GumboGen.processDescriptor(g.descriptor, "//   ")}
                       |${rexp}"""
                 })
-              val marker = genComputeModifiesMarker(eventPort.identifier, "ENSURES")
+              val marker = genComputeMarkerCreator(eventPort.identifier, "ENSURES")
               Some(
                 st"""Ensures(
                     |  ${marker.beginMarker}
@@ -469,20 +510,20 @@ object GumboGen {
             // use the general ones
 
             val modifies: Option[ST] = if (generalModifies.nonEmpty) {
-              val modMarker = genComputeModifiesMarker(eventPort.identifier, "MODIFIES")
+              val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
               Some(
                 st"""Modifies(
                     |  ${modMarker.beginMarker}
-                    |  ${(generalModifies, ",\n")}
+                    |  ${(generalModifies.elements, ",\n")}
                     |  ${modMarker.endMarker}
                     |)""")
             } else {
               None()
             }
 
-            val requires: Option[ST] = if (generalRequires.nonEmpty) {
-              val marker = genComputeModifiesMarker(eventPort.identifier, "REQUIRES")
-              val elems = generalRequires.map((m: GclRequiresHolder) => m.toSTMin)
+            val requires: Option[ST] = if (handlerRequires.nonEmpty) {
+              val marker = genComputeMarkerCreator(eventPort.identifier, "REQUIRES")
+              val elems = handlerRequires.map((m: GclRequiresHolder) => m.toSTMin)
               Some(
                 st"""Requires(
                     |  ${marker.beginMarker}
@@ -499,7 +540,7 @@ object GumboGen {
 
               val handlerEnsures = generalElems ++ _cases
 
-              val marker = genComputeModifiesMarker(eventPort.identifier, "ENSURES")
+              val marker = genComputeMarkerCreator(eventPort.identifier, "ENSURES")
               Some(
                 st"""Ensures(
                     |  ${marker.beginMarker}
@@ -526,12 +567,12 @@ object GumboGen {
       val id = "timeTriggered"
 
       val modifies: Option[ST] = if (generalModifies.nonEmpty) {
-        val modMarker = genComputeModifiesMarker(id, "MODIFIES")
+        val modMarker = genComputeMarkerCreator(id, "MODIFIES")
 
         Some(
           st"""Modifies(
               |  ${modMarker.beginMarker}
-              |  ${(generalModifies, ",\n")}
+              |  ${(generalModifies.elements, ",\n")}
               |  ${modMarker.endMarker}
               |)""")
       } else {
@@ -539,7 +580,7 @@ object GumboGen {
       }
 
       val requires: Option[ST] = if (generalRequires.nonEmpty) {
-        val marker = genComputeModifiesMarker(id, "REQUIRES")
+        val marker = genComputeMarkerCreator(id, "REQUIRES")
         val elems = generalRequires.map((m: GclRequiresHolder) => m.toSTMin)
         Some(
           st"""Requires(
@@ -557,7 +598,7 @@ object GumboGen {
 
         val handlerEnsures = generalElems ++ _cases
 
-        val marker = genComputeModifiesMarker(id, "ENSURES")
+        val marker = genComputeMarkerCreator(id, "ENSURES")
         Some(
           st"""Ensures(
               |  ${marker.beginMarker}
