@@ -8,10 +8,11 @@ import org.sireum.hamr.arsit.gcl.GumboGen.{GclCaseHolder, GclComputeEventHolder,
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
+import org.sireum.hamr.codegen.common.resolvers.GclResolver.GUMBO__Library
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType, TypeUtil}
 import org.sireum.hamr.ir._
-import org.sireum.lang.ast.Exp
+import org.sireum.lang.{ast => AST}
 
 object GumboGen {
 
@@ -114,6 +115,7 @@ object GumboGen {
                                                val handlers: HashSMap[AadlPort, GclComputeEventHolder]) extends GclEntryPointContainer
 
 
+  val FunctionMarker: Marker = Marker("// BEGIN FUNCTIONS", "// END FUNCTIONS")
   val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
   val InitializesModifiesMarker: Marker = Marker("// BEGIN INITIALIZES MODIFIES", "// END INITIALIZES MODIFIES")
   val InitializesEnsuresMarker: Marker = Marker("// BEGIN INITIALIZES ENSURES", "// END INITIALIZES ENSURES")
@@ -129,34 +131,118 @@ object GumboGen {
     imports = imports ++ gen.imports
   }
 
-  @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexInfo] = {
+  @record class InvokeRewriter(val aadlTypes: AadlTypes, val basePackageName: String) extends org.sireum.hamr.ir.MTransformer {
+    def rewriteInvokes(o: AST.Exp): AST.Exp = {
+      val ret: AST.Exp = transform_langastExp(o) match {
+        case MSome(r) => r
+        case _ => o
+      }
+      return ret
+    }
+
+    def convertSelects(exp: Option[AST.Exp]): String = {
+      val ret: String = exp match {
+        case Some(s: AST.Exp.Select) =>
+          if (s.receiverOpt.isEmpty) s.id.value
+          else s"${convertSelects(s.receiverOpt)}::${s.id.value}"
+        case Some(AST.Exp.Ident(id)) => id.value
+        case Some(x) => halt(s"Unexpected Exp.Select form: '${x}''")
+        case _ => ""
+      }
+      return ret
+    }
+
+    def convertToSelect(value: IS[Z, String]): Option[AST.Exp] = {
+      return (
+        if (value.isEmpty) None()
+        else if (value.size == 1) Some(
+          AST.Exp.Ident(id = AST.Id(value = value(0), attr = AST.Attr(None())), attr = AST.ResolvedAttr(None(), None(), None())))
+        else Some(AST.Exp.Select(
+          receiverOpt = convertToSelect(ops.ISZOps(value).dropRight(1)),
+          id = AST.Id(value = value(value.size - 1), attr = AST.Attr(None())),
+          targs = ISZ(), attr = AST.ResolvedAttr(None(), None(), None())))
+        )
+    }
+
+    override def post_langastExpInvoke(o: AST.Exp.Invoke): MOption[AST.Exp] = {
+      val ret: MOption[AST.Exp] = o.attr.resOpt.get match {
+        case arm: AST.ResolvedInfo.Method if arm.mode == AST.MethodMode.Constructor =>
+          val componentName = s"${convertSelects(o.receiverOpt)}::${o.ident.id.value}"
+          val path: IdPath = aadlTypes.typeMap.get(componentName) match {
+            case Some(t) =>
+              val dtns = Util.getDataTypeNames(t, basePackageName)
+              ops.StringOps(dtns.qualifiedReferencedTypeName).split((c: C) => c == '.')
+            case _ => halt(s"Couldn't find an AADL data component corresponding to '${componentName}''")
+          }
+          val receiver = convertToSelect(ops.ISZOps(path).dropRight(1))
+          val ident = AST.Exp.Ident(id = AST.Id(value = path(path.size - 1), attr = o.ident.id.attr), attr = o.ident.attr)
+          MSome(o(receiverOpt = receiver, ident = ident))
+        case _ => MNone()
+      }
+      return ret
+    }
+  }
+
+  @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexClauseInfo] = {
     val aadlComponent = symbolTable.componentMap.get(componentPath).get
-    val annexInfos: ISZ[GclAnnexInfo] = symbolTable.annexInfos.get(aadlComponent) match {
+    val annexInfos: ISZ[GclAnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
       case Some(annexInfos) =>
-        annexInfos.filter(f => f.isInstanceOf[GclAnnexInfo]).map(m => m.asInstanceOf[GclAnnexInfo])
+        annexInfos.filter(f => f.isInstanceOf[GclAnnexClauseInfo]).map(m => m.asInstanceOf[GclAnnexClauseInfo])
       case _ => ISZ()
     }
     return annexInfos
   }
 
-  def processInitializes(m: AadlThreadOrDevice, symbolTable: SymbolTable, types: AadlTypes, basePackage: String): Option[GclEntryPointInitialize] = {
+  def processLibrary(annexLibInfo: AnnexLibInfo, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackage: String): Option[(ST, ISZ[String])] = {
+    resetImports()
+    val ret: Option[(ST, ISZ[String])] = annexLibInfo match {
+      case GclAnnexLibInfo(annex, name, gclSymbolTable) =>
+        val gg = GumboGen(gclSymbolTable = gclSymbolTable, symbolTable = symbolTable, aadlTypes = aadlTypes, basePackageName = basePackage)
+        val methods = annex.methods.map((m: GclMethod) => gg.processGclMethod(m))
+
+        val filename: ISZ[String] = ISZ(basePackage) ++ annex.containingPackage.name :+ s"${GUMBO__Library}.scala"
+
+        Some((
+          st"""// #Sireum
+              |
+              |package ${basePackage}.${(annex.containingPackage.name, ".")}
+              |
+              |import org.sireum._
+              |import ${basePackage}._
+              |
+              |// this file is autogenerated, do not edit
+              |
+              |object ${GUMBO__Library} {
+              |  ${(methods, "\n\n")}
+              |}
+              |""", filename))
+      case _ => None()
+    }
+    return ret
+  }
+
+  def getRExp(e: AST.Exp, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable, basePackageName: String): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+  }
+
+  def processInitializes(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackage: String): Option[GclEntryPointInitialize] = {
     resetImports()
 
     val ais = getGclAnnexInfos(m.path, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
 
     if (ais.nonEmpty) {
-      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.initializes.nonEmpty) {
-        val modifies: ISZ[ST] = sc.initializes.get.modifies.map((m: Exp) => st"${m}")
+        val modifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${m}")
 
         val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
           imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
           st"""// guarantee ${m.id}
               |${processDescriptor(m.descriptor, "//   ")}
-              |${gclSymbolTable.rexprs.get(m.exp).get}"""
+              |${getRExp(m.exp, aadlTypes, gclSymbolTable, basePackage)}"""
         })
 
         var markers: ISZ[Marker] = ISZ()
@@ -189,14 +275,17 @@ object GumboGen {
 
         val generalRequires = addOutgoingEventPortRequires(m)
         val optRequires: Option[ST] =
-          if(generalRequires.nonEmpty) {
+          if (generalRequires.nonEmpty) {
             markers = markers :+ InitializesRequiresMarker
-            Some(st"""Requires(
-                |  ${InitializesRequiresMarker.beginMarker}
-                |  ${generalRequires.map((m: GclHolder) => m.toSTMin)}
-                |  ${InitializesRequiresMarker.endMarker}
-                |),""")
-          } else {None()}
+            Some(
+              st"""Requires(
+                  |  ${InitializesRequiresMarker.beginMarker}
+                  |  ${generalRequires.map((m: GclHolder) => m.toSTMin)}
+                  |  ${InitializesRequiresMarker.endMarker}
+                  |),""")
+          } else {
+            None()
+          }
 
 
         val ret: ST =
@@ -224,9 +313,9 @@ object GumboGen {
     assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
 
     for (ai <- ais) {
-      val sc = ai.annex.asInstanceOf[GclSubclause]
+      val sc = ai.annex
       val gclSymTable = ai.gclSymbolTable
-      val gg = GumboGen(sc, gclSymTable, symbolTable, aadlTypes, basePackageName)
+      val gg = GumboGen(gclSymTable, symbolTable, aadlTypes, basePackageName)
       ret = ret ++ gg.processInvariants(sc.invariants)
       addImports(gg)
     }
@@ -243,12 +332,12 @@ object GumboGen {
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
 
     if (ais.nonEmpty) {
-      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
       val ret: Map[AadlPort, (Option[ST], ST, ST)] = {
         if (gclSymbolTable.apiReferences.nonEmpty || gclSymbolTable.integrationMap.nonEmpty) {
-          val gg = GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+          val gg = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
           val _contracts = gg.processIntegrationContract(m, gclSymbolTable)
           addImports(gg)
           _contracts
@@ -262,15 +351,31 @@ object GumboGen {
     }
   }
 
+  def processSubclauseFunctions(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Option[(ST, Marker)] = {
+    val ais = getGclAnnexInfos(m.path, symbolTable)
+    if (ais.nonEmpty) {
+      val sc = ais(0).annex
+      val gclSymTable = ais(0).gclSymbolTable
+
+      if (sc.methods.nonEmpty) {
+        return Some(GumboGen(gclSymTable, symbolTable, aadlTypes, basePackageName).processSubclauseFunctions(sc.methods))
+      } else {
+        return None()
+      }
+    } else {
+      return None()
+    }
+  }
+
   def processStateVars(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Option[(ST, Marker)] = {
     val ais = getGclAnnexInfos(m.path, symbolTable)
 
     if (ais.nonEmpty) {
-      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.state.nonEmpty) {
-        return Some(GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(sc.state))
+        return Some(GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(sc.state))
       } else {
         return None()
       }
@@ -286,11 +391,11 @@ object GumboGen {
     val ais = getGclAnnexInfos(m.path, symbolTable)
 
     if (ais.nonEmpty) {
-      val sc = ais(0).annex.asInstanceOf[GclSubclause]
+      val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.compute.nonEmpty) {
-        return Some(GumboGen(sc, gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m))
+        return Some(GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m))
       } else {
         return None()
       }
@@ -303,7 +408,7 @@ object GumboGen {
     val outgoingEventPorts = context.getPorts().filter((p: AadlPort) => p.isInstanceOf[AadlFeatureEvent] && p.direction == Direction.Out)
 
     var ret: ISZ[GclHolder] = ISZ()
-    if(outgoingEventPorts.nonEmpty) {
+    if (outgoingEventPorts.nonEmpty) {
       val ensures: ISZ[ST] = outgoingEventPorts.map((m: AadlPort) => st"api.${m.identifier}.isEmpty")
       ret = ret :+ GclRequiresHolder(
         id = "AADL_Requirement",
@@ -364,8 +469,7 @@ object GumboGen {
   }
 }
 
-@record class GumboGen(subClause: GclSubclause,
-                       gclSymbolTable: GclSymbolTable,
+@record class GumboGen(gclSymbolTable: GclSymbolTable,
                        symbolTable: SymbolTable,
                        aadlTypes: AadlTypes,
                        basePackageName: String) {
@@ -393,7 +497,7 @@ object GumboGen {
       return m
     }
 
-    val generalModifies: Set[String] = Set(compute.modifies.map((e: Exp) => s"${e}"))
+    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${e}"))
 
     var generalHolder: ISZ[GclHolder] = ISZ()
 
@@ -443,7 +547,7 @@ object GumboGen {
 
         var handlerRequires = generalRequires
 
-        if(eventPort.isInstanceOf[AadlEventDataPort]) {
+        if (eventPort.isInstanceOf[AadlEventDataPort]) {
           handlerRequires = handlerRequires :+ GclRequiresHolder(
             id = "HAMR-Guarantee",
             descriptor = Some(
@@ -457,7 +561,7 @@ object GumboGen {
           case Some(handler) => {
             val modifies: Option[ST] = if (generalModifies.nonEmpty || handler.modifies.nonEmpty) {
               val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
-              val handlerModifies = generalModifies ++ handler.modifies.map((m: Exp) => s"${m}")
+              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${m}")
               Some(
                 st"""Modifies(
                     |  ${modMarker.beginMarker}
@@ -616,8 +720,52 @@ object GumboGen {
 
   var imports: ISZ[ST] = ISZ()
 
-  def getRExp(e: Exp): Exp = {
-    return gclSymbolTable.rexprs.get(e).get
+  def getRExp(e: AST.Exp): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+  }
+
+  def processGclMethod(gclMethod: GclMethod): ST = {
+    val methodName = gclMethod.method.sig.id.value
+
+    val returnType: String = {
+      val retTypeName: String = gclMethod.method.sig.returnType match {
+        case atn: AST.Type.Named =>
+          val key = st"${(atn.name.ids.map((i: AST.Id) => i.value), "::")}".render
+          val aadlType = Util.getDataTypeNames(aadlTypes.typeMap.get(key).get, basePackageName)
+          aadlType.qualifiedReferencedTypeName
+        case _ => halt("No")
+      }
+      retTypeName
+    }
+
+    val params: ISZ[String] = gclMethod.method.sig.params.map((p: AST.Param) => {
+      val paramTypeName: ISZ[String] = p.tipe match {
+        case atn: AST.Type.Named =>
+          atn.name.ids.map((i: AST.Id) => i.value)
+        case _ => halt("No")
+      }
+      val key = st"${(paramTypeName, "::")}".render
+      val aadlType = Util.getDataTypeNames(aadlTypes.typeMap.get(key).get, basePackageName)
+      s"${p.id.value}: ${aadlType.qualifiedReferencedTypeName}"
+    })
+
+    val rexp: AST.Exp = gclMethod.method.bodyOpt match {
+      case Some(AST.Body(ISZ(AST.Stmt.Return(Some(exp))))) => getRExp(exp)
+      case _ => halt("No")
+    }
+
+    return (
+      st"""@strictpure def ${methodName}(${(params, ", ")}): ${returnType} =
+          |  $rexp""")
+  }
+
+  def processSubclauseFunctions(methods: ISZ[GclMethod]): (ST, Marker) = {
+    val sts: ISZ[ST] = methods.map((m: GclMethod) => processGclMethod(m))
+
+    return (
+      st"""${GumboGen.FunctionMarker.beginMarker}
+          |${(sts, "\n\n")}
+          |${GumboGen.FunctionMarker.endMarker}""", GumboGen.FunctionMarker)
   }
 
   def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
@@ -677,7 +825,7 @@ object GumboGen {
             // will be placed in api so don't use resolved expr
             val pureFunc: ST =
               st"""@strictpure def $portInvariantMethodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
-                  |  ${spec.exp}"""
+                  |  ${getRExp(spec.exp)}"""
 
             val ensures = st"${portInvariantMethodName}(${port.identifier}),"
 

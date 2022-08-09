@@ -34,6 +34,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     gen(rootSystem)
 
+    processAnnexLibraries()
+
     return PhaseResult(previousPhase.resources() ++ resources,
       previousPhase.maxPort,
       previousPhase.maxComponent)
@@ -121,8 +123,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
 
-    val btsAnnexes : ISZ[AnnexInfo] =
-      symbolTable.annexInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
+    val btsAnnexes : ISZ[AnnexClauseInfo] =
+      symbolTable.annexClauseInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
 
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 
@@ -156,6 +158,13 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     var blocks: ISZ[ST] = ISZ()
     var markers: ISZ[Marker] = ISZ()
     var preBlocks: ISZ[ST] = ISZ()
+
+    GumboGen.processSubclauseFunctions(m, symbolTable, types, basePackage) match {
+      case Some((st, marker)) =>
+        preBlocks = preBlocks :+ st
+        markers = markers :+ marker
+      case _ =>
+    }
 
     // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
     GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
@@ -304,6 +313,16 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       return Some(body)
     } else {
       return None[ST]()
+    }
+  }
+
+  def processAnnexLibraries(): Unit = {
+    for(annexLibInfo <- symbolTable.annexLibInfos) {
+      GumboGen.processLibrary(annexLibInfo, symbolTable, types, basePackage) match {
+        case Some((st, filename)) =>
+          addResource(dirs.componentDir, filename, st, T)
+        case _ =>
+      }
     }
   }
 

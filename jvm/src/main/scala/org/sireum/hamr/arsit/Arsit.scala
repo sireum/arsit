@@ -19,7 +19,7 @@ object Arsit {
     return ret
   }
 
-  private def runInternal(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable): ArsitResult = {
+  private def runInternal(model: ir.Aadl, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable): ArsitResult = {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
@@ -28,21 +28,21 @@ object Arsit {
 
     assert(model.components.size == 1, "Expecting a single root component")
 
-    val projectDirectories = ProjectDirectories(o)
+    val projectDirectories = ProjectDirectories(arsitOptions)
 
     val nixPhase =
-      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
-        StubGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes,
-          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, o, symbolTable, aadlTypes).generate()
+      nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
+        StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
+          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes).generate()
         ).generate())
 
     var artResources: ISZ[Resource] = ISZ()
-    if (!o.noEmbedArt) {
+    if (!arsitOptions.noEmbedArt) {
       artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.mainDir}/art")
     }
 
     artResources = artResources ++ createBuildArtifacts(
-      CommonUtil.getLastName(model.components(0).identifier), o, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
+      CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
