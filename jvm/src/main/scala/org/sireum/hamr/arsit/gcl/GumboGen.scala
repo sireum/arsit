@@ -174,7 +174,7 @@ object GumboGen {
           val slangTypeName = Util.getDataTypeNames(aadlType, basePackageName).qualifiedReferencedTypeName
           val splitSlangTypeName = ops.StringOps(slangTypeName).split((c: C) => c == '.')
 
-          val name = AST.Name(splitSlangTypeName.map((a: String) => AST.Id(value = a, attr = AST.Attr(None())) ), attr = AST.Attr(None()))
+          val name = AST.Name(ids = splitSlangTypeName.map((a: String) => AST.Id(value = a, attr = AST.Attr(None()))), attr = AST.Attr(None()))
           val slangTypedName = AST.Type.Named(name = name, typeArgs = ISZ(), attr = o.attr)
 
           return MSome(o(tipeOpt = Some(slangTypedName)))
@@ -782,8 +782,8 @@ object GumboGen {
       case AST.Purity.Memoize => "memoize"
     }
 
-    val body: ST = if(isPure) {
-      val contractOpt: Option[ST] = if(gclMethod.method.mcontract.nonEmpty) {
+    val body: ST = if (isPure) {
+      val contractOpt: Option[ST] = if (gclMethod.method.mcontract.nonEmpty) {
         val scontract: Simple = gclMethod.method.mcontract.asInstanceOf[Simple]
 
         val readsOpt: Option[ST] =
@@ -802,12 +802,13 @@ object GumboGen {
           if (scontract.ensures.isEmpty) None()
           else Some(st"Ensures(${(scontract.ensures.map((e: AST.Exp) => getRExp(e)), ",")})")
 
-        Some(st"""Contract(
-                 |  $readsOpt
-                 |  $requiresOpt
-                 |  $modifiesOpt
-                 |  $ensuresOpt
-                 |)""")
+        Some(
+          st"""Contract(
+              |  $readsOpt
+              |  $requiresOpt
+              |  $modifiesOpt
+              |  $ensuresOpt
+              |)""")
       } else {
         None()
       }
@@ -816,7 +817,9 @@ object GumboGen {
           |  ${contractOpt}
           |  return ${rexp}
           |}"""
-    } else { st"${rexp}" }
+    } else {
+      st"${rexp}"
+    }
 
     return (st"""@${purity} def ${methodName}(${(params, ", ")}): ${returnType} = ${body}""")
   }
