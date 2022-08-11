@@ -12,6 +12,16 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 
 object Arsit {
+
+  //=================================================================
+  //  A r s i t    C o d e    G e n e r a t i o n   P i p e l i n e
+  //
+  //   Primary methods for invoke pipeline phases.
+  //   Phase results accumulated and held in memory using the PhaseResult structure,
+  //   which is threaded through phases (intermedidate versions are
+  //   named according to the associated phase).
+  //=================================================================
+
   def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
     val ret = runInternal(model, o, aadlTypes, symbolTable)
