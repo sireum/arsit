@@ -12,6 +12,7 @@ import org.sireum.hamr.codegen.common.resolvers.GclResolver.GUMBO__Library
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType, TypeUtil}
 import org.sireum.hamr.ir._
+import org.sireum.lang.ast.MethodContract.Simple
 import org.sireum.lang.{ast => AST}
 
 object GumboGen {
@@ -162,6 +163,23 @@ object GumboGen {
           id = AST.Id(value = value(value.size - 1), attr = AST.Attr(None())),
           targs = ISZ(), attr = AST.ResolvedAttr(None(), None(), None())))
         )
+    }
+
+    override def post_langastExpResult(o: AST.Exp.Result): MOption[AST.Exp] = {
+      o.attr.typedOpt match {
+        case Some(atn: AST.Typed.Name) =>
+          val fqAadlTypeName = st"${(atn.ids, "::")}".render
+          val aadlType = aadlTypes.typeMap.get(fqAadlTypeName).get
+
+          val slangTypeName = Util.getDataTypeNames(aadlType, basePackageName).qualifiedReferencedTypeName
+          val splitSlangTypeName = ops.StringOps(slangTypeName).split((c: C) => c == '.')
+
+          val name = AST.Name(splitSlangTypeName.map((a: String) => AST.Id(value = a, attr = AST.Attr(None())) ), attr = AST.Attr(None()))
+          val slangTypedName = AST.Type.Named(name = name, typeArgs = ISZ(), attr = o.attr)
+
+          return MSome(o(tipeOpt = Some(slangTypedName)))
+        case _ => return MNone()
+      }
     }
 
     override def post_langastExpInvoke(o: AST.Exp.Invoke): MOption[AST.Exp] = {
@@ -754,9 +772,53 @@ object GumboGen {
       case _ => halt("No")
     }
 
-    return (
-      st"""@strictpure def ${methodName}(${(params, ", ")}): ${returnType} =
-          |  $rexp""")
+    var isPure = F
+    val purity: String = gclMethod.method.purity match {
+      case AST.Purity.Pure =>
+        isPure = T
+        "pure"
+      case AST.Purity.StrictPure => "strictpure"
+      case AST.Purity.Impure => "impure"
+      case AST.Purity.Memoize => "memoize"
+    }
+
+    val body: ST = if(isPure) {
+      val contractOpt: Option[ST] = if(gclMethod.method.mcontract.nonEmpty) {
+        val scontract: Simple = gclMethod.method.mcontract.asInstanceOf[Simple]
+
+        val readsOpt: Option[ST] =
+          if (scontract.reads.isEmpty) None()
+          else Some(st"Reads(${(scontract.reads.map((i: AST.Exp.Ident) => getRExp(i)), ",")}),")
+
+        val requiresOpt: Option[ST] =
+          if (scontract.requires.isEmpty) None()
+          else Some(st"Requires(${(scontract.requires.map((e: AST.Exp) => getRExp(e)), ",")}),")
+
+        val modifiesOpt: Option[ST] =
+          if (scontract.modifies.isEmpty) None()
+          else Some(st"Reads(${(scontract.modifies.map((i: AST.Exp.Ident) => getRExp(i)), ",")}),")
+
+        val ensuresOpt: Option[ST] =
+          if (scontract.ensures.isEmpty) None()
+          else Some(st"Ensures(${(scontract.ensures.map((e: AST.Exp) => getRExp(e)), ",")})")
+
+        Some(st"""Contract(
+                 |  $readsOpt
+                 |  $requiresOpt
+                 |  $modifiesOpt
+                 |  $ensuresOpt
+                 |)""")
+      } else {
+        None()
+      }
+
+      st"""{
+          |  ${contractOpt}
+          |  return ${rexp}
+          |}"""
+    } else { st"${rexp}" }
+
+    return (st"""@${purity} def ${methodName}(${(params, ", ")}): ${returnType} = ${body}""")
   }
 
   def processSubclauseFunctions(methods: ISZ[GclMethod]): (ST, Marker) = {
