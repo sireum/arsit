@@ -148,8 +148,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
 
-    val btsAnnexes : ISZ[AnnexInfo] =
-      symbolTable.annexInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
+    val btsAnnexes : ISZ[AnnexClauseInfo] =
+      symbolTable.annexClauseInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
 
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 

@@ -8,8 +8,8 @@ import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
-import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
+import org.sireum.hamr.ir.FeatureEnd
 
 object ArtNixTemplate {
 
@@ -701,7 +701,7 @@ object ArtNixTemplate {
           |
           |    if((nixDir / "CMakeCache.txt").exists) {
           |      // remove cached transpiler variables
-          |      proc"cmake -U BOUND_CHECK -U NO_PRINT -U RANGE_CHECK -U WITH_LOC ..".at(nixDir).console.run()
+          |      proc"cmake -U BOUND_CHECK -U NO_PRINT -U RANGE_CHECK -U WITH_LOC ..".at(nixDir).console.runCheck()
           |    }
           |
           |    var cmake: ISZ[String] = ISZ("cmake")
@@ -711,31 +711,34 @@ object ArtNixTemplate {
           |    if(o.withLoc) { cmake = cmake :+ "-D" :+ "WITH_LOC=ON" }
           |    cmake = (cmake :+ "-D" :+ "CMAKE_BUILD_TYPE=Release") :+ ".."
           |
-          |    if(Os.proc(cmake).at(nixDir).console.run().ok) {
-          |      val MAKE_ARGS: String = Os.env("MAKE_ARGS") match {
-          |        case Some(o) => o
-          |        case _ => ""
-          |      }
-          |      if(proc"make --jobs $${o.jobs} $${MAKE_ARGS}".at(nixDir).console.run().ok) {
-          |        val binDir = home / "slang-build"
-          |        binDir.removeAll()
-          |        binDir.mkdir()
+          |    Os.proc(cmake).at(nixDir).console.runCheck()
           |
-          |        if(Os.isWin) {
-          |          nixDir.list.filter(p => p.ext == "exe").foreach((f: Os.Path) => f.moveTo(binDir / f.name))
-          |        } else {
-          |          nixDir.list.filter(p => ops.StringOps(p.name).endsWith("_App")).foreach((f: Os.Path) => f.moveTo(binDir / f.name))
-          |          val candidates: ISZ[Os.Path] = ISZ[String]("Demo", "LegacyDemo").map((m: String) => nixDir / m)
-          |          val main: ISZ[Os.Path] = candidates.filter((p: Os.Path) => p.exists)
-          |          if(main.isEmpty || main.size > 1) {
-          |            eprintln(s"Found $${main.size} possible main programs.  There should be only one of the following: $${candidates}")
-          |            Os.exit(1)
-          |          }
-          |          main(0).moveTo(binDir / main(0).name)
-          |        }
-          |        Os.exit(0)
-          |      }
+          |    val MAKE_ARGS: String = Os.env("MAKE_ARGS") match {
+          |      case Some(o) => o
+          |      case _ => ""
           |    }
+          |
+          |    proc"make --jobs $${o.jobs} $${MAKE_ARGS}".at(nixDir).console.runCheck()
+          |
+          |    val binDir = home / "slang-build"
+          |    binDir.removeAll()
+          |    binDir.mkdir()
+          |
+          |    if(Os.isWin) {
+          |      nixDir.list.filter(p => p.ext == "exe").foreach((f: Os.Path) => f.moveTo(binDir / f.name))
+          |    } else {
+          |      nixDir.list.filter(p => ops.StringOps(p.name).endsWith("_App")).foreach((f: Os.Path) => f.moveTo(binDir / f.name))
+          |      val candidates: ISZ[Os.Path] = ISZ[String]("Demo", "LegacyDemo").map((m: String) => nixDir / m)
+          |      val main: ISZ[Os.Path] = candidates.filter((p: Os.Path) => p.exists)
+          |      if(main.isEmpty || main.size > 1) {
+          |        eprintln(s"Found $${main.size} possible main programs.  There should be only one of the following: $${candidates}")
+          |        Os.exit(1)
+          |      }
+          |      main(0).moveTo(binDir / main(0).name)
+          |    }
+          |
+          |    Os.exit(0)
+          |
           |  case Some(o: Cli.CompileOption) =>
           |    println(o.help)
           |    Os.exit(0)
@@ -821,6 +824,9 @@ object ArtNixTemplate {
           |# Uncomment the following to prevent terminal from closing when the app shuts down or crashes
           |#PREVENT_CLOSE="; bash -i"
           |
+          |# check if getopt supports long options
+          |getopt -T > /dev/null || ret=$$?
+          |[[ $$ret -eq 4 ]] && GNU_GETOPT=0 || GNU_GETOPT=1
           |
           |OPTIONS=s:h
           |LONGOPTS=scheduler:,help
@@ -830,16 +836,28 @@ object ArtNixTemplate {
           |  echo "Usage: <option>*"
           |  echo ""
           |  echo "Available Options:"
-          |  echo "-s, --scheduler        The scheduler to use (expects one of"
-          |  echo "                         { default, roundRobin, static, legacy};"
-          |  echo "                         default: default)"
-          |  echo "-h, --help             Display this information"
+          |  if [[ $$GNU_GETOPT -eq 0 ]]; then
+          |    echo "-s, --scheduler        The scheduler to use (expects one of"
+          |    echo "                         { default, roundRobin, static, legacy};"
+          |    echo "                         default: default)"
+          |    echo "-h, --help             Display this information"
+          |  else
+          |    echo "-s                     The scheduler to use (expects one of"
+          |    echo "                         { default, roundRobin, static, legacy};"
+          |    echo "                         default: default)"
+          |    echo "-h                     Display this information"
+          |  fi
           |}
           |
-          |! PARSED=$$(getopt --options=$$OPTIONS --longoptions=$$LONGOPTS --name "$$0" -- "$$@")
+          |if [[ $$GNU_GETOPT -eq 0 ]]; then
+          |  ! PARSED=$$(getopt --options=$$OPTIONS --longoptions=$$LONGOPTS --name "$$0" -- "$$@")
+          |else
+          |  ! PARSED=$$(getopt $$OPTIONS "$$@")
+          |fi
+          |
           |if [[ $${PIPESTATUS[0]} -ne 0 ]]; then
-          |    usage
-          |    exit 1
+          |  usage
+          |  exit 1
           |fi
           |
           |eval set -- "$$PARSED"
@@ -872,11 +890,11 @@ object ArtNixTemplate {
           |  if [ "$$2" ]; then SCHEDULER_ARG=" -s $${2}"; fi
           |  if [ -n "$$COMSPEC" -a -x "$$COMSPEC" ]; then
           |    for APP in $$1; do
-          |      cygstart mintty /bin/bash "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
+          |      cygstart mintty /bin/bash -c "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
           |    done
           |  elif [[ "$$(uname)" == "Darwin" ]]; then
           |    for APP in $$1; do
-          |      open -a Terminal "slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE}" &
+          |      echo "$${SCRIPT_HOME}/slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE} ; rm /tmp/tmp.sh" > /tmp/tmp.sh ; chmod +x /tmp/tmp.sh ; open -a Terminal /tmp/tmp.sh &
           |    done
           |  elif [[ "$$(expr substr $$(uname -s) 1 5)" == "Linux" ]]; then
           |    for APP in $$1; do
@@ -995,5 +1013,4 @@ object ArtNixTemplate {
           |"""
     return ret
   }
-
 }
