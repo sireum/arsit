@@ -106,7 +106,7 @@ object Arsit {
     }
 
     val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
-    val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
+    val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, processes, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
 
