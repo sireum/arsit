@@ -16,7 +16,7 @@ class BaseTests extends ArsitTest {
   val modelDir = modelsDir / name
   val model = modelDir / ".slang" / "BuildingControl_BuildingControlDemo_i_Instance.json"
 
-
+  /*
   "Can run these individually" - {
     "JVM" in {
       val platform: ArsitPlatform.Type = ArsitPlatform.JVM
@@ -68,6 +68,7 @@ class BaseTests extends ArsitTest {
     ISZ(ArsitPlatform.JVM, ArsitPlatform.Linux).foreach(platform =>
       test(s"$name--$platform--v2", baseOptions(platform = platform)))
   }
+  */
 
   def test(name: String, options: ArsitOptions): Unit = {
     test(name, model, options, resultDir)
