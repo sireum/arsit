@@ -742,6 +742,10 @@ object GumboGen {
     return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
   }
 
+  def getR2Exp(e: AST.Exp.Ref): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e.asExp).get)
+  }
+
   def processGclMethod(gclMethod: GclMethod): ST = {
     val methodName = gclMethod.method.sig.id.value
 
@@ -788,7 +792,7 @@ object GumboGen {
 
         val readsOpt: Option[ST] =
           if (scontract.reads.isEmpty) None()
-          else Some(st"Reads(${(scontract.reads.map((i: AST.Exp.Ident) => getRExp(i)), ",")}),")
+          else Some(st"Reads(${(scontract.reads.map((i: AST.Exp.Ref) => getR2Exp(i)), ",")}),")
 
         val requiresOpt: Option[ST] =
           if (scontract.requires.isEmpty) None()
@@ -796,7 +800,7 @@ object GumboGen {
 
         val modifiesOpt: Option[ST] =
           if (scontract.modifies.isEmpty) None()
-          else Some(st"Reads(${(scontract.modifies.map((i: AST.Exp.Ident) => getRExp(i)), ",")}),")
+          else Some(st"Reads(${(scontract.modifies.map((i: AST.Exp.Ref) => getR2Exp(i)), ",")}),")
 
         val ensuresOpt: Option[ST] =
           if (scontract.ensures.isEmpty) None()
