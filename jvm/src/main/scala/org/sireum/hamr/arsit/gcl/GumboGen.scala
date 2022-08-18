@@ -800,7 +800,7 @@ object GumboGen {
 
         val modifiesOpt: Option[ST] =
           if (scontract.modifies.isEmpty) None()
-          else Some(st"Reads(${(scontract.modifies.map((i: AST.Exp.Ref) => getR2Exp(i)), ",")}),")
+          else Some(st"Modifies(${(scontract.modifies.map((i: AST.Exp.Ref) => getR2Exp(i)), ",")}),")
 
         val ensuresOpt: Option[ST] =
           if (scontract.ensures.isEmpty) None()
