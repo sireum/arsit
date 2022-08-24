@@ -48,7 +48,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     generateInternal()
 
-    return PhaseResult(resources, Set.empty, portId, componentId, ISZ())
+    return PhaseResult(resources, Map.empty, portId, componentId, ISZ())
   }
 
   def generateInternal(): Unit = {

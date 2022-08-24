@@ -126,12 +126,13 @@ object TranspilerTemplate {
     val sources = ops.ISZOps(opts.sourcepath.map((f: String) => Util.relativizePaths(binDir, f, script_home))
       .map((f: String) => st"""s"${f}"""".render)).sortWith( (a: String, b: String) => a <= b)
 
+    val sourcePathName = s"${opts.projectName.get}_sourcePaths"
     val slash =
-      st"""val sourcePaths: ISZ[String] = ISZ(
+      st"""val ${sourcePathName}: ISZ[String] = ISZ(
           |  ${(sources, ",\n")})
           |
           |val ${opts.projectName.get}: ISZ[String] = ISZ(
-          |  "--sourcepath", st"$${(sourcePaths, PATH_SEP)}".render,
+          |  "--sourcepath", st"$${(${sourcePathName}, PATH_SEP)}".render,
           |  "--output-dir", s"${cOutputDirRel}",
           |  "--name", "${opts.projectName.get}",
           |  "--apps", "${(opts.apps, ",")}",
@@ -246,8 +247,9 @@ object TranspilerTemplate {
           |println("Initializing runtime library ...")
           |Sireum.initRuntimeLibrary()
           |
-          |for(p <- projects) {
-          |  Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
+          |var ret: Z = 0
+          |for(p <- projects if ret == 0) {
+          |  ret = Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
           |}
           |
           |//ops.ISZOps(projects).parMap(p =>

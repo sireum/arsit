@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
-import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
+import org.sireum.hamr.codegen.common.symbols.{AadlComponent, AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.util.PathUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -353,7 +353,7 @@ object HAMR {
 }
 
 @datatype class PhaseResult(val resources: ISZ[Resource],
-                            val componentModules: Set[ISZ[String]],
+                            val componentModules: Map[AadlComponent, ISZ[String]],
                             val maxPort: Z,
                             val maxComponent: Z,
                             val transpilerOptions: ISZ[TranspilerConfig]) extends Result

@@ -326,7 +326,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val processes = previousPhase.componentModules.elements
+    val processes = previousPhase.componentModules.values
 
     val srcDir = arsitOptions.outputDir / "src"
 

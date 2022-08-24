@@ -28,7 +28,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   var resources: ISZ[Resource] = ISZ()
   val processBTSNodes: B = ExperimentalOptions.processBtsNodes(arsitOptions.experimentalOptions)
 
-  var componentModules: Set[ISZ[String]] = Set.empty
+  var componentModules: Map[AadlComponent, ISZ[String]] = Map.empty
   var appPlatformEntries: ISZ[ST] = ISZ()
   var appPlatformSetupEntries: ISZ[ST] = ISZ()
 
@@ -124,7 +124,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     val names = Names(m.component, basePackage)
 
-    componentModules = componentModules + names.modulePath
+    componentModules = componentModules + (m ~> names.modulePath)
 
     val filename: String = Util.pathAppend(dirs.componentModuleDir, names.moduleMainPath(ModuleType.shared) ++ ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
@@ -185,7 +185,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       names = names,
       isBless = genBlessEntryPoints)
 
-    componentModules = componentModules + names.modulePath
+    componentModules = componentModules + (m ~> names.modulePath)
 
     addResource(dirs.bridgesModuleDir, names.singleModuleMainPath ++ ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 

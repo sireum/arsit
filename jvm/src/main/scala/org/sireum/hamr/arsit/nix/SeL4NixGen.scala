@@ -186,6 +186,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       val plusSettingsFilename = s"+${settingsFilename}"
 
       val trans = genTranspiler(
+        component = Some(component),
+
         basePackage = basePackage,
         names = names,
         maxStackSizeInBytes = stackSizeInBytes,
@@ -246,6 +248,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       val plusSettingsFilename = s"+${settingsFilename}"
 
       val trans = genTranspilerBase(
+        component = None(),
+
         basePackage = basePackage,
         instanceName = id,
         identifier = id,
@@ -270,9 +274,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, TranspilerConfig))) => (m._1, m._2._1))
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
-    val moodules = previousPhase.componentModules.elements
+    val modules = previousPhase.componentModules.values
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)), moodules)
+    val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)), modules)
     addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.cmd"), slashTranspileScript, T)
 
   }
@@ -393,7 +397,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       names.packageName, names.sel4SlangExtensionStubName, st"${(entries, "\n\n")}")
   }
 
-  def genTranspilerBase(basePackage: String,
+  def genTranspilerBase(component: Option[AadlComponent],
+
+                        basePackage: String,
                         instanceName: String,
                         identifier: String,
                         sourcePaths: ISZ[String],
@@ -417,10 +423,24 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     val buildApps = F
 
-    val _sourcePaths = sourcePaths ++ ISZ(
-      Util.pathAppend(dirs.artModuleDir, ISZ("POINT TO SHARED")),
+    val cms = previousPhase.componentModules
+
+    var _sourcePaths = sourcePaths ++ ISZ(
+      Util.pathAppend(dirs.artModuleDir, ISZ("shared", "src", "main")),
       dirs.dataModuleMainDir,
+      dirs.libraryModuleMainDir,
       Util.pathAppend(dirs.seL4NixModuleMainDir, ISZ(packageName)))
+
+    component match {
+      case Some(component) =>
+        val p = previousPhase.componentModules.get(component).get
+        _sourcePaths = _sourcePaths ++ ISZ(
+          Util.pathAppend(dirs.apisModuleDir, p ++ ISZ("main")),
+          Util.pathAppend(dirs.bridgesModuleDir, p ++ ISZ("main")),
+          Util.pathAppend(dirs.componentModuleDir, p ++ ISZ("shared", "main"))
+        )
+      case _ =>
+    }
 
     val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
 
@@ -445,7 +465,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     )
   }
 
-  def genTranspiler(basePackage: String,
+  def genTranspiler(component: Option[AadlComponent],
+                    basePackage: String,
                     names: Names,
                     maxStackSizeInBytes: Z,
                     numComponentInPorts: Z,
@@ -504,6 +525,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     val maxSequenceSize: Z = getMaxSequenceSize(numComponentPorts, types)
 
     return genTranspilerBase(
+      component = component,
+
       basePackage = basePackage,
       instanceName = names.componentSingletonType,
       identifier = names.identifier,

@@ -46,7 +46,7 @@ object Arsit {
       options = o,
       projDirs = projectDirectories,
       resources = nixPhase.resources,
-      processes = nixPhase.componentModules.elements,
+      processes = nixPhase.componentModules.values,
       reporter = ReporterUtil.reporter)
 
     return ArsitResult(nixPhase.resources ++ artResources,
