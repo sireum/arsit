@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SchedulerTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism, SchedulerUtil}
@@ -10,7 +11,7 @@ import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureEnd
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.templates.TemplateUtil
@@ -82,7 +83,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     for (threadOrDevice <- components) {
       val component = threadOrDevice.component
 
-      val names: Names = Names(component, basePackage)
+      val names = nameProvider(component, basePackage)
       val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
       val dispatchProtocol: Dispatch_Protocol.Type = threadOrDevice.dispatchProtocol
@@ -188,7 +189,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     ext_c_entries = ext_c_entries ++ _ext_c_entries
 
     val archBridgeInstanceNames: ISZ[String] = components.map((c: AadlThreadOrDevice) =>
-      Names(c.component, basePackage).cArchInstanceName)
+      nameProvider(c.component, basePackage).cArchInstanceName)
     resources = resources ++ genSchedulerFiles(basePackage, archBridgeInstanceNames)
 
     {
@@ -211,7 +212,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         (CommonUtil.isDevice(dstComp) || CommonUtil.isThread(dstComp))) {
         val dstPath = CommonUtil.getName(c.dst.feature.get)
         val dstArchPortInstanceName = s"${CommonUtil.getName(dstComp.identifier)}.${CommonUtil.getLastName(c.dst.feature.get)}"
-        val name: Names = Names(dstComp, basePackage)
+        val name = nameProvider(dstComp, basePackage)
 
         val srcArchPortInstanceName =
           s"${CommonUtil.getName(srcComp.identifier)}.${CommonUtil.getLastName(c.src.feature.get)}"
@@ -283,7 +284,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map((m: AadlThreadOrDevice) => {
-        val name: Names = Names(m.component, basePackage)
+        val name = nameProvider(m.component, basePackage)
         s"${name.packageName}.${name.componentSingletonType}"
       })
     } else {

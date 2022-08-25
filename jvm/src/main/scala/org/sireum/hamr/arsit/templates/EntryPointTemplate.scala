@@ -4,16 +4,16 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureCategory
 
 object EntryPointTemplate {
-  @pure def assignEntryPointImpl(names: Names): ST = {
+  @pure def assignEntryPointImpl(names: NameProvider): ST = {
     val ret: ST = st"${names.componentEntryPointSingletonQualifiedName}.impl = ${names.componentEntryPointImplName}()"
     return ret
   }
 
-  @pure def genEntryPointImpl(names: Names,
+  @pure def genEntryPointImpl(names: NameProvider,
                               ports: ISZ[Port],
                               dispatchProtocol: Dispatch_Protocol.Type): ST = {
 
@@ -70,7 +70,7 @@ object EntryPointTemplate {
 
   @pure def genEntryPointObject(topLevelPackageName: String,
                                 packageName: String,
-                                names: Names,
+                                names: NameProvider,
                                 ports: ISZ[Port],
                                 dispatchProtocol: Dispatch_Protocol.Type): ST = {
 

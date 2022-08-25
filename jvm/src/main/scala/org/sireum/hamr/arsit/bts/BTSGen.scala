@@ -10,12 +10,12 @@ import org.sireum.hamr.ir._
 import org.sireum.ops._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 
 @record class BTSGen(directories: ProjectDirectories,
                      basePackage: String,
                      aadlComponent: AadlThreadOrDevice,
-                     componentNames: Names,
+                     componentNames: NameProvider,
 
                      symbolTable: SymbolTable,
                      btsSymbolTable: BTSSymbolTable,

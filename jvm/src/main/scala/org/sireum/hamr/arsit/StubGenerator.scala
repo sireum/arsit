@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StubTemplate, TestTemplate}
@@ -11,7 +12,7 @@ import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, ModuleType, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, ModuleType, NameProvider}
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
@@ -122,7 +123,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     var imports: ISZ[ST] = ISZ()
 
-    val names = Names(m.component, basePackage)
+    val names = nameProvider(m.component, basePackage)
 
     componentModules = componentModules + (m ~> names.modulePath)
 
@@ -290,7 +291,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     })
 
     if (subprograms.nonEmpty) {
-      val names = Names(m, basePackage)
+      val names = nameProvider(m, basePackage)
       val objectName = s"${names.componentSingletonType}_subprograms"
 
       val body = StubTemplate.slangBody(

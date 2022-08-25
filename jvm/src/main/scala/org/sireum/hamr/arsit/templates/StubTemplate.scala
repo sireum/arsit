@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
@@ -20,7 +20,7 @@ object StubTemplate {
                    apiType: String,
                    ports: ISZ[Port],
                    dispatchTriggers: Option[ISZ[String]],
-                   names: Names,
+                   names: NameProvider,
                    isBless: B): ST = {
 
     val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
@@ -148,7 +148,7 @@ object StubTemplate {
 
   @pure def computeBody(bridgeName: String,
                         componentName: String,
-                        names: Names,
+                        names: NameProvider,
                         ports: ISZ[Port],
                         dispatchProtocol: Dispatch_Protocol.Type,
                         isTesting: B,
@@ -328,7 +328,7 @@ object StubTemplate {
 
   @pure def componentImplBlock(componentType: String,
                                bridgeName: String,
-                               names: Names,
+                               names: NameProvider,
                                dispatchProtocol: Dispatch_Protocol.Type,
                                ports: ISZ[Port],
                                isBless: B,

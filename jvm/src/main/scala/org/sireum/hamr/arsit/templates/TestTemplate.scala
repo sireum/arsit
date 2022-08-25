@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureCategory
 
 object TestTemplate {
@@ -13,7 +13,7 @@ object TestTemplate {
   }
 
   @pure def bridgeTestSuite(basePackage: String,
-                            names: Names,
+                            names: NameProvider,
                             ports: ISZ[Port]): ST = {
     val ret: ST =
       st"""package ${names.packageName}
@@ -33,7 +33,7 @@ object TestTemplate {
   }
 
   @pure def bridgeTestApis(basePackage: String,
-                           names: Names,
+                           names: NameProvider,
                            ports: ISZ[Port]): ST = {
 
     var concretePutParams: ISZ[ST] = ISZ()

@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.templates._
@@ -10,7 +11,7 @@ import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
@@ -124,13 +125,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         case s: AadlThreadGroup => genThreadGroup(s)
 
         case s: AadlThread =>
-          val names = Names(s.component, basePackage)
+          val names = nameProvider(s.component, basePackage)
           bridges = bridges :+ genThread(s, names)
           components = components :+ names.instanceName
 
         case s: AadlDevice =>
           if (arsitOptions.devicesAsThreads) {
-            val names = Names(s.component, basePackage)
+            val names = nameProvider(s.component, basePackage)
             bridges = bridges :+ genThread(s, names)
             components = components :+ names.instanceName
           }
@@ -152,7 +153,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     for (c <- m.subComponents) {
       assert(c.isInstanceOf[AadlThread])
-      val names = Names(c.component, basePackage)
+      val names = nameProvider(c.component, basePackage)
       bridges = bridges :+ genThread(c.asInstanceOf[AadlThread], names)
       components = components :+ names.instanceName
     }
@@ -162,7 +163,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       .map((ci: ir.ConnectionInstance) => processConnectionInstance(ci))
   }
 
-  def genThread(m: AadlThreadOrDevice, names: Names): ST = {
+  def genThread(m: AadlThreadOrDevice, names: NameProvider): ST = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
     assert(m.connectionInstances.isEmpty)

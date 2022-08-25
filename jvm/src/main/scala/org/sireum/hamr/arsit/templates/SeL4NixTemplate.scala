@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
 
@@ -126,7 +126,7 @@ object SeL4NixTemplate {
     }
   }
 
-  def apiTouches(names: Names, ports: ISZ[Port]): ISZ[ST] = {
+  def apiTouches(names: NameProvider, ports: ISZ[Port]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
     val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
       .map((m: String) => s"${names.packageName}.${names.bridge}.${m}")
@@ -338,7 +338,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def initialize_apis(names: Names,
+  def initialize_apis(names: NameProvider,
                       filename: String): (ISZ[ST], ST) = {
     val initApiType = names.cInitializationApi
     val initApiId = names.cInitializationApi_Id
@@ -379,7 +379,7 @@ object SeL4NixTemplate {
     return (variables, method)
   }
 
-  def apiGet(names: Names,
+  def apiGet(names: NameProvider,
              signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
@@ -436,7 +436,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiGet_byteArrayVersion(names: Names,
+  def apiGet_byteArrayVersion(names: NameProvider,
                               signature: ST,
                               declNewStackFrame: ST,
                               apiGetMethodName: String,
@@ -498,7 +498,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
+  def apiSet(names: NameProvider, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"&initialization_api")
     if (!isEventPort) {
       args = args :+ st"value"
@@ -517,7 +517,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet_byteArrayVersion(names: Names,
+  def apiSet_byteArrayVersion(names: NameProvider,
                               signature: ST,
                               declStackFrame: ST,
                               apiSetMethodName: String): ST = {
@@ -551,7 +551,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
+  def apiLog(names: NameProvider, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
     val args: ISZ[ST] = ISZ(st"&initialization_api", st"str")
 
     val ret: ST =

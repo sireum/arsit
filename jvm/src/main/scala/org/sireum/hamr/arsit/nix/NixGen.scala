@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -59,7 +60,7 @@ object NixGen{
     val sts: ISZ[ST] = threadOrDevices.map(threadOrDevice => {
       val component = threadOrDevice.component
 
-      val names: Names = Names(component, basePackage)
+      val names = nameProvider(component, basePackage)
       val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
       st"""{
@@ -102,7 +103,7 @@ object NixGen{
       var seenTypes: Set[AadlType] = Set.empty
 
       for(threadOrDevice <- components) {
-        val names: Names = Names(threadOrDevice.component, basePackage)
+        val names = nameProvider(threadOrDevice.component, basePackage)
         val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
         for (p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
@@ -146,7 +147,7 @@ object NixGen{
     return (extHEntries, extCEntries)
   }
 
-  def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
+  def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: NameProvider, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
 
     val rootExtDir = Os.path(dirs.cExt_c_Dir)
 
@@ -642,7 +643,7 @@ object NixGen{
     return (extensionFiles, resources)
   }
 
-  def genStubInitializeMethod(names: Names, ports: ISZ[Port], apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
+  def genStubInitializeMethod(names: NameProvider, ports: ISZ[Port], apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_initialise"
     val userMethodName = s"${apiMethodName}_"
@@ -737,7 +738,7 @@ object NixGen{
     return (initialiseMethodSig, initMethodImpl, apiMethodImpl)
   }
 
-  def genStubFinaliseMethod(names: Names, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
+  def genStubFinaliseMethod(names: NameProvider, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_finalise"
     val userMethodName = s"${apiMethodName}_"

@@ -10,7 +10,7 @@ import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlComponent, AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
 import org.sireum.hamr.codegen.common.util.PathUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 
@@ -23,6 +23,18 @@ object Util {
   val ARSIT_INSTRUCTIONS_MESSAGE_KIND: String = "Arsit - Instructions"
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
+
+  @datatype class ModuleNameProvider(val c: ir.Component,
+                                     val basePackage: String) extends NameProvider {
+    def apiSuffix: String = {
+      return componentSingletonType
+    }
+  }
+
+  def nameProvider(c: ir.Component,
+                   basePackage: String): NameProvider = {
+    return ModuleNameProvider(c, basePackage)
+  }
 
   def pathAppend(outputDir: String, s: ISZ[String]): String = {
     if (s.isEmpty) {
