@@ -4,9 +4,9 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 
 object SeL4NixTemplate {
 
@@ -121,22 +121,23 @@ object SeL4NixTemplate {
       val payload: String =
         if (p.getPortTypeNames.isEmptyType()) ""
         else p.getPortTypeNames.example()
-      return st"""${initApi}.get.put_${p.name}($payload)
-                 |${operApi}.get.put_${p.name}($payload)"""
+      return (
+        st"""${initApi}.get.put_${p.name}($payload)
+            |${operApi}.get.put_${p.name}($payload)""")
     }
   }
 
-  def apiTouches(names: Names, ports: ISZ[Port]): ISZ[ST] = {
+  def apiTouches(names: NameProvider, ports: ISZ[Port]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
     val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
       .map((m: String) => s"${names.packageName}.${names.bridge}.${m}")
     val loggers = ISZ("logInfo", "logDebug", "logError")
-    for(api <- apis){
-      for(logger <- loggers) {
+    for (api <- apis) {
+      for (logger <- loggers) {
         ret = ret :+ st"""${api}.get.${logger}("")"""
       }
     }
-    for(port <- ports) {
+    for (port <- ports) {
       ret = ret :+ portApiUsage(apis(0), apis(1), port)
     }
     return ret
@@ -157,8 +158,9 @@ object SeL4NixTemplate {
 
   def genTouchMethod(typeTouches: ISZ[ST], apiTouches: ISZ[ST], scheduleTouches: ISZ[ST]): ST = {
     val sts: Option[ST] =
-      if(scheduleTouches.nonEmpty) Some(st"""// touch process/thread timing properties
-                                            |${(scheduleTouches, "\n")}
+      if (scheduleTouches.nonEmpty) Some(
+        st"""// touch process/thread timing properties
+            |${(scheduleTouches, "\n")}
                                             """)
       else None()
 
@@ -302,7 +304,7 @@ object SeL4NixTemplate {
   }
 
   def methodSignature(methodName: String, params: ISZ[ST], returnType: String): ST = {
-    val preParams: ST = if(params.isEmpty) StackFrameTemplate.STACK_FRAME_ONLY_ST else StackFrameTemplate.STACK_FRAME_ST
+    val preParams: ST = if (params.isEmpty) StackFrameTemplate.STACK_FRAME_ONLY_ST else StackFrameTemplate.STACK_FRAME_ST
     val ret: ST = if (params.isEmpty) {
       st"${returnType} ${methodName}(${preParams})"
     } else {
@@ -314,7 +316,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def initialize_apis(names: Names,
+  def initialize_apis(names: NameProvider,
                       filename: String): (ISZ[ST], ST) = {
     val initApiType = names.cInitializationApi
     val initApiId = names.cInitializationApi_Id
@@ -355,7 +357,7 @@ object SeL4NixTemplate {
     return (variables, method)
   }
 
-  def apiGet(names: Names,
+  def apiGet(names: NameProvider,
              signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
@@ -367,7 +369,7 @@ object SeL4NixTemplate {
         case b: BaseType => b.slangType.string
         case b: BitType => TypeUtil.BIT_SIG
         case _ =>
-          if(typ.isEmptyType()) {
+          if (typ.isEmptyType()) {
             typ.qualifiedReferencedTypeName
           } else {
             s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
@@ -412,7 +414,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiGet_byteArrayVersion(names: Names,
+  def apiGet_byteArrayVersion(names: NameProvider,
                               signature: ST,
                               declNewStackFrame: ST,
                               apiGetMethodName: String,
@@ -424,7 +426,7 @@ object SeL4NixTemplate {
         case b: BaseType => b.slangType.string
         case b: BitType => TypeUtil.BIT_SIG
         case _ =>
-          if(typ.isEmptyType()) {
+          if (typ.isEmptyType()) {
             typ.qualifiedReferencedTypeName
           } else {
             s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
@@ -474,7 +476,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(names: Names, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
+  def apiSet(names: NameProvider, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"&initialization_api")
     if (!isEventPort) {
       args = args :+ st"value"
@@ -493,7 +495,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet_byteArrayVersion(names: Names,
+  def apiSet_byteArrayVersion(names: NameProvider,
                               signature: ST,
                               declStackFrame: ST,
                               apiSetMethodName: String): ST = {
@@ -527,7 +529,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiLog(names: Names, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
+  def apiLog(names: NameProvider, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
     val args: ISZ[ST] = ISZ(st"&initialization_api", st"str")
 
     val ret: ST =
@@ -563,11 +565,11 @@ object SeL4NixTemplate {
                 globalVars: ISZ[ST],
                 implMethods: ISZ[ST]): ST = {
     val _includes: Option[ST] =
-      if(includes.isEmpty) None()
+      if (includes.isEmpty) None()
       else Some(st"${(ops.ISZOps(includes).map((s: String) => s"#include ${s}"), "\n")}")
 
     val _globals: Option[ST] =
-      if(globalVars.isEmpty) None()
+      if (globalVars.isEmpty) None()
       else Some(
         st"""${(globalVars.map((s: ST) => st"${s};"), "\n")}
             |""")
@@ -662,10 +664,10 @@ object SeL4NixTemplate {
           |
           |${(blocks, "\n\n")}
           |#endif"""
-        return ret
+    return ret
   }
 
-  def ext_c(blocks: ISZ[ST]): ST= {
+  def ext_c(blocks: ISZ[ST]): ST = {
     val ret: ST =
       st"""#include <ext.h>
           |

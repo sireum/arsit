@@ -7,9 +7,9 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, Ip
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.PathUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, DefaultNameProvider, NameProvider, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 
@@ -22,6 +22,11 @@ object Util {
   val ARSIT_INSTRUCTIONS_MESSAGE_KIND: String = "Arsit - Instructions"
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
+
+  def nameProvider(c: ir.Component,
+                   basePackage: String): NameProvider = {
+    return DefaultNameProvider(c, basePackage)
+  }
 
   def pathAppend(outputDir: String, s: ISZ[String]): String = {
     if (s.isEmpty) {
@@ -140,7 +145,7 @@ object Util {
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(component)
 
     var ports: ISZ[Port] = ISZ()
-    for(f <- m.getPorts()) {
+    for (f <- m.getPorts()) {
       val portName = f.identifier
       val isTrigger: B =
         if (dispatchTriggers.isEmpty) T
@@ -255,7 +260,7 @@ object HAMR {
 
   val componentDir: String = Util.pathAppend(mainDir, ISZ("component"))
 
-  val inspectorDir: String= Util.pathAppend(mainDir, ISZ("inspector"))
+  val inspectorDir: String = Util.pathAppend(mainDir, ISZ("inspector"))
 
   /* Testing dirs */
   val testDir: String = Util.pathAppend(slangSrcDir, ISZ("test"))
@@ -285,7 +290,6 @@ object HAMR {
   val cExt_schedule_Dir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("ext-schedule"))
 
   val cEtcDir: String = Util.pathAppend(cOutputSharedDir.value, ISZ("etc"))
-
 
 
   /* Camkes specific dirs */

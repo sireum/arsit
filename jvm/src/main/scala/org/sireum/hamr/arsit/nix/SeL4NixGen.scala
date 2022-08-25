@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
@@ -12,7 +13,7 @@ import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider, StringUtil}
 
 @record class SeL4NixGen(val dirs: ProjectDirectories,
                          val root: AadlSystem,
@@ -70,7 +71,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     for (component <- components) {
 
-      val names: Names = Names(component.component, basePackage)
+      val names = nameProvider(component.component, basePackage)
 
       val ports: ISZ[Port] = Util.getPorts(component, types, basePackage, z"0")
 
@@ -266,7 +267,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
   }
 
   def genGlobals(ports: ISZ[Port],
-                 names: Names): ST = {
+                 names: NameProvider): ST = {
     val _ports: ISZ[ST] = ports.map(p => {
       val portComment = SeL4NixTemplate.portComment(p.name, p.feature.direction.string, p.feature.category.string, p.getPortTypeNames.qualifiedTypeName)
       SeL4NixTemplate.portVariable(names.bridgeIdentifier, p.sel4PortVarable, p.name, p.nameId, portComment)
@@ -274,7 +275,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     return st"${(_ports, "\n\n")}"
   }
 
-  def genDispatchStatus(names: Names,
+  def genDispatchStatus(names: NameProvider,
                         ports: ISZ[Port],
                         value: Dispatch_Protocol.Type): ST = {
     val body: ST = value match {
@@ -297,7 +298,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
   }
 
   def genReceiveInput(ports: ISZ[Port],
-                      names: Names): ST = {
+                      names: NameProvider): ST = {
     val inPorts: ISZ[Port] = ports.filter(p => CommonUtil.isInFeature(p.feature))
     val entries: ISZ[ST] = inPorts.map(p =>
       st"${p.sel4PortVarable} = ${names.sel4SlangExtensionName}.${genExtensionMethodName(p, "Receive")}()")
@@ -336,7 +337,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
   }
 
   def genSendOutput(ports: ISZ[Port],
-                    names: Names): ST = {
+                    names: NameProvider): ST = {
     val outPorts: ISZ[Port] = ports.filter(p => CommonUtil.isOutFeature(p.feature))
     val entries: ISZ[ST] = outPorts.map(p => {
       st"""if(${p.sel4PortVarable}.nonEmpty) {
@@ -351,7 +352,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     return s"${p.name}_${methodName}"
   }
 
-  def genSlangSel4ExtensionObject(ports: ISZ[Port], names: Names): ST = {
+  def genSlangSel4ExtensionObject(ports: ISZ[Port], names: NameProvider): ST = {
     val entries: ISZ[ST] = ports.map(p => {
       if (CommonUtil.isInFeature(p.feature)) {
         st"""// returns T if seL4's ${p.name} port is empty, F otherwise 
@@ -367,7 +368,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
     return SeL4NixTemplate.extensionObject(names.packageName, names.sel4SlangExtensionName, st"${(entries, "\n\n")}")
   }
 
-  def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], packageName: String, names: Names): ST = {
+  def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], packageName: String, names: NameProvider): ST = {
     val entries: ISZ[ST] = ports.map(p => {
       if (CommonUtil.isInFeature(p.feature)) {
         st"""def ${genExtensionMethodName(p, "IsEmpty")}(): B = halt("stub")
@@ -434,7 +435,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
   }
 
   def genTranspiler(basePackage: String,
-                    names: Names,
+                    names: NameProvider,
                     maxStackSizeInBytes: Z,
                     numComponentInPorts: Z,
                     numComponentOutPorts: Z,
@@ -452,7 +453,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map(c => {
-        val componentNames: Names = Names(c._2, basePackage)
+        val componentNames = nameProvider(c._2, basePackage)
         s"${componentNames.packageName}.${componentNames.componentSingletonType}"
       })
     } else {
@@ -510,7 +511,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, Names, StringUtil}
       cmakeIncludes = cmakeIncludes)
   }
 
-  def genSel4Adapters(names: Names): ISZ[Os.Path] = {
+  def genSel4Adapters(names: NameProvider): ISZ[Os.Path] = {
 
     val root = Os.path(dirs.sel4EtcDir)
 

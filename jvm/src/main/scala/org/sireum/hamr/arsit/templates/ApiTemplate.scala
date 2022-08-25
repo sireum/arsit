@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir._
 
 object ApiTemplate {
@@ -18,7 +18,7 @@ object ApiTemplate {
 
   def api(packageName: String,
           basePackageName: String,
-          names: Names,
+          names: NameProvider,
           ports: ISZ[Port],
           integrationContracts: Map[AadlPort, (Option[ST], ST, ST)]): ST = {
 
@@ -110,14 +110,14 @@ object ApiTemplate {
     return ret
   }
 
-  def entryPointParams(names: Names): ISZ[ST] = {
+  def entryPointParams(names: NameProvider): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ(
       st"${apiInitializationId}: ${names.apiInitialization}",
       st"${apiOperationalId}: ${names.apiOperational}")
     return ret
   }
 
-  def apiBridgeEntry(names: Names,
+  def apiBridgeEntry(names: NameProvider,
                      bridgeCompanionObjectName: String,
                      ports: ISZ[Port],
                      isEntry: B): ST = {
@@ -143,7 +143,7 @@ object ApiTemplate {
     return ret
   }
 
-  def companionObjectApiInstances(names: Names): ST = {
+  def companionObjectApiInstances(names: NameProvider): ST = {
     val ret: ST =
       st"""var ${apiInitializationBridgeId}: Option[${names.apiInitialization}] = None()
           |var ${apiOperationalBridgeId}: Option[${names.apiOperational}] = None()"""
