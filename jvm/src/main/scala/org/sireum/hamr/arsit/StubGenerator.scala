@@ -3,18 +3,19 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
+import org.sireum.hamr.arsit.util.ReporterUtil.reporter
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
 import org.sireum.hamr.ir._
-import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
 @record class StubGenerator(dirs: ProjectDirectories,
                             rootSystem: AadlSystem,
@@ -100,7 +101,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     var imports: ISZ[ST] = ISZ()
 
-    val names = Names(m.component, basePackage)
+    val names = nameProvider(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
     val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
@@ -123,7 +124,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
     val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
 
-    val btsAnnexes : ISZ[AnnexClauseInfo] =
+    val btsAnnexes: ISZ[AnnexClauseInfo] =
       symbolTable.annexClauseInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
 
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
@@ -193,7 +194,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       case _ =>
     }
 
-    if(!genBlessEntryPoints) {
+    if (!genBlessEntryPoints) {
       val componentImplBlock = StubTemplate.componentImplBlock(
         componentType = names.componentSingletonType,
         bridgeName = names.bridge,
@@ -270,8 +271,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       assert(rets.size <= 1, s"Expecting a single out param but found ${rets.size}")
 
 
-      val (returnType, exampleType) : (Option[String], Option[ST]) =
-        if(rets.isEmpty) {
+      val (returnType, exampleType): (Option[String], Option[ST]) =
+        if (rets.isEmpty) {
           (None(), None())
         }
         else {
@@ -286,7 +287,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
     })
 
     if (subprograms.nonEmpty) {
-      val names = Names(m, basePackage)
+      val names = nameProvider(m, basePackage)
       val objectName = s"${names.componentSingletonType}_subprograms"
 
       val body = StubTemplate.slangBody(
@@ -317,7 +318,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
   }
 
   def processAnnexLibraries(): Unit = {
-    for(annexLibInfo <- symbolTable.annexLibInfos) {
+    for (annexLibInfo <- symbolTable.annexLibInfos) {
       GumboGen.processLibrary(annexLibInfo, symbolTable, types, basePackage) match {
         case Some((st, filename)) =>
           addResource(dirs.componentDir, filename, st, T)

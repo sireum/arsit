@@ -3,20 +3,21 @@
 package org.sireum.hamr.arsit.nix
 
 import org.sireum._
+import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
+import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types._
-import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate.{SF, SF_LAST}
+import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 
-object NixGen{
+object NixGen {
   val IPC_C: String = "ipc.c"
   val EXT_H: String = "ext.h"
   val EXT_C: String = "ext.c"
@@ -24,7 +25,7 @@ object NixGen{
   val KNOWN_HAMR_PROVIDED_FILES: ISZ[String] = ISZ(IPC_C, EXT_H, EXT_C)
 
   def willTranspile(platform: ArsitPlatform.Type): B = {
-    val ret : B = platform match {
+    val ret: B = platform match {
       case ArsitPlatform.Linux => T
       case ArsitPlatform.MacOS => T
       case ArsitPlatform.Cygwin => T
@@ -58,7 +59,7 @@ object NixGen{
     val sts: ISZ[ST] = threadOrDevices.map(threadOrDevice => {
       val component = threadOrDevice.component
 
-      val names: Names = Names(component, basePackage)
+      val names = nameProvider(component, basePackage)
       val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
       st"""{
@@ -88,7 +89,7 @@ object NixGen{
     var extHEntries: ISZ[ST] = ISZ()
     var extCEntries: ISZ[ST] = ISZ()
 
-    if(types.rawConnections) {
+    if (types.rawConnections) {
       // add numBit and numBytes global vars for each type passing between components
 
       val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
@@ -100,8 +101,8 @@ object NixGen{
 
       var seenTypes: Set[AadlType] = Set.empty
 
-      for(threadOrDevice <- components) {
-        val names: Names = Names(threadOrDevice.component, basePackage)
+      for (threadOrDevice <- components) {
+        val names = nameProvider(threadOrDevice.component, basePackage)
         val ports: ISZ[Port] = Util.getPorts(threadOrDevice, types, basePackage, z"0")
 
         for (p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
@@ -145,7 +146,7 @@ object NixGen{
     return (extHEntries, extCEntries)
   }
 
-  def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: Names, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
+  def genExtensionFiles(threadOrDevice: AadlThreadOrDevice, names: NameProvider, ports: ISZ[Port]): (ISZ[Os.Path], ISZ[Resource]) = {
 
     val rootExtDir = Os.path(dirs.cExt_c_Dir)
 
@@ -168,7 +169,7 @@ object NixGen{
 
       val logInfo = NixSeL4NameUtil.apiHelperMethodName("logInfo", names)
 
-      if(arsitOptions.excludeImpl) { // add entrypoint stubs
+      if (arsitOptions.excludeImpl) { // add entrypoint stubs
         var entrypointSignatures: ISZ[ST] = ISZ()
 
         val params: ISZ[ST] = ISZ()
@@ -186,22 +187,30 @@ object NixGen{
         var exampleApiUsage: ISZ[ST] = ISZ()
         var tindex = z"0"
 
-        for(p <- ports.filter(f => CommonUtil.isInPort(f.feature))) {
+        for (p <- ports.filter(f => CommonUtil.isInPort(f.feature))) {
           val getter = NixSeL4NameUtil.apiHelperGetterMethodName(p.name, names)
           val str = s"${p.name}_str"
           val portType: String = {
-            if(CommonUtil.isAadlDataPort(p.feature)) { "data" }
-            else if(CommonUtil.isAadlEventDataPort(p.feature)) { "event data" }
-            else if(CommonUtil.isAadlEventPort(p.feature)) { "event" }
-            else { halt(s"Unexpected port type: ${p}")}
+            if (CommonUtil.isAadlDataPort(p.feature)) {
+              "data"
+            }
+            else if (CommonUtil.isAadlEventDataPort(p.feature)) {
+              "event data"
+            }
+            else if (CommonUtil.isAadlEventPort(p.feature)) {
+              "event"
+            }
+            else {
+              halt(s"Unexpected port type: ${p}")
+            }
           }
 
-          val s: ST = if(CommonUtil.isDataPort(p.feature)) {
+          val s: ST = if (CommonUtil.isDataPort(p.feature)) {
             val t = s"t$tindex"
             tindex = tindex + 1
 
-            val entry:ST = {
-              if(types.rawConnections) {
+            val entry: ST = {
+              if (types.rawConnections) {
                 val originatingTypeNames: DataTypeNames = p._portType match {
                   case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
                   case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
@@ -262,10 +271,11 @@ object NixGen{
         }
 
         val _exampleApiUsage: Option[ST] =
-          if(exampleApiUsage.isEmpty) None()
-          else Some(st"""// examples of api getter usage
-                        |
-                        |${(exampleApiUsage, "\n\n")}""")
+          if (exampleApiUsage.isEmpty) None()
+          else Some(
+            st"""// examples of api getter usage
+                |
+                |${(exampleApiUsage, "\n\n")}""")
 
         threadOrDevice.dispatchProtocol match {
           case Dispatch_Protocol.Periodic =>
@@ -311,10 +321,18 @@ object NixGen{
             var dumpedExampleGetterApiUsageAlready: B = F
             for (p <- inEventPorts) {
               val portType: String = {
-                if(CommonUtil.isAadlDataPort(p.feature)) { "data" }
-                else if(CommonUtil.isAadlEventDataPort(p.feature)) { "event data" }
-                else if(CommonUtil.isAadlEventPort(p.feature)) { "event" }
-                else { halt(s"Unexpected port type: ${p}")}
+                if (CommonUtil.isAadlDataPort(p.feature)) {
+                  "data"
+                }
+                else if (CommonUtil.isAadlEventDataPort(p.feature)) {
+                  "event data"
+                }
+                else if (CommonUtil.isAadlEventPort(p.feature)) {
+                  "event"
+                }
+                else {
+                  halt(s"Unexpected port type: ${p}")
+                }
               }
               val isEventData: B = CommonUtil.isAadlEventDataPort(p.feature)
               val handlerName = s"${componentName}_handle_${p.name}"
@@ -370,7 +388,7 @@ object NixGen{
                       |}"""
 
                 val __exampleApiUsage: Option[ST] =
-                  if(!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
+                  if (!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
                     dumpedExampleGetterApiUsageAlready = T
                     _exampleApiUsage
                   } else {
@@ -387,7 +405,7 @@ object NixGen{
                       |}"""
               }
               else {
-                val printValue: ST = if(isEventData) {
+                val printValue: ST = if (isEventData) {
                   st"""printf("%s: Received data on ${portType} port ${p.name}: \n", component_id);
                       |
                       |/* alternative using logInfo.  Commented out as the constructed String may be too large
@@ -406,7 +424,7 @@ object NixGen{
                 }
 
                 val __exampleApiUsage: Option[ST] =
-                  if(!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
+                  if (!dumpedExampleGetterApiUsageAlready && _exampleApiUsage.nonEmpty) {
                     dumpedExampleGetterApiUsageAlready = T
                     _exampleApiUsage
                   } else {
@@ -440,7 +458,7 @@ object NixGen{
                 name = apiMethodName,
                 line = 0)
 
-              val valueArg: String = if(isEventData) s"${SF} value" else SF_LAST
+              val valueArg: String = if (isEventData) s"${SF} value" else SF_LAST
 
               val apiAdapterMethod: ST =
                 st"""${apiMethodSig} {
@@ -484,7 +502,7 @@ object NixGen{
       }
 
       // api helper methods (cakeml ffi's link against the c helper apis)
-      if(arsitOptions.excludeImpl || threadOrDevice.isCakeMLComponent()) {
+      if (arsitOptions.excludeImpl || threadOrDevice.isCakeMLComponent()) {
 
         var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
@@ -626,7 +644,7 @@ object NixGen{
         val (apiGlobalVars, apiInitMethod): (ISZ[ST], ST) = SeL4NixTemplate.initialize_apis(names, userImplFile.name)
         implMethods = apiInitMethod +: implMethods
 
-        val includes: ISZ[String] = if(arsitOptions.excludeImpl) ISZ(s"<${userHeaderFile.name}>") else ISZ()
+        val includes: ISZ[String] = if (arsitOptions.excludeImpl) ISZ(s"<${userHeaderFile.name}>") else ISZ()
 
         val implContents = SeL4NixTemplate.cImplFile(apiFilename, includes, apiGlobalVars, implMethods)
 
@@ -641,7 +659,7 @@ object NixGen{
     return (extensionFiles, resources)
   }
 
-  def genStubInitializeMethod(names: Names, ports: ISZ[Port], apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
+  def genStubInitializeMethod(names: NameProvider, ports: ISZ[Port], apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_initialise"
     val userMethodName = s"${apiMethodName}_"
@@ -650,16 +668,16 @@ object NixGen{
     var statements: ISZ[ST] = ISZ()
 
     var resultCount = z"0"
-    for(p <- ports.filter(f => CommonUtil.isOutPort(f.feature))) {
+    for (p <- ports.filter(f => CommonUtil.isOutPort(f.feature))) {
       val setterName = NixSeL4NameUtil.apiHelperSetterMethodName(p.name, names)
-      val u: ST = if(CommonUtil.isDataPort(p.feature)) {
+      val u: ST = if (CommonUtil.isDataPort(p.feature)) {
         val result = s"t${resultCount}"
         resultCount = resultCount + 1
         val decl: ST =
-          if(types.rawConnections) {
+          if (types.rawConnections) {
             val originatingTypeNames: DataTypeNames = p._portType match {
               case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
-              case _ =>halt(s"Unexpected: Could not find originating type for ${p._portType}")
+              case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
             }
 
             val numBits = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
@@ -673,7 +691,7 @@ object NixGen{
             if (p.getPortTypeNames.isEnum()) {
               st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()};
                   |${setterName}(${SF} ${result});"""
-            } else if(p.getPortTypeNames.isBaseType()){
+            } else if (p.getPortTypeNames.isBaseType()) {
               st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()}(${SF_LAST});
                   |${setterName}(${SF} ${result});"""
             } else {
@@ -736,7 +754,7 @@ object NixGen{
     return (initialiseMethodSig, initMethodImpl, apiMethodImpl)
   }
 
-  def genStubFinaliseMethod(names: Names, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
+  def genStubFinaliseMethod(names: NameProvider, apiFileUri: String, userFileUri: String): (ST, ST, ST) = {
     val params: ISZ[ST] = ISZ()
     val apiMethodName = s"${names.cComponentType}_finalise"
     val userMethodName = s"${apiMethodName}_"

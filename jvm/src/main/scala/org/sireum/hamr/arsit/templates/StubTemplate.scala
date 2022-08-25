@@ -4,10 +4,10 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.gcl.GumboGen
-import org.sireum.hamr.arsit.gcl.GumboGen.{GclComputeEventHolder, GclEntryPointInitialize, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointInitialize, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, Dispatch_Protocol, SymbolTable}
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
@@ -31,7 +31,7 @@ object StubTemplate {
                    apiType: String,
                    ports: ISZ[Port],
                    dispatchTriggers: Option[ISZ[String]],
-                   names: Names,
+                   names: NameProvider,
                    isBless: B): ST = {
 
     // make sequence of tags for each category of Entry Point (EP) for which code will be generated
@@ -181,7 +181,7 @@ object StubTemplate {
 
   @pure def computeBody(bridgeName: String,
                         componentName: String,
-                        names: Names,
+                        names: NameProvider,
                         ports: ISZ[Port],
                         dispatchProtocol: Dispatch_Protocol.Type,
                         isTesting: B,
@@ -379,7 +379,7 @@ object StubTemplate {
 
   @pure def componentImplBlock(componentType: String,
                                bridgeName: String,
-                               names: Names,
+                               names: NameProvider,
                                dispatchProtocol: Dispatch_Protocol.Type,
                                ports: ISZ[Port],
                                isBless: B,

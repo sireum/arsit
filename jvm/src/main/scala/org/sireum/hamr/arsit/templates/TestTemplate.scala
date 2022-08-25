@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, Names}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
 import org.sireum.hamr.ir.FeatureCategory
 
 object TestTemplate {
@@ -13,7 +13,7 @@ object TestTemplate {
   }
 
   @pure def bridgeTestSuite(basePackage: String,
-                            names: Names,
+                            names: NameProvider,
                             ports: ISZ[Port]): ST = {
     val ret: ST =
       st"""package ${names.packageName}
@@ -44,7 +44,7 @@ object TestTemplate {
   }
 
   @pure def bridgeTestApis(basePackage: String,
-                           names: Names,
+                           names: NameProvider,
                            ports: ISZ[Port]): ST = {
 
     var concretePutParams: ISZ[ST] = ISZ()
@@ -66,9 +66,10 @@ object TestTemplate {
                   |*   ART currently supports single element event queues so at most
                   |*   one event will be placed in the queue."""
 
-            concretePutBlocks = concretePutBlocks :+ st"""for(i <- 0 until ${p.name}) {
-                                                         |  ${putMethodName}()
-                                                         |}"""
+            concretePutBlocks = concretePutBlocks :+
+              st"""for(i <- 0 until ${p.name}) {
+                  |  ${putMethodName}()
+                  |}"""
             (s"", s"Empty()", p.name, "Z")
           }
           case _ => {
@@ -77,7 +78,7 @@ object TestTemplate {
               if (CommonUtil.isAadlEventDataPort(p.feature)) s"ISZ[${ptype}]"
               else ptype
 
-            if(CommonUtil.isAadlEventDataPort(p.feature)) {
+            if (CommonUtil.isAadlEventDataPort(p.feature)) {
               concretePutScalaDoc = concretePutScalaDoc :+
                 st"""* @param ${p.name} payloads for event data port ${p.name}.
                     |*   ART currently supports single element event data queues so
@@ -113,17 +114,20 @@ object TestTemplate {
     })
 
     val concretePutter: Option[ST] =
-      if(concretePutBlocks.isEmpty) { None() }
+      if (concretePutBlocks.isEmpty) {
+        None()
+      }
       else {
         val scalaDoc = concretePutScalaDoc.map((m: ST) => st"${m}")
-        Some(st"""/** helper function to set the values of all input ports.
-                 | ${(scalaDoc, "\n")}
-                 | */
-                 |def put_concrete_inputs(${(concretePutParams, ",\n")}): Unit = {
-                 |  ${(concretePutBlocks, "\n")}
-                 |}
-                 |
-                 |""")
+        Some(
+          st"""/** helper function to set the values of all input ports.
+              | ${(scalaDoc, "\n")}
+              | */
+              |def put_concrete_inputs(${(concretePutParams, ",\n")}): Unit = {
+              |  ${(concretePutBlocks, "\n")}
+              |}
+              |
+              |""")
       }
 
     val testFailures = "testFailures"
@@ -142,31 +146,34 @@ object TestTemplate {
 
       val (checkParamType, concretePreamble, checkExplanation, checkScalaDoc): (String, ST, String, ST) =
         p.feature.category match {
-        case FeatureCategory.EventPort =>
-          val preamble =
-            st"""// TODO: event port getter should return the number of events in
-                |//       the output queue when queue sizes > 1 support is added to ART
-                |val ${portNameValue}: Z = if(${getterName}().nonEmpty) z"1" else z"0""""
-          val scalaDoc = st"""* @param ${portName} method that will be called with the number of events to be sent
-                             |*        on the outgoing event port '${portName}'."""
-          ("Z", preamble, s"$${${portNameValue}} events were in the outgoing event queue", scalaDoc)
-        case FeatureCategory.EventDataPort =>
-          val preamble =
-            st"""var ${portNameValue}: ISZ[${typeName}] = ISZ()
-                |// TODO: event data port getter should return all of the events/payloads
-                |//       received on event data ports when queue sizes > 1 support is added
-                |//       to ART
-                |if(${getterName}().nonEmpty) ${portNameValue} = ${portNameValue} :+ ${getterName}().get"""
-          val scalaDoc = st"""* @param ${portName} method that will be called with the payloads to be sent
-                             |*        on the outgoing event data port '${portName}'."""
-          (s"ISZ[$typeName]", preamble, s"received $${${portNameValue}.size} events with the following payloads $${${portNameValue}}", scalaDoc)
-        case FeatureCategory.DataPort =>
-          val preamble = st"val ${portNameValue}: ${typeName} = ${getterName}().get"
-          val scalaDoc = st"""* @param ${portName} method that will be called with the value of the outgoing data
-                             |*        port '${portName}'."""
-          (typeName, preamble, s"value of the outgoing data port is $${${portNameValue}}", scalaDoc)
-        case _ => halt("Unexpected")
-      }
+          case FeatureCategory.EventPort =>
+            val preamble =
+              st"""// TODO: event port getter should return the number of events in
+                  |//       the output queue when queue sizes > 1 support is added to ART
+                  |val ${portNameValue}: Z = if(${getterName}().nonEmpty) z"1" else z"0""""
+            val scalaDoc =
+              st"""* @param ${portName} method that will be called with the number of events to be sent
+                  |*        on the outgoing event port '${portName}'."""
+            ("Z", preamble, s"$${${portNameValue}} events were in the outgoing event queue", scalaDoc)
+          case FeatureCategory.EventDataPort =>
+            val preamble =
+              st"""var ${portNameValue}: ISZ[${typeName}] = ISZ()
+                  |// TODO: event data port getter should return all of the events/payloads
+                  |//       received on event data ports when queue sizes > 1 support is added
+                  |//       to ART
+                  |if(${getterName}().nonEmpty) ${portNameValue} = ${portNameValue} :+ ${getterName}().get"""
+            val scalaDoc =
+              st"""* @param ${portName} method that will be called with the payloads to be sent
+                  |*        on the outgoing event data port '${portName}'."""
+            (s"ISZ[$typeName]", preamble, s"received $${${portNameValue}.size} events with the following payloads $${${portNameValue}}", scalaDoc)
+          case FeatureCategory.DataPort =>
+            val preamble = st"val ${portNameValue}: ${typeName} = ${getterName}().get"
+            val scalaDoc =
+              st"""* @param ${portName} method that will be called with the value of the outgoing data
+                  |*        port '${portName}'."""
+            (typeName, preamble, s"value of the outgoing data port is $${${portNameValue}}", scalaDoc)
+          case _ => halt("Unexpected")
+        }
 
       concreteCheckScalaDoc = concreteCheckScalaDoc :+ checkScalaDoc
 
@@ -197,23 +204,26 @@ object TestTemplate {
     })
 
     val concreteChecker: Option[ST] =
-    if(concreteCheckBlocks.isEmpty) { None() }
-    else {
-      val scalaDoc = concreteCheckScalaDoc.map((m: ST) => st"${m}")
-      Some(st"""/** helper function to check ${names.componentSingletonType}'s
-               | * output ports.  Use named arguments to check subsets of the output ports.
-               | ${(scalaDoc, "\n")}
-               | */
-               |def check_concrete_output(${(concreteCheckParams, ",\n")}): Unit = {
-               |  var ${testFailures}: ISZ[ST] = ISZ()
-               |
-               |  ${(concreteCheckBlocks, "\n")}
-               |
-               |  assert(testFailures.isEmpty, st"$${(testFailures, "\n")}".render)
-               |}
-               |
-               |""")
-    }
+      if (concreteCheckBlocks.isEmpty) {
+        None()
+      }
+      else {
+        val scalaDoc = concreteCheckScalaDoc.map((m: ST) => st"${m}")
+        Some(
+          st"""/** helper function to check ${names.componentSingletonType}'s
+              | * output ports.  Use named arguments to check subsets of the output ports.
+              | ${(scalaDoc, "\n")}
+              | */
+              |def check_concrete_output(${(concreteCheckParams, ",\n")}): Unit = {
+              |  var ${testFailures}: ISZ[ST] = ISZ()
+              |
+              |  ${(concreteCheckBlocks, "\n")}
+              |
+              |  assert(testFailures.isEmpty, st"$${(testFailures, "\n")}".render)
+              |}
+              |
+              |""")
+      }
 
     val ret: ST =
       st"""package ${names.packageName}
