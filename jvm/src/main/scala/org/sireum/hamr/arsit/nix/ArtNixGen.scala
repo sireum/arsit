@@ -342,7 +342,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       srcDir / "infrastructure" / "schedulers" / "main"
     )
 
-    for(p <- processes) {
+    val _processes = Set.empty[ISZ[String]] ++ processes
+    for(p <- _processes.elements) {
       modules = modules :+ ((srcDir / "components") /+ p / "shared" / "main")
       modules = modules :+ ((srcDir / "infrastructure" / "apis") /+ p / "main")
       modules = modules :+ ((srcDir / "infrastructure" / "bridges") /+ p / "main")
