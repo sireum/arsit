@@ -80,6 +80,10 @@ object ScalaJsTemplate {
           |val macroJsLib = fetch(s"org.sireum.kekinian::macros_sjs1:$${runtimeLibraryVer}").path
           |val scalaJsDomJsLib = fetch(s"org.scala-js::scalajs-dom_sjs1:$${scalaJsDomVer}").path
           |
+          |def rel(p: Os.Path): String = {
+          |  return home.relativize(p).value
+          |}
+          |
           |var cps: ISZ[String] = ISZ()
           |for(m <- project.modules.values){
           |  if(ops.ISZOps(m.targets).contains(Target.Js)){
@@ -114,15 +118,19 @@ object ScalaJsTemplate {
           |assert(scalajsAssembly.exists && scalaJsLibrary.exists, s"Fetching scalaJS standalone failed")
           |
           |val scalaExe = sireum.up / "scala" / "bin" / (if(Os.isWin) "scala.bat" else "scala")
-          |val jsClasspath = st"$${scalaJsDomJsLib.string} $${macroJsLib.string} $${libSharedJsLib.string} $${(cps, " ")}"
-          |val s = st"$${scalaExe.string} -classpath $${scalajsAssembly.string} org.scalajs.cli.Scalajsld --stdlib $${scalaJsLibrary.string} --$${optType} --mainMethod $${mainMethod} --outputDir $${jsOutputDir.string} $${jsClasspath}"
           |
-          |jsOutputDir.mkdir()
+          |val scalaArgs = ISZ("-classpath", rel(scalajsAssembly), "org.scalajs.cli.Scalajsld",
+          |  "--stdlib", rel(scalaJsLibrary), s"--$$optType", "--mainMethod", mainMethod, "--outputDir", rel(jsOutputDir),
+          |  scalaJsDomJsLib.value, macroJsLib.value, libSharedJsLib.value) ++ cps
+          |
+          |val sargs = st"$${(scalaArgs, " ")}".render
           |
           |println(s"Running scalaJS linker using $${optType} ...")
-          |proc"$${s.render}".at(home).console.runCheck()
+          |proc"$${scalaExe.value} $$sargs".at(home.canon).console.runCheck()
           |
+          |jsOutputDir.mkdir()
           |val mainJs = jsOutputDir / "main.js"
+          |
           |assert(mainJs.exists, s"JS file not generated: $${mainJs.string}")
           |println(s"Generated: $${mainJs.string}. Size is $${mainJs.size} bytes")
           |
