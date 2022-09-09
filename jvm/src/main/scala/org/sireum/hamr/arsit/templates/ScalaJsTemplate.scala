@@ -91,7 +91,7 @@ object ScalaJsTemplate {
           |    if(!classes.exists) {
           |      halt(s"classes directory not found for JS module $${m.id}")
           |    }
-          |    cps = cps :+ classes.canon.string
+          |    cps = cps :+ rel(classes.canon)
           |  }
           |}
           |
