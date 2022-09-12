@@ -226,6 +226,7 @@ object BlessST {
       case BTSStateCategory.Complete => "COMPLETE"
       case BTSStateCategory.Final => "FINAL"
       case BTSStateCategory.Initial => "INITIAL"
+      case BTSStateCategory.Mode => "MODE"
     }
     return st"StateType.${name}"
   }

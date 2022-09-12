@@ -661,6 +661,9 @@ import org.sireum.ops._
 
       case BTSBinaryOp.EXP => "??? EXP"
       case BTSBinaryOp.XOR => "??? XOR"
+
+      case BTSBinaryOp.IMPLIES => "-->:"
+      case BTSBinaryOp.IFF => "=="
     }
 
     return st"($lhs $op $rhs)"
