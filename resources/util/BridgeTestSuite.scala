@@ -45,8 +45,21 @@ class BridgeTestSuite[+T <: Bridge](val bridge: T) extends AnyFunSuite with OneI
    * invocations.
    *
    */
-  def executeTest(): Unit = {
+  def testCompute(): Unit = {
     Art.manuallyClearOutput()
-    Art.executeTest(bridge)
+    Art.testCompute(bridge)
+  }
+
+  /**
+   * Invokes testCompute() once per registered bridge.
+   *
+   * IMPORTANT: This method also clears all bridge output BEFORE each call. This will have no effect the first time it's
+   * invoked (because all output will be empty), but it does ensure that output doesn't "leak" across multiple
+   * invocations.
+   *
+   */
+  def testInitialise(): Unit = {
+    Art.manuallyClearOutput()
+    Art.testInitialise(bridge)
   }
 }

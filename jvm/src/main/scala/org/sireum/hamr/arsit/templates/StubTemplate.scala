@@ -19,7 +19,9 @@ object StubTemplate {
     return if(s.nonEmpty) Some(st"${(s.elements, "\n")}") else None()
   }
 
-@pure def bridge(topLevelPackageName: String,
+  // generate code for the (fully quantified component name)_bridge.scala file within the
+  // project's src/main/bridge folder
+  @pure def bridge(topLevelPackageName: String,
                    packageName: String,
                    imports: ISZ[ST],
                    bridgeName: String,
@@ -32,21 +34,38 @@ object StubTemplate {
                    names: NameProvider,
                    isBless: B): ST = {
 
+    // make sequence of tags for each category of Entry Point (EP) for which code will be generated
+    // Note: This list does not include "compute" -- that's handled separately as a special case because its
+    // structure varies based on the thread dispatch protocol and whether or not we are generated code for BLESS
     val _entryPoints = ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.initialise, EntryPoints.recover)
 
+    // iterate through (map) each EP category tag and build a Slang String Template (ST)
+    // for a method for each EP
     val entryPoints: ISZ[ST] = _entryPoints.map((m: EntryPoints.Type) => {
+    // ------- for each EP category ...
+      // generate flag value indicating if we are processing an Initialize EP
       val isInitialize = m == EntryPoints.initialise
+      // if this is an Initialize EP, then set the generated method
+      // to take as an argument the (restricted) Initialize API (which doesn't have port getters).
+      // Otherwise, use the more general Operational API (which has both port getters and setters).
       val (apiId, apiType): (String, String) =
         if(isInitialize) (ApiTemplate.apiInitializationId, names.apiInitialization)
         else (ApiTemplate.apiOperationalId, names.apiOperational)
-
+      // create string representing the call to the application entry point method.
+      // This call will be the primary code in the bridge entry point method.
+      //   e.g.,  component.finalise(operational_api)
       var body = st"${componentName}.${m.string}(${apiId})"
+      // if the EP is an initialize EP,
+      // append the sendOutput RTS call after the call to the application initial EP code.
+      // This propagates (to the communication substrate) the application code's writes to
+      // out ports.
       if (isInitialize) {
         body =
           st"""$body
               |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
       }
 
+      // form the complete method def for the EP
       st"""def ${m.string}(): Unit = {
           |  // implement the following method in '${componentName}':  def ${m.string}(api: ${apiType}): Unit = {}
           |  $body
@@ -149,6 +168,11 @@ object StubTemplate {
           |      ${computeBody(s"${bridgeName}Id", componentName, names, ports, dispatchProtocol, T, isBless)}
           |    }
           |
+          |    override
+          |    def testInitialise(): Unit = {
+          |      ${initialiseBody(s"${bridgeName}Id", componentName, names, T)}
+          |    }
+          |
           |    ${(entryPoints, "\n\n")}
           |  }
           |}"""
@@ -231,6 +255,24 @@ object StubTemplate {
 
       return ret
     }
+  }
+
+  @pure def initialiseBody(bridgeName: String,
+                        componentName: String,
+                        names: Names,
+                        isTesting: B
+                       ): ST = {
+    // determine communication substrate method name based on if this is test infrastructure
+    //  or a "regular" entry point call
+    val sendOutputName: String = if (isTesting) "releaseOutput" else "sendOutput"
+
+    // generate call to application code Initialize EP
+    //  e.g., component.initialise(initialization_api)
+    // generate call to propagate writes to output ports to the communication substrate
+    val ret: ST =
+           st"""${componentName}.${EntryPoints.initialise.string}(${ApiTemplate.apiInitializationId})
+                |Art.${sendOutputName}(eventOutPortIds, dataOutPortIds)"""
+    return ret
   }
 
   @pure def addId(s: String): String = {
