@@ -125,10 +125,11 @@ object ScalaJsTemplate {
           |
           |val sargs = st"$${(scalaArgs, " ")}".render
           |
+          |jsOutputDir.mkdir()
+          |
           |println(s"Running scalaJS linker using $${optType} ...")
           |proc"$${scalaExe.value} $$sargs".at(home.canon).console.runCheck()
           |
-          |jsOutputDir.mkdir()
           |val mainJs = jsOutputDir / "main.js"
           |
           |assert(mainJs.exists, s"JS file not generated: $${mainJs.string}")
