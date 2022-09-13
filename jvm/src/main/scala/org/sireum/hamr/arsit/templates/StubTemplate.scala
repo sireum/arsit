@@ -259,7 +259,7 @@ object StubTemplate {
 
   @pure def initialiseBody(bridgeName: String,
                         componentName: String,
-                        names: Names,
+                        names: NameProvider,
                         isTesting: B
                        ): ST = {
     // determine communication substrate method name based on if this is test infrastructure
