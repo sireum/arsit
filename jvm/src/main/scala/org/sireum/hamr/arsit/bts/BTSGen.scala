@@ -8,7 +8,8 @@ import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 import org.sireum.hamr.ir._
 import org.sireum.ops._
 
@@ -149,7 +150,7 @@ import org.sireum.ops._
       methods,
       extensions,
       componentNames.apiOperational,
-      st"${componentNames.bridgeTypeName}.${componentNames.apiOperational_Id}.get"
+      st"${componentNames.bridgeTypeName}.${componentNames.cApiOperational_Id}.get"
     )
 
     return BTSResults(

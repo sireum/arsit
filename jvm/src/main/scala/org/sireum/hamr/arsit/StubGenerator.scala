@@ -145,107 +145,122 @@ import org.sireum.hamr.ir._
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
 
-    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
-
-    val api = ApiTemplate.api(
-      names.packageName,
-      basePackage,
-      names,
-      ports,
-      integrationContracts)
-
-    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
-
-    var blocks: ISZ[ST] = ISZ()
-    var markers: ISZ[Marker] = ISZ()
-    var preBlocks: ISZ[ST] = ISZ()
-
-    GumboGen.processSubclauseFunctions(m, symbolTable, types, basePackage) match {
-      case Some((st, marker)) =>
-        preBlocks = preBlocks :+ st
-        markers = markers :+ marker
-      case _ =>
+    val annexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
+      case Some(infos) => infos
+      case _ => ISZ()
     }
 
-    // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
-    GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
-      case Some((st, marker)) =>
-        preBlocks = preBlocks :+ st
-        markers = markers :+ marker
-      case _ =>
+    var behaviors: ISZ[Resource] = ISZ()
+    for(p <- Util.registeredPlugins) {
+      behaviors = behaviors ++ p.offerThread(m, annexClauseInfos, filename, ISZ(dirs.componentDir, names.packagePath), reporter)
     }
 
-    var entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer] = Map.empty
-
-    GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
-      case Some(gepi) =>
-        entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> gepi)
-        markers = markers ++ gepi.markers
-      case _ =>
-    }
-
-    GumboGen.processCompute(m, symbolTable, types, basePackage) match {
-      case Some(t: GclEntryPointSporadicCompute) =>
-        entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
-        markers = markers ++ t.markers
-      case Some(t: GclEntryPointPeriodicCompute) =>
-        entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
-        markers = markers ++ t.markers
-      case _ =>
-    }
-
-    if (!genBlessEntryPoints) {
-      val componentImplBlock = StubTemplate.componentImplBlock(
-        componentType = names.componentSingletonType,
-        bridgeName = names.bridge,
-        names = names,
-        dispatchProtocol = dispatchProtocol,
-        ports = ports,
-        isBless = genBlessEntryPoints,
-        excludeComponentImpl = arsitOptions.excludeImpl,
-        preBlocks = preBlocks,
-        entryPointContracts = entryPointContracts,
-        symbolTable = symbolTable
-      )
-      blocks = blocks :+ componentImplBlock
+    if(behaviors.nonEmpty) {
+      resources = resources ++ behaviors
     } else {
-      assert(btsAnnexes.size == 1, s"Expecting exactly one BTS annex but found ${btsAnnexes.size}")
 
-      val btsAnnexInfo = btsAnnexes(0).asInstanceOf[BTSAnnexInfo]
+      val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
 
-      val br: BTSResults = BTSGen(
-        directories = dirs,
-        basePackage = basePackage,
-        aadlComponent = m,
-        componentNames = names,
+      val api = ApiTemplate.api(
+        names.packageName,
+        basePackage,
+        names,
+        ports,
+        integrationContracts)
 
-        symbolTable = symbolTable,
-        btsSymbolTable = btsAnnexInfo.btsSymbolTable,
-        aadlTypes = types,
+      addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
-        addViz = F,
-        genDebugObjects = F).process(btsAnnexInfo.annex)
+      var blocks: ISZ[ST] = ISZ()
+      var markers: ISZ[Marker] = ISZ()
+      var preBlocks: ISZ[ST] = ISZ()
 
-      assert(br.maxPort == -1 && br.maxComponent == -1 && br.optVizEntries.isEmpty) // TODO
+      GumboGen.processSubclauseFunctions(m, symbolTable, types, basePackage) match {
+        case Some((st, marker)) =>
+          preBlocks = preBlocks :+ st
+          markers = markers :+ marker
+        case _ =>
+      }
 
-      blocks = blocks :+ br.component
+      // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
+      GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
+        case Some((st, marker)) =>
+          preBlocks = preBlocks :+ st
+          markers = markers :+ marker
+        case _ =>
+      }
 
-      resources = resources ++ br.resources
+      var entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer] = Map.empty
+
+      GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
+        case Some(gepi) =>
+          entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> gepi)
+          markers = markers ++ gepi.markers
+        case _ =>
+      }
+
+      GumboGen.processCompute(m, symbolTable, types, basePackage) match {
+        case Some(t: GclEntryPointSporadicCompute) =>
+          entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
+          markers = markers ++ t.markers
+        case Some(t: GclEntryPointPeriodicCompute) =>
+          entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
+          markers = markers ++ t.markers
+        case _ =>
+      }
+
+      if (!genBlessEntryPoints) {
+        val componentImplBlock = StubTemplate.componentImplBlock(
+          componentType = names.componentSingletonType,
+          bridgeName = names.bridge,
+          names = names,
+          dispatchProtocol = dispatchProtocol,
+          ports = ports,
+          isBless = genBlessEntryPoints,
+          excludeComponentImpl = arsitOptions.excludeImpl,
+          preBlocks = preBlocks,
+          entryPointContracts = entryPointContracts,
+          symbolTable = symbolTable
+        )
+        blocks = blocks :+ componentImplBlock
+      } else {
+        assert(btsAnnexes.size == 1, s"Expecting exactly one BTS annex but found ${btsAnnexes.size}")
+
+        val btsAnnexInfo = btsAnnexes(0).asInstanceOf[BTSAnnexInfo]
+
+        val br: BTSResults = BTSGen(
+          directories = dirs,
+          basePackage = basePackage,
+          aadlComponent = m,
+          componentNames = names,
+
+          symbolTable = symbolTable,
+          btsSymbolTable = btsAnnexInfo.btsSymbolTable,
+          aadlTypes = types,
+
+          addViz = F,
+          genDebugObjects = F).process(btsAnnexInfo.annex)
+
+        assert(br.maxPort == -1 && br.maxComponent == -1 && br.optVizEntries.isEmpty) // TODO
+
+        blocks = blocks :+ br.component
+
+        resources = resources ++ br.resources
+      }
+
+      genSubprograms(m) match {
+        case Some(x) => blocks = blocks :+ x
+        case _ =>
+      }
+
+      val componentImpl = StubTemplate.slangPreamble(
+        inSlang = T,
+        packageName = names.packageName,
+        topLevelPackageName = basePackage,
+        imports = GumboGen.imports,
+        blocks = blocks)
+
+      addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)
     }
-
-    genSubprograms(m) match {
-      case Some(x) => blocks = blocks :+ x
-      case _ =>
-    }
-
-    val componentImpl = StubTemplate.slangPreamble(
-      inSlang = T,
-      packageName = names.packageName,
-      topLevelPackageName = basePackage,
-      imports = GumboGen.imports,
-      blocks = blocks)
-
-    addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
     testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)

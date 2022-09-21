@@ -6,7 +6,8 @@ import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 
 object SeL4NixTemplate {
 
@@ -129,7 +130,7 @@ object SeL4NixTemplate {
 
   def apiTouches(names: NameProvider, ports: ISZ[Port]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
-    val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
+    val apis = ISZ(names.cApiInitialization_Id, names.cApiOperational_Id)
       .map((m: String) => s"${names.packageName}.${names.bridge}.${m}")
     val loggers = ISZ("logInfo", "logDebug", "logError")
     for (api <- apis) {

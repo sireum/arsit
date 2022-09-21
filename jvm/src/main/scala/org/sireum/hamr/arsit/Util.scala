@@ -3,13 +3,15 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
+import org.sireum.hamr.arsit.bts.BlessAnnexVisitor
+import org.sireum.hamr.arsit.util.{AnnexVisitor, ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.PathUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, DefaultNameProvider, NameProvider, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, NameUtil, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 
@@ -23,9 +25,11 @@ object Util {
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
 
+  def registeredPlugins: ISZ[AnnexVisitor] = ISZ(BlessAnnexVisitor())
+
   def nameProvider(c: ir.Component,
                    basePackage: String): NameProvider = {
-    return DefaultNameProvider(c, basePackage)
+    return NameUtil.getAirNameProvider(c, basePackage)
   }
 
   def pathAppend(outputDir: String, s: ISZ[String]): String = {

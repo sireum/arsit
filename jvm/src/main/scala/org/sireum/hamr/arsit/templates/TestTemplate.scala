@@ -3,7 +3,8 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 import org.sireum.hamr.ir.FeatureCategory
 
 object TestTemplate {

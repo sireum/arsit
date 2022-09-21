@@ -8,6 +8,7 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._

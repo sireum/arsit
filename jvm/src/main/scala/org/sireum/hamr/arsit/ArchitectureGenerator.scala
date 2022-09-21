@@ -13,7 +13,8 @@ import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.NameUtil.NameProvider
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
