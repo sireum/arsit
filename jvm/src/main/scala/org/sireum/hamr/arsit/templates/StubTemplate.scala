@@ -8,7 +8,7 @@ import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointInitialize, GclEntryPoin
 import org.sireum.hamr.arsit.{EntryPoints, Port}
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, Dispatch_Protocol, SymbolTable}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
@@ -281,7 +281,7 @@ object StubTemplate {
   }
 
   @pure def putValue(p: Port): ST = {
-    return st"""Art.putValue(${addId(p.name)}, ${p.getPortTypeNames.qualifiedPayloadName}${if (p.getPortTypeNames.isEmptyType()) "()" else "(value)"})"""
+    return st"""Art.putValue(${addId(p.name)}, ${p.getPortTypeNames.qualifiedPayloadName}${if (p.getPortTypeNames.isEmptyType) "()" else "(value)"})"""
   }
 
   @pure def apiCall(componentName: String, portName: String): String = {
@@ -318,7 +318,7 @@ object StubTemplate {
       return getterApi(p)
     } else {
       val ret: ST =
-        st"""def put_${p.name}(${if (p.getPortTypeNames.isEmptyType()) "" else s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}"}) : Unit = {
+        st"""def put_${p.name}(${if (p.getPortTypeNames.isEmptyType) "" else s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}"}) : Unit = {
             |  ${putValue(p)}
             |}"""
       return ret
@@ -344,7 +344,7 @@ object StubTemplate {
                  |api.logInfo(s"Received on ${p.name}: $${apiUsage_${p.name}}")"""
     } else {
       val payload: String =
-        if (p.getPortTypeNames.isEmptyType()) ""
+        if (p.getPortTypeNames.isEmptyType) ""
         else p.getPortTypeNames.example()
 
       return st"api.put_${p.name}($payload)"

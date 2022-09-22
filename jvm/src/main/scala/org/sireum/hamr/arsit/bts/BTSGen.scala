@@ -9,7 +9,7 @@ import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTabl
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir._
 import org.sireum.ops._
 
@@ -279,7 +279,7 @@ import org.sireum.ops._
   }
 
   def initType(a: AadlType): ST = {
-    val dataTypeNames = Util.getDataTypeNames(a, basePackage)
+    val dataTypeNames = TypeNameUtil.getTypeNameProvider(a, basePackage)
     return st"${dataTypeNames.example()}"
   }
 
@@ -588,7 +588,7 @@ import org.sireum.ops._
       if (aadlTypes.typeMap.contains(n)) {
         aadlTypes.typeMap.get(n).get match {
           case e: EnumType =>
-            val dn = Util.getDataTypeNames(e, basePackage)
+            val dn = TypeNameUtil.getTypeNameProvider(e, basePackage)
             st"${dn.qualifiedTypeName}"
           case x => halt(s"Unexpected type: $x")
         }
@@ -703,7 +703,7 @@ import org.sireum.ops._
     t match {
       case o: BTSClassifier =>
         val typ = aadlTypes.typeMap.get(o.classifier.name).get
-        val dataTypeNames = Util.getDataTypeNames(typ, basePackage)
+        val dataTypeNames = TypeNameUtil.getTypeNameProvider(typ, basePackage)
         return st"${dataTypeNames.qualifiedTypeName}"
       case _ =>
         halt(s"Need to handle type $t")

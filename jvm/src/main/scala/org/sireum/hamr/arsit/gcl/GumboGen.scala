@@ -10,7 +10,7 @@ import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
 import org.sireum.hamr.codegen.common.resolvers.GclResolver.GUMBO__Library
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType, TypeNameUtil, TypeUtil}
 import org.sireum.hamr.ir._
 import org.sireum.lang.ast.MethodContract.Simple
 import org.sireum.lang.{ast => AST}
@@ -171,7 +171,7 @@ object GumboGen {
           val fqAadlTypeName = st"${(atn.ids, "::")}".render
           val aadlType = aadlTypes.typeMap.get(fqAadlTypeName).get
 
-          val slangTypeName = Util.getDataTypeNames(aadlType, basePackageName).qualifiedReferencedTypeName
+          val slangTypeName = TypeNameUtil.getTypeNameProvider(aadlType, basePackageName).qualifiedReferencedTypeName
           val splitSlangTypeName = ops.StringOps(slangTypeName).split((c: C) => c == '.')
 
           val name = AST.Name(ids = splitSlangTypeName.map((a: String) => AST.Id(value = a, attr = AST.Attr(None()))), attr = AST.Attr(None()))
@@ -188,7 +188,7 @@ object GumboGen {
           val componentName = s"${convertSelects(o.receiverOpt)}::${o.ident.id.value}"
           val path: IdPath = aadlTypes.typeMap.get(componentName) match {
             case Some(t) =>
-              val dtns = Util.getDataTypeNames(t, basePackageName)
+              val dtns = TypeNameUtil.getTypeNameProvider(t, basePackageName)
               ops.StringOps(dtns.qualifiedReferencedTypeName).split((c: C) => c == '.')
             case _ => halt(s"Couldn't find an AADL data component corresponding to '${componentName}''")
           }
@@ -753,7 +753,7 @@ object GumboGen {
       val retTypeName: String = gclMethod.method.sig.returnType match {
         case atn: AST.Type.Named =>
           val key = st"${(atn.name.ids.map((i: AST.Id) => i.value), "::")}".render
-          val aadlType = Util.getDataTypeNames(aadlTypes.typeMap.get(key).get, basePackageName)
+          val aadlType = TypeNameUtil.getTypeNameProvider(aadlTypes.typeMap.get(key).get, basePackageName)
           aadlType.qualifiedReferencedTypeName
         case _ => halt("No")
       }
@@ -767,7 +767,7 @@ object GumboGen {
         case _ => halt("No")
       }
       val key = st"${(paramTypeName, "::")}".render
-      val aadlType = Util.getDataTypeNames(aadlTypes.typeMap.get(key).get, basePackageName)
+      val aadlType = TypeNameUtil.getTypeNameProvider(aadlTypes.typeMap.get(key).get, basePackageName)
       s"${p.id.value}: ${aadlType.qualifiedReferencedTypeName}"
     })
 
@@ -840,7 +840,7 @@ object GumboGen {
   def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
     val svs: ISZ[ST] = stateVars.map((sv: GclStateVar) => {
       val typ = aadlTypes.typeMap.get(sv.classifier).get
-      val typeNames = Util.getDataTypeNames(typ, basePackageName)
+      val typeNames = TypeNameUtil.getTypeNameProvider(typ, basePackageName)
       st"var ${sv.name}: ${typeNames.qualifiedReferencedTypeName} = ${typeNames.example()}"
     })
 
@@ -882,7 +882,7 @@ object GumboGen {
 
       val isIncoming = port.direction == Direction.In
 
-      val dataTypeNames = Util.getDataTypeNames(aadlType, basePackageName)
+      val dataTypeNames = TypeNameUtil.getTypeNameProvider(aadlType, basePackageName)
 
       val (specFunction, specEnsures, specRequires, specInvariant): (Option[ST], Option[ST], Option[ST], Option[ST]) =
         integration match {

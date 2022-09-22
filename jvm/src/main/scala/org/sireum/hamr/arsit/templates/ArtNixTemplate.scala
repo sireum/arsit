@@ -8,7 +8,7 @@ import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
-import org.sireum.hamr.codegen.common.types.{AadlTypes, DataTypeNames}
+import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeNameProvider}
 import org.sireum.hamr.ir.FeatureEnd
 
 object ArtNixTemplate {
@@ -41,10 +41,10 @@ object ArtNixTemplate {
 
   @pure def appCases(portOptName: String,
                      portId: String,
-                     payloadType: DataTypeNames): ST = {
+                     payloadType: TypeNameProvider): ST = {
     val ret: ST =
       st"""${portOptName} match {
-          |  case Some(v) => ArtNix.updateData(${portId}, ${if (payloadType.isEmptyType()) "v" else s"${payloadType.qualifiedPayloadName}(v)"})
+          |  case Some(v) => ArtNix.updateData(${portId}, ${if (payloadType.isEmptyType) "v" else s"${payloadType.qualifiedPayloadName}(v)"})
           |  case _ =>
           |}"""
     return ret

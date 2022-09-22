@@ -8,7 +8,7 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
-import org.sireum.hamr.codegen.common.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
@@ -48,7 +48,7 @@ object NixGen {
     }
 
     for (typ <- _types) {
-      val typeNames: DataTypeNames = Util.getDataTypeNames(typ, basePackage)
+      val typeNames = TypeNameUtil.getTypeNameProvider(typ, basePackage)
       a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.example()))
       counter = counter + z"1"
     }
@@ -127,7 +127,7 @@ object NixGen {
                 (maxBitSize, Some(s"// ${msg}"))
             }
 
-            val originatingTypeNames: DataTypeNames = Util.getDataTypeNames(originatingType, names.basePackage)
+            val originatingTypeNames = TypeNameUtil.getTypeNameProvider(originatingType, names.basePackage)
 
             val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
             val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
@@ -212,8 +212,8 @@ object NixGen {
 
             val entry: ST = {
               if (types.rawConnections) {
-                val originatingTypeNames: DataTypeNames = p._portType match {
-                  case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+                val originatingTypeNames: TypeNameProvider = p._portType match {
+                  case BitType(_, _, _, Some(o)) => TypeNameUtil.getTypeNameProvider(o, names.basePackage)
                   case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
                 }
 
@@ -239,7 +239,7 @@ object NixGen {
                     |}"""
               }
               else {
-                val (refName, decl): (String, ST) = if (p.getPortTypeNames.isEnum() || p.getPortTypeNames.isBaseType()) {
+                val (refName, decl): (String, ST) = if (p.getPortTypeNames.isEnum || p.getPortTypeNames.isBaseType) {
                   (t, st"${p.getPortTypeNames.qualifiedCTypeName} $t;")
                 } else {
                   (s"&$t", st"DeclNew${p.getPortTypeNames.qualifiedCTypeName}($t);")
@@ -342,7 +342,7 @@ object NixGen {
 
               var eventDataParams: ISZ[ST] = params
               if (isEventData) {
-                val typeNames = Util.getDataTypeNames(p._portType, names.basePackage)
+                val typeNames = TypeNameUtil.getTypeNameProvider(p._portType, names.basePackage)
                 eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
               }
               val handlerSig = SeL4NixTemplate.methodSignature(handlerMethodName, eventDataParams, "Unit")
@@ -509,7 +509,7 @@ object NixGen {
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
 
         for (p <- ports) {
-          val typeNames = Util.getDataTypeNames(p._portType, names.basePackage)
+          val typeNames = TypeNameUtil.getTypeNameProvider(p._portType, names.basePackage)
 
           p.feature.direction match {
             case ir.Direction.In => {
@@ -542,10 +542,10 @@ object NixGen {
                   apiGetMethodName = slangApiGetMethodName,
                   typ = typeNames)
               } else {
-                val pointer: String = if (typeNames.isEnum() || typeNames.isBaseType()) "*" else ""
+                val pointer: String = if (typeNames.isEnum || typeNames.isBaseType) "*" else ""
 
                 var params: ISZ[ST] = ISZ()
-                if (!typeNames.isEmptyType()) {
+                if (!typeNames.isEmptyType) {
                   params = params :+ st"${typeNames.qualifiedCTypeName} ${pointer}value"
                 }
 
@@ -676,8 +676,8 @@ object NixGen {
         resultCount = resultCount + 1
         val decl: ST =
           if (types.rawConnections) {
-            val originatingTypeNames: DataTypeNames = p._portType match {
-              case BitType(_, _, _, Some(o)) => Util.getDataTypeNames(o, names.basePackage)
+            val originatingTypeNames: TypeNameProvider = p._portType match {
+              case BitType(_, _, _, Some(o)) => TypeNameUtil.getTypeNameProvider(o, names.basePackage)
               case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
             }
 
@@ -689,10 +689,10 @@ object NixGen {
                 |${setterName}(${SF} ${numBits}, ${result});"""
 
           } else {
-            if (p.getPortTypeNames.isEnum()) {
+            if (p.getPortTypeNames.isEnum) {
               st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()};
                   |${setterName}(${SF} ${result});"""
-            } else if (p.getPortTypeNames.isBaseType()) {
+            } else if (p.getPortTypeNames.isBaseType) {
               st"""${p.getPortTypeNames.qualifiedCTypeName} ${result} = ${p.getPortTypeNames.example_C_Name()}(${SF_LAST});
                   |${setterName}(${SF} ${result});"""
             } else {

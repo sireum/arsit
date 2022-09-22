@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
-import org.sireum.hamr.codegen.common.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._

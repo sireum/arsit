@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir._
 
 object ApiTemplate {
@@ -157,13 +157,13 @@ object ApiTemplate {
 
   @pure def putValue(p: Port): ST = {
     val q = p.getPortTypeNames.qualifiedPayloadName
-    val isEmpty = p.getPortTypeNames.isEmptyType()
+    val isEmpty = p.getPortTypeNames.isEmptyType
     return st"""Art.putValue(${addId(p.name)}, ${q}${if (isEmpty) "()" else "(value)"})"""
   }
 
   def setterApi(p: Port, integrationContracts: Option[(Option[ST], ST, ST)]): (Option[ST], ST) = {
     val q = p.getPortTypeNames.qualifiedReferencedTypeName
-    val isEmpty = p.getPortTypeNames.isEmptyType()
+    val isEmpty = p.getPortTypeNames.isEmptyType
 
     val (strictPureFunction, integrationMethods, integrationContract): (Option[ST], Option[ST], Option[ST]) = integrationContracts match {
       case Some((_strictPureFunction, _specVars, _contracts)) =>
