@@ -10,7 +10,8 @@ import org.sireum.hamr.ir._
 import org.sireum.ops._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 @record class BTSGen(directories: ProjectDirectories,
                      basePackage: String,
@@ -149,7 +150,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
       methods,
       extensions,
       componentNames.apiOperational,
-      st"${componentNames.bridgeTypeName}.${componentNames.apiOperational_Id}.get"
+      st"${componentNames.bridgeTypeName}.${componentNames.cApiOperational_Id}.get"
     )
 
     return BTSResults(
@@ -274,7 +275,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
   }
 
   def initType(a: AadlType): ST = {
-    val dataTypeNames = Util.getDataTypeNames(a, basePackage)
+    val dataTypeNames = TypeNameUtil.getTypeNameProvider(a, basePackage)
     return st"${dataTypeNames.example()}"
   }
 
@@ -577,7 +578,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
       if(aadlTypes.typeMap.contains(n)){
         aadlTypes.typeMap.get(n).get match {
           case e: EnumType =>
-            val dn = Util.getDataTypeNames(e, basePackage)
+            val dn = TypeNameUtil.getTypeNameProvider(e, basePackage)
             st"${dn.qualifiedTypeName}"
           case x => halt(s"Unexpected type: $x")
         }
@@ -692,7 +693,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
     t match {
       case o: BTSClassifier =>
         val typ = aadlTypes.typeMap.get(o.classifier.name).get
-        val dataTypeNames = Util.getDataTypeNames(typ, basePackage)
+        val dataTypeNames = TypeNameUtil.getTypeNameProvider(typ, basePackage)
         return st"${dataTypeNames.qualifiedTypeName}"
       case _ =>
         halt(s"Need to handle type $t")

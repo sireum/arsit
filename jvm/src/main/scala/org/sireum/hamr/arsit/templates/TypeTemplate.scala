@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.StringTemplate.doNotEditComment
-import org.sireum.hamr.codegen.common.types.DataTypeNames
+import org.sireum.hamr.codegen.common.types.{TypeNameProvider}
 
 object TypeTemplate {
   def Base_Types(basePackage: String): ST = {
@@ -162,7 +162,7 @@ object TypeTemplate {
           |}"""
     return ret
   }
-  @pure def enumType(typeNames: DataTypeNames,
+  @pure def enumType(typeNames: TypeNameProvider,
                      values: ISZ[String]): ST = {
     val vals = values.map((m: String) => st""""$m"""")
     val ret: ST =
@@ -173,7 +173,7 @@ object TypeTemplate {
     return ret
   }
 
-  @pure def dataType(typeNames: DataTypeNames,
+  @pure def dataType(typeNames: TypeNameProvider,
                      fields: ISZ[ST],
                      paramInits: ISZ[String],
                      invariants: ISZ[ST]): ST = {
@@ -195,7 +195,7 @@ object TypeTemplate {
     return ret
   }
 
-  @pure def typeSkeleton(typeNames: DataTypeNames): ST = {
+  @pure def typeSkeleton(typeNames: TypeNameProvider): ST = {
     val ret: ST =
       st"""object ${typeNames.typeName} {
           |  def example(): ${typeNames.qualifiedTypeName} = {
@@ -208,7 +208,7 @@ object TypeTemplate {
     return ret
   }
 
-  @pure def payloadType(typeNames: DataTypeNames): ST = {
+  @pure def payloadType(typeNames: TypeNameProvider): ST = {
     val typeName = typeNames.qualifiedReferencedTypeName
     val payloadTypeName = typeNames.payloadName
     val examplePayload = typeNames.example()

@@ -11,7 +11,7 @@ import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.{CommonUtil}
 import org.sireum.hamr.ir.FeatureEnd
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.templates.TemplateUtil

@@ -4,7 +4,8 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir._
 
 object ApiTemplate {
@@ -116,13 +117,13 @@ object ApiTemplate {
 
   @pure def putValue(p: Port): ST = {
     val q = p.getPortTypeNames.qualifiedPayloadName
-    val isEmpty = p.getPortTypeNames.isEmptyType()
+    val isEmpty = p.getPortTypeNames.isEmptyType
     return st"""Art.putValue(${addId(p.name)}, ${q}${if (isEmpty) "()" else "(value)"})"""
   }
 
   def setterApi(p: Port): ST = {
     val q = p.getPortTypeNames.qualifiedReferencedTypeName
-    val isEmpty = p.getPortTypeNames.isEmptyType()
+    val isEmpty = p.getPortTypeNames.isEmptyType
     val ret: ST = p.feature.category match {
       case FeatureCategory.DataPort =>
         st"""def put_${p.name}(value : ${q}) : Unit = {

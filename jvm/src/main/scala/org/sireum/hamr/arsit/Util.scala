@@ -8,9 +8,10 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, Ip
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlComponent, AadlFeature, AadlThreadOrDevice}
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BitType, TypeNameProvider, TypeNameUtil, TypeUtil}
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.PathUtil
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider, StringUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.ops._
 
@@ -24,16 +25,28 @@ object Util {
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
 
-  @datatype class ModuleNameProvider(val c: ir.Component,
+  @datatype class ModuleNameProvider(val idPath: ISZ[String],
+                                     val classifier: ISZ[String],
                                      val basePackage: String) extends NameProvider {
-    def apiSuffix: String = {
+    override def apiSuffix: String = {
       return componentSingletonType
     }
   }
 
   def nameProvider(c: ir.Component,
                    basePackage: String): NameProvider = {
-    return ModuleNameProvider(c, basePackage)
+    val idPath = c.identifier.name
+
+    assert(ops.StringOps(idPath(0)).endsWith("Instance"), "idPath must start from a system instance")
+
+    val splitClassifier: ISZ[String] = {
+      val san = StringUtil.replaceAll(c.classifier.get.name, "::", ":")
+      ops.StringOps(san).split(char => char == ':')
+    }
+
+    assert(splitClassifier.size > 1, "classifier must at least be of the form '<id>::<id>'")
+
+    return ModuleNameProvider(idPath, splitClassifier, basePackage)
   }
 
   def pathAppend(outputDir: String, s: ISZ[String]): String = {
@@ -78,21 +91,6 @@ object Util {
     val e = ArsitLibrary.getFiles.filter(p => p._1 == fileName)
     assert(e.size == 1)
     return st"${e(0)._2}"
-  }
-
-  @pure def getDataTypeNames(typ: AadlType, basePackageName: String): DataTypeNames = {
-    val (packageName, typeName): (String, String) = typ match {
-      case TypeUtil.EmptyType => ("art", "Empty")
-      case b: BitType => ("Base_Types", "Bits")
-      case _ =>
-        val classifier = typ.container.get.classifier.get
-
-        val a = ops.StringOps(ops.StringOps(classifier.name).replaceAllLiterally("::", "|")).split((c: C) => c == c"|")
-        assert(a.size == 2)
-
-        (a(0), a(1))
-    }
-    return DataTypeNames(typ, basePackageName, packageName, StringUtil.sanitizeName(typeName))
   }
 
   @pure def getDispatchTriggers(c: ir.Component): Option[ISZ[String]] = {
@@ -249,8 +247,8 @@ object HAMR {
     return CommonUtil.getName(parent.identifier)
   }
 
-  def getPortTypeNames: DataTypeNames = {
-    return Util.getDataTypeNames(_portType, basePackageName)
+  def getPortTypeNames: TypeNameProvider = {
+    return TypeNameUtil.getTypeNameProvider(_portType, basePackageName)
   }
 
   def urgency: Option[Z] = {

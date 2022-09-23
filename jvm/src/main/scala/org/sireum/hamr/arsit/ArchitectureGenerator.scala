@@ -11,11 +11,13 @@ import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
+import org.sireum.hamr.codegen.common
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 
 @record class ArchitectureGenerator(directories: ProjectDirectories,
@@ -215,7 +217,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       return
     }
 
-    val typeNames: DataTypeNames = Util.getDataTypeNames(t, basePackage)
+    val typeNames = TypeNameUtil.getTypeNameProvider(t, basePackage)
 
     var canOverwrite: B = T
 
@@ -228,7 +230,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
         for (f <- e.fields.entries) {
           val fname = f._1
-          val fieldTypeNames = Util.getDataTypeNames(f._2, basePackage)
+          val fieldTypeNames = TypeNameUtil.getTypeNameProvider(f._2, basePackage)
 
           fldInits = fldInits :+ fieldTypeNames.example()
 
@@ -240,7 +242,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
 
       case e: ArrayType =>
-        val baseTypeNames = Util.getDataTypeNames(e.baseType, basePackage)
+        val baseTypeNames = TypeNameUtil.getTypeNameProvider(e.baseType, basePackage)
         val baseTypeEmpty = baseTypeNames.example()
 
         val dims = TypeUtil.getArrayDimensions(e)

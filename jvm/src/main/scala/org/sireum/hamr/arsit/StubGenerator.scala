@@ -10,9 +10,9 @@ import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StubTem
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeNameUtil}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, ModuleType, NameProvider}
+import org.sireum.hamr.codegen.common.{CommonUtil, ModuleType}
 import org.sireum.hamr.ir._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 
@@ -269,7 +269,7 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
       val params: ISZ[String] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
         .map(param => {
           val pType = Util.getFeatureEndType(param, types)
-          s"${CommonUtil.getLastName(param.identifier)} : ${Util.getDataTypeNames(pType, basePackage).qualifiedReferencedTypeName}"
+          s"${CommonUtil.getLastName(param.identifier)} : ${TypeNameUtil.getTypeNameProvider(pType, basePackage).qualifiedReferencedTypeName}"
         })
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
       assert(rets.size <= 1, s"Expecting a single out param but found ${rets.size}")
@@ -281,8 +281,8 @@ import org.sireum.hamr.arsit.util.ReporterUtil.reporter
         }
         else {
           val rType: AadlType = Util.getFeatureEndType(rets(0), types)
-          val _exampleValue: String = Util.getDataTypeNames(rType, basePackage).example()
-          val returnType = Util.getDataTypeNames(rType, basePackage).qualifiedReferencedTypeName
+          val _exampleValue: String = TypeNameUtil.getTypeNameProvider(rType, basePackage).example()
+          val returnType = TypeNameUtil.getTypeNameProvider(rType, basePackage).qualifiedReferencedTypeName
 
           (Some(returnType), Some(st"${_exampleValue}"))
         }

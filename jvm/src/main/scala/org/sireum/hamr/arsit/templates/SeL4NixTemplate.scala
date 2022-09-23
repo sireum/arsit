@@ -4,9 +4,10 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.{CommonUtil, NameProvider}
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{BaseType, BitType, DataTypeNames, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{BaseType, BitType, TypeKind, TypeNameProvider, TypeResolver, TypeUtil}
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 object SeL4NixTemplate {
 
@@ -119,7 +120,7 @@ object SeL4NixTemplate {
       return st"val apiUsage_${p.name}: Option[${typeName}] = ${operApi}.get.get_${p.name}()"
     } else {
       val payload: String =
-        if (p.getPortTypeNames.isEmptyType()) ""
+        if (p.getPortTypeNames.isEmptyType) ""
         else p.getPortTypeNames.example()
       return st"""${initApi}.get.put_${p.name}($payload)
                  |${operApi}.get.put_${p.name}($payload)"""
@@ -128,7 +129,7 @@ object SeL4NixTemplate {
 
   def apiTouches(names: NameProvider, ports: ISZ[Port]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
-    val apis = ISZ(names.apiInitialization_Id, names.apiOperational_Id)
+    val apis = ISZ(names.cApiInitialization_Id, names.cApiOperational_Id)
       .map((m: String) => s"${names.packageName}.${names.bridge}.${m}")
     val loggers = ISZ("logInfo", "logDebug", "logError")
     for(api <- apis){
@@ -383,32 +384,28 @@ object SeL4NixTemplate {
              signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
-             typ: DataTypeNames): ST = {
+             typ: TypeNameProvider): ST = {
 
     // this CANNOT use type aliases
     val qualifiedNameForFingerprinting: String =
-      typ.typ match {
-        case b: BaseType => b.slangType.string
-        case b: BitType => TypeUtil.BIT_SIG
-        case _ =>
-          if(typ.isEmptyType()) {
-            typ.qualifiedReferencedTypeName
-          } else {
-            s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
-          }
+      typ.kind match {
+        case TypeKind.Base => TypeResolver.getSlangType(typ.typeName).string
+        case TypeKind.Bit => TypeUtil.BIT_SIG
+        case TypeKind.Empty => typ.qualifiedReferencedTypeName
+        case _ => s"${typ.basePackageName}.${typ.qualifiedReferencedTypeName}"
       }
 
     val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedNameForFingerprinting)
 
     val typeAssign: Option[String] =
-      if (typ.isEmptyType()) {
+      if (typ.isEmptyType) {
         None[String]()
       }
-      else if (typ.isBaseType() || typ.isEnum()) {
+      else if (typ.isBaseType || typ.isEnum) {
         Some(s"*value = t_0.${someSig}.value;")
       }
       else {
-        val struct: String = if (!typ.isEnum() && !typ.isBaseType()) s"struct " else ""
+        val struct: String = if (!typ.isEnum && !typ.isBaseType) s"struct " else ""
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
@@ -440,32 +437,28 @@ object SeL4NixTemplate {
                               signature: ST,
                               declNewStackFrame: ST,
                               apiGetMethodName: String,
-                              typ: DataTypeNames): ST = {
+                              typ: TypeNameProvider): ST = {
 
     // this CANNOT use type aliases
     val qualifiedNameForFingerprinting: String =
-      typ.typ match {
-        case b: BaseType => b.slangType.string
-        case b: BitType => TypeUtil.BIT_SIG
-        case _ =>
-          if(typ.isEmptyType()) {
-            typ.qualifiedReferencedTypeName
-          } else {
-            s"${typ.basePackage}.${typ.qualifiedReferencedTypeName}"
-          }
+      typ.kind match {
+        case TypeKind.Base => TypeResolver.getSlangType(typ.typeName).string
+        case TypeKind.Bit => TypeUtil.BIT_SIG
+        case TypeKind.Empty => typ.qualifiedReferencedTypeName
+        case _ => s"${typ.basePackageName}.${typ.qualifiedReferencedTypeName}"
       }
 
     val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedNameForFingerprinting)
 
     val typeAssign: Option[String] =
-      if (typ.isEmptyType()) {
+      if (typ.isEmptyType) {
         None[String]()
       }
-      else if (typ.isBaseType()) {
+      else if (typ.isBaseType) {
         Some(s"*value = t_0.${someSig}.value;")
       }
       else {
-        val struct: String = if (!typ.isEnum() && !typ.isBaseType()) s"struct " else ""
+        val struct: String = if (!typ.isEnum && !typ.isBaseType) s"struct " else ""
         Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
       }
 
