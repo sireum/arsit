@@ -59,10 +59,6 @@ import org.sireum.hamr.ir._
   def genContainer(m: AadlComponent): Unit = {
     assert(m.isInstanceOf[AadlSystem] || m.isInstanceOf[AadlProcess])
 
-    if (!m.isInstanceOf[AadlThread]) {
-      genSubprograms(m)
-    }
-
     for (c <- m.subComponents) {
       c match {
         case s: AadlSystem => genContainer(s)
