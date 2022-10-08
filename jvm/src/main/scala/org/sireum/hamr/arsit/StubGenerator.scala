@@ -146,26 +146,25 @@ import org.sireum.hamr.ir._
       case _ => ISZ()
     }
 
+    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
+
+    val api = ApiTemplate.api(
+      names.packageName,
+      basePackage,
+      names,
+      ports,
+      integrationContracts)
+
+    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
+
     var behaviors: ISZ[Resource] = ISZ()
-    for(p <- Util.registeredPlugins) {
+    for (p <- Util.registeredPlugins) {
       behaviors = behaviors ++ p.offerThread(m, annexClauseInfos, filename, ISZ(dirs.componentDir, names.packagePath), reporter)
     }
 
     if(behaviors.nonEmpty) {
       resources = resources ++ behaviors
     } else {
-
-      val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
-
-      val api = ApiTemplate.api(
-        names.packageName,
-        basePackage,
-        names,
-        ports,
-        integrationContracts)
-
-      addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
-
       var blocks: ISZ[ST] = ISZ()
       var markers: ISZ[Marker] = ISZ()
       var preBlocks: ISZ[ST] = ISZ()
