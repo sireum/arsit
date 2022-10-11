@@ -131,6 +131,32 @@ object GumboGen {
   def addImports(gen: GumboGen): Unit = {
     imports = imports ++ gen.imports
   }
+  @record class StateVarInRewriter() extends org.sireum.hamr.ir.MTransformer {
+
+    def wrapStateVarsInInput(o: AST.Exp): AST.Exp = {
+      val ret: AST.Exp = transform_langastExp(o) match {
+        case MSome(r) => r
+        case _ => o
+      }
+      return ret
+    }
+
+    override def pre_langastExpInput(o: AST.Exp.Input): org.sireum.hamr.ir.MTransformer.PreResult[AST.Exp] = {
+      // currently resolving phase ensures o.exp can only be a state vars so nothing to do
+      return org.sireum.hamr.ir.MTransformer.PreResult(F, MNone())
+    }
+
+    override def pre_langastExpIdent(o: AST.Exp.Ident): org.sireum.hamr.ir.MTransformer.PreResult[AST.Exp] = {
+      o.attr.resOpt match {
+        case Some(v: AST.ResolvedInfo.Var) =>
+          // the only vars the gumbo clause can refer to are state vars so
+          // checking whether o is referning to a state var isn't needed
+          return org.sireum.hamr.ir.MTransformer.PreResult(F, MSome(AST.Exp.Input(o, AST.Attr(None()))))
+        case _ =>
+          return org.sireum.hamr.ir.MTransformer.PreResult(T, MNone())
+      }
+    }
+  }
 
   @record class InvokeRewriter(val aadlTypes: AadlTypes, val basePackageName: String) extends org.sireum.hamr.ir.MTransformer {
     def rewriteInvokes(o: AST.Exp): AST.Exp = {
@@ -529,7 +555,9 @@ object GumboGen {
       val descriptor = GumboGen.processDescriptor(spec.descriptor, "//   ")
 
       val genHolder: GclGeneralHolder = spec match {
-        case g: GclAssume => GclRequiresHolder(id, descriptor, st"$rspec")
+        case g: GclAssume =>
+          val rassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rspec)
+          GclRequiresHolder(id, descriptor, st"$rassume")
         case g: GclGuarantee => GclEnsuresHolder(id, descriptor, st"$rspec")
       }
 
@@ -540,8 +568,9 @@ object GumboGen {
       // fill in general case
       for (generalCase <- compute.cases) {
 
-        val rassume = gclSymbolTable.rexprs.get(generalCase.assumes).get
-        imports = imports ++ GumboUtil.resolveLitInterpolateImports(rassume)
+        val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
+        val rrassume =  GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
+        imports = imports ++ GumboUtil.resolveLitInterpolateImports(rrassume)
 
         val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
         imports = imports ++ GumboUtil.resolveLitInterpolateImports(rguarantee)
@@ -549,7 +578,7 @@ object GumboGen {
         generalHolder = generalHolder :+ GclCaseHolder(
           caseId = generalCase.id,
           descriptor = GumboGen.processDescriptor(generalCase.descriptor, "//   "),
-          requires = st"${rassume}",
+          requires = st"${rrassume}",
           ensures = st"${rguarantee}")
       }
     }
