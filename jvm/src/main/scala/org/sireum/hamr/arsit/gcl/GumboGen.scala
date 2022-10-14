@@ -534,8 +534,8 @@ object GumboGen {
 
     def genComputeMarkerCreator(id: String, typ: String): Marker = {
       val m = Marker(
-        s"// BEGIN_COMPUTE_${typ}_${id}",
-        s"// END_COMPUTE ${typ}_${id}")
+        s"// BEGIN COMPUTE ${typ} ${id}",
+        s"// END COMPUTE ${typ} ${id}")
 
       markers = markers + m
       return m
