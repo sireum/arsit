@@ -7,11 +7,13 @@ import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
+import org.sireum.hamr.arsit.plugin.ArsitPlugin
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
+import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeNameUtil}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
@@ -22,9 +24,9 @@ import org.sireum.hamr.ir._
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
+                            plugins: ISZ[Plugin],
                             previousPhase: Result) {
 
-  var toImpl: ISZ[(ST, ST)] = ISZ()
   val basePackage: String = arsitOptions.packageName
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
@@ -95,56 +97,44 @@ import org.sireum.hamr.ir._
   def genThread(m: AadlThreadOrDevice): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
-    var imports: ISZ[ST] = ISZ()
-
     val names = nameProvider(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
-
-    val dispatchTriggers: Option[ISZ[String]] = Util.getDispatchTriggers(m.component)
-
-    val componentName: String = "component"
-
-    imports = imports :+ st"${names.packageName}.{${names.componentSingletonType} => component}"
 
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
     val bridgeTestApis: ST = TestTemplate.bridgeTestApis(basePackage, names, ports)
     addResource(dirs.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala"), bridgeTestApis, T)
 
-    val bridgeTestSuite: ST = TestTemplate.bridgeTestSuite(names.packageName, names, ports)
+    val bridgeTestSuite: ST = TestTemplate.bridgeTestSuite(names.packageName, names)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
 
     if (seenComponents.contains(filename)) {
       return
     }
 
-    val dispatchProtocol: Dispatch_Protocol.Type = m.dispatchProtocol
-
     val btsAnnexes: ISZ[AnnexClauseInfo] =
       symbolTable.annexClauseInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
 
     val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
 
-    val bridge = StubTemplate.bridge(
-      topLevelPackageName = basePackage,
-      packageName = names.packageName,
-      imports = imports,
-      bridgeName = names.bridge,
-      dispatchProtocol = dispatchProtocol,
-      componentName = componentName,
-      componentType = names.componentSingletonType,
-      apiType = names.componentType,
-      ports = ports,
-      dispatchTriggers = dispatchTriggers,
-      names = names,
-      isBless = genBlessEntryPoints)
-
-    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridge, T)
-
     val annexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
       case Some(infos) => infos
       case _ => ISZ()
     }
+
+    val epp = ArsitPlugin.getEntryPointProvider(plugins, m, annexClauseInfos)
+
+    val bridgeCode = ArsitPlugin.getBridgeCodeProviders(plugins).generate(
+      nameProvider = names,
+      component = m,
+      ports = ports,
+      entryPointProvider = epp,
+      symbolTable = symbolTable,
+      aadlTypes = types,
+      reporter = reporter)
+
+    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridgeCode.bridge, T)
+    resources = resources ++ bridgeCode.resources
 
     val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
 
@@ -157,13 +147,18 @@ import org.sireum.hamr.ir._
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
-    var behaviors: ISZ[Resource] = ISZ()
-    for (p <- Util.registeredPlugins) {
-      behaviors = behaviors ++ p.offerThread(m, annexClauseInfos, filename, ISZ(dirs.componentDir, names.packagePath), reporter)
-    }
-
-    if(behaviors.nonEmpty) {
-      resources = resources ++ behaviors
+    if (ArsitPlugin.canHandleBehaviorProviders(plugins, m, annexClauseInfos)) {
+      // TODO: probably should only allow one provider (i.e. assume the first one wins)
+      for (bp <- ArsitPlugin.getBehaviorProviders(plugins)) {
+        resources = resources ++ bp.handle(
+          component = m,
+          resolvedAnnexSubclauses = annexClauseInfos,
+          suggestedFilename = filename,
+          componentDirectory = ISZ(dirs.componentDir, names.packagePath),
+          symbolTable = symbolTable,
+          aadlTypes = types,
+          reporter = reporter)
+      }
     } else {
       var blocks: ISZ[ST] = ISZ()
       var markers: ISZ[Marker] = ISZ()
@@ -206,11 +201,9 @@ import org.sireum.hamr.ir._
       if (!genBlessEntryPoints) {
         val componentImplBlock = StubTemplate.componentImplBlock(
           componentType = names.componentSingletonType,
-          bridgeName = names.bridge,
           names = names,
-          dispatchProtocol = dispatchProtocol,
+          dispatchProtocol = m.dispatchProtocol,
           ports = ports,
-          isBless = genBlessEntryPoints,
           excludeComponentImpl = arsitOptions.excludeImpl,
           preBlocks = preBlocks,
           entryPointContracts = entryPointContracts,

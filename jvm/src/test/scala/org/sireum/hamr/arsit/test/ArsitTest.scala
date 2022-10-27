@@ -2,6 +2,7 @@ package org.sireum.hamr.arsit.test
 
 import org.sireum._
 import org.sireum.$internal.RC
+import org.sireum.hamr.arsit.plugin.ArsitPlugin
 import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
@@ -118,7 +119,7 @@ trait ArsitTest extends TestSuite {
       (me.model, me.types, me.symbolTable)
     }
 
-    val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, reporter)
+    val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, ArsitPlugin.defaultPlugins, reporter)
 
     reporter.printMessages()
 

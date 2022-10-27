@@ -4,9 +4,9 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
-import org.sireum.hamr.codegen.common.types.{BaseType, BitType, TypeKind, TypeNameProvider, TypeResolver, TypeUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
+import org.sireum.hamr.codegen.common.types.{TypeKind, TypeNameProvider, TypeResolver, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 object SeL4NixTemplate {
@@ -220,8 +220,7 @@ object SeL4NixTemplate {
           getValue: ST,
           putValue: ST,
           sendOutput: ST,
-          touchMethod: ST,
-          transpilerToucher: ST): ST = {
+          touchMethod: ST): ST = {
     val ret: ST =
       st"""// #Sireum
           |
@@ -358,8 +357,7 @@ object SeL4NixTemplate {
     return (variables, method)
   }
 
-  def apiGet(names: NameProvider,
-             signature: ST,
+  def apiGet(signature: ST,
              declNewStackFrame: ST,
              apiGetMethodName: String,
              typ: TypeNameProvider): ST = {
@@ -411,8 +409,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiGet_byteArrayVersion(names: NameProvider,
-                              signature: ST,
+  def apiGet_byteArrayVersion(signature: ST,
                               declNewStackFrame: ST,
                               apiGetMethodName: String,
                               typ: TypeNameProvider): ST = {
@@ -427,18 +424,6 @@ object SeL4NixTemplate {
       }
 
     val (optionSig, someSig, noneSig) = TypeUtil.getOptionTypeFingerprints(qualifiedNameForFingerprinting)
-
-    val typeAssign: Option[String] =
-      if (typ.isEmptyType) {
-        None[String]()
-      }
-      else if (typ.isBaseType) {
-        Some(s"*value = t_0.${someSig}.value;")
-      }
-      else {
-        val struct: String = if (!typ.isEnum && !typ.isBaseType) s"struct " else ""
-        Some(s"Type_assign(value, &t_0.${someSig}.value, sizeof(${struct}${typ.qualifiedCTypeName}));")
-      }
 
     val ret: ST =
       st"""${signature}{
@@ -469,7 +454,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet(names: NameProvider, signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
+  def apiSet(signature: ST, declNewStackFrame: ST, apiSetMethodName: String, isEventPort: B): ST = {
     var args: ISZ[ST] = ISZ(st"&initialization_api")
     if (!isEventPort) {
       args = args :+ st"value"
@@ -488,12 +473,11 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiSet_byteArrayVersion(names: NameProvider,
-                              signature: ST,
+  def apiSet_byteArrayVersion(signature: ST,
                               declStackFrame: ST,
                               apiSetMethodName: String): ST = {
 
-    var args: ISZ[ST] = ISZ(
+    val args: ISZ[ST] = ISZ(
       st"&initialization_api",
       st"&t_0"
     )
@@ -522,7 +506,7 @@ object SeL4NixTemplate {
     return ret
   }
 
-  def apiLog(names: NameProvider, signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
+  def apiLog(signature: ST, declNewStackFrame: ST, apiLogMethodName: String): ST = {
     val args: ISZ[ST] = ISZ(st"&initialization_api", st"str")
 
     val ret: ST =

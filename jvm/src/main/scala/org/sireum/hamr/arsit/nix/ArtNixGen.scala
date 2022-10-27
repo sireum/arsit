@@ -45,7 +45,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
   def generate(): ArsitResult = {
     assert(Util.isNix(arsitOptions.platform))
 
-    gen(root)
+    gen()
 
     return ArsitResult(
       previousPhase.resources() ++ resources,
@@ -62,7 +62,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     resources = resources :+ ResourceUtil.createResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
-  def gen(model: AadlSystem): Unit = {
+  def gen(): Unit = {
 
     var platformPorts: ISZ[ST] = ISZ()
     var mainSends: ISZ[ST] = ISZ()
@@ -161,8 +161,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         IPCPort_Id = App_Id,
         period = CommonUtil.getPeriod(threadOrDevice),
         bridge = bridgeInstanceVarName,
-        portIds = portIds,
-        cases = appCases,
         component = threadOrDevice,
         isPeriodic = isPeriodic,
         types = types,

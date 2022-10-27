@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.util
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.symbols.{AadlProcessor, AadlThread, AadlThreadOrDevice, AadlVirtualProcessor, SymbolTable}
+import org.sireum.hamr.codegen.common.symbols._
 
 object SchedulerUtil {
 
@@ -20,7 +20,7 @@ object SchedulerUtil {
       st"println(Schedulers.${getProcessorTimingPropertiesName(p)})")
 
     val components: ISZ[AadlThreadOrDevice] =
-      if(devicesAsThreads) symbolTable.getThreadOrDevices()
+      if (devicesAsThreads) symbolTable.getThreadOrDevices()
       else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
 
     ret = ret ++ components.map((t: AadlThreadOrDevice) =>
@@ -31,7 +31,7 @@ object SchedulerUtil {
 
   def getThreadTimingProperties(symbolTable: SymbolTable, devicesAsThreads: B): ISZ[ST] = {
     val components: ISZ[AadlThreadOrDevice] =
-      if(devicesAsThreads) symbolTable.getThreadOrDevices()
+      if (devicesAsThreads) symbolTable.getThreadOrDevices()
       else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
 
     return components.map((t: AadlThreadOrDevice) => {
@@ -52,7 +52,7 @@ object SchedulerUtil {
 
   def getThreadReachableProcessors(symbolTable: SymbolTable): ISZ[AadlProcessor] = {
     var processors: Set[AadlProcessor] = Set.empty
-    for(process <- symbolTable.getThreads().map((t: AadlThread) => t.getParent(symbolTable))) {
+    for (process <- symbolTable.getThreads().map((t: AadlThread) => t.getParent(symbolTable))) {
       process.getBoundProcessor(symbolTable) match {
         case Some(processor: AadlProcessor) => processors = processors + processor
         case Some(processor: AadlVirtualProcessor) => processors = processors + symbolTable.getActualBoundProcess(processor).get
@@ -94,7 +94,7 @@ object SchedulerUtil {
 
   def getFramePeriod(symbolTable: SymbolTable): Z = {
     val processors: ISZ[AadlProcessor] = getThreadReachableProcessors(symbolTable)
-    if(processors.size == 1) {
+    if (processors.size == 1) {
       processors(0).getFramePeriod() match {
         case Some(z) => return z
         case _ =>

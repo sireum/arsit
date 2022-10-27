@@ -7,12 +7,12 @@ import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
-import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
@@ -37,7 +37,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
   def generate(): ArsitResult = {
     assert(arsitOptions.platform == ArsitPlatform.SeL4)
 
-    gen(root)
+    gen()
 
     return ArsitResult(
       previousPhase.resources() ++ resources,
@@ -54,7 +54,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     resources = resources :+ ResourceUtil.createResource(Util.pathAppend(outDir, path), content, overwrite)
   }
 
-  def gen(root: AadlSystem): Unit = {
+  def gen(): Unit = {
 
     val extC = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_C
     val extH = Os.path(dirs.cExt_c_Dir) / NixGen.EXT_H
@@ -131,8 +131,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
         getValue,
         putValue,
         sendOutput,
-        touchMethod,
-        transpilerToucherMethodCall)
+        touchMethod)
 
       addResource(
         dirs.seL4NixDir,
@@ -150,7 +149,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
           slangExtensionObject,
           T)
 
-        val slangExtensionObjectStub: ST = genSlangSel4ExtensionObjectStub(ports, basePackage, names)
+        val slangExtensionObjectStub: ST = genSlangSel4ExtensionObjectStub(ports, names)
 
         addResource(
           dirs.seL4NixDir,
@@ -207,8 +206,6 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
       val id = "SlangTypeLibrary"
       val cOutputDir: Os.Path = dirs.cOutputPlatformDir / id
-      val relPath = s"${cOutputDir.up.name}/${id}"
-
 
       val typeApp = SeL4NixTemplate.typeApp(basePackage, id, id, typeTouches)
 
@@ -369,7 +366,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     return SeL4NixTemplate.extensionObject(names.packageName, names.sel4SlangExtensionName, st"${(entries, "\n\n")}")
   }
 
-  def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], packageName: String, names: NameProvider): ST = {
+  def genSlangSel4ExtensionObjectStub(ports: ISZ[Port], names: NameProvider): ST = {
     val entries: ISZ[ST] = ports.map(p => {
       if (CommonUtil.isInFeature(p.feature)) {
         st"""def ${genExtensionMethodName(p, "IsEmpty")}(): B = halt("stub")

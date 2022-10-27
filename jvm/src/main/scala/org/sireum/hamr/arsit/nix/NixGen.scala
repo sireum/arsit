@@ -8,13 +8,13 @@ import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
-import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate.{SF, SF_LAST}
 import org.sireum.hamr.codegen.common.types._
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 
@@ -536,7 +536,6 @@ object NixGen {
                 headerMethods = headerMethods :+ st"${altSignature};"
 
                 implMethods = implMethods :+ SeL4NixTemplate.apiGet_byteArrayVersion(
-                  names = names,
                   signature = altSignature,
                   declNewStackFrame = declNewStackFrame,
                   apiGetMethodName = slangApiGetMethodName,
@@ -554,7 +553,6 @@ object NixGen {
                 headerMethods = headerMethods :+ st"${signature};"
 
                 implMethods = implMethods :+ SeL4NixTemplate.apiGet(
-                  names = names,
                   signature = signature,
                   declNewStackFrame = declNewStackFrame,
                   apiGetMethodName = slangApiGetMethodName,
@@ -585,7 +583,6 @@ object NixGen {
 
                 headerMethods = headerMethods :+ st"${altSignature};"
                 implMethods = implMethods :+ SeL4NixTemplate.apiSet_byteArrayVersion(
-                  names,
                   altSignature,
                   declNewStackFrame,
                   slangApiSetMethodName)
@@ -600,7 +597,6 @@ object NixGen {
 
                 headerMethods = headerMethods :+ st"${altSignature};"
                 implMethods = implMethods :+ SeL4NixTemplate.apiSet(
-                  names,
                   altSignature,
                   declNewStackFrame,
                   slangApiSetMethodName,
@@ -631,7 +627,7 @@ object NixGen {
             val apiLogMethodName = s"${names.cInitializationApi}_${l}_"
 
             headerMethods = headerMethods :+ st"${signature};"
-            implMethods = implMethods :+ SeL4NixTemplate.apiLog(names, signature, declNewStackFrame, apiLogMethodName)
+            implMethods = implMethods :+ SeL4NixTemplate.apiLog(signature, declNewStackFrame, apiLogMethodName)
           }
         }
 
@@ -789,18 +785,6 @@ object NixGen {
           |}"""
     return (finaliseMethodSig, ret, adapterMethod)
   }
-
-  def getExistingCFiles(cExtensionDir: String): ISZ[Os.Path] = {
-    val p = Os.path(cExtensionDir)
-    val ret: ISZ[Os.Path] = if (p.exists && p.isDir) {
-      p.list.filter(f => f.ext == "c" || f.ext == "h")
-        .filter(f => !ops.ISZOps(NixGen.KNOWN_HAMR_PROVIDED_FILES).contains(f.name))
-    } else {
-      ISZ()
-    }
-    return ret
-  }
-
 }
 
 object NixGenDispatch {

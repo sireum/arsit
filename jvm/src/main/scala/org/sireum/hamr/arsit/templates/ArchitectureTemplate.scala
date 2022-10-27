@@ -239,7 +239,7 @@ object ArchitectureTemplate {
     val _imports = imports.map((m: String) => st"import ${m}")
 
     val touches: (Option[String], Option[ST]) =
-      if(touchMethod.nonEmpty)
+      if (touchMethod.nonEmpty)
         (Some("TranspilerUtil.touch()"), Some(
           st"""
               |object TranspilerUtil {

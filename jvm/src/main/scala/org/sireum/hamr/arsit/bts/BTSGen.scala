@@ -4,12 +4,12 @@ package org.sireum.hamr.arsit.bts
 import org.sireum._
 import org.sireum.hamr.arsit.templates.BlessST
 import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
-import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
 import org.sireum.ops._
 

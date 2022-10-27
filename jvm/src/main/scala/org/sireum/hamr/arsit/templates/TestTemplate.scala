@@ -14,8 +14,7 @@ object TestTemplate {
   }
 
   @pure def bridgeTestSuite(basePackage: String,
-                            names: NameProvider,
-                            ports: ISZ[Port]): ST = {
+                            names: NameProvider): ST = {
     val ret: ST =
       st"""package ${names.packageName}
           |

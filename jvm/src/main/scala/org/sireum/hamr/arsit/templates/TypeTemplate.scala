@@ -162,6 +162,7 @@ object TypeTemplate {
           |}"""
     return ret
   }
+
   @pure def enumType(typeNames: TypeNameProvider,
                      values: ISZ[String]): ST = {
     val vals = values.map((m: String) => st""""$m"""")
@@ -177,7 +178,7 @@ object TypeTemplate {
                      fields: ISZ[ST],
                      paramInits: ISZ[String],
                      invariants: ISZ[ST]): ST = {
-    val optInvariants: Option[ST] = if(invariants.isEmpty) None()
+    val optInvariants: Option[ST] = if (invariants.isEmpty) None()
 
     else Some(st"${(invariants, "\n\n")}")
     val ret: ST =

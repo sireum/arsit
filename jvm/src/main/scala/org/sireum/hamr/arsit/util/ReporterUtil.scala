@@ -10,8 +10,12 @@ object ReporterUtil {
   val reporter: Reporter = Reporter.create
 
   // singleton so must reset before each unique invocation of Arsit from same JVM
-  def resetReporter(): Unit = { reporter.setMessages(ISZ()) }
+  def resetReporter(): Unit = {
+    reporter.setMessages(ISZ())
+  }
 
-  def addReports(dst: Reporter): Unit = { dst.reports(reporter.messages) }
+  def addReports(dst: Reporter): Unit = {
+    dst.reports(reporter.messages)
+  }
 
 }

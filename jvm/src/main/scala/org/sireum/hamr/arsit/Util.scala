@@ -3,13 +3,12 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.bts.BlessAnnexVisitor
-import org.sireum.hamr.arsit.util.{AnnexVisitor, ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
-import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types._
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.{NameUtil, PathUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
@@ -25,8 +24,6 @@ object Util {
 
   val SCRIPT_HOME: String = "SCRIPT_HOME"
 
-  val registeredPlugins: ISZ[AnnexVisitor] = ISZ(BlessAnnexVisitor())
-
   def nameProvider(c: ir.Component,
                    basePackage: String): NameProvider = {
     return NameUtil.getAirNameProvider(c, basePackage)
@@ -37,16 +34,6 @@ object Util {
       return outputDir
     } else {
       return ISZOps(s).foldLeft((r: String, s: String) => s"${r}${pathSep}${s}", s"${outputDir}")
-    }
-  }
-
-  def pathSimpleName(path: String): String = {
-    val s = StringOps(path)
-    val pos = s.lastIndexOf(pathSep)
-    if (pos < 0) {
-      return path
-    } else {
-      return s.substring(pos + 1, s.size)
     }
   }
 
@@ -96,10 +83,6 @@ object Util {
     return is.filter(f => f.isInstanceOf[ir.FeatureEnd]).map(m => m.asInstanceOf[ir.FeatureEnd])
   }
 
-  @pure def getFeatureEnds(is: ISZ[AadlFeature]): ISZ[AadlFeature] = {
-    return is.filter(f => f.feature.isInstanceOf[ir.FeatureEnd])
-  }
-
   @pure def getFeatureEndType(f: ir.FeatureEnd, types: AadlTypes): AadlType = {
     val ret: AadlType = f.classifier match {
       case Some(c) => types.typeMap.get(c.name).get
@@ -124,7 +107,7 @@ object Util {
       candidate
     }
 
-    return Port(aadlFeature, feature, parent, pType, basePackage, isTrigger, counter)
+    return Port(aadlFeature, feature, parent, pType, basePackage, counter)
   }
 
   def getPorts(m: AadlThreadOrDevice, types: AadlTypes, basePackage: String, counter: Z): ISZ[Port] = {
@@ -160,12 +143,14 @@ object Util {
 }
 
 @enum object EntryPoints {
-  'activate
-  'compute
-  'deactivate
-  'finalise
-  'initialise
-  'recover
+  "activate"
+  "compute"
+  "deactivate"
+  "finalise"
+  "initialise"
+  "recover"
+  "testInitialise"
+  "testCompute"
 }
 
 // see property set in HAMR.aadl
@@ -192,7 +177,6 @@ object HAMR {
                      parent: ir.Component,
                      _portType: AadlType,
                      basePackageName: String,
-                     dispatchTrigger: B,
                      portId: Z) {
 
   def name: String = {

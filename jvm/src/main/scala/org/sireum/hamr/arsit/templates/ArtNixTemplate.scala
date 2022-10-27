@@ -9,7 +9,6 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeNameProvider}
-import org.sireum.hamr.ir.FeatureEnd
 
 object ArtNixTemplate {
 
@@ -55,15 +54,6 @@ object ArtNixTemplate {
     return st"""val $portName: Art.PortId = $portId"""
   }
 
-  @pure def platformPayload(payloadName: String,
-                            fields: ISZ[ST]): ST = {
-    val ret: ST =
-      st"""@datatype class $payloadName(
-          |  ${(fields, ",\n")}
-          |) extends DataContent"""
-    return ret
-  }
-
   @pure def artNixCases(srcArchPortId: String,
                         cases: ISZ[ST]): ST = {
     val ret: ST =
@@ -87,8 +77,6 @@ object ArtNixTemplate {
                 IPCPort_Id: String,
                 period: Z,
                 bridge: String,
-                portIds: ISZ[ST],
-                cases: ISZ[ST],
                 component: AadlThreadOrDevice,
                 isPeriodic: B,
                 types: AadlTypes,
@@ -662,7 +650,6 @@ object ArtNixTemplate {
   }
 
   @pure def compileSlash(dirs: ProjectDirectories): ST = {
-    val script_home = "home"
     val cOutputDirRel = Util.relativizePaths(dirs.cBinDir.value, dirs.cNixDir, "")
 
     val ret =
@@ -791,26 +778,6 @@ object ArtNixTemplate {
 
   @pure def runS(apps: ISZ[String]): ST = {
     val buildDir = st"slang-build"
-
-    def buildApp(arch: ArsitPlatform.Type): ST = {
-      val ext: String = if (arch == ArsitPlatform.Cygwin) ".exe" else ""
-      val stapp: ISZ[ST] = apps.map(st => {
-        val prefix: String = arch match {
-          case ArsitPlatform.Cygwin => "cygstart mintty /bin/bash"
-          case ArsitPlatform.Linux => s"x-terminal-emulator -T ${st} -e sh -c"
-          case ArsitPlatform.MacOS => "open -a Terminal"
-          case _ => halt(s"Unexpected platform ${arch}")
-        }
-        st"""$prefix "${buildDir}/${st}${ext}$${PREVENT_CLOSE}" &"""
-      })
-      return st"""${(stapp, "\n")}
-                 |read -p "Press enter to initialise components ..."
-                 |${buildDir}/Main${ext}
-                 |read -p "Press enter again to start ..."
-                 |${buildDir}/Main${ext}"""
-    }
-
-    val sq: String = "\""
 
     val ret: ST =
       st"""#!/usr/bin/env bash

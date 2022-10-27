@@ -5,6 +5,7 @@ import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.ResourceUtil
@@ -22,14 +23,14 @@ object Arsit {
   //   named according to the associated phase).
   //=================================================================
 
-  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ArsitResult = {
+  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: ISZ[Plugin], reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
-    val ret = runInternal(model, o, aadlTypes, symbolTable)
+    val ret = runInternal(model, o, aadlTypes, symbolTable, plugins)
     ReporterUtil.addReports(reporter)
     return ret
   }
 
-  private def runInternal(model: ir.Aadl, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable): ArsitResult = {
+  private def runInternal(model: ir.Aadl, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: ISZ[Plugin]): ArsitResult = {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
@@ -42,7 +43,7 @@ object Arsit {
 
     val nixPhase =
       nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
-        StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
+        StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins,
           ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes).generate()
         ).generate())
 
@@ -98,7 +99,7 @@ object Arsit {
 
     val demoScalaPath: String = {
       val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.dstPath).endsWith("Demo.scala"))
-      if(candidate.nonEmpty) root.relativize(Os.path(candidate(0).dstPath)).value
+      if (candidate.nonEmpty) root.relativize(Os.path(candidate(0).dstPath)).value
       else "??"
     }
 
@@ -118,7 +119,7 @@ object Arsit {
     val versionPropBuildContent = ProjectTemplate.proyekVersionProperties()
     ret = ret :+ ResourceUtil.createResource(versionPropDest.value, versionPropBuildContent, F)
 
-    if(options.genSbtMill) {
+    if (options.genSbtMill) {
       val millBuildDest = options.outputDir / "build.sc"
       val outputDirSimpleName = millBuildDest.up.name
       val millBuildContent = ProjectTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
@@ -139,7 +140,7 @@ object Arsit {
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
       ProjectTemplate.arsitSlangInstructionsMessage(options.outputDir.value, options.genSbtMill).render)
 
-    if(isNixProject(options.platform)) {
+    if (isNixProject(options.platform)) {
       val cmakeDir: String = projDirs.cNixDir
 
       val devDir = projDirs.cExt_c_Dir
@@ -172,10 +173,10 @@ object Arsit {
         ProjectTemplate.arsitCInstructionsMessage(cmakeDir, devDir, transpile, compile, run, stop).render)
     }
 
-    if(options.platform == ArsitPlatform.SeL4) {
+    if (options.platform == ArsitPlatform.SeL4) {
       val transpile: String = {
         val x = resources.filter(p => ops.StringOps(p.dstPath).endsWith("bin/transpile-sel4.cmd"))
-        if(x.nonEmpty) x(0).dstPath
+        if (x.nonEmpty) x(0).dstPath
         else "??"
       }
 

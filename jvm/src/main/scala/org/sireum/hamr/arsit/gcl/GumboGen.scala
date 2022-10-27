@@ -3,14 +3,13 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.Util
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclCaseHolder, GclComputeEventHolder, GclEnsuresHolder, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute, GclGeneralHolder, GclHolder, GclRequiresHolder, addOutgoingEventPortRequires}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
 import org.sireum.hamr.codegen.common.resolvers.GclResolver.GUMBO__Library
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, RecordType, TypeNameUtil, TypeUtil}
+import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.ir._
 import org.sireum.lang.ast.MethodContract.Simple
 import org.sireum.lang.{ast => AST}
@@ -131,6 +130,7 @@ object GumboGen {
   def addImports(gen: GumboGen): Unit = {
     imports = imports ++ gen.imports
   }
+
   @record class StateVarInRewriter() extends org.sireum.hamr.ir.MTransformer {
 
     def wrapStateVarsInInput(o: AST.Exp): AST.Exp = {
@@ -569,7 +569,7 @@ object GumboGen {
       for (generalCase <- compute.cases) {
 
         val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
-        val rrassume =  GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
+        val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
         imports = imports ++ GumboUtil.resolveLitInterpolateImports(rrassume)
 
         val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get

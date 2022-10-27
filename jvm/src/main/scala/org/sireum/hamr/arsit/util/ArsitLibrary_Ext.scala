@@ -1,9 +1,9 @@
 package org.sireum.hamr.arsit.util
 
-import java.io.StringReader
-
 import org.sireum.$internal.RC
 import org.sireum._
+
+import java.io.StringReader
 
 object ArsitLibrary_Ext {
 
