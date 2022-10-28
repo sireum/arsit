@@ -64,7 +64,6 @@ import org.sireum.hamr.arsit.EntryPoints
     val entryPoint: ST =
       st"""@datatype class EntryPoints(
           |  ${(parameters, ",\n")}) extends Bridge.EntryPoints {
-          |
           |  ${(blocks, "\n\n")}
           |
           |  def ${EntryPoints.initialise.name}(): Unit = {
