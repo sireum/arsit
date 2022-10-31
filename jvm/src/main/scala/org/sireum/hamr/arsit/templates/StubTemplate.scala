@@ -224,9 +224,9 @@ object StubTemplate {
         })
       }
 
-    val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute && f != EntryPoints.initialise).map((m: EntryPoints.Type) => {
-      st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
-    })
+    val remainingEntryPoints =
+      ISZ(EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.recover).map((m: EntryPoints.Type) =>
+        st"def ${m.string}(api: ${names.apiOperational}): Unit = { }")
 
     val preBlocksOpt: Option[ST] = if (preBlocks.isEmpty) None()
     else Some(
@@ -242,7 +242,7 @@ object StubTemplate {
           |
           |  ${(eventHandlers, "\n\n")}
           |
-          |  ${(entryPoints, "\n\n")}
+          |  ${(remainingEntryPoints, "\n\n")}
           |}"""
     return ret
   }
