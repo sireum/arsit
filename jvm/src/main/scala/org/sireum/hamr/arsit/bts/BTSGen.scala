@@ -2,16 +2,16 @@
 package org.sireum.hamr.arsit.bts
 
 import org.sireum._
-import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
 import org.sireum.hamr.arsit.templates.BlessST
+import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
+import org.sireum.hamr.codegen.common.types._
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
 import org.sireum.ops._
-import org.sireum.hamr.codegen.common.types._
-import org.sireum.hamr.codegen.common.util.ResourceUtil
-import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 @record class BTSGen(directories: ProjectDirectories,
                      basePackage: String,
@@ -48,10 +48,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   var resources: ISZ[Resource] = ISZ()
 
   def process(a: BTSBLESSAnnexClause): BTSResults = {
-    if(a.assertions.nonEmpty) {
+    if (a.assertions.nonEmpty) {
       println(s"Need to handle assertions")
     } // TODO
-    if(a.invariant.nonEmpty){
+    if (a.invariant.nonEmpty) {
       println(s"Need to handle invariants")
     } // TODO
 
@@ -63,14 +63,14 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     val componentName = componentNames.componentSingletonType
     val bridgeName = componentNames.bridge
 
-    for(v <- a.variables){
+    for (v <- a.variables) {
       val gv = visitBTSVariableDeclaration(v)
       globalVariables = globalVariables + (gv.slangName ~> gv)
     }
 
     a.transitions.map((t: BTSTransition) => visitBTSTransition(t))
 
-    if(addViz) {
+    if (addViz) {
 
       val trans: ISZ[ST] = a.transitions.map((bts: BTSTransition) => {
         val label = CommonUtil.getLastName(bts.label.id)
@@ -98,9 +98,9 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 
     // DONE WALKING
-    var methods = completeStateMachines.entries.map((entry : (BTSStateCategory.Type, ISZ[GuardedTransition])) => buildSM(entry._1, entry._2))
+    var methods = completeStateMachines.entries.map((entry: (BTSStateCategory.Type, ISZ[GuardedTransition])) => buildSM(entry._1, entry._2))
 
-    methods = methods ++ executeStateMachines.entries.map((entry : (String, ISZ[GuardedTransition])) => buildExecutionStateMachine(entry._1, entry._2))
+    methods = methods ++ executeStateMachines.entries.map((entry: (String, ISZ[GuardedTransition])) => buildExecutionStateMachine(entry._1, entry._2))
 
     methods = methods ++ transitionMethods.values
 
@@ -108,7 +108,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     var extensions: ISZ[ST] = ISZ()
 
-    if(subprograms.nonEmpty) {
+    if (subprograms.nonEmpty) {
       /*
       extensions = extensions :+ BlessST.externalObjectSlang(extSubprogramObject(F),
         subprograms.values.map(sp => st"${sp.extMethod}$$"))
@@ -124,10 +124,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
       */
     }
 
-    val globalVars: ISZ[ST] = if(genDebugObjects) {
-      val fields = globalVariables.values.map((m : GlobalVar) => st"var ${m.slangName}: ${m.slangTypeName}")
-      val names = globalVariables.values.map((m : GlobalVar) => st"${m.slangName}")
-      val initExps = globalVariables.values.map((m : GlobalVar) => m.initExp)
+    val globalVars: ISZ[ST] = if (genDebugObjects) {
+      val fields = globalVariables.values.map((m: GlobalVar) => st"var ${m.slangName}: ${m.slangTypeName}")
+      val names = globalVariables.values.map((m: GlobalVar) => st"${m.slangName}")
+      val initExps = globalVariables.values.map((m: GlobalVar) => m.initExp)
 
       extensions = extensions :+ BlessST.debugObject(componentNames.componentSingletonType, fields, names)
       ISZ(BlessST.debugObjectDec(componentNames.componentSingletonType, initExps))
@@ -170,9 +170,9 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     return ret
   }
 
-  def buildSM(t: BTSStateCategory.Type, l: ISZ[GuardedTransition]) : ST = {
+  def buildSM(t: BTSStateCategory.Type, l: ISZ[GuardedTransition]): ST = {
 
-    if(t == BTSStateCategory.Initial) {
+    if (t == BTSStateCategory.Initial) {
       val inits = l.filter(f => f.srcState == initialState).map((m: GuardedTransition) =>
         (m.transCondition, st"${m.actionMethodName}()"))
 
@@ -180,16 +180,18 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
       var body = BlessST.ifST(inits(0), ISZOps(inits).tail, None[ST]())
 
-      if(addViz) {
-        body = st"""${BlessST.vizCallCreateStateMachines(basePackage)}
-                   |
-                   |$body"""
+      if (addViz) {
+        body =
+          st"""${BlessST.vizCallCreateStateMachines(basePackage)}
+              |
+              |$body"""
       }
 
-      if(genDebugObjects) {
-        body = st"""${BlessST.debugRegister()}
-                   |
-                   |$body"""
+      if (genDebugObjects) {
+        body =
+          st"""${BlessST.debugRegister()}
+              |
+              |$body"""
       }
 
       val initApiParam = st"_api: ${componentNames.apiInitialization}"
@@ -197,28 +199,30 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     } else {
       var cases: ISZ[ST] = ISZ()
 
-      for(e <- btsStates.entries.filter(f => isCompleteState(f._1) || isFinalState(f._1))) {
+      for (e <- btsStates.entries.filter(f => isCompleteState(f._1) || isFinalState(f._1))) {
         val stateName = e._1
         val gts: ISZ[(ST, ST)] = l.filter(f => f.srcState == stateName).map(m =>
           (m.transCondition, st"${m.actionMethodName}()")
         )
-        val options: ST = if(gts.isEmpty) {
+        val options: ST = if (gts.isEmpty) {
           st"// no transitions defined leaving this state"
         } else {
           BlessST.ifST(gts(0), ISZOps(gts).tail, None[ST]())
         }
 
-        val _case = st"""case ${completeStateEnumName}.${stateName} =>
-                        |  $options"""
+        val _case =
+          st"""case ${completeStateEnumName}.${stateName} =>
+              |  $options"""
 
         cases = cases :+ _case
 
       }
 
-      val body = st"""currentState match {
-                     |  ${(cases, "\n")}
-                     |  case _ => halt(s"Unexpected: $$currentState")
-                     |}"""
+      val body =
+        st"""currentState match {
+            |  ${(cases, "\n")}
+            |  case _ => halt(s"Unexpected: $$currentState")
+            |}"""
 
       val operationalApiParam = st"_api: ${componentNames.apiOperational}"
       val params: ISZ[ST] = ISZ(operationalApiParam, BlessST.dispatchedPortsDec())
@@ -235,7 +239,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     btsStates = btsStates + (stateName ~> state)
 
-    if(state.categories.filter(f => f == BTSStateCategory.Initial).nonEmpty){
+    if (state.categories.filter(f => f == BTSStateCategory.Initial).nonEmpty) {
       initialState = stateName
     }
 
@@ -259,15 +263,15 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
       case _ => halt("finish this ${variable}")
     }
 
-    val assignExp: ST = if(variable.assignExpression.nonEmpty) {
+    val assignExp: ST = if (variable.assignExpression.nonEmpty) {
       visitBTSExp(variable.assignExpression.get)
     } else {
       // emit default value
       st"${initType(aadlType)}"
     }
 
-    var varType:ST = visitBTSType(variable.varType)
-    if(isEnum) {
+    var varType: ST = visitBTSType(variable.varType)
+    if (isEnum) {
       varType = st"${varType}.Type"
     }
 
@@ -305,22 +309,25 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
       case _ => st"// empty actions"
     }
 
-    if(addViz) {
-      actions = st"""${actions}
-                    |
-                    |${BlessST.vizCallTransition(basePackage, transLabel)}"""
+    if (addViz) {
+      actions =
+        st"""${actions}
+            |
+            |${BlessST.vizCallTransition(basePackage, transLabel)}"""
     }
 
-    if(isExecuteState(dst)) {
+    if (isExecuteState(dst)) {
       // going to an execute state
-      actions = st"""${actions}
-                    |
-                    |${executeStateMethodName(dst)}()"""
+      actions =
+        st"""${actions}
+            |
+            |${executeStateMethodName(dst)}()"""
     } else {
       // going to a complete state
-      actions = st"""${actions}
-                    |
-                    |currentState = ${completeStateEnumName}.${dst}"""
+      actions =
+        st"""${actions}
+            |
+            |currentState = ${completeStateEnumName}.${dst}"""
     }
 
     val doMethod = BlessST.method(actionMethodName, ISZ(), actions, st"Unit")
@@ -329,7 +336,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     assert(btsStates.get(src).get.categories.size == 1, s"Need to handle states with 2+ categories: ${src} has ${btsStates.get(src).get.categories.size}")
 
 
-    if(isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
+    if (isCompleteState(src) || isFinalState(src) || isInitialState(src)) {
       // transitioning from a complete state
       val gt = GuardedTransition(src, dst, cond, actionMethodName)
 
@@ -359,7 +366,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   def visitBTSBehaviorActions(actions: BTSBehaviorActions): ST = {
     assert(actions.executionOrder == BTSExecutionOrder.Sequential)
 
-    val _a = actions.actions.map((assertedAction : BTSAssertedAction) => visitBTSAssertedAction(assertedAction))
+    val _a = actions.actions.map((assertedAction: BTSAssertedAction) => visitBTSAssertedAction(assertedAction))
 
     return st"${(_a, "\n")}"
   }
@@ -389,7 +396,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     val sb = resolveSubprogram(action.name)
 
     var params: ISZ[ST] = ISZ()
-    for(i <- z"0" until sb.params.size){
+    for (i <- z"0" until sb.params.size) {
       val p = action.params(i)
       val paramName = CommonUtil.getLastName(p.paramName.get)
       val exp = visitBTSExp(p.exp.get)
@@ -400,7 +407,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     var ret: ST = st"${methodName}(${(params, ", ")})"
 
-    if(action.params.size > sb.params.size) {
+    if (action.params.size > sb.params.size) {
       // TODO: assumes single and optional out param that has to be last
       assert(action.params.size == sb.params.size + 1)
       val assignExp = visitBTSExp(action.params(action.params.size - 1).exp.get)
@@ -420,7 +427,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   def visitBTSPortOutAction(action: BTSPortOutAction): ST = {
     val portName = CommonUtil.getLastName(action.name)
 
-    val arg: ST = if(action.exp.nonEmpty) {
+    val arg: ST = if (action.exp.nonEmpty) {
       visitBTSExp(action.exp.get)
     } else {
       st""
@@ -435,9 +442,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     val body = visitBTSBehaviorActions(actions.actions)
 
-    return st"""if($cond) {
-               |  $body
-               |}"""
+    return (
+      st"""if($cond) {
+          |  $body
+          |}""")
   }
 
   def visitBTSIfBAAction(action: BTSIfBAAction): ST = {
@@ -445,7 +453,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     val elsifs = action.elseIfBranches.map((e: BTSConditionalActions) => visitBTSConditionalActions(e)).map((x: ST) => st"else ${x}")
 
-    val elseb: ST = if(action.elseBranch.nonEmpty) {
+    val elseb: ST = if (action.elseBranch.nonEmpty) {
       val body = visitBTSBehaviorActions(action.elseBranch.get)
       st"""else {
           |  $body
@@ -454,9 +462,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
       st""
     }
 
-    return st"""${ifb}
-               |${(elsifs, "\n")}
-               |${elseb}"""
+    return (
+      st"""${ifb}
+          |${(elsifs, "\n")}
+          |${elseb}""")
   }
 
   def visitBTSIfBLESSAction(action: BTSIfBLESSAction): ST = {
@@ -484,9 +493,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
     val actions = visitBTSBehaviorActions(quantification.actions)
 
-    val body = st"""${(localVars, "\n")}
-                   |
-                   |$actions"""
+    val body =
+      st"""${(localVars, "\n")}
+          |
+          |$actions"""
 
     return body
   }
@@ -504,7 +514,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   }
 
   def visitBTSDispatchCondition(condition: BTSDispatchCondition): ST = {
-    if(condition.dispatchTriggers.isEmpty) {
+    if (condition.dispatchTriggers.isEmpty) {
       assert(CommonUtil.isPeriodic(aadlComponent))
 
       return st"T"
@@ -531,9 +541,9 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
       case BTSDispatchTriggerPort(port) =>
         val name = CommonUtil.getLastName(port)
 
-        val d = this.component.features.filter(f => f.identifier.name == port.name )
+        val d = this.component.features.filter(f => f.identifier.name == port.name)
         assert(d.size == 1)
-        if(!CommonUtil.isEventPort(d(0).asInstanceOf[FeatureEnd])){
+        if (!CommonUtil.isEventPort(d(0).asInstanceOf[FeatureEnd])) {
           println(s"WARNING: Processing dispatch trigger in ${componentNames.componentSingletonType}.  '${name}' is not an event port so will not be dispatched")
         }
 
@@ -558,10 +568,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
   def visitBTSNameExp(e: BTSNameExp): ST = {
     val n = CommonUtil.getLastName(e.name)
-    val st: ST = if(e.name.name.size > 1) {
+    val st: ST = if (e.name.name.size > 1) {
 
       val _feature = component.features.filter(f => f.identifier.name == e.name.name)
-      if(_feature.nonEmpty){
+      if (_feature.nonEmpty) {
         assert(_feature.size == 1)
         val feature = _feature(0).asInstanceOf[FeatureEnd]
 
@@ -575,7 +585,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     } else {
       assert(e.name.name.size == 1)
 
-      if(aadlTypes.typeMap.contains(n)){
+      if (aadlTypes.typeMap.contains(n)) {
         aadlTypes.typeMap.get(n).get match {
           case e: EnumType =>
             val dn = TypeNameUtil.getTypeNameProvider(e, basePackage)
@@ -603,10 +613,10 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   def visitBTSLiteralExp(exp: BTSLiteralExp): ST = {
     val ret: ST = exp.typ match {
       case BTSLiteralType.BOOLEAN =>
-        if(exp.exp == "true") st"T" else st"F"
+        if (exp.exp == "true") st"T" else st"F"
       case BTSLiteralType.STRING =>
         val so = StringOps(exp.exp)
-        if(so.contains("#Enumerators")) {
+        if (so.contains("#Enumerators")) {
           // TODO need to fix bless grammar
           st"${so.replaceAllLiterally("#Enumerators", "")}"
         } else {
@@ -638,15 +648,15 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
       case BTSBinaryOp.EQ => "=="
       case BTSBinaryOp.NEQ => "!="
-      case BTSBinaryOp.LT=> "<"
-      case BTSBinaryOp.LTE=> "<="
+      case BTSBinaryOp.LT => "<"
+      case BTSBinaryOp.LTE => "<="
       case BTSBinaryOp.GT => ">"
       case BTSBinaryOp.GTE => ">="
 
       case BTSBinaryOp.PLUS => "+"
       case BTSBinaryOp.MINUS => "-"
       case BTSBinaryOp.DIV => "/"
-      case BTSBinaryOp.MULT=> "*"
+      case BTSBinaryOp.MULT => "*"
       case BTSBinaryOp.MOD => "%"
       case BTSBinaryOp.REM => "rem"
 
@@ -675,7 +685,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
     assert(sb.params.size == call.args.size)
 
     var args: ISZ[ST] = ISZ()
-    for(i <- 0 until call.args.size) {
+    for (i <- 0 until call.args.size) {
       val pair = call.args(0)
       val pname = CommonUtil.getLastName(pair.paramName.get)
 
@@ -703,7 +713,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
   def resolveSubprogram(name: Name): Subprogram = {
 
-    if(!subprograms.contains(name)) {
+    if (!subprograms.contains(name)) {
       val subprog: Component = {
         val x = component.subComponents.filter(sc => sc.identifier.name == name.name)
 
@@ -713,7 +723,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
           val subComponentName = nameops.substring(nameops.indexOf('.') + 1, nameops.size)
           val hackX = component.subComponents.filter(sc => {
             val scops = ops.StringOps(CommonUtil.getLastName(sc.identifier))
-            if(scops.startsWith("codegen_hack_")) {
+            if (scops.startsWith("codegen_hack_")) {
               val candidate = scops.substring(13, scops.size)
               println(s"$candidate == $subComponentName ${candidate == subComponentName}")
               candidate == subComponentName
@@ -744,14 +754,14 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
             // last param might be the return type, all others must be in
             assert((i == featureSize - 1) || fe.direction == Direction.In, "All but last param must be 'in'")
 
-            if(i == featureSize - 1) {
+            if (i == featureSize - 1) {
               isLastParamOut = fe.direction == Direction.Out
             }
 
             val paramName = CommonUtil.getLastName(fe.identifier)
             //var paramType: ST = st"${CommonUtil.getNamesFromClassifier(fe.classifier.get, basePackage).component}"
             var paramType: ST = st"FIXME_Param_Type"
-            if(isEnum(fe.classifier.get)) {
+            if (isEnum(fe.classifier.get)) {
               paramType = st"${paramType}.Type"
             }
 
@@ -762,8 +772,8 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
         }
       })
 
-      val (lastType, slangParams) : (ST, ISZ[(ST, ST)])=
-        if(isLastParamOut)
+      val (lastType, slangParams): (ST, ISZ[(ST, ST)]) =
+        if (isLastParamOut)
           (ISZOps(params).last._2, ISZOps(params).dropRight(1))
         else (st"Unit", params)
 
@@ -808,7 +818,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
   def isEnum(c: Classifier): B = {
     aadlTypes.typeMap.get(c.name) match {
-      case Some(c: EnumType)=> return T
+      case Some(c: EnumType) => return T
       case _ => return F
     }
   }
@@ -818,7 +828,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
   }
 
   def extSubprogramObject(isJvm: B): ST = {
-    return st"${componentNames.componentSingletonType}_subprograms${if(isJvm) "_Ext" else ""}"
+    return st"${componentNames.componentSingletonType}_subprograms${if (isJvm) "_Ext" else ""}"
   }
 
   def addExeResource(baseDir: String, paths: ISZ[String], content: ST, overwrite: B): Unit = {

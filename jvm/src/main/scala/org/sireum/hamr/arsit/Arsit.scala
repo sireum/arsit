@@ -5,6 +5,7 @@ import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.ResourceUtil
@@ -12,7 +13,7 @@ import org.sireum.hamr.ir
 import org.sireum.message._
 
 object Arsit {
-  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ArsitResult = {
+  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: ISZ[Plugin], reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
     val ret = runInternal(model, o, aadlTypes, symbolTable)
     ReporterUtil.addReports(reporter)

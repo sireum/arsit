@@ -184,12 +184,14 @@ object Util {
 }
 
 @enum object EntryPoints {
-  'activate
-  'compute
-  'deactivate
-  'finalise
-  'initialise
-  'recover
+  "activate"
+  "compute"
+  "deactivate"
+  "finalise"
+  "initialise"
+  "recover"
+  "testInitialise"
+  "testCompute"
 }
 
 // see property set in HAMR.aadl

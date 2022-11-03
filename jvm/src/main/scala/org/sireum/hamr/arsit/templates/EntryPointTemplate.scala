@@ -8,6 +8,25 @@ import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.FeatureCategory
 
+@datatype class EntryPointTemplate(parameters: ISZ[ST],
+                                   localVars: ISZ[ST],
+
+                                   defaultActivateBody: ST,
+
+                                   defaultInitialiseBody: ST,
+                                   defaultTestInitialiseBody: ST,
+
+                                   defaultComputeBody: ST,
+                                   defaultTestComputeBody: ST,
+
+                                   defaultDeactivateBody: ST,
+                                   defaultFinaliseBody: ST,
+                                   defaultRecoverBody: ST) {
+  def generateDefault(): ST = {
+    halt("stub")
+  }
+}
+
 object EntryPointTemplate {
   @pure def assignEntryPointImpl(names: NameProvider): ST = {
     val ret: ST = st"${names.componentEntryPointSingletonQualifiedName}.impl = ${names.componentEntryPointImplName}()"
@@ -51,7 +70,8 @@ object EntryPointTemplate {
       }
     }
 
-    for(m <- EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute)){
+    for(m <- EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute &&
+      f != EntryPoints.testCompute && f != EntryPoints.testInitialise)){
       val apiType: String =
         if(m == EntryPoints.initialise) names.apiInitializationQualifiedName
         else names.apiOperationalQualifiedName
@@ -115,7 +135,8 @@ object EntryPointTemplate {
       }
     }
 
-    for(m <- EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute)){
+    for(m <- EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute &&
+      f != EntryPoints.testInitialise && f != EntryPoints.testCompute)){
       val apiType: String =
         if(m == EntryPoints.initialise) names.apiInitializationQualifiedName
         else names.apiOperationalQualifiedName

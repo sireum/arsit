@@ -111,7 +111,7 @@ trait ArsitTest extends TestSuite {
       (me.model, me.types, me.symbolTable)
     }
 
-    val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, reporter)
+    val results: ArsitResult = Arsit.run(rmodel, testOps, aadlTypes, symbolTable, ISZ(), reporter)
 
     reporter.printMessages()
 

@@ -411,7 +411,9 @@ object StubTemplate {
         })
       }
 
-    val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) => f != EntryPoints.compute && f != EntryPoints.initialise).map((m: EntryPoints.Type) => {
+    val entryPoints = EntryPoints.elements.filter((f: EntryPoints.Type) =>
+      f != EntryPoints.compute && f != EntryPoints.initialise &&
+        f != EntryPoints.testInitialise && f != EntryPoints.testCompute).map((m: EntryPoints.Type) => {
       st"""def ${m.string}(api: ${names.apiOperational}): Unit = { }"""
     })
 
