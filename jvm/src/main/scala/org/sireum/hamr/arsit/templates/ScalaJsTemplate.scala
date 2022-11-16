@@ -69,7 +69,6 @@ object ScalaJsTemplate {
           |val scalaVer = versions.get("org.scala-lang:scala-library:").get
           |
           |def fetch(s: String): CoursierFileInfo = {
-          |  Coursier.setScalaVersion(scalaVer)
           |  return org.sireum.Coursier.fetch(ISZ(s))(0)
           |}
           |
