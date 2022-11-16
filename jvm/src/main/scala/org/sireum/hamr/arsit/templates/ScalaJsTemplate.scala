@@ -69,7 +69,7 @@ object ScalaJsTemplate {
           |val scalaVer = versions.get("org.scala-lang:scala-library:").get
           |
           |def fetch(s: String): CoursierFileInfo = {
-          |  return org.sireum.Coursier.fetch(ISZ(s))(0)
+          |  return org.sireum.Coursier.fetch(scalaVer, ISZ(s))(0)
           |}
           |
           |val runtimeLibraryVer = versions.get("org.sireum.kekinian::library-shared:").get
