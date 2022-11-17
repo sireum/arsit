@@ -51,7 +51,7 @@ import org.sireum._
 
 def usage(): Unit = {
   println("Arsit /build")
-  println("Usage: ( compile | test | clean | regen-clis)+")
+    println("Usage: ( compile | test | regen-clis)+")
 }
 
 
@@ -67,6 +67,39 @@ val sireum : Os.Path = homeBin / (if (Os.isWin) "sireum.bat" else "sireum")
 
 val proyekName: String = "sireum-proyek"
 val project: Os.Path = homeBin / "project4testing.cmd"
+
+val versions = (home / "versions.properties").properties
+
+val cache: Os.Path = Os.env("SIREUM_CACHE") match {
+  case Some(p) =>
+    val d = Os.path(p)
+    if (!d.exists) {
+      d.mkdirAll()
+    }
+    d
+  case _ => Os.home / "Downloads" / "sireum"
+}
+
+def installCoursier(): Unit = {
+  val version = versions.get("org.sireum.version.coursier").get
+  val ver = home / "lib" / "coursier.jar.ver"
+  if (ver.exists && ver.read == version) {
+    return
+  }
+
+  val drop = cache / s"coursier-$version.jar"
+  if (!drop.exists) {
+    println(s"Downloading Coursier $version ...")
+    val url = s"https://github.com/coursier/coursier/releases/download/v$version/coursier.jar"
+    drop.downloadFrom(url)
+    println()
+  }
+
+  val coursierJar = home / "lib" / "coursier.jar"
+  drop.copyOverTo(coursierJar)
+
+  ver.writeOver(version)
+}
 
 def clone(repo: String): Unit = {
   val clean = ops.StringOps(repo).replaceAllChars('-', '_')
@@ -119,16 +152,6 @@ def test(): Unit = {
 }
 
 
-def clean(): Unit = {
-  println(s"Cleaning ${home}")
-  val homeResources: ISZ[Os.Path] = ISZ("air", "common", "hamr_codegen", "lib", "out", "runtime", "slang", "versions.properties").map(m => home / m)
-  val homeBinResources: ISZ[Os.Path] = ISZ("sireum.jar", "sireum").map(m => homeBin / m)
-  for(r <- (homeResources ++ homeBinResources) if r.exists) {
-    println(s"Deleting ${r}")
-    r.removeAll()
-  }
-}
-
 def regenClis(): Unit = {
   val utilDir = home / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util"
   val compileConfig =  utilDir / "cliCompile.sc"
@@ -146,9 +169,10 @@ def regenClis(): Unit = {
   proc"$sireum tools cligen -s cliTranspile-alt.cmd ${transpileAltConfig}".at(destDir).console.run()
 }
 
+installCoursier()
+
 for (i <- 0 until Os.cliArgs.size) {
   Os.cliArgs(i) match {
-    case string"clean" => clean()
     case string"compile" =>
       cloneProjects()
       compile()
