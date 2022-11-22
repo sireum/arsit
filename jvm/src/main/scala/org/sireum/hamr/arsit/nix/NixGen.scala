@@ -36,21 +36,13 @@ object NixGen {
     return ret
   }
 
-  def genTypeTouches(types: AadlTypes, basePackage: String): ISZ[ST] = {
+  def genTypeTouches(types: AadlTypes): ISZ[ST] = {
     var a: ISZ[ST] = ISZ()
-    var counter: Z = z"0"
-    val _types: ISZ[AadlType] = if (types.rawConnections) {
-      // TODO all types in typesMap should be BitTypes that optionally link
-      // back to their originating type
-      ISZ(BitType(TypeUtil.SlangEmbeddedBitTypeName, None(), None(), None()))
-    } else {
-      types.typeMap.entries.map((x: (String, AadlType)) => x._2)
-    }
 
-    for (typ <- _types) {
-      val typeNames = TypeNameUtil.getTypeNameProvider(typ, basePackage)
-      a = a :+ SeL4NixTemplate.touchType(typeNames.qualifiedPayloadName, Some(typeNames.example()))
-      counter = counter + z"1"
+    var seen: Set[String] = Set.empty
+    for (typ <- types.typeMap.values if !seen.contains(typ.name)) {
+      seen = seen + typ.name
+      a = a :+ SeL4NixTemplate.touchType(typ.nameProvider.qualifiedPayloadName, Some(typ.nameProvider.example()))
     }
     a = a :+ SeL4NixTemplate.touchType("art.Empty", None())
     return a
@@ -108,7 +100,7 @@ object NixGen {
 
         for (p <- ports.filter(p => CommonUtil.isDataPort(p.feature))) {
           val originatingType: AadlType = p._portType match {
-            case BitType(_, _, _, Some(o)) => o
+            case BitType(_, _, _, _, Some(o)) => o
             case _ => halt(s"Unexpected: Could not find originating type for ${p._portType} used by ${p.parentName}.${p.path}")
           }
           if (!seenTypes.contains(originatingType)) {
@@ -127,13 +119,11 @@ object NixGen {
                 (maxBitSize, Some(s"// ${msg}"))
             }
 
-            val originatingTypeNames = TypeNameUtil.getTypeNameProvider(originatingType, names.basePackage)
-
-            val numBitsName = BitCodecNameUtil.numBitsConstName(originatingTypeNames.qualifiedCTypeName)
-            val numBytesName = BitCodecNameUtil.numBytesConstName(originatingTypeNames.qualifiedCTypeName)
+            val numBitsName = BitCodecNameUtil.numBitsConstName(originatingType.nameProvider.qualifiedCTypeName)
+            val numBytesName = BitCodecNameUtil.numBytesConstName(originatingType.nameProvider.qualifiedCTypeName)
 
             extHEntries = extHEntries :+
-              st"""// bit-codec size for ${originatingTypeNames.qualifiedCTypeName}
+              st"""// bit-codec size for ${originatingType.nameProvider.qualifiedCTypeName}
                   |${optionalMessage}
                   |#define ${numBitsName} ${bitSize}
                   |#define ${numBytesName} ((${numBitsName} - 1) / 8 + 1)"""
@@ -213,7 +203,7 @@ object NixGen {
             val entry: ST = {
               if (types.rawConnections) {
                 val originatingTypeNames: TypeNameProvider = p._portType match {
-                  case BitType(_, _, _, Some(o)) => TypeNameUtil.getTypeNameProvider(o, names.basePackage)
+                  case BitType(_, _, _, _, Some(o)) => o.nameProvider
                   case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
                 }
 
@@ -342,8 +332,7 @@ object NixGen {
 
               var eventDataParams: ISZ[ST] = params
               if (isEventData) {
-                val typeNames = TypeNameUtil.getTypeNameProvider(p._portType, names.basePackage)
-                eventDataParams = eventDataParams :+ st"${typeNames.qualifiedCTypeName} value"
+                eventDataParams = eventDataParams :+ st"${p._portType.nameProvider.qualifiedCTypeName} value"
               }
               val handlerSig = SeL4NixTemplate.methodSignature(handlerMethodName, eventDataParams, "Unit")
               entrypointSignatures = entrypointSignatures :+ handlerSig
@@ -509,7 +498,7 @@ object NixGen {
         var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
 
         for (p <- ports) {
-          val typeNames = TypeNameUtil.getTypeNameProvider(p._portType, names.basePackage)
+          val typeNames = p._portType.nameProvider
 
           p.feature.direction match {
             case ir.Direction.In => {
@@ -673,7 +662,7 @@ object NixGen {
         val decl: ST =
           if (types.rawConnections) {
             val originatingTypeNames: TypeNameProvider = p._portType match {
-              case BitType(_, _, _, Some(o)) => TypeNameUtil.getTypeNameProvider(o, names.basePackage)
+              case BitType(_, _, _, _, Some(o)) => o.nameProvider
               case _ => halt(s"Unexpected: Could not find originating type for ${p._portType}")
             }
 

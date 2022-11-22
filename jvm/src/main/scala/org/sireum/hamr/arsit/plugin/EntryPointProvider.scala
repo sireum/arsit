@@ -13,16 +13,13 @@ import org.sireum.message.Reporter
 
 @datatype class SingletonEntryPointProviderPlugin extends EntryPointProviderPlugin {
 
-  @pure def name: String = {
-    return "Singleton Entry Point Provider Plugin"
-  }
+  @strictpure def name: String = "Singleton Entry Point Provider Plugin"
 
-  @pure def canHandle(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
-    return T
-  }
+  @strictpure def canHandle(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
+    T
 
-  def handle(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port], entryPointTemplate: EntryPointTemplate,
-             symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): EntryPointContributions = {
+  @pure def handle(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port], entryPointTemplate: EntryPointTemplate,
+                   symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): EntryPointContributions = {
 
     return EntryPointContributions(
       imports = ISZ(),
@@ -35,9 +32,9 @@ import org.sireum.message.Reporter
 
 object SingletonEntryPointProviderPlugin {
 
-  def getEntryPointTemplate(nameProvider: NameProvider,
-                            component: AadlThreadOrDevice,
-                            ports: ISZ[Port]): EntryPointTemplate = {
+  @pure def getEntryPointTemplate(nameProvider: NameProvider,
+                                  component: AadlThreadOrDevice,
+                                  ports: ISZ[Port]): EntryPointTemplate = {
     val componentName = "component"
 
     val parameters: ISZ[ST] = (
@@ -72,9 +69,7 @@ object SingletonEntryPointProviderPlugin {
     return entryPointTemplate
   }
 
-  @pure def addId(s: String): String = {
-    return s"${s}_Id"
-  }
+  @strictpure def addId(s: String): String = s"${s}_Id"
 
   @pure def initialiseBody(componentName: String,
                            names: NameProvider,
@@ -93,28 +88,28 @@ object SingletonEntryPointProviderPlugin {
     return ret
   }
 
-  def activateBody(componentName: String, nameProvider: NameProvider): ST = {
+  @pure def activateBody(componentName: String, nameProvider: NameProvider): ST = {
     val ep = EntryPoints.activate
     return (
       st"""// implement the following method in '${componentName}':  def ${ep.string}(api: ${nameProvider.apiOperational}): Unit = {}
           |${componentName}.${ep.name}(${ApiTemplate.apiOperationalId})""")
   }
 
-  def deactivateBody(componentName: String, nameProvider: NameProvider): ST = {
+  @pure def deactivateBody(componentName: String, nameProvider: NameProvider): ST = {
     val ep = EntryPoints.deactivate
     return (
       st"""// implement the following method in '${componentName}':  def ${ep.string}(api: ${nameProvider.apiOperational}): Unit = {}
           |${componentName}.${ep.name}(${ApiTemplate.apiOperationalId})""")
   }
 
-  def finaliseBody(componentName: String, nameProvider: NameProvider): ST = {
+  @pure def finaliseBody(componentName: String, nameProvider: NameProvider): ST = {
     val ep = EntryPoints.finalise
     return (
       st"""// implement the following method in '${componentName}':  def ${ep.string}(api: ${nameProvider.apiOperational}): Unit = {}
           |${componentName}.${ep.name}(${ApiTemplate.apiOperationalId})""")
   }
 
-  def recoverBody(componentName: String, nameProvider: NameProvider): ST = {
+  @pure def recoverBody(componentName: String, nameProvider: NameProvider): ST = {
     val ep = EntryPoints.recover
     return (
       st"""// implement the following method in '${componentName}':  def ${ep.string}(api: ${nameProvider.apiOperational}): Unit = {}

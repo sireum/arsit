@@ -279,8 +279,7 @@ import org.sireum.ops._
   }
 
   def initType(a: AadlType): ST = {
-    val dataTypeNames = TypeNameUtil.getTypeNameProvider(a, basePackage)
-    return st"${dataTypeNames.example()}"
+    return st"${a.nameProvider.example()}"
   }
 
   def visitBTSTransition(t: BTSTransition): Unit = {
@@ -587,9 +586,7 @@ import org.sireum.ops._
 
       if (aadlTypes.typeMap.contains(n)) {
         aadlTypes.typeMap.get(n).get match {
-          case e: EnumType =>
-            val dn = TypeNameUtil.getTypeNameProvider(e, basePackage)
-            st"${dn.qualifiedTypeName}"
+          case e: EnumType => st"${e.nameProvider.qualifiedTypeName}"
           case x => halt(s"Unexpected type: $x")
         }
       } else if (genDebugObjects && isGlobalVariables(n)) {
@@ -703,8 +700,7 @@ import org.sireum.ops._
     t match {
       case o: BTSClassifier =>
         val typ = aadlTypes.typeMap.get(o.classifier.name).get
-        val dataTypeNames = TypeNameUtil.getTypeNameProvider(typ, basePackage)
-        return st"${dataTypeNames.qualifiedTypeName}"
+        return st"${typ.nameProvider.qualifiedTypeName}"
       case _ =>
         halt(s"Need to handle type $t")
     }

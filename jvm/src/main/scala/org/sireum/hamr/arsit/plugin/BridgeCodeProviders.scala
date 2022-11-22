@@ -21,17 +21,15 @@ import org.sireum.message.Reporter
 
 
 @datatype class SingletonBridgeCodeProviderPlugin extends BridgeCodeProviderPlugin {
-  @pure def name: String = {
-    return "Singleton Bridge Code Provider Plugin"
-  }
+  @strictpure def name: String = "Singleton Bridge Code Provider Plugin"
 
-  def generate(nameProvider: NameUtil.NameProvider,
-               component: AadlThreadOrDevice,
-               ports: ISZ[Port],
-               entryPointProvider: EntryPointProviderPlugin,
-               symbolTable: SymbolTable,
-               aadlTypes: AadlTypes,
-               reporter: Reporter): BridgeCodeContributions = {
+  @pure def generate(nameProvider: NameUtil.NameProvider,
+                     component: AadlThreadOrDevice,
+                     ports: ISZ[Port],
+                     entryPointProvider: EntryPointProviderPlugin,
+                     symbolTable: SymbolTable,
+                     aadlTypes: AadlTypes,
+                     reporter: Reporter): BridgeCodeContributions = {
 
     val portParams: ISZ[String] = ports.map((p: Port) => {
       val artPortType: String = if (p.urgency.nonEmpty) "UrgentPort" else "Port"
@@ -110,7 +108,7 @@ import org.sireum.message.Reporter
     return BridgeCodeContributions(bridge, entryPointContributions.resources)
   }
 
-  def addImports(imports: ISZ[ST]): Option[ST] = {
+  @pure def addImports(imports: ISZ[ST]): Option[ST] = {
     val s: Set[String] = Set.empty[String] ++ (imports.map((m: ST) => s"import ${m.render}"))
     return if (s.nonEmpty) Some(st"${(s.elements, "\n")}") else None()
   }

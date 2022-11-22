@@ -153,7 +153,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         F) // don't overwrite since user may add contents to this file
 
       val apiTouches = SeL4NixTemplate.apiTouches(names, ports)
-      val touchMethod = SeL4NixTemplate.genTouchMethod(NixGen.genTypeTouches(types, basePackage), apiTouches, ISZ())
+      val touchMethod = SeL4NixTemplate.genTouchMethod(NixGen.genTypeTouches(types), apiTouches, ISZ())
 
       val stApp = ArtNixTemplate.app(
         packageName = basePackage,

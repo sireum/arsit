@@ -4,17 +4,35 @@ package org.sireum.hamr.arsit.plugin
 import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.arsit.bts.BlessBehaviorProviderPlugin
-import org.sireum.hamr.arsit.templates.EntryPointTemplate
+import org.sireum.hamr.arsit.gcl.GumboDatatypeProviderPlugin
+import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
-import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.message.Reporter
 
 object ArsitPlugin {
 
-  val defaultPlugins: ISZ[Plugin] = ISZ(BlessBehaviorProviderPlugin(), SingletonBridgeCodeProviderPlugin(), SingletonEntryPointProviderPlugin())
+  val defaultPlugins: ISZ[Plugin] = ISZ(
+    BlessBehaviorProviderPlugin(),
+    SingletonBridgeCodeProviderPlugin(),
+    SingletonEntryPointProviderPlugin(),
+    GumboDatatypeProviderPlugin(),
+    DefaultDatatypeProvider())
+
+  @memoize def getDatatypeProviders(plugins: ISZ[Plugin]): ISZ[DatatypeProviderPlugin] = {
+    return plugins.filter((p : Plugin) => p.isInstanceOf[DatatypeProviderPlugin]).map((m: Plugin) => m.asInstanceOf[DatatypeProviderPlugin])
+  }
+
+  @pure def getDatatypeProvider(plugins: ISZ[Plugin],
+                                aadlType: AadlType,
+                                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): DatatypeProviderPlugin = {
+    return getDatatypeProviders(plugins).filter((p: DatatypeProviderPlugin) =>
+      p.canHandle(aadlType, resolvedAnnexSubclauses))(0)
+  }
+
 
   @memoize def getBridgeCodeProviders(plugins: ISZ[Plugin]): BridgeCodeProviderPlugin = {
     val ret = plugins.filter((p: Plugin) => p.isInstanceOf[BridgeCodeProviderPlugin]).map((p: Plugin) => p.asInstanceOf[BridgeCodeProviderPlugin])
@@ -102,10 +120,26 @@ object ArsitPlugin {
              reporter: Reporter): EntryPointContributions
 }
 
-@sig trait DatatypeProviderPlugin extends ArsitPlugin {
-  @pure def canHandle(): B
+@datatype class DatatypeContribution(val datatype: Resource,
+                                     val resources: ISZ[Resource])
 
-  def handle(): ISZ[Resource]
+@sig trait DatatypeProviderPlugin extends ArsitPlugin {
+  @pure def canHandle(aadlType: AadlType,
+                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+
+  def handle(aadlType: AadlType,
+
+             datatypeTemplate: IDatatypeTemplate,
+
+             suggestFilename: String,
+             dataDirectory: String,
+
+             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
+             symbolTable: SymbolTable,
+             aadlTypes: AadlTypes,
+
+             reporter: Reporter): DatatypeContribution
 }
 
 

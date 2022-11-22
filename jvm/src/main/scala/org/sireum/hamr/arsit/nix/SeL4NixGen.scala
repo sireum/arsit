@@ -68,7 +68,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
     var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
 
-    val typeTouches = NixGen.genTypeTouches(types, basePackage)
+    val typeTouches = NixGen.genTypeTouches(types)
 
     for (component <- components) {
 

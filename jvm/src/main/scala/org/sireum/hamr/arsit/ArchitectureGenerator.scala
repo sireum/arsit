@@ -4,13 +4,14 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
-import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.nix.NixGen
+import org.sireum.hamr.arsit.plugin.{ArsitPlugin, DefaultDatatypeProvider}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -19,11 +20,12 @@ import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
 
-@record class ArchitectureGenerator(directories: ProjectDirectories,
-                                    rootSystem: AadlSystem,
-                                    arsitOptions: ArsitOptions,
-                                    symbolTable: SymbolTable,
-                                    types: AadlTypes) {
+@record class ArchitectureGenerator(val directories: ProjectDirectories,
+                                    val rootSystem: AadlSystem,
+                                    val arsitOptions: ArsitOptions,
+                                    val symbolTable: SymbolTable,
+                                    val types: AadlTypes,
+                                    val plugins: ISZ[Plugin]) {
   var componentId: Z = 0
   var portId: Z = 0
 
@@ -38,8 +40,20 @@ import org.sireum.ops.ISZOps
 
   def generate(): PhaseResult = {
     if (!types.rawConnections) {
-      for (t <- types.typeMap.values) {
-        emitType(t)
+      // TODO allow for customizations of base types
+      for (aadlType <- types.typeMap.values if !aadlType.isInstanceOf[BaseType]) {
+        val defaultTemplate = DefaultDatatypeProvider.genDefaultTemplate(aadlType)
+
+        val aadlComponent = symbolTable.componentMap.get(ISZ(aadlType.name)).get
+        val resolvedAnnexSubclauses: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
+          case Some(annexInfos) => annexInfos
+          case _ => ISZ()
+        }
+
+        val dpProvider = ArsitPlugin.getDatatypeProvider(plugins, aadlType, resolvedAnnexSubclauses)
+        val dpContributions = dpProvider.handle(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
+          resolvedAnnexSubclauses, symbolTable, types, reporter)
+        resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
       }
     }
 
@@ -63,7 +77,7 @@ import org.sireum.ops.ISZOps
           if (arsitOptions.devicesAsThreads) symbolTable.getThreadOrDevices()
           else symbolTable.getThreads().map(m => m.asInstanceOf[AadlThreadOrDevice])
 
-        val typeTouches = NixGen.genTypeTouches(types, basePackage)
+        val typeTouches = NixGen.genTypeTouches(types)
         val apiTouches = NixGen.genApiTouches(types, basePackage, components)
         val scheduleTouches = SchedulerUtil.getSchedulerTouches(symbolTable, arsitOptions.devicesAsThreads)
         Some(SeL4NixTemplate.genTouchMethod(typeTouches, apiTouches, scheduleTouches))
@@ -217,81 +231,6 @@ import org.sireum.ops.ISZOps
     return ArchitectureTemplate.connection(
       s"${srcComponentId}.${srcComponentFeatureId}",
       s"${dstComponentId}.${dstComponentFeatureId}")
-  }
-
-
-  def emitType(t: AadlType): Unit = {
-    if (t.isInstanceOf[BaseType]) {
-      return
-    }
-
-    val typeNames: TypeNameProvider = TypeNameUtil.getTypeNameProvider(t, basePackage)
-
-    var canOverwrite: B = T
-
-    var imports: ISZ[ST] = ISZ()
-
-    val body: ST = t match {
-      case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
-
-      case e: RecordType =>
-        var fldInits: ISZ[String] = ISZ()
-        var flds: ISZ[ST] = ISZ()
-
-        for (f <- e.fields.entries) {
-          val fname = f._1
-          val fieldTypeNames = TypeNameUtil.getTypeNameProvider(f._2, basePackage)
-
-          fldInits = fldInits :+ fieldTypeNames.example()
-
-          flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
-        }
-
-        val contracts = GumboGen.processInvariants(e, symbolTable, types, basePackage)
-        imports = imports ++ GumboGen.imports
-
-        TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
-
-      case e: ArrayType =>
-        val baseTypeNames = TypeNameUtil.getTypeNameProvider(e.baseType, basePackage)
-        val baseTypeEmpty = baseTypeNames.example()
-
-        val dims = TypeUtil.getArrayDimensions(e)
-
-        val emptyInit: String = if (dims.nonEmpty) {
-          assert(dims.size == 1)
-          s"ISZ.create(${dims(0)}, ${baseTypeEmpty})"
-        } else {
-          s"ISZ(${baseTypeEmpty})"
-        }
-
-        val flds = ISZ(st"value : ISZ[${baseTypeNames.qualifiedReferencedTypeName}]")
-
-        val optChecks: ISZ[ST] = if (dims.nonEmpty) {
-          ISZ(st"//{  assert (value.size == ${dims(0)}) }")
-        } else {
-          ISZ()
-        }
-
-        TypeTemplate.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
-
-      case e: TODOType =>
-        reporter.warn(None(), Util.toolName, s"Don't know how to handle ${e}")
-        canOverwrite = F
-        TypeTemplate.typeSkeleton(typeNames)
-
-      case _ => halt(s"${t}")
-    }
-
-    val ts = TypeTemplate.typeS(
-      basePackage,
-      typeNames.qualifiedPackageName,
-      imports,
-      body,
-      TypeTemplate.payloadType(typeNames),
-      canOverwrite)
-
-    addResource(directories.dataDir, ISZ(typeNames.filePath), ts, canOverwrite)
   }
 
   def allowConnection(c: ConnectionInstance, srcComponent: ir.Component): B = {
