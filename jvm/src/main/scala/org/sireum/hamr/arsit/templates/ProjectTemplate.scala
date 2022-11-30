@@ -265,7 +265,7 @@ object ProjectTemplate {
           |  organization := "org.sireum",
           |  incOptions := incOptions.value.withLogRecompileOnMacro(false),
           |  scalaVersion := scalaVer,
-          |  scalacOptions := Seq("-target:jvm-1.8", "-deprecation",
+          |  scalacOptions := Seq("-release:8", "-deprecation",
           |    "-Ydelambdafy:method", "-feature", "-unchecked", "-Xfatal-warnings"),
           |  Test / parallelExecution := true,
           |  resolvers ++= Resolver.sonatypeOssRepos("public") ++ Seq("jitpack" at "https://jitpack.io"),
@@ -364,7 +364,6 @@ object ProjectTemplate {
     val ret: ST =
       st"""import mill._
           |import scalalib._
-          |import ammonite.ops._
           |
           |// Example mill build -- the contents of this file will not be overwritten.
           |//
@@ -406,7 +405,7 @@ object ProjectTemplate {
           |  override def javacOptions = T { Seq("-source", "1.8", "-target", "1.8", "-encoding", "utf8") }
           |
           |  override def scalacOptions = T { Seq(
-          |    "-target:jvm-1.8",
+          |    "-release:8",
           |    "-deprecation",
           |    "-Yrangepos",
           |    "-Ydelambdafy:method",
@@ -486,7 +485,7 @@ object ProjectTemplate {
           |      Repositories.sonatype("releases"),
           |      Repositories.jitpack
           |    ).run()
-          |    val pathRefs = files.map(f => PathRef(Path(f)))
+          |    val pathRefs = files.map(f => PathRef(os.Path(f)))
           |    Agg(pathRefs : _*)
           |  }
           |}
