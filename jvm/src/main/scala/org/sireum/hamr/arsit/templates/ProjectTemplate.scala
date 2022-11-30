@@ -211,7 +211,7 @@ object ProjectTemplate {
       (Some(
         st"""// https://github.com/sireum/slang-embedded-art/tree/${artVersion}
             |val artVersion = "${artVersion}""""),
-        Some(st""""org.sireum.slang-embedded-art" %% "slang-embedded-art" % artVersion withSources() withJavadoc(),"""),
+        Some(st""""org.sireum.slang-embedded-art" %% "slang-embedded-art" % artVersion withSources(),"""),
         None())
     } else {
       (None(), None(), Some(st"""Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/art","""))
