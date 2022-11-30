@@ -64,26 +64,6 @@ def update(key: String, currentVersion: String): B = {
   }
 }
 
-def jitpack(): Unit = {
-  val library = s"org.sireum.kekinian::library:$kekinianVersion"
-  val art = s"org.sireum.slang-embedded-art::slang-embedded-art:$artVersion"
-
-  val scalaVer = versions.get("org.scala-lang%scala-library%").get
-  val sc = Os.tempFix("", ".sc")
-  sc.writeOver(
-    st"""import org.sireum._
-        |Coursier.setScalaVersion("$scalaVer")
-        |for (cif <- Coursier.fetch(ISZ(s"$library", s"$art"))) {
-        |  println(cif.path)
-        |}""".render
-  )
-  sc.removeOnExit()
-  println("Jitpacking ...")
-  proc"$sireum slang run $sc".console.runCheck()
-}
-
-jitpack()
-
 var updated = update("art.version", artVersion)
 updated |= update("org.sireum.kekinian.version", kekinianVersion)
 updated |= update("org.sireum.version.scala", scalaVersion)

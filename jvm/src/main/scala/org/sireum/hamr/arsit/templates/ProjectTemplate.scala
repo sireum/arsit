@@ -268,11 +268,11 @@ object ProjectTemplate {
           |  scalacOptions := Seq("-target:jvm-1.8", "-deprecation",
           |    "-Ydelambdafy:method", "-feature", "-unchecked", "-Xfatal-warnings"),
           |  Test / parallelExecution := true,
-          |  resolvers ++= Seq(Resolver.sonatypeRepo("public"), "jitpack" at "https://jitpack.io"),
+          |  resolvers ++= Resolver.sonatypeOssRepos("public") ++ Seq("jitpack" at "https://jitpack.io"),
           |  addCompilerPlugin("org.sireum" %% "scalac-plugin" % sireumScalacVersion),
           |  libraryDependencies ++= Seq(
           |    ${artJitpack}
-          |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources() withJavadoc()
+          |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources()
           |  )
           |)
           |
