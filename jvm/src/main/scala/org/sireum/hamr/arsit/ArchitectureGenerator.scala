@@ -217,12 +217,10 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       return
     }
 
-    val typeNames = TypeNameUtil.getTypeNameProvider(t, basePackage)
-
     var canOverwrite: B = T
 
     val body: ST = t match {
-      case e: EnumType => TypeTemplate.enumType(typeNames, e.values)
+      case e: EnumType => TypeTemplate.enumType(e.nameProvider, e.values)
 
       case e: RecordType =>
         var fldInits: ISZ[String] = ISZ()
@@ -230,22 +228,21 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
         for (f <- e.fields.entries) {
           val fname = f._1
-          val fieldTypeNames = TypeNameUtil.getTypeNameProvider(f._2, basePackage)
 
-          fldInits = fldInits :+ fieldTypeNames.example()
+          fldInits = fldInits :+ f._2.nameProvider.example()
 
-          flds = flds :+ st"${fname} : ${fieldTypeNames.qualifiedReferencedSergenTypeName}"
+          flds = flds :+ st"${fname} : ${f._2.nameProvider.qualifiedReferencedSergenTypeName}"
         }
 
         val contracts = GumboGen.processInvariants(e, symbolTable, types, basePackage)
 
-        TypeTemplate.dataType(typeNames, flds, fldInits, contracts)
+        TypeTemplate.dataType(e.nameProvider, flds, fldInits, contracts)
 
       case e: ArrayType =>
-        val baseTypeNames = TypeNameUtil.getTypeNameProvider(e.baseType, basePackage)
+        val baseTypeNames = e.baseType.nameProvider
         val baseTypeEmpty = baseTypeNames.example()
 
-        val dims = TypeUtil.getArrayDimensions(e)
+        val dims = e.dimensions
 
         val emptyInit: String = if (dims.nonEmpty) {
           assert(dims.size == 1)
@@ -262,24 +259,24 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
           ISZ()
         }
 
-        TypeTemplate.dataType(typeNames, flds, ISZ(emptyInit), optChecks)
+        TypeTemplate.dataType(e.nameProvider, flds, ISZ(emptyInit), optChecks)
 
       case e: TODOType =>
         reporter.warn(None(), Util.toolName, s"Don't know how to handle ${e}")
         canOverwrite = F
-        TypeTemplate.typeSkeleton(typeNames)
+        TypeTemplate.typeSkeleton(e.nameProvider)
 
       case _ => halt(s"${t}")
     }
 
     val ts = TypeTemplate.typeS(
       basePackage,
-      typeNames.qualifiedPackageName,
+      t.nameProvider.qualifiedPackageName,
       body,
-      TypeTemplate.payloadType(typeNames),
+      TypeTemplate.payloadType(t.nameProvider),
       canOverwrite)
 
-    addResource(directories.dataModuleMainDir, ISZ(typeNames.filePath), ts, canOverwrite)
+    addResource(directories.dataModuleMainDir, ISZ(t.nameProvider.filePath), ts, canOverwrite)
   }
 
   def allowConnection(c: ConnectionInstance, srcComponent: ir.Component): B = {

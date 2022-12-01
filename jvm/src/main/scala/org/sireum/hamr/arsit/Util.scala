@@ -133,14 +133,7 @@ object Util {
               basePackage: String,
               isTrigger: B,
               counter: Z): Port = {
-
-    val candidate = getFeatureEndType(feature, types)
-    val pType: AadlType = if (types.rawConnections && CommonUtil.isDataPort(feature)) {
-      BitType(TypeUtil.SlangEmbeddedBitTypeName, candidate.container, None(), Some(candidate))
-    } else {
-      candidate
-    }
-
+    val pType: AadlType = getFeatureEndType(feature, types)
     return Port(aadlFeature, feature, parent, pType, basePackage, isTrigger, counter)
   }
 
@@ -250,7 +243,7 @@ object HAMR {
   }
 
   def getPortTypeNames: TypeNameProvider = {
-    return TypeNameUtil.getTypeNameProvider(_portType, basePackageName)
+    return _portType.nameProvider
   }
 
   def urgency: Option[Z] = {
