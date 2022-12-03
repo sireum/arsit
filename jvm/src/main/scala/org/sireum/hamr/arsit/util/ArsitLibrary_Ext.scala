@@ -40,7 +40,7 @@ object ArsitLibrary_Ext {
   }
 
   def getBuildSbtProperties(): java.util.Properties = {
-    val str = Map(getFiles).get("buildSbt.properties").get
+    val str = Map(getFiles).get("codegen.versions").get
     val p = new java.util.Properties()
     p.load(new StringReader(str.native))
     return p
