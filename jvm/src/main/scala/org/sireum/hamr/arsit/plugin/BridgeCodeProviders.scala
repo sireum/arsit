@@ -51,6 +51,10 @@ import org.sireum.message.Reporter
       st"${nameProvider.packageName}.{${nameProvider.componentSingletonType} => component}"
     )
 
+    val portOpt: Option[ST] = if (ports.isEmpty) None()
+    else Some(st"""
+                  |${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},""")
+
     val bridge: ST =
       st"""// #Sireum
           |
@@ -89,8 +93,7 @@ import org.sireum.message.Reporter
           |  val entryPoints : Bridge.EntryPoints =
           |    ${nameProvider.bridge}.EntryPoints(
           |      id,
-          |
-          |      ${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},
+          |      $portOpt
           |
           |      dispatchTriggers,
           |
