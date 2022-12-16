@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.{DatatypeTemplate, EnumTemplate, IDatatypeTemplate}
+import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.IResource
 import org.sireum.hamr.codegen.common.symbols.{AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
@@ -38,6 +39,11 @@ object DefaultDatatypeProvider {
                    aadlTypes: AadlTypes,
                    reporter: Reporter): DatatypeContribution = {
 
+    aadlType match {
+      case at: ArrayType if at.dimensions.size > 1 =>
+        reporter.error(None(), CommonUtil.toolName, s"Codegen currently only supports single dimension arrays, but ${aadlType.name} specifies a ${at.dimensions.size} dimensional array" )
+      case _ =>
+    }
     return DatatypeContribution(
       datatype = IResource(
         dstPath = s"$dataDirectory/$suggestFilename", // TODO: need fileSep
