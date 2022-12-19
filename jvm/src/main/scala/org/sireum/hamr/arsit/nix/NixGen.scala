@@ -774,6 +774,36 @@ object NixGen {
           |}"""
     return (finaliseMethodSig, ret, adapterMethod)
   }
+
+  def genBitArraySequenceSizes(maxISZSize: Z): ISZ[String] = {
+    if (types.rawConnections) {
+      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
+        case Some(z) => z
+        case _ =>
+          // model must only contain event ports (i.e. no data ports)
+          1
+      }
+      return ISZ(s"IS[Z,B]=${maxBitSize}")
+    } else {
+      var ret: ISZ[String] = ISZ()
+      var maxSeqSizes: Map[String, Z] = Map.empty[String, Z] + "IS[Z,Z]" ~> maxISZSize
+      for (t <- types.typeMap.values) {
+        t match {
+          case at: ArrayType if at.dimensions.nonEmpty =>
+            assert(at.dimensions.size == 1, "Codegen currently only supports single dimension arrays")
+            val key = s"IS[Z,${at.baseType.nameProvider.qualifiedReferencedSergenTypeName}]"
+            if (!maxSeqSizes.contains(key) || maxSeqSizes.get(key).get < at.dimensions(0)) {
+              maxSeqSizes = maxSeqSizes + key ~> at.dimensions(0)
+            }
+          case _ =>
+        }
+      }
+      for(e <- maxSeqSizes.entries if e._2 != maxISZSize) {
+        ret = ret :+ s"${e._1}=${e._2}"
+      }
+      return ret
+    }
+  }
 }
 
 object NixGenDispatch {

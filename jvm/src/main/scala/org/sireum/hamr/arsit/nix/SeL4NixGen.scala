@@ -460,7 +460,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
 
-    var customSequenceSizes: ISZ[String] = ISZ(
+    val customSequenceSizes = ISZ[String](
       //s"IS[Z,art.Bridge]=1", // no bridges
       s"MS[Z,Option[art.Bridge]]=1",
       s"IS[Z,art.UPort]=${numComponentPorts}"
@@ -468,17 +468,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    )
-
-    if (types.rawConnections) {
-      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
-        case Some(z) => z
-        case _ =>
-          // model must only contain event ports (i.e. no data ports)
-          1
-      }
-      customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${maxBitSize}"
-    }
+    ) ++ genBitArraySequenceSizes(numComponentPorts)
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=1",

@@ -13,7 +13,7 @@ import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.TemplateUtil
-import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
@@ -295,7 +295,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
 
-    var customSequenceSizes: ISZ[String] = ISZ(
+    val customSequenceSizes = ISZ[String](
       s"IS[Z,art.Bridge]=${numComponents}",
       s"MS[Z,Option[art.Bridge]]=${numComponents}",
       s"IS[Z,art.UPort]=${maxPortsForComponents}",
@@ -303,17 +303,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    )
-
-    if (types.rawConnections) {
-      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
-        case Some(z) => z
-        case _ =>
-          // model must only contain event ports (i.e. no data ports)
-          1
-      }
-      customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=${maxBitSize}"
-    }
+    ) ++ genBitArraySequenceSizes(maxArraySize)
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=${numComponents}",

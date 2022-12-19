@@ -120,9 +120,9 @@ import org.sireum.hamr.codegen.common.types._
   @strictpure def params: ISZ[ST] =
     typ match {
       case at: ArrayType =>
-        ISZ(st"val value: ISZ[${at.baseType.nameProvider.qualifiedReferencedSergenTypeName}]")
+        ISZ(st"val value: ISZ[${at.baseType.nameProvider.referencedSergenTypeName}]")
       case rt: RecordType =>
-        for (f <- rt.fields.entries) yield st"val ${f._1}: ${f._2.nameProvider.qualifiedReferencedSergenTypeName}"
+        for (f <- rt.fields.entries) yield st"val ${f._1}: ${f._2.nameProvider.referencedSergenTypeName}"
       case _ => ISZ()
     }
 
