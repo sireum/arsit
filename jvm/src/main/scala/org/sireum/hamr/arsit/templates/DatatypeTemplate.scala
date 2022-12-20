@@ -113,32 +113,65 @@ import org.sireum.hamr.codegen.common.types._
   }
 }
 
-
 @datatype class DatatypeTemplate(val typ: AadlType,
                                  val willBeOverwritten: B) extends IDatatypeTemplate {
 
   @strictpure def params: ISZ[ST] =
     typ match {
       case at: ArrayType =>
-        ISZ(st"val value: ISZ[${at.baseType.nameProvider.referencedSergenTypeName}]")
+        if (at.dimensions.size == 1)
+          ISZ(st"val value: IS[${at.nameProvider.referencedTypeName}.I, ${at.baseType.nameProvider.referencedSergenTypeName}]")
+        else
+          ISZ(st"val value: ISZ[${at.baseType.nameProvider.referencedSergenTypeName}]")
       case rt: RecordType =>
         for (f <- rt.fields.entries) yield st"val ${f._1}: ${f._2.nameProvider.referencedSergenTypeName}"
       case _ => ISZ()
     }
 
-  @pure def exampleDatatype: ST = {
+  @pure def defaultDatatypeCompanionBlocks: ISZ[ST] = {
+    var ret : ISZ[ST] = ISZ()
+
     val args: ISZ[ST] = typ match {
       case at: ArrayType =>
-        if (at.dimensions.size == 1) // FIXME: need multi-dim array examples
-          ISZ(st"value = ISZ.create(${at.dimensions(0)}, ${at.baseType.nameProvider.example()})")
-        else
+        val baseType = at.baseType.nameProvider.qualifiedReferencedTypeName
+        if (at.dimensions.size == 1) {
+
+          val min = 0 // perhaps TODO, allow for negative indexing
+          val max = at.dimensions(0) - 1
+
+          ret = ret :+ st"val min_I: Z = $min"
+          ret = ret :+ st"val max_I: Z = $max"
+
+          ret = ret :+ st"""// Import I's interpolator to create instances of I.  For e.g.,
+                            |//   import ${at.nameProvider.qualifiedReferencedTypeName}.I._
+                            |//   object Example {
+                            |//     val value: ${at.nameProvider.qualifiedReferencedTypeName}.I = i"0"
+                            |//     ...
+                            |
+                            |@range(min = 0, max = $max, index = T) class I"""
+
+          ret = ret :+ st"""// Import and rename the following when using multiple <array-def>.I indexing types in the same context.  For e.g.
+                           |//   import ${at.nameProvider.qualifiedReferencedTypeName}.{i => i0}
+                           |//   import <other-array-def>.{i => i1}
+                           |//   object Example {
+                           |//     val value: ${at.nameProvider.qualifiedReferencedTypeName}.I = i0(0)
+                           |//     ...
+                           |
+                           |@pure def i(value: Z): I = {
+                           |  Contract(Requires( 0 <= value && value <= $max))
+                           |  return I(value.string).get
+                           |}"""
+
+          ISZ(st"value = IS.create[I, $baseType](${at.dimensions(0)}, ${at.baseType.nameProvider.example()})")
+        } else {
           ISZ(st"value = ISZ(${at.baseType.nameProvider.example()})")
+        }
       case rt: RecordType =>
         for (f <- rt.fields.entries) yield st"${f._1} = ${f._2.nameProvider.example()}"
       case _ => ISZ()
     }
 
-    return (
+    ret = ret :+ (
       if (args.isEmpty)
         st"""def example(): ${typ.nameProvider.qualifiedReferencedTypeName} = {
             |  return ${typ.nameProvider.qualifiedTypeName}()
@@ -148,15 +181,11 @@ import org.sireum.hamr.codegen.common.types._
             |  return ${typ.nameProvider.qualifiedTypeName}(
             |    ${(args, ",\n")})
             |}""")
+
+    return ret
   }
 
-  @pure def defaultDatatypeBlocks: ISZ[ST] = {
-    typ match {
-      case at: ArrayType if at.dimensions.size == 1 =>
-        return ISZ(st"""@spec def correctSize = Invariant(value.size == ${at.dimensions(0)})""")
-      case _ => return ISZ()
-    }
-  }
+  @strictpure def defaultDatatypeBlocks: ISZ[ST] = ISZ()
 
   @pure def generateCustom(custSlangSwitches: ISZ[String],
                            custImports: ISZ[String],
@@ -170,7 +199,7 @@ import org.sireum.hamr.codegen.common.types._
     return generate(
       slangSwitches = choose(custSlangSwitches, ISZ(st"#Sireum")),
       imports = choose(custImports, ISZ()),
-      datatypeCompanionBlocks = choose(custDatatypeCompanionBlocks, ISZ(exampleDatatype)),
+      datatypeCompanionBlocks = choose(custDatatypeCompanionBlocks, defaultDatatypeCompanionBlocks),
       params = choose(custParams, params),
       datatypeBlocks = choose(custDatatypeBlocks, defaultDatatypeBlocks),
       payloadSingletonBlocks = choose(custPayloadSingletonBlocks, ISZ(examplePayload)),
@@ -182,7 +211,7 @@ import org.sireum.hamr.codegen.common.types._
     return generate(
       slangSwitches = ISZ(st"#Sireum"),
       imports = ISZ(),
-      datatypeCompanionBlocks = ISZ(exampleDatatype),
+      datatypeCompanionBlocks = defaultDatatypeCompanionBlocks,
       params = params,
       datatypeBlocks = defaultDatatypeBlocks,
       payloadSingletonBlocks = ISZ(examplePayload),
