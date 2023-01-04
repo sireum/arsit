@@ -139,9 +139,6 @@ import org.sireum.hamr.codegen.common.types._
           val min = 0 // perhaps TODO, allow for negative indexing
           val max = at.dimensions(0) - 1
 
-          ret = ret :+ st"val min_I: Z = $min"
-          ret = ret :+ st"val max_I: Z = $max"
-
           ret = ret :+ st"""// Import I's interpolator to create instances of I.  For e.g.,
                             |//   import ${at.nameProvider.qualifiedReferencedTypeName}.I._
                             |//   object Example {
@@ -158,7 +155,7 @@ import org.sireum.hamr.codegen.common.types._
                            |//     ...
                            |
                            |@pure def i(value: Z): I = {
-                           |  Contract(Requires( 0 <= value && value <= $max))
+                           |  Contract(Requires(0 <= value && value <= $max))
                            |  return I(value.string).get
                            |}"""
 
