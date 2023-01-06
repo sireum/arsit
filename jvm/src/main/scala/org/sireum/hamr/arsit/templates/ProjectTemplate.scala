@@ -270,6 +270,7 @@ object ProjectTemplate {
           |  Test / parallelExecution := true,
           |  resolvers ++= Resolver.sonatypeOssRepos("public") ++ Seq("jitpack" at "https://jitpack.io"),
           |  addCompilerPlugin("org.sireum" %% "scalac-plugin" % sireumScalacVersion),
+          |  ThisBuild / evictionErrorLevel := Level.Warn,
           |  libraryDependencies ++= Seq(
           |    ${artJitpack}
           |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources()
