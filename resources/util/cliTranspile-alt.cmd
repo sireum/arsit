@@ -116,7 +116,7 @@ import Cli._
       case Some(sargs) =>
         var r = ISZ[Z]()
         for (arg <- sargs) {
-          parseNumH(arg, minOpt, maxOpt) match {
+          parseNumH(F, arg, minOpt, maxOpt)._2 match {
             case Some(n) => r = r :+ n
             case _ => return None()
           }
@@ -184,17 +184,27 @@ import Cli._
       eprintln(s"Expecting an integer, but none found.")
       return None()
     }
-    return parseNumH(args(i), minOpt, maxOpt)
+    return parseNumH(F, args(i), minOpt, maxOpt)._2
   }
 
-  def parseNumH(arg: String, minOpt: Option[Z], maxOpt: Option[Z]): Option[Z] = {
+  def parseNumFlag(args: ISZ[String], i: Z, minOpt: Option[Z], maxOpt: Option[Z]): Option[Option[Z]] = {
+    if (i >= args.size) {
+      return Some(None())
+    }
+    parseNumH(T, args(i), minOpt, maxOpt) match {
+      case (T, vOpt) => return Some(vOpt)
+      case _ => return None()
+    }
+  }
+
+  def parseNumH(optArg: B, arg: String, minOpt: Option[Z], maxOpt: Option[Z]): (B, Option[Z]) = {
     Z(arg) match {
       case Some(n) =>
         minOpt match {
           case Some(min) =>
             if (n < min) {
               eprintln(s"Expecting an integer at least $min, but found $n.")
-              return None()
+              return (F, None())
             }
           case _ =>
         }
@@ -202,15 +212,18 @@ import Cli._
           case Some(max) =>
             if (n > max) {
               eprintln(s"Expecting an integer at most $max, but found $n.")
-              return None()
+              return (F, None())
             }
-            return Some(n)
           case _ =>
         }
-        return Some(n)
+        return (T, Some(n))
       case _ =>
-        eprintln(s"Expecting an integer, but found '$arg'.")
-        return None()
+        if (!optArg) {
+          eprintln(s"Expecting an integer, but found '$arg'.")
+          return (F, None())
+        } else {
+          return (T, None())
+       }
     }
   }
 

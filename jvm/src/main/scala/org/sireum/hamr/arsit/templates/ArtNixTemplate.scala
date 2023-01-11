@@ -696,7 +696,9 @@ object ArtNixTemplate {
           |    if(o.noPrint) { cmake = cmake :+ "-D" :+ "NO_PRINT=ON" }
           |    if(o.rangeCheck) { cmake = cmake :+ "-D" :+ "RANGE_CHECK=ON" }
           |    if(o.withLoc) { cmake = cmake :+ "-D" :+ "WITH_LOC=ON" }
-          |    cmake = (cmake :+ "-D" :+ "CMAKE_BUILD_TYPE=Release") :+ ".."
+          |    cmake = (cmake :+ "-D" :+ s"CMAKE_BUILD_TYPE=$${o.build}") :+ ".."
+          |
+          |    if(o.verbose) { println(st"$${(cmake, " ")}".render) }
           |
           |    Os.proc(cmake).at(nixDir).console.runCheck()
           |

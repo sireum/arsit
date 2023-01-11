@@ -20,7 +20,12 @@ val compileTool: Tool = Tool(
     Opt(name = "withLoc", longKey = "with-loc", shortKey = Some('l'),
       tpe = Type.Flag(F), description = "Build the program with Slang location info"),
     Opt(name = "jobs", longKey = "jobs", shortKey = Some('j'),
-      tpe = Type.Num(None(), 4, Some(1), None()), description = "Number of make jobs to run in parallel")
+      tpe = Type.Num(None(), 4, Some(1), None()), description = "Number of make jobs to run in parallel"),
+    Opt(name = "build", longKey = "build-type", shortKey = Some('t'),
+      tpe = Type.Choice(name = "choice", sep = None(), elements = ISZ("release", "debug")),
+      description = "Build type"),
+    Opt(name = "verbose", longKey = "verbose", shortKey = Some('v'),
+      tpe = Type.Flag(F), description = "Echo cmake command")
   ),
   groups = ISZ()
 )
