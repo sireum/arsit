@@ -775,7 +775,7 @@ object NixGen {
     return (finaliseMethodSig, ret, adapterMethod)
   }
 
-  def genBitArraySequenceSizes(maxISZSize: Z): ISZ[String] = {
+  def genBitArraySequenceSizes(): ISZ[String] = {
     if (types.rawConnections) {
       val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
         case Some(z) => z

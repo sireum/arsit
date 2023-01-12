@@ -179,6 +179,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       val trans = genTranspiler(
         basePackage = basePackage,
         names = names,
+        maxArraySize = arsitOptions.maxArraySize,
         maxStackSizeInBytes = stackSizeInBytes,
         numComponentInPorts = ports.filter(p => CommonUtil.isInPort(p.feature)).size,
         numComponentOutPorts = ports.filter(p => CommonUtil.isOutPort(p.feature)).size,
@@ -234,14 +235,14 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       // prefix with '+' to indicate settings should come after library definitions
       val plusSettingsFilename = s"+${settingsFilename}"
 
-      val trans = genTranspilerBase(
+      val transForSlangTypeLibrary = genTranspilerBase(
         basePackage = basePackage,
         instanceName = id,
         identifier = id,
         sourcePaths = ISZ(),
         cOutputDir = cOutputDir,
 
-        maxSequenceSize = 1,
+        maxArraySize = 1,
 
         customSequenceSizes = customSequenceSizes,
         customConstants = ISZ(),
@@ -252,7 +253,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
         cmakeIncludes = ISZ(plusSettingsFilename))
 
-      transpilerScripts = transpilerScripts + (id ~> trans)
+      transpilerScripts = transpilerScripts + (id ~> transForSlangTypeLibrary)
 
     } // end slang type library
 
@@ -386,7 +387,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
                         sourcePaths: ISZ[String],
                         cOutputDir: Os.Path,
 
-                        maxSequenceSize: Z,
+                        maxArraySize: Z,
 
                         customSequenceSizes: ISZ[String],
                         customConstants: ISZ[String],
@@ -420,7 +421,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       apps = apps,
       forwards = forwards,
       numBits = arsitOptions.bitWidth,
-      maxSequenceSize = maxSequenceSize,
+      maxArraySize = maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
       customArraySizes = customSequenceSizes,
       customConstants = customConstants,
@@ -434,6 +435,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
   def genTranspiler(basePackage: String,
                     names: NameProvider,
+                    maxArraySize: Z,
                     maxStackSizeInBytes: Z,
                     numComponentInPorts: Z,
                     numComponentOutPorts: Z,
@@ -459,26 +461,23 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     }
 
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
+    val minISZSize: Z = if(numComponentPorts > 1) numComponentPorts else 1
 
     val customSequenceSizes = ISZ[String](
       //s"IS[Z,art.Bridge]=1", // no bridges
-      s"MS[Z,Option[art.Bridge]]=1",
-      s"IS[Z,art.UPort]=${numComponentPorts}"
+      "MS[Z,Option[art.Bridge]]=1",
+      s"IS[Z,art.UPort]=${numComponentPorts}",
+      s"IS[Z,Z]=$minISZSize"
       //s"IS[Z,art.UConnection]=1" // no connections
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    ) ++ genBitArraySequenceSizes(numComponentPorts)
+    ) ++ genBitArraySequenceSizes()
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=1",
       s"art.Art.maxPorts=${numComponentPorts}"
     )
-
-    // NOTE: the bridge entrypoints port sequences are dependent on the max
-    // number of incoming and outgoing ports, so for now overestimate and just
-    // use the total number of ports, or max array size if not cooked connections
-    val maxSequenceSize: Z = getMaxSequenceSize(numComponentPorts, types)
 
     return genTranspilerBase(
       basePackage = basePackage,
@@ -487,7 +486,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       sourcePaths = sourcePaths,
       cOutputDir = cOutputDir,
 
-      maxSequenceSize = maxSequenceSize,
+      maxArraySize = maxArraySize,
 
       customSequenceSizes = customSequenceSizes,
       customConstants = customConstants,
@@ -552,15 +551,5 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     extensionFiles = (extensionFiles :+ headerFile) :+ implFile
 
     return extensionFiles
-  }
-
-  def getMaxSequenceSize(numPorts: Z, types: AadlTypes): Z = {
-
-    val aadlArraySize: Z =
-      if (!types.rawConnections)
-        TypeUtil.findMaxAadlArraySize(types)
-      else 0
-
-    return CommonUtil.findMaxZ(ISZ(numPorts, aadlArraySize, arsitOptions.maxArraySize))
   }
 }

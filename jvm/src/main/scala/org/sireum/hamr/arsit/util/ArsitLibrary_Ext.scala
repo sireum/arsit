@@ -82,4 +82,4 @@ object ArsitLibrary_Ext {
     return getBuildSbtProperties().getProperty("org.sireum.inspector.version")
   }
 
-}
+} 

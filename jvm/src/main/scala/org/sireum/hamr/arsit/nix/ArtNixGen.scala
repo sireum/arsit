@@ -288,10 +288,6 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     val buildApps: B = T
 
-    val arraySizeInfluencers = ISZ(arsitOptions.maxArraySize, portId, previousPhase.maxComponent)
-
-    val maxArraySize: Z = CommonUtil.findMaxZ(arraySizeInfluencers)
-
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
 
@@ -299,11 +295,12 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       s"IS[Z,art.Bridge]=${numComponents}",
       s"MS[Z,Option[art.Bridge]]=${numComponents}",
       s"IS[Z,art.UPort]=${maxPortsForComponents}",
-      s"IS[Z,art.UConnection]=${numConnections}"
+      s"IS[Z,art.UConnection]=${numConnections}",
+      s"IS[Z,Z]=$$${TranspilerTemplate.minISZSize}"
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    ) ++ genBitArraySequenceSizes(maxArraySize)
+    ) ++ genBitArraySequenceSizes()
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=${numComponents}",
@@ -321,7 +318,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       apps = (appNames :+ "LegacyDemo").map(s => s"${basePackage}.${s}"),
       forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
       numBits = arsitOptions.bitWidth,
-      maxSequenceSize = maxArraySize,
+      maxArraySize = arsitOptions.maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
       customArraySizes = customSequenceSizes,
       customConstants = customConstants,
@@ -348,7 +345,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       apps = ISZ(s"${basePackage}.Demo"),
       forwards = ISZ(s"art.ArtNative=art.ArtNativeSlang"),
       numBits = arsitOptions.bitWidth,
-      maxSequenceSize = maxArraySize,
+      maxArraySize = arsitOptions.maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
       customArraySizes = customSequenceSizes,
       customConstants = customConstants,
@@ -361,7 +358,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1)
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1,
+      Some((numPorts, numComponents)))
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
   }
 

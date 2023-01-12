@@ -20,7 +20,7 @@ object TranspilerTemplate {
                        apps: ISZ[String],
                        forwards: ISZ[String],
                        numBits: Z,
-                       maxSequenceSize: Z,
+                       maxArraySize: Z,
                        maxStringSize: Z,
                        customArraySizes: ISZ[String],
                        customConstants: ISZ[String],
@@ -49,7 +49,7 @@ object TranspilerTemplate {
         fingerprint = TypeUtil.FINGERPRINT_WIDTH, // default set in org.sireum.transpilers.cli.cTranspiler
         bitWidth = numBits,
         maxStringSize = maxStringSize,
-        maxArraySize = maxSequenceSize,
+        maxArraySize = maxArraySize,
         customArraySizes = customArraySizes,
         customConstants = customConstants,
         plugins = ISZ(),
@@ -144,16 +144,18 @@ object TranspilerTemplate {
     return slashRet
   }
 
+  val minISZSize: String = "minISZSize"
+
   def transpilerSel4Preamble(entries: ISZ[(String, ST)]): ST = {
 
     val ret: ST =
-      st"""::#! 2> /dev/null                                   #
-          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
-          |if [ -z $${SIREUM_HOME} ]; then                      #
-          |  echo "Please set SIREUM_HOME env var"             #
-          |  exit -1                                           #
-          |fi                                                  #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+      st"""::/*#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
+          |if [ -z $${SIREUM_HOME} ]; then                       #
+          |  echo "Please set SIREUM_HOME env var"               #
+          |  exit -1                                             #
+          |fi                                                    #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@" #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
@@ -162,7 +164,7 @@ object TranspilerTemplate {
           |)
           |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
           |exit /B %errorlevel%
-          |::!#
+          |::!#*/
           |// #Sireum
           |
           |import org.sireum._
@@ -171,6 +173,9 @@ object TranspilerTemplate {
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
+          |
+          |// ART stores bridge and port ids using ISZ[Z] so the sequence size of IS[Z,Z] for each isolated
+          |// bridge below must at least be art.Art.maxComponents or art.Art.maxPorts, whichever is greatest
           |
           |${(entries.map((m: (String, ST)) => m._2), "\n\n")}
           |
@@ -192,15 +197,26 @@ object TranspilerTemplate {
     return ret
   }
 
-  def transpilerSlashScriptPreamble(legacy: ST, demo: ST): ST = {
+  def transpilerSlashScriptPreamble(legacy: ST, demo: ST, portsBridges: Option[(Z, Z)]): ST = {
+    val minISZSizeOpt: Option[ST] = portsBridges match {
+      case Some((ports, bridges)) =>
+        val min: Z = if (ports > bridges) ports else bridges
+        Some(
+          st"""
+              |// ART stores bridge and port ids using ISZ[Z].  This project has $ports ports and $bridges bridges
+              |// so the sequence size of IS[Z,Z] must be at least $min
+              |val ${minISZSize}: Z = $min""")
+      case _ => None()
+    }
+
     val ret: ST =
-      st"""::#! 2> /dev/null                                   #
-          |@ 2>/dev/null # 2>nul & echo off & goto BOF         #
-          |if [ -z $${SIREUM_HOME} ]; then                      #
-          |  echo "Please set SIREUM_HOME env var"             #
-          |  exit -1                                           #
-          |fi                                                  #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"  #
+      st"""::/*#! 2> /dev/null                                   #
+          |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
+          |if [ -z $${SIREUM_HOME} ]; then                       #
+          |  echo "Please set SIREUM_HOME env var"               #
+          |  exit -1                                             #
+          |fi                                                    #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@" #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
@@ -209,7 +225,7 @@ object TranspilerTemplate {
           |)
           |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
           |exit /B %errorlevel%
-          |::!#
+          |::!#*/
           |// #Sireum
           |
           |import org.sireum._
@@ -218,6 +234,7 @@ object TranspilerTemplate {
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
+          |$minISZSizeOpt
           |
           |var project: ISZ[String] = Cli(Os.pathSepChar).parseTranspile(Os.cliArgs, 0) match {
           |  case Some(o: Cli.TranspileOption) =>
