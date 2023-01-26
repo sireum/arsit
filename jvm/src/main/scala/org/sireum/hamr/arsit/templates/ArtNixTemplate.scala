@@ -51,13 +51,13 @@ object ArtNixTemplate {
 
   @pure def platformPortDecl(portName: String,
                              portId: Z): ST = {
-    return st"""val $portName: Art.PortId = $portId"""
+    return st"""val $portName: Art.PortId = Art.zToPortId($portId)"""
   }
 
   @pure def artNixCases(srcArchPortId: String,
                         cases: ISZ[ST]): ST = {
     val ret: ST =
-      st"""r(Arch.$srcArchPortId.id) = ISZ(
+      st"""r(Arch.$srcArchPortId.id) = IS(
           |  ${(cases, ",\n")}
           |)"""
     return ret
@@ -180,6 +180,7 @@ object ArtNixTemplate {
           |
           |import org.sireum._
           |import art._
+          |import art.Art.PortId._
           |import art.scheduling.nop.NopScheduler
           |
           |${StringTemplate.doNotEditComment(None())}
@@ -258,6 +259,7 @@ object ArtNixTemplate {
           |
           |import org.sireum._
           |import art._
+          |import art.Art.PortId._
           |
           |${StringTemplate.doNotEditComment(None())}
           |
@@ -265,11 +267,11 @@ object ArtNixTemplate {
           |  ${(ports, "\n")}
           |
           |  def emptyReceiveOut: MBox2[Art.PortId, DataContent] = {
-          |    return MBox2(-1, art.Empty())
+          |    return MBox2(portId"0", art.Empty())
           |  }
           |
           |  def emptyReceiveAsyncOut: MBox2[Art.PortId, Option[DataContent]] = {
-          |    return MBox2(-1, None())
+          |    return MBox2(portId"0", None())
           |  }
           |}
           |"""
@@ -292,18 +294,18 @@ object ArtNixTemplate {
           |
           |object ArtNix {
           |
-          |  val maxPortIds: Art.PortId = IPCPorts.Main + 1
+          |  val maxPortIds: Z = Art.portIdToZ(IPCPorts.Main) + 1
           |  val timeTriggered: TimeTriggered = TimeTriggered()
           |  val noData: Option[DataContent] = None()
           |  val data: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
-          |  val connection: MS[Art.PortId, ISZ[(Art.PortId, Art.PortId)]] = {
-          |    val r = MS.create[Art.PortId, ISZ[(Art.PortId, Art.PortId)]](maxPortIds, ISZ())
+          |  val connection: MS[Art.PortId, IS[Art.ConnectionId, (Art.PortId, Art.PortId)]] = {
+          |    val r = MS.create[Art.PortId, IS[Art.ConnectionId, (Art.PortId, Art.PortId)]](maxPortIds, IS())
           |
           |    ${(cases, "\n")}
           |
           |    r
           |  }
-          |  val eventInPorts: MS[Z, Art.PortId] = MSZ(
+          |  val eventInPorts: MS[Art.PortId, Art.PortId] = MS[Art.PortId, Art.PortId] (
           |    ${(eventInPorts, ",\n")}
           |  )
           |  var frozen: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
@@ -326,7 +328,7 @@ object ArtNixTemplate {
           |    if (isTimeDispatch) {
           |      return timeTriggered
           |    } else {
-          |      var r = ISZ[Art.PortId]()
+          |      var r = IS[Art.PortId, Art.PortId]()
           |      for (i <- eventInPorts if data(i).nonEmpty) {
           |        r = r :+ i
           |      }
@@ -334,7 +336,7 @@ object ArtNixTemplate {
           |    }
           |  }
           |
-          |  def receiveInput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
+          |  def receiveInput(eventPortIds: IS[Art. PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
           |    frozen = data
           |    for (i <- eventPortIds) {
           |      data(i) = noData
@@ -349,7 +351,7 @@ object ArtNixTemplate {
           |    return frozen(portId)
           |  }
           |
-          |  def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
+          |  def sendOutput(eventPortIds: IS[Art.PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
           |    for (p <- dataPortIds) {
           |      outgoing(p) match {
           |        case Some(d) =>
@@ -428,7 +430,7 @@ object ArtNixTemplate {
           |
           |    val seed: Z = if (args.size == z"1") {
           |      val n = Z(args(0)).get
-          |      if (n == z"0") 1 else n
+          |      if (n <= z"0") 1 else n
           |    } else {
           |      1
           |    }
@@ -538,7 +540,7 @@ object ArtNixTemplate {
   @pure def PlatformNix(packageName: String): ST = {
 
     val init: ST =
-      st"""val id = seed + port
+      st"""val id = seed + Art.portIdToZ(port)
           |SharedMemory.create(id)
           |ids = ids :+ id"""
 
@@ -546,13 +548,13 @@ object ArtNixTemplate {
       st"""portOpt match {
           |  case Some(port) =>
           |    out.value1 = port
-          |    SharedMemory.receive(seed + port, out)
+          |    SharedMemory.receive(Art.zToPortIdToZ(seed) + port, out)
           |  case _ => halt("Unsupported receive operation without port.")
           |}"""
 
-    val send: String = "SharedMemory.send(port, seed + port, data)"
+    val send: String = "SharedMemory.send(port.toZ, Art.portIdToZ(seed) + port, data)"
 
-    val sendAsync: String = "SharedMemory.sendAsync(port, seed + port, data)"
+    val sendAsync: String = "SharedMemory.sendAsync(port.toZ, Art.portIdToZ(seed) + port, data)"
 
     val finalise: ST =
       st"""for (id <- ids) {
@@ -561,7 +563,7 @@ object ArtNixTemplate {
 
     val receiveAsync: ST =
       st"""portOpt match {
-          |  case Some(port) => SharedMemory.receiveAsync(seed + port, out)
+          |  case Some(port) => SharedMemory.receiveAsync(Art.portIdToZ(seed) + port, out)
           |  case _ => halt("Unsupported receive operation without port.")
           |}"""
 

@@ -40,7 +40,15 @@ object SchedulerTemplate {
           |  ${(threadTimingProperties, "\n\n")}
           |
           |  // roundRobinSchedule represents the component dispatch order
-          |  val roundRobinSchedule: ISZ[art.Bridge] = Arch.ad.components
+          |  val roundRobinSchedule: ISZ[art.Bridge] = {
+          |    // convert IS[Art.BridgeId, art.Bridge] to an IS[Z, art.Bridge] to allow bridges to be dispatched
+          |    // multiple times during a hyper-period
+          |    var ret: ISZ[art.Bridge] = ISZ()
+          |    for(e <- Arch.ad.components) {
+          |      ret = ret :+ e
+          |    }
+          |    ret
+          |  }
           |
           |  val framePeriod: Z = ${framePeriod}
           |  val numComponents: Z = Arch.ad.components.size
@@ -85,6 +93,7 @@ object SchedulerTemplate {
       st"""package ${packageName}
           |
           |import org.sireum._
+          |import art.Art
           |import art.scheduling.static.Schedule.DScheduleSpec
           |
           |${StringTemplate.doNotEditComment(None())}
@@ -109,7 +118,7 @@ object SchedulerTemplate {
           |
           |${StringTemplate.safeToEditComment()}
           |
-          |Unit art_scheduling_legacy_LegacyInterface_computePhase(STACK_FRAME IS_7E8796 bridges) {
+          |Unit art_scheduling_legacy_LegacyInterface_computePhase(STACK_FRAME IS_058E6F bridges) {
           |  printf("Infeasible.  You should not get here in C");
           |  exit(1);
           |}"""

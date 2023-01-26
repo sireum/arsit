@@ -157,6 +157,7 @@ import org.sireum.ops._
       resources = resources,
       maxPort = -1,
       maxComponent = -1,
+      maxConnection = -1,
       component = ci,
       optVizEntries = vizEntries)
   }
@@ -854,6 +855,7 @@ import org.sireum.ops._
 @datatype class BTSResults(val resources: ISZ[Resource],
                            val maxPort: Z,
                            val maxComponent: Z,
+                           val maxConnection: Z,
 
                            component: ST,
                            optVizEntries: ISZ[ST]) extends Result

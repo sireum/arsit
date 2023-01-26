@@ -170,7 +170,7 @@ object ArchitectureTemplate {
                      urgency: Option[Z]): ST = {
     val artPortType: String = if (urgency.nonEmpty) "UrgentPort" else "Port"
     val _urgency: String = if (urgency.nonEmpty) s", urgency = ${urgency.get}" else ""
-    return st"""val $name = ${artPortType}[$typ] (id = $id, name = "$identifier", mode = $mode${_urgency})"""
+    return st"""val $name = ${artPortType}[$typ] (id = portId"$id", name = "$identifier", mode = $mode${_urgency})"""
   }
 
   def genPort(port: Port): ST = {
@@ -217,7 +217,7 @@ object ArchitectureTemplate {
           |  ${(ports, "\n")}
           |
           |  ${typeName}(
-          |    id = $id,
+          |    id = bridgeId"$id",
           |    name = "$instanceName",
           |    dispatchProtocol = $dispatchProtocol,
           |    dispatchTriggers = ${_dispatchTriggers},
@@ -258,6 +258,8 @@ object ArchitectureTemplate {
           |import art._
           |import art.PortMode._
           |import art.DispatchPropertyProtocol._
+          |import art.Art.BridgeId._
+          |import art.Art.PortId._
           |${(_imports, "\n")}
           |
           |${doNotEditComment(None())}
@@ -269,9 +271,9 @@ object ArchitectureTemplate {
           |    ${touches._1}
           |
           |    ArchitectureDescription(
-          |      components = ISZ (${(components, ", ")}),
+          |      components = IS[Art.BridgeId, Bridge] (${(components, ", ")}),
           |
-          |      connections = ISZ (${(connections, ",\n")})
+          |      connections = IS[Art.ConnectionId, UConnection] (${(connections, ",\n")})
           |    )
           |  }
           |}

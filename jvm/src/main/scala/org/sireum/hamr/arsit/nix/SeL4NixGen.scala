@@ -40,10 +40,11 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     gen()
 
     return ArsitResult(
-      previousPhase.resources() ++ resources,
-      previousPhase.maxPort,
-      previousPhase.maxComponent,
-      transpilerOptions)
+      resources = previousPhase.resources() ++ resources,
+      maxPort = previousPhase.maxPort,
+      maxComponent = previousPhase.maxComponent,
+      maxConnection= previousPhase.maxConnection,
+      transpilerOptions = transpilerOptions)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -220,7 +221,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       if (types.rawConnections) {
         // TODO is this necessary?
         val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
-          case Some(z) => z
+          case Some((z, _)) => z
           case _ =>
             // model must only contain event ports (i.e. no data ports)
             1
@@ -461,18 +462,19 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     }
 
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
-    val minISZSize: Z = if(numComponentPorts > 1) numComponentPorts else 1
 
-    val customSequenceSizes = ISZ[String](
+    var customSequenceSizes = ISZ[String](
       //s"IS[Z,art.Bridge]=1", // no bridges
-      "MS[Z,Option[art.Bridge]]=1",
-      s"IS[Z,art.UPort]=${numComponentPorts}",
-      s"IS[Z,Z]=$minISZSize"
-      //s"IS[Z,art.UConnection]=1" // no connections
+      "MS[Z,Option[art.Bridge]]=1"
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    ) ++ genBitArraySequenceSizes()
+    )
+
+    genBitArraySequenceSizes() match {
+      case Some((z, _)) => customSequenceSizes = customSequenceSizes :+ s"IS[Z,B]=$z"
+      case _ =>
+    }
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=1",

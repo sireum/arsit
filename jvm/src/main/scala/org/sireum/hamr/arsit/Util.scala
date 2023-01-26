@@ -273,13 +273,17 @@ object HAMR {
   def maxPort: Z
 
   def maxComponent: Z
+
+  def maxConnection: Z
 }
 
 @datatype class PhaseResult(val resources: ISZ[Resource],
                             val maxPort: Z,
-                            val maxComponent: Z) extends Result
+                            val maxComponent: Z,
+                            val maxConnection: Z) extends Result
 
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
+                            val maxConnection: Z,
                             val transpilerOptions: ISZ[TranspilerConfig]) extends Result

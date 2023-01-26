@@ -77,15 +77,15 @@ import org.sireum.message.Reporter
           |  ) extends Bridge {
           |
           |  val ports : Bridge.Ports = Bridge.Ports(
-          |    all = ISZ(${(ports.map((m: Port) => m.name), ",\n")}),
+          |    all = IS[Art.PortId, art.UPort](${(ports.map((m: Port) => m.name), ",\n")}),
           |
-          |    dataIns = ISZ(${(ports.filter((v: Port) => CommonUtil.isAadlDataPort(v.feature) && CommonUtil.isInFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
+          |    dataIns = IS[Art.PortId, art.UPort](${(ports.filter((v: Port) => CommonUtil.isAadlDataPort(v.feature) && CommonUtil.isInFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
           |
-          |    dataOuts = ISZ(${(ports.filter((v: Port) => CommonUtil.isAadlDataPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
+          |    dataOuts = IS[Art.PortId, art.UPort](${(ports.filter((v: Port) => CommonUtil.isAadlDataPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
           |
-          |    eventIns = ISZ(${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isInFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
+          |    eventIns = IS[Art.PortId, art.UPort](${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isInFeature(v.feature)).map((m: Port) => m.name), ",\n")}),
           |
-          |    eventOuts = ISZ(${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((m: Port) => m.name), ",\n")})
+          |    eventOuts = IS[Art.PortId, art.UPort](${(ports.filter((v: Port) => CommonUtil.isEventPort(v.feature) && CommonUtil.isOutFeature(v.feature)).map((m: Port) => m.name), ",\n")})
           |  )
           |
           |  ${(apiDecls, "\n\n")}

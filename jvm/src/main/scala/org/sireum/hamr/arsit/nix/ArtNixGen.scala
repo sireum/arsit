@@ -48,10 +48,11 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     gen()
 
     return ArsitResult(
-      previousPhase.resources() ++ resources,
-      portId,
-      previousPhase.maxComponent,
-      transpilerOptions)
+      resources = previousPhase.resources() ++ resources,
+      maxPort = portId,
+      maxComponent = previousPhase.maxComponent,
+      maxConnection = previousPhase.maxConnection,
+      transpilerOptions = transpilerOptions)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -291,16 +292,13 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
 
-    val customSequenceSizes = ISZ[String](
-      s"IS[Z,art.Bridge]=${numComponents}",
-      s"MS[Z,Option[art.Bridge]]=${numComponents}",
-      s"IS[Z,art.UPort]=${maxPortsForComponents}",
-      s"IS[Z,art.UConnection]=${numConnections}",
-      s"IS[Z,Z]=$$${TranspilerTemplate.minISZSize}"
-
-      // not valid
-      //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
-    ) ++ genBitArraySequenceSizes()
+    var customSequenceSizes = ISZ[(String, String)](
+      ("IS[Z,String]=3", "Needed for the CLI arguments to the Demo Slang app")
+    )
+    genBitArraySequenceSizes() match {
+      case Some((z, typeName)) => customSequenceSizes = customSequenceSizes :+ ((s"IS[Z,B]=$z", s"Needed for the max bit size specified in the model -- see $typeName"))
+      case _ =>
+    }
 
     val customConstants: ISZ[String] = ISZ(
       s"art.Art.maxComponents=${numComponents}",
@@ -320,7 +318,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       numBits = arsitOptions.bitWidth,
       maxArraySize = arsitOptions.maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
-      customArraySizes = customSequenceSizes,
+      customArraySizes = customSequenceSizes.map(m => m._1),
       customConstants = customConstants,
       stackSizeInBytes = maxStackSize,
       extensions = _legacyextensions,
@@ -328,6 +326,16 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       buildApps = buildApps,
       cmakeIncludes = ISZ()
     )
+
+    customSequenceSizes = customSequenceSizes ++ ISZ(
+      (s"IS[Z,(art.Art.PortId, art.ArtSlangMessage)]=$numPorts", "Needed for the Map[PortId, ArgSlangMessage] in ArtNativeSlang"),
+      (s"IS[Z,art.Bridge]=$numComponents", "Needed for the example round robin schedule in Schedulers"),
+      (s"IS[Z,art.scheduling.static.Schedule.Slot]=$numComponents", "Needed for the example static schedule in Schedulers")
+    )
+
+    val custSeqSizeComment =
+      st"""// Origin of custom sequence sizes
+          |${(customSequenceSizes.map((m: (String, String)) => st"//   ${m._1} - ${m._2}"), "\n")}"""
 
     // don't have arsit automatically run transpiler on legacy scheduler as
     // legacy and slang schedulers projects are saved to the same nix directory
@@ -347,7 +355,7 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
       numBits = arsitOptions.bitWidth,
       maxArraySize = arsitOptions.maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,
-      customArraySizes = customSequenceSizes,
+      customArraySizes = customSequenceSizes.map(m => m._1),
       customConstants = customConstants,
       stackSizeInBytes = maxStackSize,
       extensions = _extensions,
@@ -358,8 +366,9 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
 
     transpilerOptions = transpilerOptions :+ transpiler._2
 
-    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1,
-      Some((numPorts, numComponents)))
+    val comments = ISZ(st"// If you want to make changes to this script, make a copy of it and edit that version", custSeqSizeComment)
+
+    val slashTranspileScript = TranspilerTemplate.transpilerSlashScriptPreamble(legacyTranspiler._1, transpiler._1, comments)
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
   }
 

@@ -86,7 +86,7 @@ object NixGen {
       // add numBit and numBytes global vars for each type passing between components
 
       val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
-        case Some(z) => z
+        case Some((z, _)) => z
         case _ =>
           // model must only contain event ports (i.e not data ports)
           1
@@ -775,17 +775,11 @@ object NixGen {
     return (finaliseMethodSig, ret, adapterMethod)
   }
 
-  def genBitArraySequenceSizes(): ISZ[String] = {
+  def genBitArraySequenceSizes(): Option[(Z, String)] = {
     if (types.rawConnections) {
-      val maxBitSize: Z = TypeUtil.getMaxBitsSize(symbolTable) match {
-        case Some(z) => z
-        case _ =>
-          // model must only contain event ports (i.e. no data ports)
-          1
-      }
-      return ISZ(s"IS[Z,B]=${maxBitSize}")
+      return TypeUtil.getMaxBitsSize(symbolTable)
     } else {
-      return ISZ()
+      return None()
     }
   }
 }
@@ -810,10 +804,11 @@ object NixGenDispatch {
         SeL4NixGen(dirs, root, arsitOptions, symbolTable, types, previousPhase).generate()
       case _ =>
         ArsitResult(
-          previousPhase.resources,
-          previousPhase.maxPort,
-          previousPhase.maxComponent,
-          ISZ()
+          resources = previousPhase.resources,
+          maxPort = previousPhase.maxPort,
+          maxComponent = previousPhase.maxComponent,
+          maxConnection = previousPhase.maxConnection,
+          transpilerOptions = ISZ()
         )
     }
     return ret

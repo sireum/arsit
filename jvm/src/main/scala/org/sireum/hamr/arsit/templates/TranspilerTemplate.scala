@@ -144,8 +144,6 @@ object TranspilerTemplate {
     return slashRet
   }
 
-  val minISZSize: String = "minISZSize"
-
   def transpilerSel4Preamble(entries: ISZ[(String, ST)]): ST = {
 
     val ret: ST =
@@ -197,17 +195,11 @@ object TranspilerTemplate {
     return ret
   }
 
-  def transpilerSlashScriptPreamble(legacy: ST, demo: ST, portsBridges: Option[(Z, Z)]): ST = {
-    val minISZSizeOpt: Option[ST] = portsBridges match {
-      case Some((ports, bridges)) =>
-        val min: Z = if (ports > bridges) ports else bridges
-        Some(
-          st"""
-              |// ART stores bridge and port ids using ISZ[Z].  This project has $ports ports and $bridges bridges
-              |// so the sequence size of IS[Z,Z] must be at least $min
-              |val ${minISZSize}: Z = $min""")
-      case _ => None()
-    }
+  def transpilerSlashScriptPreamble(legacy: ST, demo: ST, preBlocks: ISZ[ST]): ST = {
+    val preBlocksOpt: Option[ST] =
+      if(preBlocks.isEmpty) None()
+      else Some(st"""
+                    |${(preBlocks, "\n\n")}""")
 
     val ret: ST =
       st"""::/*#! 2> /dev/null                                   #
@@ -231,10 +223,10 @@ object TranspilerTemplate {
           |import org.sireum._
           |
           |${StringTemplate.doNotEditComment(None())}
+          |$preBlocksOpt
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
-          |$minISZSizeOpt
           |
           |var project: ISZ[String] = Cli(Os.pathSepChar).parseTranspile(Os.cliArgs, 0) match {
           |  case Some(o: Cli.TranspileOption) =>

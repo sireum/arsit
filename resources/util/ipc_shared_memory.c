@@ -53,7 +53,8 @@ Z PACKAGE_NAME_SharedMemory_create(STACK_FRAME Z id) {
     return (Z) shmid;
 }
 
-Unit PACKAGE_NAME_SharedMemory_receive(STACK_FRAME Z port, MBox2_1CBFC4 out) {
+// MBox2_43CC67=MBox2[art.Art.PortId, art.DataContent]
+Unit PACKAGE_NAME_SharedMemory_receive(STACK_FRAME Z port, MBox2_43CC67 out) {
     int sid = semget((key_t) port, 1, 0666);
 
     lock(sid);
@@ -62,7 +63,7 @@ Unit PACKAGE_NAME_SharedMemory_receive(STACK_FRAME Z port, MBox2_1CBFC4 out) {
 
     Option_8E9F45 p = (Option_8E9F45) shmat(shmid, (void *) 0, 0);
 
-    while (p->type != TSome_D29615) { // wait until there is a data
+    while (p->type != TSome_D29615) { // wait until there is data
         unlock(sid);
         usleep((useconds_t) 10 * 1000);
         lock(sid);
@@ -76,7 +77,8 @@ Unit PACKAGE_NAME_SharedMemory_receive(STACK_FRAME Z port, MBox2_1CBFC4 out) {
     unlock(sid);
 }
 
-Unit PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Z port, MBox2_1029D1 out) {
+// MBox2_37E193=MBox2[art.Art.PortId, Option[art.DataContent]]
+Unit PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Z port, MBox2_37E193 out) {
     int sid = semget((key_t) port, 1, 0666);
 
     lock(sid);

@@ -171,8 +171,8 @@ object SeL4NixTemplate {
           |    ${callTranspilerToucher()}
           |
           |    // add types used in Platform.receive and Platform.receiveAsync
-          |    val mbox2Boolean_Payload: MBox2[Art.PortId, DataContent] = MBox2(0, Base_Types.Boolean_Payload(T))
-          |    val mbox2OptionDataContent: MBox2[Art.PortId, Option[DataContent]] = MBox2(0, None())
+          |    val mbox2Boolean_Payload: MBox2[Art.PortId, DataContent] = MBox2(portId"0", Base_Types.Boolean_Payload(T))
+          |    val mbox2OptionDataContent: MBox2[Art.PortId, Option[DataContent]] = MBox2(portId"0", None())
           |
           |    ${sts}
           |    ${touchTypes(typeTouches)}

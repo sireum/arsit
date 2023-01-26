@@ -1,14 +1,14 @@
 #include <all.h>
 #include <signal.h>
 
-__attribute__((weak)) IS_7E8796 PACKAGE_NAME_RunRoundRobinDemo_schedule(STACK_FRAME_ONLY);
+__attribute__((weak)) IS_058E6F PACKAGE_NAME_RunRoundRobinDemo_schedule(STACK_FRAME_ONLY);
 
 volatile sig_atomic_t shouldStop = 0;
 
-void PACKAGE_NAME_RoundRobinProvider_getRoundRobinOrder(STACK_FRAME IS_7E8796 result) {
+void PACKAGE_NAME_RoundRobinProvider_getRoundRobinOrder(STACK_FRAME IS_058E6F result) {
 
   if(PACKAGE_NAME_RunRoundRobinDemo_schedule) {
-    IS_7E8796 order = PACKAGE_NAME_RunRoundRobinDemo_schedule();
+    IS_058E6F order = PACKAGE_NAME_RunRoundRobinDemo_schedule();
     memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
     result->size = order->size;
   } else {

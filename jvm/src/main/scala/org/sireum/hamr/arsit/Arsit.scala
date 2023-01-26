@@ -34,7 +34,7 @@ object Arsit {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(ISZ(), 0, 0, ISZ[TranspilerConfig]())
+      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig]())
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
@@ -49,7 +49,7 @@ object Arsit {
 
     var artResources: ISZ[Resource] = ISZ()
     if (!arsitOptions.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, s"${projectDirectories.mainDir}/art")
+      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art")
     }
 
     artResources = artResources ++ createBuildArtifacts(
@@ -58,10 +58,11 @@ object Arsit {
     return ArsitResult(nixPhase.resources ++ artResources,
       nixPhase.maxPort,
       nixPhase.maxComponent,
+      nixPhase.maxConnection,
       nixPhase.transpilerOptions)
   }
 
-  private def copyArtFiles(maxPort: Z, maxComponent: Z, outputDir: String): ISZ[Resource] = {
+  private def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
     for ((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
       val _c: String =
@@ -69,10 +70,16 @@ object Arsit {
           val out = new StringBuilder()
           c.native.split("\n").map(s =>
             out.append({
-              if (s.contains("val maxComponents")) {
-                s"  val maxComponents: BridgeId = $maxComponent"
+              if (s.contains("@range(min = 0, index = T) class BridgeId")) {
+                s"  @range(min = 0, max = ${maxComponent - 1}, index = T) class BridgeId"
+              } else if (s.contains("@range(min = 0, index = T) class PortId")) {
+                s"  @range(min = 0, max = ${maxPort - 1}, index = T) class PortId"
+              } else if (s.contains("@range(min = 0, index = T) class ConnectionId")) {
+                s"  @range(min = 0, max = ${maxConnections - 1}, index = T) class ConnectionId"
+              } else if (s.contains("val maxComponents")) {
+                s"  val maxComponents: Z = $maxComponent"
               } else if (s.contains("val maxPorts:")) {
-                s"  val maxPorts: PortId = $maxPort"
+                s"  val maxPorts: Z = $maxPort"
               }
               else {
                 s

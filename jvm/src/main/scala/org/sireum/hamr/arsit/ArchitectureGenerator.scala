@@ -62,7 +62,11 @@ import org.sireum.ops.ISZOps
 
     generateInternal()
 
-    return PhaseResult(resources, portId, componentId)
+    return PhaseResult(
+      resources = resources,
+      maxPort = portId,
+      maxComponent = componentId,
+      maxConnection = connections.size)
   }
 
   def generateInternal(): Unit = {

@@ -39,9 +39,11 @@ import org.sireum.hamr.ir._
 
     processAnnexLibraries()
 
-    return PhaseResult(previousPhase.resources() ++ resources,
-      previousPhase.maxPort,
-      previousPhase.maxComponent)
+    return PhaseResult(
+      resources = previousPhase.resources() ++ resources,
+      maxPort = previousPhase.maxPort,
+      maxComponent = previousPhase.maxComponent,
+      maxConnection = previousPhase.maxConnection)
   }
 
   def gen(m: AadlComponent): Unit = {
