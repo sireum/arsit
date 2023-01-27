@@ -99,12 +99,12 @@ Unit PACKAGE_NAME_SharedMemory_receiveAsync(STACK_FRAME Z port, MBox2_37E193 out
     unlock(sid);
 }
 
-Unit PACKAGE_NAME_SharedMemory_send(STACK_FRAME Z destid, Z port, art_DataContent d) {
-    int sid = semget((key_t) port, 1, 0666);
+Unit PACKAGE_NAME_SharedMemory_send(STACK_FRAME Z appPortId, Z componentPortId, art_DataContent d) {
+    int sid = semget((key_t) componentPortId, 1, 0666);
 
     lock(sid);
 
-    int shmid = shmget((key_t) port, sizeof(union Option_8E9F45), 0666);
+    int shmid = shmget((key_t) componentPortId, sizeof(union Option_8E9F45), 0666);
 
     Option_8E9F45 p = (Option_8E9F45) shmat(shmid, (void *) 0, 0);
 
@@ -122,12 +122,12 @@ Unit PACKAGE_NAME_SharedMemory_send(STACK_FRAME Z destid, Z port, art_DataConten
     unlock(sid);
 }
 
-B PACKAGE_NAME_SharedMemory_sendAsync(STACK_FRAME Z destid, Z port, art_DataContent d) {
-    int sid = semget((key_t) port, 1, 0666);
+B PACKAGE_NAME_SharedMemory_sendAsync(STACK_FRAME Z appPortId, Z componentPortId, art_DataContent d) {
+    int sid = semget((key_t) componentPortId, 1, 0666);
 
     lock(sid);
 
-    int shmid = shmget((key_t) port, sizeof(union Option_8E9F45), 0666);
+    int shmid = shmget((key_t) componentPortId, sizeof(union Option_8E9F45), 0666);
 
     Option_8E9F45 p = (Option_8E9F45) shmat(shmid, (void *) 0, 0);
     p->type = TSome_D29615;

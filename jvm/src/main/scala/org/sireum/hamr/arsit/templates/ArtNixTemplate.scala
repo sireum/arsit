@@ -51,7 +51,7 @@ object ArtNixTemplate {
 
   @pure def platformPortDecl(portName: String,
                              portId: Z): ST = {
-    return st"""val $portName: Art.PortId = Art.zToPortId($portId)"""
+    return st"""val $portName: Art.PortId = Art.PortId.fromZ($portId)"""
   }
 
   @pure def artNixCases(srcArchPortId: String,
@@ -108,6 +108,8 @@ object ArtNixTemplate {
 
     var inits: ISZ[ST] = ISZ(st"Platform.initialise(seed, appPortIdOpt)")
 
+    globals = globals :+ st"""
+                             |// incoming ports"""
     for (p <- inPorts) {
       globals = globals :+ st"val ${localPortId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id"
 
@@ -294,11 +296,12 @@ object ArtNixTemplate {
           |
           |object ArtNix {
           |
-          |  val maxPortIds: Z = Art.portIdToZ(IPCPorts.Main) + 1
+          |  val maxPortIds: Z = IPCPorts.Main.toZ + 1
           |  val timeTriggered: TimeTriggered = TimeTriggered()
           |  val noData: Option[DataContent] = None()
           |  val data: MS[Art.PortId, Option[DataContent]] = MS.create(maxPortIds, noData)
           |  val connection: MS[Art.PortId, IS[Art.ConnectionId, (Art.PortId, Art.PortId)]] = {
+          |    // mapping from src ports to pairs holding the destination app port ids and component port ids
           |    val r = MS.create[Art.PortId, IS[Art.ConnectionId, (Art.PortId, Art.PortId)]](maxPortIds, IS())
           |
           |    ${(cases, "\n")}
@@ -463,10 +466,10 @@ object ArtNixTemplate {
           |@ext object SharedMemory {
           |  def create(id: Z): Z = $$
           |  def get(id: Z): Z = $$
-          |  def send(id: Z, port: Art.PortId, d: DataContent): Unit = $$
-          |  def receive(port: Art.PortId, out: MBox2[Art.PortId, DataContent]): Unit = $$
-          |  def sendAsync(id: Z, port: Art.PortId, d: DataContent): B = $$
-          |  def receiveAsync(port: Art.PortId, out: MBox2[Art.PortId, Option[DataContent]]): Unit = $$
+          |  def send(appId: Z, portId: Z, d: DataContent): Unit = $$
+          |  def sendAsync(appId: Z, portId: Z, d: DataContent): B = $$
+          |  def receive(portId: Z, out: MBox2[Art.PortId, DataContent]): Unit = $$
+          |  def receiveAsync(portId: Z, out: MBox2[Art.PortId, Option[DataContent]]): Unit = $$
           |  def remove(id: Z): Unit = $$
           |}"""
     return ret
@@ -484,10 +487,10 @@ object ArtNixTemplate {
           |object SharedMemory_Ext {
           |  def create(id: Z): Z = halt("stub")
           |  def get(id: Z): Z = halt("stub")
-          |  def send(id: Z, port: Art.PortId, d: DataContent): Unit = halt("stub")
-          |  def receive(port: Art.PortId, out: MBox2[Art.PortId, DataContent]): Unit = halt("stub")
-          |  def sendAsync(id: Z, port: Art.PortId, d: DataContent): B = halt("stub")
-          |  def receiveAsync(port: Art.PortId, out: MBox2[Art.PortId, Option[DataContent]]): Unit = halt("stub")
+          |  def send(appId: Z, portId: Z, d: DataContent): Unit = halt("stub")
+          |  def sendAsync(appId: Z, portId: Z, d: DataContent): B = halt("stub")
+          |  def receive(portId: Z, out: MBox2[Art.PortId, DataContent]): Unit = halt("stub")
+          |  def receiveAsync(portId: Z, out: MBox2[Art.PortId, Option[DataContent]]): Unit = halt("stub")
           |  def remove(id: Z): Unit = halt("stub")
           |}"""
     return ret
@@ -540,7 +543,7 @@ object ArtNixTemplate {
   @pure def PlatformNix(packageName: String): ST = {
 
     val init: ST =
-      st"""val id = seed + Art.portIdToZ(port)
+      st"""val id = seed + port.toZ
           |SharedMemory.create(id)
           |ids = ids :+ id"""
 
@@ -548,13 +551,13 @@ object ArtNixTemplate {
       st"""portOpt match {
           |  case Some(port) =>
           |    out.value1 = port
-          |    SharedMemory.receive(Art.zToPortIdToZ(seed) + port, out)
+          |    SharedMemory.receive(seed + port.toZ, out)
           |  case _ => halt("Unsupported receive operation without port.")
           |}"""
 
-    val send: String = "SharedMemory.send(port.toZ, Art.portIdToZ(seed) + port, data)"
+    val send: String = "SharedMemory.send(app.toZ, seed + port.toZ, data)"
 
-    val sendAsync: String = "SharedMemory.sendAsync(port.toZ, Art.portIdToZ(seed) + port, data)"
+    val sendAsync: String = "SharedMemory.sendAsync(app.toZ, seed + port.toZ, data)"
 
     val finalise: ST =
       st"""for (id <- ids) {
@@ -563,7 +566,7 @@ object ArtNixTemplate {
 
     val receiveAsync: ST =
       st"""portOpt match {
-          |  case Some(port) => SharedMemory.receiveAsync(Art.portIdToZ(seed) + port, out)
+          |  case Some(port) => SharedMemory.receiveAsync(seed + port.toZ, out)
           |  case _ => halt("Unsupported receive operation without port.")
           |}"""
 
@@ -579,7 +582,7 @@ object ArtNixTemplate {
           |object PlatformNix {
           |
           |  var seed: Z = 0
-          |  var ids: ISZ[Z] = ISZ()
+          |  var ids: IS[Art.PortId, Z] = IS()
           |
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = {
           |    PlatformNix.seed = seed
@@ -865,7 +868,10 @@ object ArtNixTemplate {
           |    done
           |  elif [[ "$$(uname)" == "Darwin" ]]; then
           |    for APP in $$1; do
-          |      echo "$${SCRIPT_HOME}/slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE} ; rm /tmp/tmp.sh" > /tmp/tmp.sh ; chmod +x /tmp/tmp.sh ; open -a Terminal /tmp/tmp.sh &
+          |      # workaround to launch the applications via separate Terminals. Create a shell script in the
+          |      # /tmp directory that launches the application. Then delete the shell script when the
+          |      # application exits
+          |      echo "$${SCRIPT_HOME}/slang-build/$${APP}$${SCHEDULER_ARG}$${PREVENT_CLOSE} ; rm /tmp/$${APP}.sh" > /tmp/$${APP}.sh ; chmod +x /tmp/$${APP}.sh ; open -a Terminal /tmp/$${APP}.sh &
           |    done
           |  elif [[ "$$(expr substr $$(uname -s) 1 5)" == "Linux" ]]; then
           |    for APP in $$1; do
@@ -960,7 +966,7 @@ object ArtNixTemplate {
           |#
           |APPS="Demo ${(apps, " ")}"
           |for APP in $${APPS}; do
-          |  pkill -f -SIGTERM $$APP
+          |  pkill -SIGTERM -f $$APP
           |done
           |ME=`whoami`
           |
