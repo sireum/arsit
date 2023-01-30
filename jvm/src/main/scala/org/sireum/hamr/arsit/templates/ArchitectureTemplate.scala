@@ -210,7 +210,7 @@ object ArchitectureTemplate {
                   ): ST = {
     val _dispatchTriggers: ST =
       if (dispatchTriggers.isEmpty) st"None()"
-      else st"Some(ISZ(${(dispatchTriggers.get.map((f: String) => s"${f}.id"), ", ")}))"
+      else st"Some(IS[Art.PortId, Art.PortId](${(dispatchTriggers.get.map((f: String) => s"${f}.id"), ", ")}))"
 
     val ret: ST =
       st"""val ${bridgeIdentifier} : ${typeName} = {

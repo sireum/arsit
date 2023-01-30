@@ -40,7 +40,7 @@ object SingletonEntryPointProviderPlugin {
     val parameters: ISZ[ST] = (
       (st"${nameProvider.bridge}Id : Art.BridgeId" +:
         ports.map((p: Port) => st"${addId(p.name)} : Art.PortId")) :+
-        st"dispatchTriggers : Option[ISZ[Art.PortId]]") ++
+        st"dispatchTriggers : Option[IS[Art.PortId, Art.PortId]]") ++
       ApiTemplate.entryPointParams(nameProvider)
 
     val localVars: ISZ[ST] = ISZ(
@@ -137,9 +137,9 @@ object SingletonEntryPointProviderPlugin {
           })
           val ret: ST =
             st"""// transpiler friendly filter
-                |def filter(receivedEvents: ISZ[Art.PortId], triggers: ISZ[Art.PortId]): ISZ[Art.PortId] = {
-                |  var r = ISZ[Art.PortId]()
-                |  val opsTriggers = ops.ISZOps(triggers)
+                |def filter(receivedEvents: IS[Art.PortId, Art.PortId], triggers: IS[Art.PortId, Art.PortId]): IS[Art.PortId, Art.PortId] = {
+                |  var r = IS[Art.PortId, Art.PortId]()
+                |  val opsTriggers = art.ops.ISPOps(triggers)
                 |  for(e <- receivedEvents) {
                 |    if(opsTriggers.contains(e)) {
                 |      r = r :+ e
@@ -152,7 +152,7 @@ object SingletonEntryPointProviderPlugin {
                 |val EventTriggered(receivedEvents) = Art.dispatchStatus(${bridgeName})
                 |
                 |// remove non-dispatching event ports
-                |val dispatchableEventPorts: ISZ[Art.PortId] =
+                |val dispatchableEventPorts: IS[Art.PortId, Art.PortId] =
                 |  if(dispatchTriggers.isEmpty) receivedEvents
                 |  else filter(receivedEvents, dispatchTriggers.get)
                 |

@@ -144,20 +144,15 @@ import org.sireum.hamr.codegen.common.types._
                             |//   object Example {
                             |//     val value: ${at.nameProvider.qualifiedReferencedTypeName}.I = i"0"
                             |//     ...
+                            |//
+                            |// Rename I and use its fromZ method when using multiple <array-def>.I indexing types in the same context.  For e.g.
+                            |//   import ${at.nameProvider.qualifiedReferencedTypeName}.{I => I0}
+                            |//   import <other-array-def>.{I => I1}
+                            |//   object Example {
+                            |//     val value: ${at.nameProvider.qualifiedReferencedTypeName}.I = I0.fromZ(0)
+                            |//     ...
                             |
                             |@range(min = 0, max = $max, index = T) class I"""
-
-          ret = ret :+ st"""// Import and rename the following when using multiple <array-def>.I indexing types in the same context.  For e.g.
-                           |//   import ${at.nameProvider.qualifiedReferencedTypeName}.{i => i0}
-                           |//   import <other-array-def>.{i => i1}
-                           |//   object Example {
-                           |//     val value: ${at.nameProvider.qualifiedReferencedTypeName}.I = i0(0)
-                           |//     ...
-                           |
-                           |@pure def i(value: Z): I = {
-                           |  Contract(Requires(0 <= value && value <= $max))
-                           |  return I(value.string).get
-                           |}"""
 
           ISZ(st"value = IS.create[I, $baseType](${at.dimensions(0)}, ${at.baseType.nameProvider.example()})")
         } else {

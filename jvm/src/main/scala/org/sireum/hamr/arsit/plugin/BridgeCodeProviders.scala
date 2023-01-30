@@ -71,7 +71,7 @@ import org.sireum.message.Reporter
           |  val id: Art.BridgeId,
           |  val name: String,
           |  val dispatchProtocol: DispatchPropertyProtocol,
-          |  val dispatchTriggers: Option[ISZ[Art.PortId]],
+          |  val dispatchTriggers: Option[IS[Art.PortId, Art.PortId]],
           |
           |  ${(portParams, ",\n")}
           |  ) extends Bridge {
