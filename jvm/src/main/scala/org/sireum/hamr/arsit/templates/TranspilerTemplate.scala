@@ -172,9 +172,6 @@ object TranspilerTemplate {
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
           |
-          |// ART stores bridge and port ids using ISZ[Z] so the sequence size of IS[Z,Z] for each isolated
-          |// bridge below must at least be art.Art.maxComponents or art.Art.maxPorts, whichever is greatest
-          |
           |${(entries.map((m: (String, ST)) => m._2), "\n\n")}
           |
           |val projects: ISZ[ISZ[String]] = ISZ(

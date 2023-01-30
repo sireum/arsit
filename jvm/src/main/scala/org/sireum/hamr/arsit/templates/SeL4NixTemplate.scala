@@ -16,7 +16,7 @@ object SeL4NixTemplate {
 
   def sendOutput(entries: ST): ST = {
     val ret: ST =
-      st"""def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
+      st"""def sendOutput(eventPortIds: IS[Art.PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
           |  // ignore params
           |
           |  ${entries}
@@ -43,7 +43,7 @@ object SeL4NixTemplate {
 
   def receiveInput(entries: ST): ST = {
     val ret: ST =
-      st"""def receiveInput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
+      st"""def receiveInput(eventPortIds: IS[Art.PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
           |  // ignore params
           |
           |  ${entries}
@@ -230,6 +230,8 @@ object SeL4NixTemplate {
           |
           |import org.sireum._
           |import art._
+          |import art.Art.BridgeId._
+          |import art.Art.PortId._
           |import art.DispatchPropertyProtocol._
           |import art.PortMode._
           |${(imports, "\n")}
