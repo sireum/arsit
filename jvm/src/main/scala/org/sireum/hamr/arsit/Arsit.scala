@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
-import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
@@ -81,7 +81,7 @@ object Arsit {
             }
             return str
           }
-          val lines = ops.StringOps(c).split((c: C) => c == C('\n')).map((s: String) => sub(s))
+          val lines = StringUtil.split_PreserveEmptySegments(c, (c: C) => c == C('\n')).map((s: String) => sub(s))
           st"${(lines, "\n")}".render
         } else {
           c
