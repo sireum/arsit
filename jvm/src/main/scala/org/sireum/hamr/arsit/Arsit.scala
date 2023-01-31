@@ -64,28 +64,25 @@ object Arsit {
 
   private def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
-    for ((p, c) <- ArsitLibrary.getFiles if p.native.contains("art")) {
+    for ((p, c) <- ArsitLibrary.getFiles if ops.StringOps(p).contains("art")) {
       val _c: String =
-        if (p.native.contains("Art.scala")) {
-          val out = new StringBuilder()
-          c.native.split("\n").map(s =>
-            out.append({
-              if (s.contains("@range(min = 0, index = T) class BridgeId")) {
-                s"  @range(min = 0, max = ${maxComponent - 1}, index = T) class BridgeId"
-              } else if (s.contains("@range(min = 0, index = T) class PortId")) {
-                s"  @range(min = 0, max = ${maxPort - 1}, index = T) class PortId"
-              } else if (s.contains("@range(min = 0, index = T) class ConnectionId")) {
-                s"  @range(min = 0, max = ${maxConnections - 1}, index = T) class ConnectionId"
-              } else if (s.contains("val maxComponents")) {
-                s"  val maxComponents: Z = $maxComponent"
-              } else if (s.contains("val maxPorts:")) {
-                s"  val maxPorts: Z = $maxPort"
-              }
-              else {
-                s
-              }
-            }).append("\n"))
-          out.toString()
+        if (ops.StringOps(p).contains("Art.scala")) {
+          @strictpure def atLeast0(i: Z): Z = if(i < 0) 0 else i
+          val subs: ISZ[(String, String)] = ISZ(
+            ("@range(min = 0, index = T) class BridgeId", s"  @range(min = 0, max = ${atLeast0(maxComponent - 1)}, index = T) class BridgeId"),
+            ("@range(min = 0, index = T) class PortId", s"  @range(min = 0, max = ${atLeast0(maxPort - 1)}, index = T) class PortId"),
+            ("@range(min = 0, index = T) class ConnectionId", s"  @range(min = 0, max = ${atLeast0(maxConnections - 1)}, index = T) class ConnectionId"),
+            ("val maxComponents", s"  val maxComponents: Z = $maxComponent"),
+            ("val maxPorts:", s"  val maxPorts: Z = $maxPort")
+          )
+          def sub(str: String): String = {
+            for(s <- subs if ops.StringOps(str).contains(s._1)) {
+              return s._2
+            }
+            return str
+          }
+          val lines = ops.StringOps(c).split((c: C) => c == C('\n')).map((s: String) => sub(s))
+          st"${(lines, "\n")}".render
         } else {
           c
         }

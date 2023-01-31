@@ -288,7 +288,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
               |  portIds = portIds :+ ${p.nameId}
               |}"""
         })
-        st"""var portIds: ISZ[Art.PortId] = ISZ()
+        st"""var portIds: IS[Art.PortId, Art.PortId] = IS()
             |${(checks, "\n")}
             |return EventTriggered(portIds)"""
       }
