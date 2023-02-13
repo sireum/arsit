@@ -36,7 +36,7 @@ object ProjectTemplate {
     val ret: ST =
       st"""C Instructions:
           |---------------
-          |  Cmake Project Directory:  ${cmakeProjDirectory}
+          |  CMake Project Directory:  ${cmakeProjDirectory}
           |  Developer Code Directory: ${devDir}
           |
           |  $lng
