@@ -101,7 +101,7 @@ object ProjectTemplate {
           |
           |// Example Sireum Proyek build definitions -- the contents of this file will not be overwritten
           |//
-          |// To install Sireum (Proyek and IVE) see https://github.com/sireum/kekinian#installing
+          |// To install Sireum (Proyek and IVE) see https://sireum.org/getting-started/
           |//
           |// The following commands should be executed in the parent of the 'bin' directory.
           |//
@@ -120,7 +120,8 @@ object ProjectTemplate {
           |//
           |// Sireum IVE:
           |//
-          |//   If you prevented HAMR from running Proyek IVE then first generate the IVE project:
+          |//   Create the IVE project if Codegen was not run locally or if its no-proyek-ive
+          |//   option was used:
           |//     sireum proyek ive .
           |//
           |//   Then in IVE select 'File > Open ...' and navigate to the parent of the
@@ -240,9 +241,10 @@ object ProjectTemplate {
           |//   sbt "set test in assembly := {}" assembly
           |// on Windows
           |//
-          |// Sireum IVE:
+          |// Sireum IVE: Installation instructions available at https://sireum.org/getting-started/
+          |//
           |//   In IVE select 'File > Open ...' and navigate to the directory containing
-          |//   this file then click 'OK'.  To install Sireum IVE see https://github.com/sireum/kekinian#installing
+          |//   this file then click 'OK'.
           |//
           |//   To run the demo from within Sireum IVE:
           |//     Right click ${demoScalaPath} and choose "Run 'Demo'"
@@ -368,15 +370,17 @@ object ProjectTemplate {
           |
           |// Example mill build -- the contents of this file will not be overwritten.
           |//
-          |// mill can be obtained following instructions at https://github.com/sireum/kekinian#slang-app-example-mill-project
+          |// A custom mill build for Sireum can be obtained from https://github.com/sireum/rolling/releases/tag/mill
+          |// On Windows, rename 'mill' to 'mill.bat'
           |//
           |// To run the demo from the command line:
-          |//   $$SIREUM_HOME/bin/mill ${basePackageName}.run
+          |//   mill ${basePackageName}.run
           |//
           |// To run the example unit tests:
-          |//   $$SIREUM_HOME/bin/mill ${basePackageName}.tests
+          |//   mill ${basePackageName}.tests
           |//
-          |// Sireum IVE:
+          |// Sireum IVE: Installation instructions available at https://sireum.org/getting-started/
+          |//
           |//   First cd to the directory containing this file and execute the following:
           |//
           |//     $$SIREUM_HOME/bin/sireum tools ivegen -f -m mill -n ${outputDirSimpleName} ../
