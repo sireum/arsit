@@ -331,7 +331,7 @@ object ArtNixTemplate {
           |    if (isTimeDispatch) {
           |      return timeTriggered
           |    } else {
-          |      var r = IS[Art.PortId, Art.PortId]()
+          |      var r = ISZ[Art.PortId]()
           |      for (i <- eventInPorts if data(i).nonEmpty) {
           |        r = r :+ i
           |      }
@@ -339,7 +339,7 @@ object ArtNixTemplate {
           |    }
           |  }
           |
-          |  def receiveInput(eventPortIds: IS[Art. PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
+          |  def receiveInput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
           |    frozen = data
           |    for (i <- eventPortIds) {
           |      data(i) = noData
@@ -354,7 +354,7 @@ object ArtNixTemplate {
           |    return frozen(portId)
           |  }
           |
-          |  def sendOutput(eventPortIds: IS[Art.PortId, Art.PortId], dataPortIds: IS[Art.PortId, Art.PortId]): Unit = {
+          |  def sendOutput(eventPortIds: ISZ[Art.PortId], dataPortIds: ISZ[Art.PortId]): Unit = {
           |    for (p <- dataPortIds) {
           |      outgoing(p) match {
           |        case Some(d) =>

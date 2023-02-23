@@ -40,12 +40,12 @@ object SchedulerTemplate {
           |  ${(threadTimingProperties, "\n\n")}
           |
           |  // roundRobinSchedule represents the component dispatch order
-          |  val roundRobinSchedule: ISZ[art.Bridge] = {
-          |    // convert IS[Art.BridgeId, art.Bridge] to an IS[Z, art.Bridge] to allow bridges to be dispatched
+          |  val roundRobinSchedule: ISZ[Art.BridgeId] = {
+          |    // convert IS[Art.BridgeId, art.Bridge] to an IS[Z, Art.BridgeId] to allow bridges to be dispatched
           |    // multiple times during a hyper-period
-          |    var ret: ISZ[art.Bridge] = ISZ()
+          |    var ret: ISZ[Art.BridgeId] = ISZ()
           |    for(e <- Arch.ad.components) {
-          |      ret = ret :+ e
+          |      ret = ret :+ e.id
           |    }
           |    ret
           |  }
@@ -60,7 +60,7 @@ object SchedulerTemplate {
           |  )))
           |
           |
-          |  def getRoundRobinScheduler(schedule: Option[ISZ[art.Bridge]]): RoundRobin = {
+          |  def getRoundRobinScheduler(schedule: Option[ISZ[Art.BridgeId]]): RoundRobin = {
           |    if(roundRobinSchedule.isEmpty) {} // line needed for transpiler; do not remove
           |    schedule match {
           |      case Some(s) => return RoundRobin(s)
@@ -81,8 +81,10 @@ object SchedulerTemplate {
           |  }
           |}
           |
+          |// the purpose of this extension is to allow users to provide custom schedules
+          |// at the C level after transpiling
           |@ext(name = "ScheduleProvider") object ScheduleProviderI {
-          |  def getRoundRobinOrder(): ISZ[art.Bridge] = $$
+          |  def getRoundRobinOrder(): ISZ[Art.BridgeId] = $$
           |  def getStaticSchedule(): DScheduleSpec = $$
           |}"""
     return ret
@@ -100,7 +102,7 @@ object SchedulerTemplate {
           |
           |object ScheduleProvider {
           |
-          |  def getRoundRobinOrder(): ISZ[art.Bridge] = {
+          |  def getRoundRobinOrder(): ISZ[Art.BridgeId] = {
           |    return Schedulers.roundRobinSchedule
           |  }
           |
@@ -133,7 +135,7 @@ object SchedulerTemplate {
     val cMethodName = s"${packageName}_ScheduleProviderI_getRoundRobinOrder"
     val slangSymbol = s"${packageName}.Schedulers.roundRobinSchedule"
     val symbol = s"${packageName}_Schedulers_roundRobinSchedule"
-    val iszUpdates = bridges.map((m: String) => s"IS_7E8796_up(result, i++, (art_Bridge) ${m}(SF_LAST));")
+    val iszUpdates = bridges.map((m: String) => s"IS_FDDCB6_up(result, i++, (art_Art_BridgeId) ${m}(SF_LAST)->id);")
 
     val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, filepath, "", cMethodName, 0)
 
@@ -146,7 +148,7 @@ object SchedulerTemplate {
           |// Transpiled signature of the Slang variable ${slangSymbol}
           |// in ${slangPath}.  This weak function declaration allows
           |// ${cMethodName} to detect whether the Slang variable was deleted
-          |__attribute__((weak)) IS_7E8796 ${symbol}(STACK_FRAME_ONLY);
+          |__attribute__((weak)) IS_FDDCB6 ${symbol}(STACK_FRAME_ONLY);
           |
           |volatile sig_atomic_t shouldStop = 0;
           |
@@ -155,9 +157,9 @@ object SchedulerTemplate {
           | * defined in ${slangPath}
           | *
           | * @param result an empty schedule.  Add components in the order you want them to be dispatched.
-          | *               IS_7E8796=ISZ[art.Bridge], i.e. an immutable sequence of art.Bridge
+          | *               IS_FDDCB6=ISZ[art.Art.BridgeId], i.e. an immutable sequence of art.Bridge
           | */
-          |void ${cMethodName}(STACK_FRAME IS_7E8796 result) {
+          |void ${cMethodName}(STACK_FRAME IS_FDDCB6 result) {
           |  ${declNewStackFrame};
           |
           |  if(${symbol}) {
@@ -165,8 +167,8 @@ object SchedulerTemplate {
           |    printf("  ${cMethodName} located in ${filepath}\n");
           |    printf("to supply your own\n");
           |
-          |    IS_7E8796 order = ${symbol}(SF_LAST);
-          |    memcpy(result->value, order->value, sizeof(union art_Bridge) * order->size);
+          |    IS_FDDCB6 order = ${symbol}(SF_LAST);
+          |    memcpy(result->value, order->value, sizeof(art_Art_BridgeId) * order->size);
           |    result->size = order->size;
           |
           |  } else {

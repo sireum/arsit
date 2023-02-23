@@ -464,11 +464,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
 
     var customSequenceSizes = ISZ[String](
-      // TODO: we could customize the size of MS[Z,Option[art.Bridge]], but we can't
-      //       do the same after the refactoring to use index types as the static size
-      //       is always Max - Min + 1.  Would be nice if we could do something like
-      //       --sequence Art.BridgeId.Max=1
-      //"MS[Art.BridgeId, Option[art.Bridge]]=1"
+      "MS[Art.BridgeId, Option[art.Bridge]]=1"
 
       // not valid
       //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
@@ -480,8 +476,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     }
 
     val customConstants: ISZ[String] = ISZ(
-      s"art.Art.maxComponents=1",
-      s"art.Art.maxPorts=${numComponentPorts}"
+      s"art.Art.numComponents=1",
+      s"art.Art.numPorts=${numComponentPorts}",
+      s"art.Art.numConnections=1"
     )
 
     return genTranspilerBase(

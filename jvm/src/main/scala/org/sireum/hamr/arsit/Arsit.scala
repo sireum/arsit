@@ -72,8 +72,9 @@ object Arsit {
             ("@range(min = 0, index = T) class BridgeId", s"  @range(min = 0, max = ${atLeast0(maxComponent - 1)}, index = T) class BridgeId"),
             ("@range(min = 0, index = T) class PortId", s"  @range(min = 0, max = ${atLeast0(maxPort - 1)}, index = T) class PortId"),
             ("@range(min = 0, index = T) class ConnectionId", s"  @range(min = 0, max = ${atLeast0(maxConnections - 1)}, index = T) class ConnectionId"),
-            ("val maxComponents", s"  val maxComponents: Z = $maxComponent"),
-            ("val maxPorts:", s"  val maxPorts: Z = $maxPort")
+            ("val numComponents", s"  val numComponents: Z = $maxComponent"),
+            ("val numPorts:", s"  val numPorts: Z = $maxPort"),
+            ("val numConnections:", s"  val numConnections: Z = $maxConnections")
           )
           def sub(str: String): String = {
             for(s <- subs if ops.StringOps(str).contains(s._1)) {

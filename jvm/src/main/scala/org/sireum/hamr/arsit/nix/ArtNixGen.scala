@@ -15,6 +15,7 @@ import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.TemplateUtil
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.ResourceUtil
+import org.sireum.hamr.ir.Direction
 
 @record class ArtNixGen(val dirs: ProjectDirectories,
                         val root: AadlSystem,
@@ -292,17 +293,24 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
 
+    val (t, s, z) = ArtNixGen.V().v(symbolTable.rootSystem)
+
     var customSequenceSizes = ISZ[(String, String)](
-      ("IS[Z,String]=3", "Needed for the CLI arguments to the Demo Slang app")
+      ("IS[Z,String]=3", "Needed for the CLI arguments to the Demo Slang app"),
+      (s"IS[Z,art.Art.PortId]=$z", "Needed for the sending and receiving of messages in ART and the bridges"),
+      (s"ISZ[art.UPort]=$z", s"Needed for ${t.identifier}'s ${s} ports"),
+      (s"MSZ[art.UPort]=$z", "Needed for the ops.ISZOps(sorted).tail call used by ArtNativeSlang")
     )
+
     genBitArraySequenceSizes() match {
       case Some((z, typeName)) => customSequenceSizes = customSequenceSizes :+ ((s"IS[Z,B]=$z", s"Needed for the max bit size specified in the model -- see $typeName"))
       case _ =>
     }
 
     val customConstants: ISZ[String] = ISZ(
-      s"art.Art.maxComponents=${numComponents}",
-      s"art.Art.maxPorts=${numPorts}"
+      s"art.Art.numComponents=${numComponents}",
+      s"art.Art.numPorts=${numPorts}",
+      s"art.Art.numConnections=${numConnections}"
     )
 
     val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
@@ -328,8 +336,8 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
     )
 
     customSequenceSizes = customSequenceSizes ++ ISZ(
-      (s"IS[Z,(art.Art.PortId, art.ArtSlangMessage)]=$numPorts", "Needed for the Map[PortId, ArgSlangMessage] in ArtNativeSlang"),
-      (s"IS[Z,art.Bridge]=$numComponents", "Needed for the example round robin schedule in Schedulers"),
+      (s"IS[Z,(Z, art.ArtSlangMessage)]=$numPorts", "Needed for the Map[Z, ArgSlangMessage] in ArtNativeSlang"),
+      (s"IS[Z,art.Art.BridgeId]=$numComponents", "Needed for the example round robin schedule in Schedulers"),
       (s"IS[Z,art.scheduling.static.Schedule.Slot]=$numComponents", "Needed for the example static schedule in Schedulers")
     )
 
@@ -381,5 +389,56 @@ import org.sireum.hamr.codegen.common.util.ResourceUtil
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(staticSchedulerFile)), SchedulerTemplate.c_static_schedule(packageName, archBridgeInstanceNames, staticSchedulerFile), F),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("process.c")), SchedulerTemplate.c_process(), T))
     return ret
+  }
+}
+
+object ArtNixGen {
+
+  @record class V extends MTransformer {
+    var t: Option[AadlThread] = None()
+    var d: String = ""
+    var m: Z = -1
+
+    def v(r: AadlSystem): (AadlThread, String, Z) = {
+      this.transformAadlSystem(r)
+      return (t.get, d, m)
+    }
+
+    override def preAadlThread(o: AadlThread): MTransformer.PreResult[AadlThread] = {
+      var (inData, inEvent, outData, outEvent) = ((0, 0, 0, 0))
+      for (p <- o.features.filter((p => p.isInstanceOf[AadlPort]))) {
+        if (p.isInstanceOf[AadlFeatureEvent]) {
+          if (p.asInstanceOf[AadlPort].direction == Direction.In) {
+            inEvent = inEvent + 1
+          }
+          else {
+            outEvent = outEvent + 1
+          }
+        }
+        if (p.isInstanceOf[AadlFeatureData]) {
+          if (p.asInstanceOf[AadlPort].direction == Direction.In) {
+            inData = inData + 1
+          }
+          else {
+            outData = outData + 1
+          }
+        }
+      }
+
+      def s(z: Z, id: String): Unit = {
+        if (z > m) {
+          m = z
+          t = Some(o)
+          d = id
+        }
+      }
+
+      s(inData, "dataIns")
+      s(outData, "dataOuts")
+      s(inEvent, "eventIns")
+      s(outEvent, "eventOuts")
+
+      return MTransformer.PreResultAadlThread(F, MNone())
+    }
   }
 }
