@@ -70,7 +70,6 @@ object TranspilerTemplate {
 
   @pure def transpilerX(opts: TranspilerConfig,
                         binDir: String): ST = {
-
     val script_home = s"$${${SCRIPT_HOME}}"
 
     val projHomesRel = opts.sourcepath.map((s: String) => Util.relativizePaths(binDir, s, script_home))
@@ -149,11 +148,11 @@ object TranspilerTemplate {
     val ret: ST =
       st"""::/*#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
-          |if [ -z $${SIREUM_HOME} ]; then                       #
+          |if [ -z $${SIREUM_HOME} ]; then                        #
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@" #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"    #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
@@ -181,13 +180,16 @@ object TranspilerTemplate {
           |println("Initializing runtime library ...")
           |Sireum.initRuntimeLibrary()
           |
-          |for(p <- projects) {
-          |  Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
+          |var result = 0
+          |for(p <- projects if result == 0) {
+          |  result = Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
           |}
           |
           |//ops.ISZOps(projects).parMap(p =>
           |//  Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ p)
           |//)
+          |
+          |Os.exit(result)
           |"""
     return ret
   }
@@ -201,11 +203,11 @@ object TranspilerTemplate {
     val ret: ST =
       st"""::/*#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
-          |if [ -z $${SIREUM_HOME} ]; then                       #
+          |if [ -z $${SIREUM_HOME} ]; then                        #
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@" #
+          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"    #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
@@ -248,7 +250,9 @@ object TranspilerTemplate {
           |println("Initializing runtime library ...")
           |Sireum.initRuntimeLibrary()
           |
-          |Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ project)
+          |val result = Sireum.run(ISZ[String]("slang", "transpilers", "c") ++ project)
+          |
+          |Os.exit(result)
           |
           |${ArsitLibrary.getTranspileSlashCli}
           |"""

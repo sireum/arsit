@@ -43,7 +43,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       resources = previousPhase.resources() ++ resources,
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
-      maxConnection= previousPhase.maxConnection,
+      maxConnection = previousPhase.maxConnection,
       transpilerOptions = transpilerOptions)
   }
 
@@ -288,7 +288,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
               |  portIds = portIds :+ ${p.nameId}
               |}"""
         })
-        st"""var portIds: IS[Art.PortId, Art.PortId] = IS()
+        st"""var portIds: ISZ[Art.PortId] = IS()
             |${(checks, "\n")}
             |return EventTriggered(portIds)"""
       }
@@ -462,12 +462,13 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     }
 
     val numComponentPorts: Z = numComponentInPorts + numComponentOutPorts
+    val maxPortSeqSize: Z = if (numComponentInPorts > numComponentOutPorts) numComponentInPorts else numComponentOutPorts
 
     var customSequenceSizes = ISZ[String](
-      "MS[Art.BridgeId, Option[art.Bridge]]=1"
+      "MS[Z,Option[art.Bridge]]=1", // bridges are isolated
 
-      // not valid
-      //s"MS[org.sireum.Z,org.sireum.Option[art.UPort]]=${maxPortsForComponents}"
+      s"IS[Z,art.UPort]=$maxPortSeqSize",
+      s"IS[Z,art.Art.PortId]=$maxPortSeqSize"
     )
 
     genBitArraySequenceSizes() match {

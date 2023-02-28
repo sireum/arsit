@@ -293,13 +293,13 @@ import org.sireum.hamr.ir.Direction
     val numPorts: Z = portId
     val numComponents: Z = previousPhase.maxComponent
 
-    val (t, s, z) = ArtNixGen.V().v(symbolTable.rootSystem)
+    val (t, s, z, hasSporadic) = ArtNixGen.V().v(symbolTable.rootSystem)
 
     var customSequenceSizes = ISZ[(String, String)](
+      (s"MS[Z,Option[art.Bridge]]=$numComponents", "Needed for Art.bridges"),
       ("IS[Z,String]=3", "Needed for the CLI arguments to the Demo Slang app"),
       (s"IS[Z,art.Art.PortId]=$z", "Needed for the sending and receiving of messages in ART and the bridges"),
-      (s"ISZ[art.UPort]=$z", s"Needed for ${t.identifier}'s ${s} ports"),
-      (s"MSZ[art.UPort]=$z", "Needed for the ops.ISZOps(sorted).tail call used by ArtNativeSlang")
+      (s"IS[Z,art.UPort]=$z", s"Needed for ${t.identifier}'s ${s} ports")
     )
 
     genBitArraySequenceSizes() match {
@@ -335,8 +335,16 @@ import org.sireum.hamr.ir.Direction
       cmakeIncludes = ISZ()
     )
 
+    if (hasSporadic) {
+      // sporadic threads call ArtNative.dispatchStatus to get any received incoming events.
+      // These will be sorted using ISZOps when ArtNativeSlang is used.  ISZOps internally uses
+      // an MSZ[Uport]
+      customSequenceSizes = customSequenceSizes :+
+        ((s"MS[Z,art.UPort]=$z", "Needed for the ops.ISZOps(sorted).tail call used by ArtNativeSlang"))
+    }
+
     customSequenceSizes = customSequenceSizes ++ ISZ(
-      (s"IS[Z,(Z, art.ArtSlangMessage)]=$numPorts", "Needed for the Map[Z, ArgSlangMessage] in ArtNativeSlang"),
+      (s"IS[Z,(Z, art.ArtSlangMessage)]=$numPorts", "Needed for the backing store of Map[Z, ArgSlangMessage] in ArtNativeSlang"),
       (s"IS[Z,art.Art.BridgeId]=$numComponents", "Needed for the example round robin schedule in Schedulers"),
       (s"IS[Z,art.scheduling.static.Schedule.Slot]=$numComponents", "Needed for the example static schedule in Schedulers")
     )
@@ -395,16 +403,18 @@ import org.sireum.hamr.ir.Direction
 object ArtNixGen {
 
   @record class V extends MTransformer {
-    var t: Option[AadlThread] = None()
-    var d: String = ""
-    var m: Z = -1
+    var thread: Option[AadlThread] = None() // the thread which has the largest port partition
+    var partition: String = "" // port partition id
+    var maxPorts: Z = -1 // the number of ports in the thread's partition
+    var hasSporadic: B = F // does the model have sporadic threads?
 
-    def v(r: AadlSystem): (AadlThread, String, Z) = {
+    def v(r: AadlSystem): (AadlThread, String, Z, B) = {
       this.transformAadlSystem(r)
-      return (t.get, d, m)
+      return (thread.get, partition, maxPorts, hasSporadic)
     }
 
     override def preAadlThread(o: AadlThread): MTransformer.PreResult[AadlThread] = {
+      hasSporadic = hasSporadic || o.dispatchProtocol == Dispatch_Protocol.Sporadic
       var (inData, inEvent, outData, outEvent) = ((0, 0, 0, 0))
       for (p <- o.features.filter((p => p.isInstanceOf[AadlPort]))) {
         if (p.isInstanceOf[AadlFeatureEvent]) {
@@ -426,10 +436,10 @@ object ArtNixGen {
       }
 
       def s(z: Z, id: String): Unit = {
-        if (z > m) {
-          m = z
-          t = Some(o)
-          d = id
+        if (z > maxPorts) {
+          maxPorts = z
+          thread = Some(o)
+          partition = id
         }
       }
 
