@@ -282,7 +282,7 @@ object GumboGen {
         val modifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${m}")
 
         val inits: ISZ[ST] = sc.initializes.get.guarantees.map((m: GclGuarantee) => {
-          imports = imports ++ GumboUtil.resolveLitInterpolateImports(m.exp)
+          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(m.exp)
           st"""// guarantee ${m.id}
               |${processDescriptor(m.descriptor, "//   ")}
               |${getRExp(m.exp, aadlTypes, gclSymbolTable, basePackage)}"""
@@ -516,6 +516,15 @@ object GumboGen {
                        symbolTable: SymbolTable,
                        aadlTypes: AadlTypes,
                        basePackageName: String) {
+  var imports: ISZ[ST] = ISZ()
+
+  def getRExp(e: AST.Exp): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+  }
+
+  def getR2Exp(e: AST.Exp.Ref): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e.asExp).get)
+  }
 
   def fetchHandler(port: AadlPort, handlers: ISZ[GclHandle]): Option[GclHandle] = {
     var ret: Option[GclHandle] = None()
@@ -548,7 +557,7 @@ object GumboGen {
 
     for (spec <- compute.specs) {
       val rspec = gclSymbolTable.rexprs.get(spec.exp).get
-      imports = imports ++ GumboUtil.resolveLitInterpolateImports(rspec)
+      imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
       val id = spec.id
       val descriptor = GumboGen.processDescriptor(spec.descriptor, "//   ")
@@ -569,10 +578,10 @@ object GumboGen {
 
         val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
         val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
-        imports = imports ++ GumboUtil.resolveLitInterpolateImports(rrassume)
+        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
 
         val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
-        imports = imports ++ GumboUtil.resolveLitInterpolateImports(rguarantee)
+        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
         generalHolder = generalHolder :+ GclCaseHolder(
           caseId = generalCase.id,
@@ -638,7 +647,7 @@ object GumboGen {
               val handlerEnsures = generalElems ++ _cases ++
                 handler.guarantees.map((g: GclGuarantee) => {
                   val rexp = gclSymbolTable.rexprs.get(g.exp).get
-                  imports = imports ++ GumboUtil.resolveLitInterpolateImports(rexp)
+                  imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rexp)
                   st"""// guarantees ${g.id}
                       |${GumboGen.processDescriptor(g.descriptor, "//   ")}
                       |${rexp}"""
@@ -763,17 +772,6 @@ object GumboGen {
     }
   }
 
-
-  var imports: ISZ[ST] = ISZ()
-
-  def getRExp(e: AST.Exp): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
-  }
-
-  def getR2Exp(e: AST.Exp.Ref): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e.asExp).get)
-  }
-
   def processGclMethod(gclMethod: GclMethod): ST = {
     val methodName = gclMethod.method.sig.id.value
 
@@ -883,7 +881,7 @@ object GumboGen {
     for (i <- invariants) {
       val methodName = GumboGen.convertToMethodName(i.id)
 
-      imports = imports ++ GumboUtil.resolveLitInterpolateImports(i.exp)
+      imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
 
       // will be placed in data type def so use resolved exp
       ret = ret :+
@@ -917,7 +915,7 @@ object GumboGen {
           case Some(spec) =>
             val portInvariantMethodName = GumboGen.convertToMethodName(spec.id)
 
-            imports = imports ++ GumboUtil.resolveLitInterpolateImports(spec.exp)
+            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(spec.exp)
 
             // will be placed in api so don't use resolved expr
             val pureFunc: ST =

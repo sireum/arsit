@@ -29,7 +29,7 @@ import org.sireum.message.Reporter
                    reporter: Reporter): DatatypeContribution = {
 
     val subclauses = resolvedAnnexSubclauses.filter((f: AnnexClauseInfo) => f.isInstanceOf[GclAnnexClauseInfo])
-    if(subclauses.size != 1) {
+    if (subclauses.size != 1) {
       // should be infeasible as sym resolution should have rejected this already
       halt(s"A data component can have at most one GUMBO subclause but ${aadlType.name} has ${subclauses.size}")
     }

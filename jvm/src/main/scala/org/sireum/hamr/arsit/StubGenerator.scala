@@ -5,10 +5,10 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
-import org.sireum.hamr.arsit.gcl.GumboGen
+import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.plugin.ArsitPlugin
-import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
+import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.CommonUtil
@@ -197,6 +197,27 @@ import org.sireum.hamr.ir._
         case Some(t: GclEntryPointPeriodicCompute) =>
           entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
           markers = markers ++ t.markers
+        case _ =>
+      }
+
+      GumboXGen.processCompute(m, symbolTable, types, basePackage) match {
+        case Some(body) =>
+          val exe =
+            st"""// #Sireum
+                |
+                |package ${names.packageName}
+                |
+                |import org.sireum._
+                |import ${basePackage}._
+                |
+                |${StringTemplate.doNotEditComment(None())}
+                |object ${names.bridge}_GumboX {
+                |  $body
+                |}
+                |"""
+
+          addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}_GumboX.scala"), exe, T)
+          resources = resources ++ bridgeCode.resources
         case _ =>
       }
 

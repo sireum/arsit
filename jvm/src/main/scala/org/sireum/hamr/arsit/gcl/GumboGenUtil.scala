@@ -2,10 +2,10 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.lang.{ast => AST}
 import org.sireum.hamr.codegen.common.util.GclUtil
+import org.sireum.lang.{ast => AST}
 
-object GumboUtil {
+object GumboGenUtil {
 
   @record class LitImportResolver() extends org.sireum.hamr.ir.MTransformer {
     var imports: ISZ[ST] = ISZ()
