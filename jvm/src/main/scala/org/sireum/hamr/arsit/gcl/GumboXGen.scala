@@ -213,7 +213,7 @@ object GumboXGen {
         imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
         val gg = GumboXGenUtil.rewriteToExpX(rguarantee)
-        val methodName = st"compute_cae_${generalCase.id}_guarantee"
+        val methodName = st"compute_case_${generalCase.id}_guarantee"
 
         oracleParams = oracleParams ++ gg.params.elements
 
