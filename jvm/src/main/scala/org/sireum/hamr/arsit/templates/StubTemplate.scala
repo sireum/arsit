@@ -164,7 +164,8 @@ object StubTemplate {
               st"""Contract(
                   |  ${comma(g.requires)}
                   |  ${comma(g.modifies)}
-                  |  ${g.ensures}
+                  |  ${comma(g.ensures)}
+                  |  ${g.flows}
                   |)""")
           case _ => None()
         }
@@ -200,7 +201,8 @@ object StubTemplate {
                 st"""Contract(
                     |  ${comma(handler.requires)}
                     |  ${comma(handler.modifies)}
-                    |  ${handler.ensures}
+                    |  ${comma(handler.ensures)}
+                    |  ${handler.flows}
                     |)""")
             case _ => None()
           }

@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.gcl.GumboGen.{GclCaseHolder, GclComputeEventHolder, GclEnsuresHolder, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute, GclGeneralHolder, GclHolder, GclRequiresHolder, addOutgoingEventPortRequires}
+import org.sireum.hamr.arsit.gcl.GumboGen.{GclApiContributions, GclCaseHolder, GclComputeEventHolder, GclEnsuresHolder, GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute, GclGeneralHolder, GclHolder, GclRequiresHolder, addOutgoingEventPortRequires}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
@@ -73,7 +73,8 @@ object GumboGen {
 
   @datatype class GclComputeEventHolder(val modifies: Option[ST],
                                         val requires: Option[ST],
-                                        val ensures: Option[ST]) extends GclHolder {
+                                        val ensures: Option[ST],
+                                        val flows: Option[ST]) extends GclHolder {
     def toST: ST = {
       halt("stub")
     }
@@ -109,11 +110,16 @@ object GumboGen {
   @datatype class GclEntryPointPeriodicCompute(val markers: ISZ[Marker],
                                                val modifies: Option[ST],
                                                val requires: Option[ST],
-                                               val ensures: Option[ST]) extends GclEntryPointContainer
+                                               val ensures: Option[ST],
+                                               val flows: Option[ST]) extends GclEntryPointContainer
 
   @datatype class GclEntryPointSporadicCompute(val markers: ISZ[Marker],
                                                val handlers: HashSMap[AadlPort, GclComputeEventHolder]) extends GclEntryPointContainer
 
+  @datatype class GclApiContributions(val objectContributions: ISZ[ST],
+                                      val datatypeContributions: ISZ[ST],
+                                      val requiresContributions: ISZ[ST],
+                                      val ensuresContributions: ISZ[ST])
 
   val FunctionMarker: Marker = Marker("// BEGIN FUNCTIONS", "// END FUNCTIONS")
   val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
@@ -369,7 +375,7 @@ object GumboGen {
   def processIntegrationContract(m: AadlThreadOrDevice,
                                  symbolTable: SymbolTable,
                                  aadlTypes: AadlTypes,
-                                 basePackageName: String): Map[AadlPort, (Option[ST], ST, ST)] = {
+                                 basePackageName: String): Map[AadlPort, GclApiContributions] = {
     resetImports()
     val ais = getGclAnnexInfos(m.path, symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to an AADL thread")
@@ -378,7 +384,7 @@ object GumboGen {
       val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
-      val ret: Map[AadlPort, (Option[ST], ST, ST)] = {
+      val ret: Map[AadlPort, GclApiContributions] = {
         if (gclSymbolTable.apiReferences.nonEmpty || gclSymbolTable.integrationMap.nonEmpty) {
           val gg = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
           val _contracts = gg.processIntegrationContract(m, gclSymbolTable)
@@ -591,6 +597,20 @@ object GumboGen {
       }
     }
 
+    var generalFlows: ISZ[ST] = ISZ()
+
+    for (f <- compute.flows) {
+      val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(e).get
+      val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(e).get
+      generalFlows = generalFlows :+
+        st"""// infoflow ${f.id}
+            |${GumboGen.processDescriptor(f.descriptor, "//   ")}
+            |Flow("${f.id}",
+            |  From(${(froms, ", ")}),
+            |  To(${(tos, ", ")})
+            |)"""
+    }
+
     val generalRequires: ISZ[GclRequiresHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclRequiresHolder]).map((m: GclHolder) => m.asInstanceOf[GclRequiresHolder])
     val generalEnsures: ISZ[GclEnsuresHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclEnsuresHolder]).map((m: GclHolder) => m.asInstanceOf[GclEnsuresHolder])
     val generalCases: ISZ[GclCaseHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclCaseHolder]).map((m: GclHolder) => m.asInstanceOf[GclCaseHolder])
@@ -607,9 +627,21 @@ object GumboGen {
             id = "HAMR-Guarantee",
             descriptor = Some(
               st"""//   passed in payload must be the same as the spec var's value
-                  |//   NOTE: this assumes the user never changes the param name""""),
+                  |//   NOTE: this assumes the user never changes the param name"""),
             requires = st"api.${eventPort.identifier} == value"
           )
+        }
+
+
+        var flows: Option[ST] = None()
+        if (generalFlows.nonEmpty) {
+          val marker = genComputeMarkerCreator(eventPort.identifier, "FLOW")
+          flows = Some(
+            st"""InfoFlows(
+                |  ${marker.beginMarker}
+                |  ${(generalFlows, ",\n")}
+                |  ${marker.endMarker}
+                |)""")
         }
 
         fetchHandler(eventPort, compute.handlers) match {
@@ -663,7 +695,7 @@ object GumboGen {
               None()
             }
 
-            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures)
+            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures, flows)
           }
           case _ => {
             // use the general ones
@@ -710,10 +742,10 @@ object GumboGen {
               None()
             }
 
-            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures)
+            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures, flows)
           }
-        }
-      }
+        } // end handler match
+      } // end for
 
       return GclEntryPointSporadicCompute(markers.elements, handlerMap)
     } else {
@@ -768,8 +800,19 @@ object GumboGen {
         None()
       }
 
-      return GclEntryPointPeriodicCompute(markers.elements, modifies, requires, ensures)
-    }
+      var flows: Option[ST] = None()
+      if (generalFlows.nonEmpty) {
+        val marker = genComputeMarkerCreator(context.identifier, "FLOW")
+        flows = Some(
+          st"""InfoFlows(
+              |  ${marker.beginMarker}
+              |  ${(generalFlows, ",\n")}
+              |  ${marker.endMarker}
+              |)""")
+      }
+
+      return GclEntryPointPeriodicCompute(markers.elements, modifies, requires, ensures, flows)
+    } // end periodic branch
   }
 
   def processGclMethod(gclMethod: GclMethod): ST = {
@@ -893,8 +936,8 @@ object GumboGen {
   }
 
   def processIntegrationContract(m: AadlThreadOrDevice,
-                                 gclSymTable: GclSymbolTable): Map[AadlPort, (Option[ST], ST, ST)] = {
-    var ret: Map[AadlPort, (Option[ST], ST, ST)] = Map.empty
+                                 gclSymTable: GclSymbolTable): Map[AadlPort, GclApiContributions] = {
+    var ret: Map[AadlPort, GclApiContributions] = Map.empty
 
     for (port <- m.getPorts()) {
       val integration: Option[GclSpec] = gclSymTable.integrationMap.get(port)
@@ -910,77 +953,53 @@ object GumboGen {
 
       val dataTypeNames = aadlType.nameProvider
 
-      val (specFunction, specEnsures, specRequires, specInvariant): (Option[ST], Option[ST], Option[ST], Option[ST]) =
-        integration match {
-          case Some(spec) =>
-            val portInvariantMethodName = GumboGen.convertToMethodName(spec.id)
+      var objectContributions: ISZ[ST] = ISZ()
+      var datatypeContributions: ISZ[ST] = ISZ()
+      var requiresContributions: ISZ[ST] = ISZ()
+      var ensuresContributions: ISZ[ST] = ISZ()
 
-            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(spec.exp)
+      integration match {
+        case Some(spec) =>
+          val portInvariantMethodName = GumboGen.convertToMethodName(spec.id)
 
-            // will be placed in api so don't use resolved expr
-            val pureFunc: ST =
-              st"""@strictpure def $portInvariantMethodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
-                  |  ${getRExp(spec.exp)}"""
+          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(spec.exp)
 
-            val ensures = st"${portInvariantMethodName}(${port.identifier}),"
+          // will be placed in api so don't use resolved expr
+          objectContributions = objectContributions :+
+            st"""@strictpure def $portInvariantMethodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
+                |  ${getRExp(spec.exp)}"""
 
-            val requires = st"Requires(${portInvariantMethodName}(value)),"
+          spec match {
+            case a: GclAssume =>
+              // assume integration clauses can only be applied to incoming ports.  The api therefore
+              // ensures that the getter's return value will satisfy the assume clause.
+              ensuresContributions = ensuresContributions :+ st"${portInvariantMethodName}(${port.identifier})"
 
-            val body: ST =
-              if (!isIncoming && isEvent) st"${port.identifier} == None[${dataTypeNames.qualifiedReferencedTypeName}]() || ${portInvariantMethodName}(${port.identifier}.get) // NOTE: isEmpty symbol undefined in CVC4"
-              else st"${portInvariantMethodName}(${port.identifier})"
+            case g: GclGuarantee =>
+              // guarantee integration clauses can only be applied to outgoing ports.  They become
+              // requirements on the param value passed to the api -- the param's name will always be 'value'
+              requiresContributions = requiresContributions :+ st"${portInvariantMethodName}(value)"
+          }
 
-            val inv =
-              st"""@spec def ${port.identifier}_Inv = Invariant(
-                  |  ${body}
-                  |)"""
+          val body: ST =
+            if (!isIncoming && isEvent) st"${port.identifier} == None[${dataTypeNames.qualifiedReferencedTypeName}]() || ${portInvariantMethodName}(${port.identifier}.get) // NOTE: isEmpty symbol undefined in CVC4"
+            else st"${portInvariantMethodName}(${port.identifier})"
 
-            (Some(pureFunc), Some(ensures), Some(requires), Some(inv))
-          case _ => (None(), None(), None(), None())
-        }
-
-      val portDir: String = if (isIncoming) "incoming" else "outgoing"
-      val portType = st"${if (isEvent) "event " else ""}${if (isData) "data " else ""}"
-
-      val specType: String =
-        if (!isIncoming && !port.isInstanceOf[AadlDataPort]) s"Option[${dataTypeNames.qualifiedReferencedTypeName}]"
-        else dataTypeNames.qualifiedReferencedTypeName
-      val specVar: ST =
-        st"""// Logika spec var representing port state for ${portDir} ${portType}port
-            |@spec var ${port.identifier}: ${specType} = $$
-            |${specInvariant}
-            |"""
-
-      val contract: ST = {
-        val inValue: String =
-          if (port.isInstanceOf[AadlEventPort]) s"Some(Empty())"
-          else s"Some(${port.identifier})"
-        if (isIncoming) {
-          st"""Contract(
-              |  Ensures(
-              |    ${specEnsures}
-              |    Res == $inValue
-              |  )
-              |)"""
-        } else {
-          val outValue: String =
-            if (isEvent) s"Some(${if (isData) "value" else "Empty()"})"
-            else "value"
-          st"""Contract(
-              |  ${specRequires}
-              |  Modifies(${port.identifier}),
-              |  Ensures(${port.identifier} == $outValue)
-              |)
-              |Spec {
-              |  ${port.identifier} = $outValue
-              |}
-              |"""
-        }
+          datatypeContributions = datatypeContributions :+
+            st"""@spec def ${port.identifier}_Inv = Invariant(
+                |  ${body}
+                |)"""
+        case _ =>
       }
 
-      ret = ret + (port ~> ((specFunction, specVar, contract)))
+      ret = ret + (port ~> GclApiContributions(
+        objectContributions = objectContributions,
+        datatypeContributions = datatypeContributions,
+        requiresContributions = requiresContributions,
+        ensuresContributions = ensuresContributions))
     }
 
     return ret
   }
 }
+

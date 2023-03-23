@@ -4,8 +4,10 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
+import org.sireum.hamr.arsit.gcl.GumboGen.GclApiContributions
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
+import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlEventPort, AadlFeature, AadlFeatureData, AadlFeatureEvent, AadlPort}
+import org.sireum.hamr.codegen.common.types.{AadlType, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir._
 
@@ -21,7 +23,7 @@ object ApiTemplate {
           basePackageName: String,
           names: NameProvider,
           ports: ISZ[Port],
-          integrationContracts: Map[AadlPort, (Option[ST], ST, ST)]): ST = {
+          integrationContracts: Map[AadlPort, GclApiContributions]): ST = {
 
     val portDefs: ISZ[ST] = st"id: Art.BridgeId" +:
       ops.ISZOps(ports).map((p: Port) => st"${p.name}_Id : Art.PortId")
@@ -32,8 +34,8 @@ object ApiTemplate {
     val inPorts = ports.filter((p: Port) => CommonUtil.isInPort(p.feature))
     val outPorts = ports.filter((p: Port) => !CommonUtil.isInPort(p.feature))
 
-    def getContract(f: AadlFeature): Option[(Option[ST], ST, ST)] = {
-      val ret: Option[(Option[ST], ST, ST)] = f match {
+    def getContract(f: AadlFeature): Option[GclApiContributions] = {
+      val ret: Option[GclApiContributions] = f match {
         case i: AadlPort => integrationContracts.get(i)
         case _ => None()
       }
@@ -42,20 +44,22 @@ object ApiTemplate {
 
     var traitSPFs: ISZ[ST] = ISZ()
     val getters = inPorts.map((p: Port) => {
-      val g = getterApi(p, getContract(p.aadlFeature))
-      if (g._1.nonEmpty) {
-        traitSPFs = traitSPFs :+ g._1.get
+      val gclApiContributions = getContract(p.aadlFeature)
+      gclApiContributions match {
+        case Some(c) if c.objectContributions.nonEmpty => traitSPFs = traitSPFs :+ st"${(c.objectContributions, "\n\n")}"
+        case _ =>
       }
-      g._2
+      getterApi(p, gclApiContributions)
     })
 
     var opSPFs: ISZ[ST] = ISZ()
     val setters = outPorts.map((p: Port) => {
-      val s = setterApi(p, getContract(p.aadlFeature))
-      if (s._1.nonEmpty) {
-        opSPFs = opSPFs :+ s._1.get
+      val gclApiContributions = getContract(p.aadlFeature)
+      gclApiContributions match {
+        case Some(c) if c.objectContributions.nonEmpty => opSPFs = opSPFs :+ st"${(c.objectContributions, "\n\n")}"
+        case _ =>
       }
-      s._2
+      setterApi(p, gclApiContributions)
     })
 
     def collect(name: String, v: ISZ[ST]): Option[ST] = {
@@ -161,57 +165,128 @@ object ApiTemplate {
     return st"""Art.putValue(${addId(p.name)}, ${q}${if (isEmpty) "()" else "(value)"})"""
   }
 
-  def setterApi(p: Port, integrationContracts: Option[(Option[ST], ST, ST)]): (Option[ST], ST) = {
+  def genContracts(p: Port, gclApiContributions: Option[GclApiContributions]): (Option[ST], Option[ST], Option[ST]) = {
+
+    val isIncoming = p.feature.direction == Direction.In
+
+    val (aadlType, isEvent, isData): (AadlType, B, B) = p.aadlFeature match {
+      case i: AadlEventDataPort => (i.aadlType, T, T)
+      case i: AadlDataPort => (i.aadlType, F, T)
+      case i: AadlEventPort => (TypeUtil.EmptyType, T, F)
+      case x => halt("Unexpected port type: $x")
+    }
+
+    val portDir: String = if (isIncoming) "incoming" else "outgoing"
+    val portType = st"${if (isEvent) "event " else ""}${if (isData) "data " else ""}"
+
+    val specType: String =
+      if (!isIncoming && !p.aadlFeature.isInstanceOf[AadlDataPort]) s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
+      else aadlType.nameProvider.qualifiedReferencedTypeName
+
+    var dtcontributions = ISZ(
+      st"""// Logika spec var representing port state for ${portDir} ${portType}port
+          |@spec var ${p.name}: ${specType} = $$"""
+    )
+    gclApiContributions match {
+      case Some(GclApiContributions(_, datatypeContributions, _, _)) if datatypeContributions.nonEmpty =>
+        dtcontributions = dtcontributions ++ datatypeContributions
+      case _ =>
+    }
+    val optDatatypeContributions: Option[ST] = Some(st"${(dtcontributions, "\n")}")
+
+    val optRequires: Option[ST] = gclApiContributions match {
+      case Some(GclApiContributions(_, _, requires, _)) if requires.nonEmpty =>
+        Some(
+          st"""Requires(
+              |  ${(requires, ",\n")}
+              |),""")
+      case _ => None()
+    }
+
+    val optEnsures: Option[ST] = gclApiContributions match {
+      case Some(GclApiContributions(_, _, _, ensures)) if ensures.nonEmpty =>
+        Some(st"${(ensures, ",\n")},")
+      case _ => None()
+    }
+
+    return (optDatatypeContributions, optRequires, optEnsures)
+  }
+
+  def setterApi(p: Port, gclApiContributions: Option[GclApiContributions]): ST = {
     val q = p.getPortTypeNames.qualifiedReferencedTypeName
     val isEmpty = p.getPortTypeNames.isEmptyType
 
-    val (strictPureFunction, integrationMethods, integrationContract): (Option[ST], Option[ST], Option[ST]) = integrationContracts match {
-      case Some((_strictPureFunction, _specVars, _contracts)) =>
-        (_strictPureFunction, Some(_specVars), Some(_contracts))
-      case _ => (None(), None(), None())
-    }
+    val isEvent = p.aadlFeature.isInstanceOf[AadlFeatureEvent]
+    val isData = p.aadlFeature.isInstanceOf[AadlFeatureData]
+
+    val (optDatatypeContributions, optRequires, optEnsures) = genContracts(p, gclApiContributions)
+
+    val outValue: String =
+      if (isEvent) s"Some(${if (isData) "value" else "Empty()"})"
+      else "value"
+
+    val contract: ST =
+      st"""Contract(
+          |  $optRequires
+          |  Modifies(${p.name}),
+          |  Ensures(
+          |    $optEnsures
+          |    ${p.name} == $outValue
+          |  )
+          |)
+          |Spec {
+          |  ${p.name} = $outValue
+          |}
+          |"""
 
     val ret: ST = p.feature.category match {
       case FeatureCategory.DataPort =>
-        st"""${integrationMethods}
-            |def put_${p.name}(value : ${q}) : Unit = {
-            |  ${integrationContract}
+        st"""def put_${p.name}(value : ${q}) : Unit = {
+            |  ${contract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventPort =>
-        st"""${integrationMethods}
-            |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
-            |  ${integrationContract}
+        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+            |  ${contract}
             |  ${putValue(p)}
             |}"""
       case FeatureCategory.EventDataPort =>
-        st"""${integrationMethods}
-            |def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
-            |  ${integrationContract}
+        st"""def put_${p.name}(${if (isEmpty) "" else s"value : ${q}"}) : Unit = {
+            |  ${contract}
             |  ${putValue(p)}
             |}"""
       case _ => halt("Unexpected: $p")
     }
 
-    return ((strictPureFunction, ret))
+    return (st"""$optDatatypeContributions
+                |
+                |$ret""")
   }
 
-  @pure def getterApi(p: Port, integrationContracts: Option[(Option[ST], ST, ST)]): (Option[ST], ST) = {
+  @pure def getterApi(p: Port, gclApiContributions: Option[GclApiContributions]): ST = {
     val isEvent = CommonUtil.isAadlEventPort(p.feature)
     val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
     val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
     val _match: String = if (isEvent) "Empty()" else s"${payloadType}(v)"
     val value: String = if (isEvent) "Empty()" else "v"
 
-    val (strictPureFunction, specVars, integrationContract): (Option[ST], Option[ST], Option[ST]) = integrationContracts match {
-      case Some((_strictPureFunction, _specVars, _contract)) => (_strictPureFunction, Some(_specVars), Some(_contract))
-      case _ => (None(), None(), None())
-    }
+    val (optDatatypeContributions, optRequires, optEnsures) = genContracts(p, gclApiContributions)
+
+    val inValue: String =
+      if(p.aadlFeature.isInstanceOf[AadlEventPort]) s"Some(Empty())"
+      else s"Some(${p.name})"
 
     val ret: ST =
-      st"""${specVars}
+      st"""$optDatatypeContributions
+          |
           |def get_${p.name}() : Option[${typeName}] = {
-          |  ${integrationContract}
+          |  Contract(
+          |    $optRequires
+          |    Ensures(
+          |      $optEnsures
+          |      Res == $inValue
+          |    )
+          |  )
           |  val value : Option[${typeName}] = Art.getValue(${addId(p.name)}) match {
           |    case Some(${_match}) => Some(${value})
           |    case Some(v) =>
@@ -222,6 +297,6 @@ object ApiTemplate {
           |  return value
           |}"""
 
-    return ((strictPureFunction, ret))
+    return ret
   }
 }

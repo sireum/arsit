@@ -287,13 +287,15 @@ object GumboXGen {
           for (param <- sortedParams) yield
             ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
 
-        oracleMethods = oracleMethods :+
-          st"""/**
-              |  ${(paramsToComment(sortedParams), "\n")}
-              |  */
-              |@strictpure def ${eventPort.identifier}_oracle(
-              |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
-              |  ${(oracleComputeSpecCalls ++ oracleCalls, " &\n")}"""
+        if (oracleComputeSpecCalls.nonEmpty || oracleCalls.nonEmpty) {
+          oracleMethods = oracleMethods :+
+            st"""/**
+                |  ${(paramsToComment(sortedParams), "\n")}
+                |  */
+                |@strictpure def ${eventPort.identifier}_oracle(
+                |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+                |  ${(oracleComputeSpecCalls ++ oracleCalls, " &\n")}"""
+        }
       }
     } else {
       val sortedParams = GumboXGenUtil.sortParam(oracleParams.elements)
@@ -301,13 +303,15 @@ object GumboXGen {
         for (param <- sortedParams) yield
           ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
 
-      oracleMethods = oracleMethods :+
-        st"""/**
-            |  ${(paramsToComment(sortedParams), "\n")}
-            |  */
-            |@strictpure def time_triggered_oracle(
-            |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
-            |  ${(oracleComputeSpecCalls, " &\n")}"""
+      if(oracleComputeSpecCalls.nonEmpty) {
+        oracleMethods = oracleMethods :+
+          st"""/**
+              |  ${(paramsToComment(sortedParams), "\n")}
+              |  */
+              |@strictpure def time_triggered_oracle(
+              |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+              |  ${(oracleComputeSpecCalls, " &\n")}"""
+      }
     }
 
     return (
