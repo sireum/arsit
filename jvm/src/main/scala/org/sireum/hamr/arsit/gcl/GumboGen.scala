@@ -123,9 +123,11 @@ object GumboGen {
 
   val FunctionMarker: Marker = Marker("// BEGIN FUNCTIONS", "// END FUNCTIONS")
   val StateVarMarker: Marker = Marker("// BEGIN STATE VARS", "// END STATE VARS")
+
   val InitializesModifiesMarker: Marker = Marker("// BEGIN INITIALIZES MODIFIES", "// END INITIALIZES MODIFIES")
   val InitializesEnsuresMarker: Marker = Marker("// BEGIN INITIALIZES ENSURES", "// END INITIALIZES ENSURES")
   val InitializesRequiresMarker: Marker = Marker("// BEGIN INITIALIZES REQUIRES", "// END INITIALIZES REQUIRES")
+  val InitializesFlowsMarker: Marker = Marker("// BEGIN INITIALIZES FLOWS", "// END INITIALIZES FLOWS")
 
   var imports: ISZ[ST] = ISZ()
 
@@ -336,12 +338,37 @@ object GumboGen {
             None()
           }
 
+        var optFlows: Option[ST] = None()
+        if (sc.initializes.get.flows.nonEmpty) {
+
+          var initFlows: ISZ[ST] = ISZ()
+
+          for (f <- sc.initializes.get.flows) {
+            val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(e).get
+            val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(e).get
+            initFlows = initFlows :+
+              st"""// infoflow ${f.id}
+                  |${GumboGen.processDescriptor(f.descriptor, "//   ")}
+                  |Flow("${f.id}",
+                  |  From(${(froms, ", ")}),
+                  |  To(${(tos, ", ")})
+                  |)"""
+          }
+
+          optFlows = Some(
+            st"""InfoFlows(
+                |  ${InitializesFlowsMarker.beginMarker}
+                |  ${(initFlows, ",\n")}
+                |  ${InitializesFlowsMarker.endMarker}
+                |),""")
+        }
 
         val ret: ST =
           st"""Contract(
               |  ${optRequires}
               |  ${optModifies}
               |  ${optEnsures}
+              |  ${optFlows}
               |)"""
 
         return Some(GclEntryPointInitialize(markers, ret))
