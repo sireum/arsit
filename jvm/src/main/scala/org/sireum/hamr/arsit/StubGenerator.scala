@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
 import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
-import org.sireum.hamr.arsit.plugin.ArsitPlugin
+import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointContributions, BehaviorEntryPointFullContributions, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -99,6 +99,8 @@ import org.sireum.hamr.ir._
   def genThread(m: AadlThreadOrDevice): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
+    BehaviorEntryPointProviders.resetContext(plugins)
+
     val names = nameProvider(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
@@ -138,6 +140,7 @@ import org.sireum.hamr.ir._
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridgeCode.bridge, T)
     resources = resources ++ bridgeCode.resources
 
+
     val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
 
     val api = ApiTemplate.api(
@@ -148,6 +151,7 @@ import org.sireum.hamr.ir._
       integrationContracts)
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
+
 
     if (ArsitPlugin.canHandleBehaviorProviders(plugins, m, annexClauseInfos)) {
       // TODO: probably should only allow one provider (i.e. assume the first one wins)
@@ -221,6 +225,39 @@ import org.sireum.hamr.ir._
         case _ =>
       }
 
+      val beppp: ISZ[BehaviorEntryPointProviderPlugin] = BehaviorEntryPointProviders.getPlugins(plugins)
+
+      var behaviorCodeContributions: ISZ[BehaviorEntryPointFullContributions] = ISZ()
+      for(entryPoint <- ISZ(EntryPoints.initialise, EntryPoints.compute, EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.recover)) {
+        entryPoint match {
+          case EntryPoints.compute if m.isSporadic() =>
+            val inEventPorts = m.features.filter(
+              f => f.isInstanceOf[AadlFeatureEvent] &&
+              f.asInstanceOf[AadlFeatureEvent].direction == Direction.In).map((m: AadlFeature) => m.asInstanceOf[AadlPort])
+            var isFirst = T
+            for(inEventPort <- inEventPorts) {
+              val methodSig: String = BehaviorEntryPointProviders.genMethodSignature(entryPoint, names, Some(inEventPort))
+              val defaultMethodBody: ST = BehaviorEntryPointProviders.genComputeMethodBody(Some(inEventPort), m, isFirst)
+
+              behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
+                entryPoint, Some(inEventPort), m, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
+                basePackage, symbolTable, types, dirs, reporter)
+
+              isFirst = F
+            }
+          case _ =>
+            val methodSig: String = BehaviorEntryPointProviders.genMethodSignature(entryPoint, names, None())
+            val defaultMethodBody: ST =
+              if(entryPoint == EntryPoints.compute) BehaviorEntryPointProviders.genComputeMethodBody(None(), m, T)
+              else BehaviorEntryPointProviders.genMethodBody(entryPoint, m)
+
+            behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(), m,
+              arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
+              basePackage, symbolTable, types, dirs, reporter)
+        }
+      }
+
+      /*
       if (!genBlessEntryPoints) {
         val componentImplBlock = StubTemplate.componentImplBlock(
           componentType = names.componentSingletonType,
@@ -258,19 +295,28 @@ import org.sireum.hamr.ir._
         resources = resources ++ br.resources
       }
 
+       */
+
       genSubprograms(m) match {
         case Some(x) => blocks = blocks :+ x
         case _ =>
       }
 
+      val componentImpl: ST = BehaviorEntryPointProviders.genComponentImpl(names, behaviorCodeContributions)
+      addResourceWithMarkers(filename, ISZ(), componentImpl, markers, F)
+
+      resources = resources ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointFullContributions) => f.resources)
+
+      markers = markers ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointFullContributions) => f.markers)
+/*
       val componentImpl = StubTemplate.slangPreamble(
         inSlang = T,
         packageName = names.packageName,
         topLevelPackageName = basePackage,
         imports = GumboGen.imports,
         blocks = blocks)
+*/
 
-      addResourceWithMarkers(filename, ISZ(), componentImpl, markers, genBlessEntryPoints)
     }
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render

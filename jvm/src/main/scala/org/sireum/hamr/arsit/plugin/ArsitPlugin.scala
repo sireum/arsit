@@ -2,13 +2,13 @@
 package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
-import org.sireum.hamr.arsit.Port
+import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.arsit.bts.BlessBehaviorProviderPlugin
-import org.sireum.hamr.arsit.gcl.GumboDatatypeProviderPlugin
+import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin}
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
-import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
+import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.message.Reporter
@@ -20,6 +20,7 @@ object ArsitPlugin {
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
     GumboDatatypeProviderPlugin(),
+    GumboPlugin(),
     DefaultDatatypeProvider())
 
   @memoize def getDatatypeProviders(plugins: ISZ[Plugin]): ISZ[DatatypeProviderPlugin] = {
@@ -80,6 +81,7 @@ object ArsitPlugin {
   @pure def canHandle(component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
+  // allows a plugin to provide its own behavior code implementation for component
   def handle(component: AadlThreadOrDevice,
              resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
              suggestedFilename: String,
@@ -89,6 +91,102 @@ object ArsitPlugin {
              aadlTypes: AadlTypes,
 
              reporter: Reporter): ISZ[Resource]
+}
+
+
+@sig trait BehaviorEntryPointContributions
+
+object BehaviorEntryPointPartialContributions {
+  @strictpure def empty: BehaviorEntryPointPartialContributions =
+    BehaviorEntryPointPartialContributions(ISZ(), ISZ(), ISZ(), ISZ(), None(), None(), ISZ(), ISZ(), ISZ(), ISZ())
+}
+
+object BehaviorEntryPointFullContributions {
+  @strictpure def empty: BehaviorEntryPointFullContributions =
+    BehaviorEntryPointFullContributions(ISZ(), ISZ(), ISZ(), ISZ(), st"", ISZ(), ISZ(), ISZ(), ISZ())
+}
+
+// allows plugin to fully provide the behavior code for a method.  An error will be thrown
+// if there are more than one of these plugins for a pipeline
+@datatype class BehaviorEntryPointFullContributions(val tags: ISZ[String],
+                                                    val imports: ISZ[String],
+                                                    val preObjectBlocks: ISZ[ST],
+
+                                                    val preMethodBlocks: ISZ[ST],
+                                                    val method: ST, // includes the method sig, optional contract, and body
+                                                    val postMethodBlocks: ISZ[ST],
+
+                                                    val postObjectBlocks: ISZ[ST],
+
+                                                    val markers: ISZ[Marker],
+                                                    val resources: ISZ[Resource]) extends BehaviorEntryPointContributions
+
+// allows plugin to provide parts of the behavior code for a method that will be
+// combined with those from other plugins in the same pipeline.
+// ContractBlock types must be the same for all plugins (all return cases or general)
+// an error will be thrown if more than one plugin provides an optBody
+@datatype class BehaviorEntryPointPartialContributions(val tags: ISZ[String],
+                                                       val imports: ISZ[String],
+                                                       val preObjectBlocks: ISZ[ST],
+
+                                                       val preMethodBlocks: ISZ[ST],
+
+                                                       val contractBlock: Option[ContractBlock],
+
+                                                       val optBody: Option[ST],
+
+                                                       val postMethodBlocks: ISZ[ST],
+
+                                                       val postObjectBlocks: ISZ[ST],
+
+                                                       val markers: ISZ[Marker],
+                                                       val resources: ISZ[Resource]) extends BehaviorEntryPointContributions
+
+@sig trait ContractBlock
+
+@datatype class CaseContractBlock(val cases: ISZ[ST]) extends ContractBlock
+
+@datatype class NonCaseContractBlock(val contractReads: ISZ[ST],
+                                     val contractRequires: ISZ[ST],
+                                     val contractModifies: ISZ[ST],
+                                     val contractEnsures: ISZ[ST],
+                                     val contractFlows: ISZ[ST]) extends ContractBlock
+
+@sig trait Context
+
+@sig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
+
+  /** Will be called at the start of processing a thread
+    *
+    */
+  def getContext(): Context
+
+  @pure def canHandle(entryPoint: EntryPoints.Type,
+                      optInEventPort: Option[AadlPort],
+                      component: AadlThreadOrDevice,
+                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                      context: Context): B
+
+  // allows a plugin to provide contributions to the generated code for
+  // an entrypoint. BehaviorEntryPointProviderPlugins will not be called
+  // for a component if a BehaviorProviderPlugin has already handled the
+  // component
+  def handle(entryPoint: EntryPoints.Type,
+             optInEventPort: Option[AadlPort],
+             component: AadlThreadOrDevice,
+             excludeComponentImplementation: B,
+
+             methodSignature: String, // e.g. def handlePortName(value: PortType, api: ApiType): Unit
+             defaultMethodBody: ST,
+
+             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+             context: Context,
+
+             basePackageName: String,
+             symbolTable: SymbolTable,
+             aadlTypes: AadlTypes,
+             projectDirectories: ProjectDirectories,
+             reporter: Reporter): (BehaviorEntryPointContributions, Context)
 }
 
 @sig trait BridgeCodeProviderPlugin extends ArsitPlugin {
