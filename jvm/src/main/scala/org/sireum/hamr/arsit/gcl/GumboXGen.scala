@@ -9,9 +9,33 @@ import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.ir._
+import org.sireum.lang.ast.Exp
 import org.sireum.lang.{ast => AST}
 
 object GumboXGen {
+
+  @record class InvariantRewriter() extends org.sireum.hamr.ir.MTransformer {
+    override def pre_langastExpIdent(o: AST.Exp.Ident): org.sireum.hamr.ir.MTransformer.PreResult[AST.Exp] = {
+      o.attr.resOpt match {
+        case Some(v: AST.ResolvedInfo.Var) =>
+          val value = Exp.Ident(id = AST.Id(value = "value", attr = AST.Attr(posOpt = o.posOpt)), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
+          val select = Exp.Select(receiverOpt = Some(value), id = o.id, targs = ISZ(), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
+          return org.sireum.hamr.ir.MTransformer.PreResult(F, MSome(select))
+        case _ =>
+          return org.sireum.hamr.ir.MTransformer.PreResult(T, MNone())
+      }
+    }
+  }
+
+  def rewriteInvariant(exp: Exp): Exp = {
+    InvariantRewriter().transform_langastExp(exp) match {
+      case MSome(e)=> return e
+      case _ => return exp
+    }
+  }
+
+  @strictpure def convertInvariantToMethodName(id: String, aadlType: AadlType): String =
+    s"${aadlType.nameProvider.qualifiedCTypeName}_${GumboGen.convertToMethodName(id)}_Invariant"
 
   var imports: ISZ[ST] = ISZ()
 
@@ -33,25 +57,6 @@ object GumboXGen {
     return annexInfos
   }
 
-  def processInvariants(e: AadlType, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): ISZ[ST] = {
-    resetImports()
-    var ret: ISZ[ST] = ISZ()
-
-    val FIXME = ISZ(e.name)
-    val ais = getGclAnnexInfos(FIXME, symbolTable)
-    assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
-
-    for (ai <- ais) {
-      val sc = ai.annex
-      val gclSymTable = ai.gclSymbolTable
-      val gg = GumboXGen(gclSymTable, symbolTable, aadlTypes, basePackageName)
-      ret = ret ++ gg.processInvariants(sc.invariants)
-      addImports(gg)
-    }
-
-    return ret
-  }
-
   def processCompute(m: AadlThreadOrDevice,
                      symbolTable: SymbolTable,
                      aadlTypes: AadlTypes,
@@ -62,8 +67,26 @@ object GumboXGen {
       val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
+      var hasInvariant: ISZ[AadlType] = ISZ()
+      var invariants: ISZ[ST] = ISZ()
+      for (aadlType <- aadlTypes.typeMap.values) {
+        val r = processDatatype(aadlType, symbolTable, aadlTypes, basePackageName)
+        if (r.nonEmpty) {
+          hasInvariant = hasInvariant :+ aadlType
+        }
+        invariants = invariants ++ r
+      }
+
       if (sc.compute.nonEmpty) {
-        return GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m)
+        GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m, hasInvariant) match {
+          case Some(body) =>
+            val optInvariants: Option[ST] = if (invariants.nonEmpty) Some(st"${(invariants, "\n\n")}\n\n") else None()
+            return (
+              Some(
+                st"""$optInvariants
+                    |$body"""))
+          case _ => halt("When would this return None()?")
+        }
       } else {
         return None()
       }
@@ -102,6 +125,25 @@ object GumboXGen {
     }
     return ret
   }
+
+  def processDatatype(aadlType: AadlType,
+                      symbolTable: SymbolTable,
+                      aadlTypes: AadlTypes,
+                      basePackageName: String): ISZ[ST] = {
+
+    val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
+    assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
+
+    var ret: ISZ[ST] = ISZ()
+    for (ai <- ais) {
+      val sc = ai.annex
+      val gclSymbolTable = ai.gclSymbolTable
+      val gg = GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+      ret = ret ++ gg.processInvariants(aadlType, sc.invariants)
+    }
+
+    return ret
+  }
 }
 
 @record class GumboXGen(gclSymbolTable: GclSymbolTable,
@@ -131,7 +173,7 @@ object GumboXGen {
 
   def paramsToComment(params: ISZ[GGParam]): ISZ[ST] = {
     var comments: ISZ[ST] = ISZ()
-    for(p <- params) {
+    for (p <- params) {
       val kind: String = p.kind match {
         case SymbolKind.StateVarPre => "pre-state state variable"
         case SymbolKind.StateVar => "post-state state variable"
@@ -143,23 +185,27 @@ object GumboXGen {
     return comments
   }
 
-  def processInvariants(invariants: ISZ[GclInvariant]): ISZ[ST] = {
+  def processInvariants(aadlType: AadlType, invariants: ISZ[GclInvariant]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
 
     for (i <- invariants) {
-      val methodName = GumboGen.convertToMethodName(i.id)
+      val methodName = GumboXGen.convertInvariantToMethodName(i.id, aadlType)
 
       imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
       // will be placed in data type def so use resolved exp
+
+      val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
       ret = ret :+
-        st"""@spec def ${methodName} = Invariant(
-            |  ${getRExp(i.exp)}
-            |)"""
+        st"""/** invariant ${i.id}
+            |  ${descriptor}
+            |  */
+            |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+            |  ${GumboXGen.rewriteInvariant(getRExp(i.exp))}"""
     }
     return ret
   }
 
-  def processCompute(compute: GclCompute, context: AadlThreadOrDevice): Option[ST] = {
+  def processCompute(compute: GclCompute, context: AadlThreadOrDevice, invariants: ISZ[AadlType]): Option[ST] = {
 
     var computeSpecRequires: ISZ[ST] = ISZ()
     var oracleComputeSpecCalls: ISZ[ST] = ISZ()
@@ -180,14 +226,14 @@ object GumboXGen {
         // TODO:
 
         case g: GclGuarantee =>
-          val gg = GumboXGenUtil.rewriteToExpX(rspec)
+          val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
           val methodName = st"compute_spec_${g.id}_guarantee"
 
           oracleParams = oracleParams ++ gg.params.elements
 
           val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
           val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
+            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
           oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
 
@@ -212,14 +258,14 @@ object GumboXGen {
         val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
         imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
-        val gg = GumboXGenUtil.rewriteToExpX(rguarantee)
+        val gg = GumboXGenUtil.rewriteToExpX(rguarantee, aadlTypes)
         val methodName = st"compute_case_${generalCase.id}_guarantee"
 
         oracleParams = oracleParams ++ gg.params.elements
 
         val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
         val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
+          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
         oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
 
@@ -255,14 +301,14 @@ object GumboXGen {
                   val rexp = gclSymbolTable.rexprs.get(g.exp).get
                   imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rexp)
 
-                  val gg = GumboXGenUtil.rewriteToExpX(rexp)
+                  val gg = GumboXGenUtil.rewriteToExpX(rexp, aadlTypes)
                   val methodName = st"compute_${handler.port.prettyST}_${g.id}_guarantee"
 
                   allHandlerParams = allHandlerParams ++ gg.params.elements
 
                   val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
                   val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-                    ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
+                    ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
                   oracleCalls = oracleCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
 
@@ -285,25 +331,31 @@ object GumboXGen {
         val sortedParams = GumboXGenUtil.sortParam((oracleParams ++ allHandlerParams.elements).elements)
         val handlerParams: ISZ[(String, String)] =
           for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
+            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
         if (oracleComputeSpecCalls.nonEmpty || oracleCalls.nonEmpty) {
+
+          var invariantBlocks: ISZ[ST] = ISZ()
+          for(sortedParam <- sortedParams) {
+
+          }
+
           oracleMethods = oracleMethods :+
             st"""/**
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def ${eventPort.identifier}_oracle(
                 |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
-                |  ${(oracleComputeSpecCalls ++ oracleCalls, " &\n")}"""
+                |  ${(invariantBlocks ++ oracleComputeSpecCalls ++ oracleCalls, " &\n")}"""
         }
       }
     } else {
       val sortedParams = GumboXGenUtil.sortParam(oracleParams.elements)
       val handlerParams: ISZ[(String, String)] =
         for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.typ, aadlTypes)))
+          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-      if(oracleComputeSpecCalls.nonEmpty) {
+      if (oracleComputeSpecCalls.nonEmpty) {
         oracleMethods = oracleMethods :+
           st"""/**
               |  ${(paramsToComment(sortedParams), "\n")}

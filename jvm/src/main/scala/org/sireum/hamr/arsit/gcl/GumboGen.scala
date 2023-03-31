@@ -158,7 +158,7 @@ object GumboGen {
       o.attr.resOpt match {
         case Some(v: AST.ResolvedInfo.Var) =>
           // the only vars the gumbo clause can refer to are state vars so
-          // checking whether o is referning to a state var isn't needed
+          // checking whether o is refering to a state var isn't needed
           return org.sireum.hamr.ir.MTransformer.PreResult(F, MSome(AST.Exp.Input(o, AST.Attr(None()))))
         case _ =>
           return org.sireum.hamr.ir.MTransformer.PreResult(T, MNone())
