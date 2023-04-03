@@ -52,10 +52,18 @@ object GumboXGenUtil {
     var params: Set[GGParam] = Set.empty
 
     def getAadlType(typ: AST.Typed.Name): AadlType = {
-      println(typ)
-      println(aadlTypes.typeMap.keySet)
-      halt("No")
+      val ids: ISZ[String] = typ match {
+        case AST.Typed.Name(AST.Typed.optionName, ISZ(i: AST.Typed.Name)) =>
+          i.ids
+        case _ => typ.ids
+      }
+      val _ids: ISZ[String] =
+        if (ids(ids.size - 1) == "Type") ops.ISZOps(typ.ids).dropRight(1)
+        else ids
+      val key = st"${(_ids, "::")}".render
+      return aadlTypes.typeMap.get(key).get
     }
+
     override def pre_langastExpSelect(o: AST.Exp.Select): ir.MTransformer.PreResult[AST.Exp] = {
       o match {
         case AST.Exp.Select(Some(AST.Exp.Ident(AST.Id("api"))), id, attr) =>

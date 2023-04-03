@@ -29,10 +29,13 @@ object GumboXGen {
 
   def rewriteInvariant(exp: Exp): Exp = {
     InvariantRewriter().transform_langastExp(exp) match {
-      case MSome(e)=> return e
+      case MSome(e) => return e
       case _ => return exp
     }
   }
+
+  @strictpure def createInvariantMethodName(aadlType: AadlType): String =
+    s"${aadlType.nameProvider.qualifiedCTypeName}_Invariant"
 
   @strictpure def convertInvariantToMethodName(id: String, aadlType: AadlType): String =
     s"${aadlType.nameProvider.qualifiedCTypeName}_${GumboGen.convertToMethodName(id)}_Invariant"
@@ -85,7 +88,7 @@ object GumboXGen {
               Some(
                 st"""$optInvariants
                     |$body"""))
-          case _ => halt("When would this return None()?")
+          case _ => None()
         }
       } else {
         return None()
@@ -188,6 +191,7 @@ object GumboXGen {
   def processInvariants(aadlType: AadlType, invariants: ISZ[GclInvariant]): ISZ[ST] = {
     var ret: ISZ[ST] = ISZ()
 
+    var methodNames: ISZ[String] = ISZ()
     for (i <- invariants) {
       val methodName = GumboXGen.convertInvariantToMethodName(i.id, aadlType)
 
@@ -195,6 +199,7 @@ object GumboXGen {
       // will be placed in data type def so use resolved exp
 
       val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
+      methodNames = methodNames :+ methodName
       ret = ret :+
         st"""/** invariant ${i.id}
             |  ${descriptor}
@@ -202,10 +207,15 @@ object GumboXGen {
             |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
             |  ${GumboXGen.rewriteInvariant(getRExp(i.exp))}"""
     }
+    val oracleName = GumboXGen.createInvariantMethodName(aadlType)
+    ret = ret :+
+      st"""@strictpure def ${oracleName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+          |  ${(methodNames, "(value) &\n")}(value)"""
+
     return ret
   }
 
-  def processCompute(compute: GclCompute, context: AadlThreadOrDevice, invariants: ISZ[AadlType]): Option[ST] = {
+  def processCompute(compute: GclCompute, context: AadlThreadOrDevice, hasInvariant: ISZ[AadlType]): Option[ST] = {
 
     var computeSpecRequires: ISZ[ST] = ISZ()
     var oracleComputeSpecCalls: ISZ[ST] = ISZ()
@@ -333,36 +343,44 @@ object GumboXGen {
           for (param <- sortedParams) yield
             ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-        if (oracleComputeSpecCalls.nonEmpty || oracleCalls.nonEmpty) {
+        var invariantBlocks: ISZ[ST] = ISZ()
+        for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
+          invariantBlocks = invariantBlocks :+ st"${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}(${sortedParam.name})"
+        }
 
-          var invariantBlocks: ISZ[ST] = ISZ()
-          for(sortedParam <- sortedParams) {
-
-          }
-
+        val blocks = invariantBlocks ++ oracleComputeSpecCalls ++ oracleCalls
+        if (blocks.nonEmpty) {
           oracleMethods = oracleMethods :+
             st"""/**
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def ${eventPort.identifier}_oracle(
                 |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
-                |  ${(invariantBlocks ++ oracleComputeSpecCalls ++ oracleCalls, " &\n")}"""
+                |  ${(blocks, " &\n")}"""
         }
-      }
-    } else {
+      } // end for loop
+    }
+    else {
+      // periodic component
       val sortedParams = GumboXGenUtil.sortParam(oracleParams.elements)
       val handlerParams: ISZ[(String, String)] =
         for (param <- sortedParams) yield
           ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-      if (oracleComputeSpecCalls.nonEmpty) {
+      var invariantBlocks: ISZ[ST] = ISZ()
+      for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
+        invariantBlocks = invariantBlocks :+ st"${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}(${sortedParam.name})"
+      }
+
+      val blocks = invariantBlocks ++ oracleComputeSpecCalls
+      if (blocks.nonEmpty) {
         oracleMethods = oracleMethods :+
           st"""/**
               |  ${(paramsToComment(sortedParams), "\n")}
               |  */
               |@strictpure def time_triggered_oracle(
               |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
-              |  ${(oracleComputeSpecCalls, " &\n")}"""
+              |  ${(blocks, " &\n")}"""
       }
     }
 
