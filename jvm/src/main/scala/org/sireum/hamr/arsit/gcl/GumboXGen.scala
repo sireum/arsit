@@ -88,7 +88,7 @@ object GumboXGen {
               Some(
                 st"""$optInvariants
                     |$body"""))
-          case _ => None()
+          case _ => return None()
         }
       } else {
         return None()
