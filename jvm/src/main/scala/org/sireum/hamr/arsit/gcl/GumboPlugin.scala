@@ -14,6 +14,8 @@ import org.sireum.message.Reporter
 
   val name: String = "Gumbo Plugin"
 
+  var handledStateVars: B = F
+  var handledMethods: B = F
 
   def canHandle(entryPoint: EntryPoints.Type,
                 optInEventPort: Option[AadlPort],
@@ -21,8 +23,8 @@ import org.sireum.message.Reporter
                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex, _)) =>
-        return (annex.state.nonEmpty) || // && !context.handledStateVars) ||
-          (annex.methods.nonEmpty) || // && !context.handledMethods) ||
+        return (annex.state.nonEmpty && !handledStateVars) ||
+          (annex.methods.nonEmpty && !handledMethods) ||
           (entryPoint == EntryPoints.initialise && annex.initializes.nonEmpty) ||
           (entryPoint == EntryPoints.compute && annex.compute.nonEmpty)
       case _ => return F
@@ -51,18 +53,16 @@ import org.sireum.message.Reporter
         var modifies: ISZ[ST] = ISZ()
         var ensures: ISZ[ST] = ISZ()
         var flows: ISZ[ST] = ISZ()
-        //var handledStateVars = context.handledStateVars
-        //var handledMethods = context.handledMethods
 
         if (annex.state.nonEmpty) { //} && !handledStateVars) {
           val p = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(annex.state)
           stateVars = stateVars :+ p._1
           markers = markers :+ p._2
-          //handledStateVars = T
+          handledStateVars = T
         }
         if (annex.methods.nonEmpty) { //} && !handledMethods) {
           println("gcl methods")
-          //handledMethods = T
+          handledMethods = T
         }
         if (annex.initializes.nonEmpty) {
           val r = GumboGen.processInitializes(component, symbolTable, aadlTypes, basePackageName).get
