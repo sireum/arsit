@@ -152,20 +152,12 @@ object BehaviorEntryPointFullContributions {
                                      val contractEnsures: ISZ[ST],
                                      val contractFlows: ISZ[ST]) extends ContractBlock
 
-@sig trait Context
-
 @sig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
-
-  /** Will be called at the start of processing a thread
-    *
-    */
-  def getContext(): Context
 
   @pure def canHandle(entryPoint: EntryPoints.Type,
                       optInEventPort: Option[AadlPort],
                       component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                      context: Context): B
+                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
   // allows a plugin to provide contributions to the generated code for
   // an entrypoint. BehaviorEntryPointProviderPlugins will not be called
@@ -180,13 +172,12 @@ object BehaviorEntryPointFullContributions {
              defaultMethodBody: ST,
 
              resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-             context: Context,
 
              basePackageName: String,
              symbolTable: SymbolTable,
              aadlTypes: AadlTypes,
              projectDirectories: ProjectDirectories,
-             reporter: Reporter): (BehaviorEntryPointContributions, Context)
+             reporter: Reporter): BehaviorEntryPointContributions
 }
 
 @sig trait BridgeCodeProviderPlugin extends ArsitPlugin {

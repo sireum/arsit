@@ -99,8 +99,6 @@ import org.sireum.hamr.ir._
   def genThread(m: AadlThreadOrDevice): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
-    BehaviorEntryPointProviders.resetContext(plugins)
-
     val names = nameProvider(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
