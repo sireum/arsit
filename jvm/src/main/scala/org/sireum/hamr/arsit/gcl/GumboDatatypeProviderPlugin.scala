@@ -9,7 +9,7 @@ import org.sireum.hamr.codegen.common.symbols.{AnnexClauseInfo, GclAnnexClauseIn
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.message.Reporter
 
-@datatype class GumboDatatypeProviderPlugin extends DatatypeProviderPlugin {
+@record class GumboDatatypeProviderPlugin extends DatatypeProviderPlugin {
   @strictpure def name: String = "GUMBO Datatype Provider Plugin"
 
   @strictpure def canHandle(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =

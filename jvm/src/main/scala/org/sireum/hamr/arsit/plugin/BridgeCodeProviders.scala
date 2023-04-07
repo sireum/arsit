@@ -20,7 +20,7 @@ import org.sireum.message.Reporter
                                         resources: ISZ[Resource])
 
 
-@datatype class SingletonBridgeCodeProviderPlugin extends BridgeCodeProviderPlugin {
+@record class SingletonBridgeCodeProviderPlugin extends BridgeCodeProviderPlugin {
   @strictpure def name: String = "Singleton Bridge Code Provider Plugin"
 
   @pure def generate(nameProvider: NameUtil.NameProvider,

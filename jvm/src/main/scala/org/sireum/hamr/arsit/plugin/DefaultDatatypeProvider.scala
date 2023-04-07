@@ -25,7 +25,7 @@ object DefaultDatatypeProvider {
   }
 }
 
-@datatype class DefaultDatatypeProvider extends DatatypeProviderPlugin {
+@record class DefaultDatatypeProvider extends DatatypeProviderPlugin {
   @strictpure def name: String = "Default Datatype Provider"
 
   @strictpure def canHandle(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = return T

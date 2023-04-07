@@ -11,7 +11,7 @@ import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.FeatureCategory
 import org.sireum.message.Reporter
 
-@datatype class SingletonEntryPointProviderPlugin extends EntryPointProviderPlugin {
+@record class SingletonEntryPointProviderPlugin extends EntryPointProviderPlugin {
 
   @strictpure def name: String = "Singleton Entry Point Provider Plugin"
 

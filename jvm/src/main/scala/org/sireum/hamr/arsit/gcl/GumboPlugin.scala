@@ -10,7 +10,7 @@ import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.message.Reporter
 
-@datatype class GumboPlugin extends BehaviorEntryPointProviderPlugin {
+@record class GumboPlugin extends BehaviorEntryPointProviderPlugin {
 
   val name: String = "Gumbo Plugin"
 

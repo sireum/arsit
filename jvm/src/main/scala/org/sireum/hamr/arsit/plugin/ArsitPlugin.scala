@@ -74,9 +74,9 @@ object ArsitPlugin {
   }
 }
 
-@sig trait ArsitPlugin extends Plugin
+@msig trait ArsitPlugin extends Plugin
 
-@sig trait BehaviorProviderPlugin extends ArsitPlugin {
+@msig trait BehaviorProviderPlugin extends ArsitPlugin {
 
   @pure def canHandle(component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
@@ -152,7 +152,7 @@ object BehaviorEntryPointFullContributions {
                                      val contractEnsures: ISZ[ST],
                                      val contractFlows: ISZ[ST]) extends ContractBlock
 
-@sig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
+@msig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
 
   @pure def canHandle(entryPoint: EntryPoints.Type,
                       optInEventPort: Option[AadlPort],
@@ -180,7 +180,7 @@ object BehaviorEntryPointFullContributions {
              reporter: Reporter): BehaviorEntryPointContributions
 }
 
-@sig trait BridgeCodeProviderPlugin extends ArsitPlugin {
+@msig trait BridgeCodeProviderPlugin extends ArsitPlugin {
   def generate(nameProvider: NameProvider,
                component: AadlThreadOrDevice,
                ports: ISZ[Port],
@@ -193,7 +193,7 @@ object BehaviorEntryPointFullContributions {
                reporter: Reporter): BridgeCodeContributions
 }
 
-@sig trait EntryPointProviderPlugin extends ArsitPlugin {
+@msig trait EntryPointProviderPlugin extends ArsitPlugin {
   @pure def canHandle(component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
@@ -212,7 +212,7 @@ object BehaviorEntryPointFullContributions {
 @datatype class DatatypeContribution(val datatype: Resource,
                                      val resources: ISZ[Resource])
 
-@sig trait DatatypeProviderPlugin extends ArsitPlugin {
+@msig trait DatatypeProviderPlugin extends ArsitPlugin {
   @pure def canHandle(aadlType: AadlType,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
