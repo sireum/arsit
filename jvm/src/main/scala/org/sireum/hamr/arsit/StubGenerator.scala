@@ -5,9 +5,10 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
-import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
 import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
 import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointContributions, BehaviorEntryPointFullContributions, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
+import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
+import org.sireum.hamr.arsit.plugin.ArsitPlugin
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter

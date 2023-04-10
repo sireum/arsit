@@ -34,11 +34,14 @@ object GumboXGen {
     }
   }
 
+  @strictpure def createInvariantObjectName(aadlType: AadlType): String =
+    s"${aadlType.nameProvider.typeName}_GumboX"
+
   @strictpure def createInvariantMethodName(aadlType: AadlType): String =
-    s"${aadlType.nameProvider.qualifiedCTypeName}_Invariant"
+    s"${aadlType.nameProvider.typeName}_Invariant"
 
   @strictpure def convertInvariantToMethodName(id: String, aadlType: AadlType): String =
-    s"${aadlType.nameProvider.qualifiedCTypeName}_${GumboGen.convertToMethodName(id)}_Invariant"
+    s"${GumboGen.convertToMethodName(id)}_Invariant"
 
   var imports: ISZ[ST] = ISZ()
 
@@ -70,26 +73,13 @@ object GumboXGen {
       val sc = ais(0).annex
       val gclSymbolTable = ais(0).gclSymbolTable
 
-      var hasInvariant: ISZ[AadlType] = ISZ()
-      var invariants: ISZ[ST] = ISZ()
-      for (aadlType <- aadlTypes.typeMap.values) {
-        val r = processDatatype(aadlType, symbolTable, aadlTypes, basePackageName)
-        if (r.nonEmpty) {
-          hasInvariant = hasInvariant :+ aadlType
-        }
-        invariants = invariants ++ r
+      var datatypesWithInvariant: ISZ[AadlType] = ISZ()
+      for (aadlType <- aadlTypes.typeMap.values if hasInvariant(aadlType, symbolTable)) {
+        datatypesWithInvariant = datatypesWithInvariant :+ aadlType
       }
 
       if (sc.compute.nonEmpty) {
-        GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m, hasInvariant) match {
-          case Some(body) =>
-            val optInvariants: Option[ST] = if (invariants.nonEmpty) Some(st"${(invariants, "\n\n")}\n\n") else None()
-            return (
-              Some(
-                st"""$optInvariants
-                    |$body"""))
-          case _ => return None()
-        }
+        return GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m, datatypesWithInvariant)
       } else {
         return None()
       }
@@ -129,10 +119,13 @@ object GumboXGen {
     return ret
   }
 
-  def processDatatype(aadlType: AadlType,
-                      symbolTable: SymbolTable,
-                      aadlTypes: AadlTypes,
-                      basePackageName: String): ISZ[ST] = {
+  @strictpure def hasInvariant(aadlType: AadlType, symbolTable: SymbolTable): B =
+    return getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+
+  def processInvariant(aadlType: AadlType,
+                       symbolTable: SymbolTable,
+                       aadlTypes: AadlTypes,
+                       basePackageName: String): ISZ[ST] = {
 
     val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
@@ -345,7 +338,8 @@ object GumboXGen {
 
         var invariantBlocks: ISZ[ST] = ISZ()
         for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
-          invariantBlocks = invariantBlocks :+ st"${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}(${sortedParam.name})"
+          val qualifiedName = s"${sortedParam.aadlType.nameProvider.qualifiedPackageName}.${GumboXGen.createInvariantObjectName(sortedParam.aadlType)}.${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}"
+          invariantBlocks = invariantBlocks :+ st"$qualifiedName(${sortedParam.name})"
         }
 
         val blocks = invariantBlocks ++ oracleComputeSpecCalls ++ oracleCalls
@@ -369,7 +363,8 @@ object GumboXGen {
 
       var invariantBlocks: ISZ[ST] = ISZ()
       for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
-        invariantBlocks = invariantBlocks :+ st"${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}(${sortedParam.name})"
+        val qualifiedName = s"${sortedParam.aadlType.nameProvider.qualifiedPackageName}.${GumboXGen.createInvariantObjectName(sortedParam.aadlType)}.${GumboXGen.createInvariantMethodName(sortedParam.aadlType)}"
+        invariantBlocks = invariantBlocks :+ st"$qualifiedName(${sortedParam.name})"
       }
 
       val blocks = invariantBlocks ++ oracleComputeSpecCalls
