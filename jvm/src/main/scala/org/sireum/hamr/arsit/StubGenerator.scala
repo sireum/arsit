@@ -245,9 +245,10 @@ import org.sireum.hamr.ir._
             }
           case _ =>
             val methodSig: String = BehaviorEntryPointProviders.genMethodSignature(entryPoint, names, None())
-            val defaultMethodBody: ST =
-              if(entryPoint == EntryPoints.compute) BehaviorEntryPointProviders.genComputeMethodBody(None(), m, T)
-              else BehaviorEntryPointProviders.genMethodBody(entryPoint, m)
+            val defaultMethodBody: ST = entryPoint match {
+              case EntryPoints.compute => BehaviorEntryPointProviders.genComputeMethodBody(None(), m, T)
+              case _ => BehaviorEntryPointProviders.genMethodBody(entryPoint, m)
+            }
 
             behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(), m,
               arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,

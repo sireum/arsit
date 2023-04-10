@@ -71,18 +71,21 @@ import org.sireum.message.Reporter
           ensures = ensures ++ r.ensures
           flows = flows ++ r.flows
         }
-        if (annex.compute.nonEmpty) {
-          println("compute")
-          GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute2(annex.compute.get, optInEventPort, component) match {
-            case (n: NonCaseContractBlock, mmarkers) =>
-              markers = markers ++ mmarkers
-              reads = reads ++ n.contractReads
-              requires = requires ++ n.contractRequires
-              modifies = modifies ++ n.contractModifies
-              ensures = ensures ++ n.contractEnsures
-              flows = flows ++ n.contractFlows
-            case _ => halt("Infeasible for now")
-          }
+        entryPoint match {
+          case EntryPoints.initialise if annex.initializes.nonEmpty =>
+            halt("need to handle initialise")
+          case EntryPoints.compute if annex.compute.nonEmpty =>
+            GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute2(annex.compute.get, optInEventPort, component) match {
+              case (n: NonCaseContractBlock, mmarkers) =>
+                markers = markers ++ mmarkers
+                reads = reads ++ n.contractReads
+                requires = requires ++ n.contractRequires
+                modifies = modifies ++ n.contractModifies
+                ensures = ensures ++ n.contractEnsures
+                flows = flows ++ n.contractFlows
+              case _ => halt("Infeasible for now")
+            }
+          case _ => // gumbo contracts cannot currently be placed on the other entrypoints
         }
 
         val contractBlock = NonCaseContractBlock(reads, requires, modifies, ensures, flows)
