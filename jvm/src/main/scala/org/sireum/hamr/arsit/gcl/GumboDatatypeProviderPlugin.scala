@@ -45,7 +45,7 @@ import org.sireum.message.Reporter
         val useDefault: ISZ[String] = ISZ()
         val content = dt.generateCustom(
           custSlangSwitches = useDefault,
-          custImports = (Set.empty[String] ++ imports.map((s: ST) => s.render)).elements,
+          custImports = (Set.empty[String] ++ imports).elements,
           custDatatypeCompanionBlocks = useDefault,
           custParams = useDefault,
           custDatatypeBlocks = datatypeBlocks.map((m: ST) => m.render),

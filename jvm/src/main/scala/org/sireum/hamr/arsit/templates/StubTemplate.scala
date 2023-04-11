@@ -13,8 +13,8 @@ import org.sireum.hamr.ir.FeatureCategory
 
 object StubTemplate {
 
-  def addImports(imports: ISZ[ST]): Option[ST] = {
-    val s: Set[String] = Set.empty[String] ++ (imports.map((m: ST) => s"import ${m.render}"))
+  def addImports(imports: ISZ[String]): Option[ST] = {
+    val s: Set[String] = Set.empty[String] ++ (for(i <- imports) yield s"import $i")
     return if (s.nonEmpty) Some(st"${(s.elements, "\n")}") else None()
   }
 
@@ -264,7 +264,7 @@ object StubTemplate {
   @pure def slangPreamble(inSlang: B,
                           packageName: String,
                           topLevelPackageName: String,
-                          imports: ISZ[ST],
+                          imports: ISZ[String],
                           blocks: ISZ[ST]): ST = {
     val ret: ST =
       st"""${if (inSlang) "// #Sireum\n\n" else ""}package $packageName

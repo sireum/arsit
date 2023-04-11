@@ -67,6 +67,7 @@ import org.sireum.ops.ISZOps
                 |
                 |import org.sireum._
                 |import ${basePackage}._
+                |${StubTemplate.addImports(GumboXGen.imports)}
                 |
                 |${StringTemplate.doNotEditComment(None())}
                 |object ${objectName} {

@@ -43,7 +43,7 @@ object GumboXGen {
   @strictpure def convertInvariantToMethodName(id: String, aadlType: AadlType): String =
     s"${GumboGen.convertToMethodName(id)}_Invariant"
 
-  var imports: ISZ[ST] = ISZ()
+  var imports: ISZ[String] = ISZ()
 
   def resetImports(): Unit = {
     imports = ISZ()
@@ -79,7 +79,10 @@ object GumboXGen {
       }
 
       if (sc.compute.nonEmpty) {
-        return GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m, datatypesWithInvariant)
+        val gg = GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+        val ret = gg.processCompute(sc.compute.get, m, datatypesWithInvariant)
+        addImports(gg)
+        return ret
       } else {
         return None()
       }
@@ -127,6 +130,8 @@ object GumboXGen {
                        aadlTypes: AadlTypes,
                        basePackageName: String): ISZ[ST] = {
 
+    resetImports()
+
     val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
     assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
 
@@ -136,6 +141,7 @@ object GumboXGen {
       val gclSymbolTable = ai.gclSymbolTable
       val gg = GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
       ret = ret ++ gg.processInvariants(aadlType, sc.invariants)
+      addImports(gg)
     }
 
     return ret
@@ -146,7 +152,7 @@ object GumboXGen {
                         symbolTable: SymbolTable,
                         aadlTypes: AadlTypes,
                         basePackageName: String) {
-  var imports: ISZ[ST] = ISZ()
+  var imports: ISZ[String] = ISZ()
 
   def getRExp(e: AST.Exp): AST.Exp = {
     return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
@@ -189,7 +195,6 @@ object GumboXGen {
       val methodName = GumboXGen.convertInvariantToMethodName(i.id, aadlType)
 
       imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
-      // will be placed in data type def so use resolved exp
 
       val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
       methodNames = methodNames :+ methodName

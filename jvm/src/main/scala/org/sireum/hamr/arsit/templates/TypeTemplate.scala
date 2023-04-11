@@ -227,7 +227,7 @@ object TypeTemplate {
 
   @pure def typeS(topLevelPackageName: String,
                   packageName: String,
-                  imports: ISZ[ST],
+                  imports: ISZ[String],
                   body: ST,
                   payload: ST,
                   canOverwrite: B): ST = {

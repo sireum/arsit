@@ -136,7 +136,7 @@ object GumboGen {
   val InitializesRequiresMarker: Marker = Marker("// BEGIN INITIALIZES REQUIRES", "// END INITIALIZES REQUIRES")
   val InitializesFlowsMarker: Marker = Marker("// BEGIN INITIALIZES FLOWS", "// END INITIALIZES FLOWS")
 
-  var imports: ISZ[ST] = ISZ()
+  var imports: ISZ[String] = ISZ()
 
   def resetImports(): Unit = {
     imports = ISZ()
@@ -503,7 +503,10 @@ object GumboGen {
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.compute.nonEmpty) {
-        return Some(GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(sc.compute.get, m))
+        val gg = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+        val ret = gg.processCompute(sc.compute.get, m)
+        addImports(gg)
+        return Some(ret)
       } else {
         return None()
       }
@@ -581,7 +584,7 @@ object GumboGen {
                        symbolTable: SymbolTable,
                        aadlTypes: AadlTypes,
                        basePackageName: String) {
-  var imports: ISZ[ST] = ISZ()
+  var imports: ISZ[String] = ISZ()
 
   def getRExp(e: AST.Exp): AST.Exp = {
     return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)

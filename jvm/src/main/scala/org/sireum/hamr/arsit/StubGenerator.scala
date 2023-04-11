@@ -186,6 +186,8 @@ import org.sireum.hamr.ir._
 
       var entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer] = Map.empty
 
+      GumboXGen.resetImports()
+
       GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
         case Some(gepi) =>
           entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> gepi)
@@ -212,6 +214,7 @@ import org.sireum.hamr.ir._
                 |
                 |import org.sireum._
                 |import ${basePackage}._
+                |${StubTemplate.addImports(GumboXGen.imports)}
                 |
                 |${StringTemplate.doNotEditComment(None())}
                 |object ${names.bridge}_GumboX {
