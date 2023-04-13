@@ -123,7 +123,7 @@ object GumboXGen {
   }
 
   @strictpure def hasInvariant(aadlType: AadlType, symbolTable: SymbolTable): B =
-    return getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+    getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
 
   def processInvariant(aadlType: AadlType,
                        symbolTable: SymbolTable,
