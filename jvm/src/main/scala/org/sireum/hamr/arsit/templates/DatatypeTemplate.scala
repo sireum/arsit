@@ -22,10 +22,10 @@ import org.sireum.hamr.codegen.common.types._
     else ret
   }
 
-  @strictpure def examplePayload: ST = {
-    st"""def example(): ${typ.nameProvider.payloadName} = {
-        |  return ${typ.nameProvider.payloadName}(${typ.nameProvider.example()})
-        |}"""
+  @pure def examplePayload: ST = {
+    return st"""def example(): ${typ.nameProvider.payloadName} = {
+               |  return ${typ.nameProvider.payloadName}(${typ.nameProvider.example()})
+               |}"""
   }
 
 
@@ -52,7 +52,7 @@ import org.sireum.hamr.codegen.common.types._
       datatypeBlocks = choose(custDatatypeBlocks, for (e <- enumValues) yield st"$e"),
       payloadSingletonBlocks = choose(custPayloadSingletonBlocks, ISZ(examplePayload)),
       preBlocks = choose(custPreBlocks, defaultPreBlocks),
-      postBlocks = choose(custPostBlocks, ISZ()),
+      postBlocks = choose(custPostBlocks, ISZ())
     )
   }
 
@@ -116,17 +116,19 @@ import org.sireum.hamr.codegen.common.types._
 @datatype class DatatypeTemplate(val typ: AadlType,
                                  val willBeOverwritten: B) extends IDatatypeTemplate {
 
-  @strictpure def params: ISZ[ST] =
+  @pure def params: ISZ[ST] = {
     typ match {
       case at: ArrayType =>
-        if (at.dimensions.size == 1)
-          ISZ(st"val value: IS[${at.nameProvider.referencedTypeName}.I, ${at.baseType.nameProvider.referencedSergenTypeName}]")
-        else
-          ISZ(st"val value: ISZ[${at.baseType.nameProvider.referencedSergenTypeName}]")
+        if (at.dimensions.size == 1) {
+          return ISZ(st"val value: IS[${at.nameProvider.referencedTypeName}.I, ${at.baseType.nameProvider.referencedSergenTypeName}]")
+        } else {
+          return ISZ(st"val value: ISZ[${at.baseType.nameProvider.referencedSergenTypeName}]")
+        }
       case rt: RecordType =>
-        for (f <- rt.fields.entries) yield st"val ${f._1}: ${f._2.nameProvider.referencedSergenTypeName}"
-      case _ => ISZ()
+        return for (f <- rt.fields.entries) yield st"val ${f._1}: ${f._2.nameProvider.referencedSergenTypeName}"
+      case _ => return ISZ()
     }
+  }
 
   @pure def defaultDatatypeCompanionBlocks: ISZ[ST] = {
     var ret : ISZ[ST] = ISZ()

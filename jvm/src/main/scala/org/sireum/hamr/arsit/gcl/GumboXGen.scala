@@ -34,14 +34,17 @@ object GumboXGen {
     }
   }
 
-  @strictpure def createInvariantObjectName(aadlType: AadlType): String =
-    s"${aadlType.nameProvider.typeName}_GumboX"
+  @pure def createInvariantObjectName(aadlType: AadlType): String = {
+    return s"${aadlType.nameProvider.typeName}_GumboX"
+  }
 
-  @strictpure def createInvariantMethodName(aadlType: AadlType): String =
-    s"${aadlType.nameProvider.typeName}_Invariant"
+  @pure def createInvariantMethodName(aadlType: AadlType): String = {
+    return s"${aadlType.nameProvider.typeName}_Invariant"
+  }
 
-  @strictpure def convertInvariantToMethodName(id: String, aadlType: AadlType): String =
-    s"${GumboGen.convertToMethodName(id)}_Invariant"
+  @pure def convertInvariantToMethodName(id: String, aadlType: AadlType): String = {
+    return s"${GumboGen.convertToMethodName(id)}_Invariant"
+  }
 
   var imports: ISZ[String] = ISZ()
 
@@ -122,8 +125,9 @@ object GumboXGen {
     return ret
   }
 
-  @strictpure def hasInvariant(aadlType: AadlType, symbolTable: SymbolTable): B =
-    getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+  @pure def hasInvariant(aadlType: AadlType, symbolTable: SymbolTable): B = {
+    return getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+  }
 
   def processInvariant(aadlType: AadlType,
                        symbolTable: SymbolTable,

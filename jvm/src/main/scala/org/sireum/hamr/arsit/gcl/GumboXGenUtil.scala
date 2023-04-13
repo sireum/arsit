@@ -10,8 +10,9 @@ import org.sireum.lang.{ast => AST}
 object GumboXGenUtil {
 
   def getSlangType(typ: Typed, aadlTypes: AadlTypes): String = {
-    @strictpure def toAadl(ids: ISZ[String]): String =
-      st"${((if (ops.ISZOps(ids).last == "Type") ops.ISZOps(ids).dropRight(1) else ids), "::")}".render
+    @pure def toAadl(ids: ISZ[String]): String = {
+      return st"${((if (ops.ISZOps(ids).last == "Type") ops.ISZOps(ids).dropRight(1) else ids), "::")}".render
+    }
 
     typ match {
       case i: AST.Typed.Name =>
@@ -26,10 +27,11 @@ object GumboXGenUtil {
     }
   }
 
-  @strictpure def sortParam(params: ISZ[GGParam]): ISZ[GGParam] =
-    (for (partition <-
+  @pure def sortParam(params: ISZ[GGParam]): ISZ[GGParam] = {
+    return (for (partition <-
             (for (kind <- SymbolKind.elements) yield ops.ISZOps(params).filter(p => p.kind == kind))) yield
       ops.ISZOps(partition).sortWith((a, b) => a.name <= b.name)).flatMap(a => a)
+  }
 
 
   @enum object SymbolKind {
