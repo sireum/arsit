@@ -25,7 +25,7 @@ import org.sireum.hamr.ir._
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
-                            plugins: ISZ[Plugin],
+                            plugins: MSZ[Plugin],
                             previousPhase: Result) {
 
   val basePackage: String = arsitOptions.packageName
@@ -227,7 +227,7 @@ import org.sireum.hamr.ir._
         case _ =>
       }
 
-      val beppp: ISZ[BehaviorEntryPointProviderPlugin] = BehaviorEntryPointProviders.getPlugins(plugins)
+      val beppp: MSZ[BehaviorEntryPointProviderPlugin] = BehaviorEntryPointProviders.getPlugins(plugins)
 
       var behaviorCodeContributions: ISZ[BehaviorEntryPointFullContributions] = ISZ()
       for(entryPoint <- ISZ(EntryPoints.initialise, EntryPoints.compute, EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.recover)) {
@@ -308,8 +308,10 @@ import org.sireum.hamr.ir._
       val componentImpl: ST = BehaviorEntryPointProviders.genComponentImpl(names, behaviorCodeContributions)
       addResourceWithMarkers(filename, ISZ(), componentImpl, markers, F)
 
+      // add external resources
       resources = resources ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointFullContributions) => f.resources)
 
+      // add markers
       markers = markers ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointFullContributions) => f.markers)
 /*
       val componentImpl = StubTemplate.slangPreamble(

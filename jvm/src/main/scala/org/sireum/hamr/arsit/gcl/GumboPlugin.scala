@@ -54,26 +54,26 @@ import org.sireum.message.Reporter
         var ensures: ISZ[ST] = ISZ()
         var flows: ISZ[ST] = ISZ()
 
-        if (annex.state.nonEmpty) { //} && !handledStateVars) {
+        if (annex.state.nonEmpty && !handledStateVars) {
           val p = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(annex.state)
           stateVars = stateVars :+ p._1
           markers = markers :+ p._2
           handledStateVars = T
         }
-        if (annex.methods.nonEmpty) { //} && !handledMethods) {
+        if (annex.methods.nonEmpty && !handledMethods) {
           println("gcl methods")
           handledMethods = T
         }
-        if (annex.initializes.nonEmpty) {
-          val r = GumboGen.processInitializes(component, symbolTable, aadlTypes, basePackageName).get
-          requires = requires ++ r.requires
-          modifies = modifies ++ r.modifies
-          ensures = ensures ++ r.ensures
-          flows = flows ++ r.flows
-        }
+
         entryPoint match {
           case EntryPoints.initialise if annex.initializes.nonEmpty =>
-            halt("need to handle initialise")
+            val r = GumboGen.processInitializes(component, symbolTable, aadlTypes, basePackageName).get
+            requires = requires ++ r.requires
+            modifies = modifies ++ r.modifies
+            ensures = ensures ++ r.ensures
+            flows = flows ++ r.flows
+
+
           case EntryPoints.compute if annex.compute.nonEmpty =>
             GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute2(annex.compute.get, optInEventPort, component) match {
               case (n: NonCaseContractBlock, mmarkers) =>

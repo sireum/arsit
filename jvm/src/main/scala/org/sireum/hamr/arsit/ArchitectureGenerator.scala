@@ -26,7 +26,7 @@ import org.sireum.ops.ISZOps
                                     val arsitOptions: ArsitOptions,
                                     val symbolTable: SymbolTable,
                                     val types: AadlTypes,
-                                    val plugins: ISZ[Plugin]) {
+                                    val plugins: MSZ[Plugin]) {
   var componentId: Z = 0
   var portId: Z = 0
 

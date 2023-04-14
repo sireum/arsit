@@ -15,7 +15,7 @@ import org.sireum.message.Reporter
 
 object ArsitPlugin {
 
-  val defaultPlugins: ISZ[Plugin] = ISZ(
+  val defaultPlugins: MSZ[Plugin] = MSZ(
     BlessBehaviorProviderPlugin(),
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
@@ -23,11 +23,11 @@ object ArsitPlugin {
     GumboPlugin(),
     DefaultDatatypeProvider())
 
-  @memoize def getDatatypeProviders(plugins: ISZ[Plugin]): ISZ[DatatypeProviderPlugin] = {
+  @memoize def getDatatypeProviders(plugins: MSZ[Plugin]): MSZ[DatatypeProviderPlugin] = {
     return plugins.filter((p : Plugin) => p.isInstanceOf[DatatypeProviderPlugin]).map((m: Plugin) => m.asInstanceOf[DatatypeProviderPlugin])
   }
 
-  @pure def getDatatypeProvider(plugins: ISZ[Plugin],
+  @pure def getDatatypeProvider(plugins: MSZ[Plugin],
                                 aadlType: AadlType,
                                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): DatatypeProviderPlugin = {
     return getDatatypeProviders(plugins).filter((p: DatatypeProviderPlugin) =>
@@ -35,7 +35,7 @@ object ArsitPlugin {
   }
 
 
-  @memoize def getBridgeCodeProviders(plugins: ISZ[Plugin]): BridgeCodeProviderPlugin = {
+  @memoize def getBridgeCodeProviders(plugins: MSZ[Plugin]): BridgeCodeProviderPlugin = {
     val ret = plugins.filter((p: Plugin) => p.isInstanceOf[BridgeCodeProviderPlugin]).map((p: Plugin) => p.asInstanceOf[BridgeCodeProviderPlugin])
     if (ret.size != 1) {
       halt("Only the default bridge code provider is currently allowed")
@@ -44,11 +44,11 @@ object ArsitPlugin {
   }
 
 
-  @memoize def getEntryPointProviders(plugins: ISZ[Plugin]): ISZ[EntryPointProviderPlugin] = {
+  @memoize def getEntryPointProviders(plugins: MSZ[Plugin]): MSZ[EntryPointProviderPlugin] = {
     return plugins.filter((p: Plugin) => p.isInstanceOf[EntryPointProviderPlugin]).map((p: Plugin) => p.asInstanceOf[EntryPointProviderPlugin])
   }
 
-  def getEntryPointProvider(plugins: ISZ[Plugin],
+  def getEntryPointProvider(plugins: MSZ[Plugin],
                             component: AadlThreadOrDevice,
                             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): EntryPointProviderPlugin = {
     val ret = getEntryPointProviders(plugins).filter((ep: EntryPointProviderPlugin) => ep.canHandle(component, resolvedAnnexSubclauses))
@@ -60,11 +60,11 @@ object ArsitPlugin {
   }
 
 
-  @memoize def getBehaviorProviders(plugins: ISZ[Plugin]): ISZ[BehaviorProviderPlugin] = {
+  @memoize def getBehaviorProviders(plugins: MSZ[Plugin]): MSZ[BehaviorProviderPlugin] = {
     return plugins.filter((p: Plugin) => p.isInstanceOf[BehaviorProviderPlugin]).map((p: Plugin) => p.asInstanceOf[BehaviorProviderPlugin])
   }
 
-  def canHandleBehaviorProviders(plugins: ISZ[Plugin],
+  def canHandleBehaviorProviders(plugins: MSZ[Plugin],
                                  component: AadlThreadOrDevice,
                                  resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
     for (bp <- getBehaviorProviders(plugins) if bp.canHandle(component, resolvedAnnexSubclauses)) {

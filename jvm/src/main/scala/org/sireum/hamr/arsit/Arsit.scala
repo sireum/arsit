@@ -1,3 +1,4 @@
+// #Sireum
 package org.sireum.hamr.arsit
 
 import org.sireum._
@@ -23,14 +24,14 @@ object Arsit {
   //   named according to the associated phase).
   //=================================================================
 
-  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: ISZ[Plugin], reporter: Reporter): ArsitResult = {
+  def run(model: ir.Aadl, o: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: MSZ[Plugin], reporter: Reporter): ArsitResult = {
     ReporterUtil.resetReporter()
     val ret = runInternal(model, o, aadlTypes, symbolTable, plugins)
     ReporterUtil.addReports(reporter)
     return ret
   }
 
-  private def runInternal(model: ir.Aadl, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: ISZ[Plugin]): ArsitResult = {
+  def runInternal(model: ir.Aadl, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, plugins: MSZ[Plugin]): ArsitResult = {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
@@ -62,11 +63,11 @@ object Arsit {
       nixPhase.transpilerOptions)
   }
 
-  private def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {
+  def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {
     var resources: ISZ[Resource] = ISZ()
-    for ((p, c) <- ArsitLibrary.getFiles if ops.StringOps(p).contains("art")) {
+    for (entry <- ArsitLibrary.getFiles if ops.StringOps(entry._1).contains("art")) {
       val _c: String =
-        if (ops.StringOps(p).contains("Art.scala")) {
+        if (ops.StringOps(entry._1).contains("Art.scala")) {
           @strictpure def atLeast0(i: Z): Z = if(i < 0) 0 else i
           val subs: ISZ[(String, String)] = ISZ(
             ("@range(min = 0, index = T) class BridgeId", s"  @range(min = 0, max = ${atLeast0(maxComponent - 1)}, index = T) class BridgeId"),
@@ -82,13 +83,13 @@ object Arsit {
             }
             return str
           }
-          val lines = StringUtil.split_PreserveEmptySegments(c, (c: C) => c == C('\n')).map((s: String) => sub(s))
+          val lines = StringUtil.split_PreserveEmptySegments(entry._2, (c: C) => c == '\n').map((s: String) => sub(s))
           st"${(lines, "\n")}".render
         } else {
-          c
+          entry._2
         }
 
-      resources = resources :+ ResourceUtil.createStringResource(Util.pathAppend(outputDir, ISZ(p)), _c, T)
+      resources = resources :+ ResourceUtil.createStringResource(Util.pathAppend(outputDir, ISZ(entry._1)), _c, T)
     }
     return resources
   }
@@ -193,11 +194,12 @@ object Arsit {
   }
 
   def isNixProject(value: ArsitPlatform.Type): B = {
-    return value match {
+    val ret: B = value match {
       case ArsitPlatform.Linux => T
       case ArsitPlatform.MacOS => T
       case ArsitPlatform.Cygwin => T
       case _ => F
     }
+    return ret
   }
 }

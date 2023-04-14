@@ -15,13 +15,13 @@ import org.sireum.message.Reporter
 
 object BehaviorEntryPointProviders {
 
-  @strictpure def getPlugins(plugins: ISZ[Plugin]): ISZ[BehaviorEntryPointProviderPlugin] =
+  @strictpure def getPlugins(plugins: MSZ[Plugin]): MSZ[BehaviorEntryPointProviderPlugin] =
     plugins.filter(f => f.isInstanceOf[BehaviorEntryPointProviderPlugin]).map(m => m.asInstanceOf[BehaviorEntryPointProviderPlugin])
 
   def offer(entryPoint: EntryPoints.Type, optInEventPort: Option[AadlPort],
             m: AadlThreadOrDevice, excludeImpl: B, methodSig: String, defaultMethodBody: ST,
             annexClauseInfos: ISZ[AnnexClauseInfo],
-            plugins: ISZ[BehaviorEntryPointProviderPlugin],
+            plugins: MSZ[BehaviorEntryPointProviderPlugin],
 
             basePackageName: String,
             symbolTable: SymbolTable,
@@ -69,18 +69,21 @@ object BehaviorEntryPointProviders {
     }
 
     @pure def processNonCases(entries: ISZ[NonCaseContractBlock]): ST = {
-      @strictpure def wrap(prefix: String, es: ISZ[ST], addComma: B): Option[ST] =
+      @strictpure def wrap(prefix: String, es: ISZ[ST]): Option[ST] =
         if(es.isEmpty) None()
         else Some(st"""$prefix(
                       |  ${(es, ",\n")}
-                      |)${if(addComma)"," else ""}""")
+                      |)""")
+
+      val _entries = ISZ(
+        wrap("Reads", entries.flatMap(f => f.contractReads)),
+        wrap("Requires", entries.flatMap(f => f.contractRequires)),
+        wrap("Modifies", entries.flatMap(f => f.contractModifies)),
+        wrap("Ensures", entries.flatMap(f => f.contractEnsures)),
+        wrap("InfoFlows", entries.flatMap(f => f.contractFlows))).filter(f => f.nonEmpty).map((m: Option[ST]) => m.get)
 
       return (st"""Contract(
-                  |  ${wrap("Reads", entries.flatMap(f => f.contractReads), T)}
-                  |  ${wrap("Requires", entries.flatMap(f => f.contractRequires), T)}
-                  |  ${wrap("Modifies", entries.flatMap(f => f.contractModifies), T)}
-                  |  ${wrap("Ensures", entries.flatMap(f =>f.contractEnsures), T)}
-                  |  ${wrap("InfoFlows", entries.flatMap(f => f.contractFlows), F)}
+                  |  ${(_entries, ",\n")}
                   |)""")
     }
 
@@ -94,11 +97,15 @@ object BehaviorEntryPointProviders {
       else None()
 
     val body: ST = if(optBody.nonEmpty) optBody.get else defaultMethodBody
-    val method =
+
+    val method: ST = if(optContract.isEmpty && body.render.size == 0) {
+      st"$methodSig = { }"
+    } else {
       st"""$methodSig = {
           |  $optContract
           |  $body
           |}"""
+    }
     return ret(method = method)
   }
 
@@ -138,14 +145,18 @@ object BehaviorEntryPointProviders {
     val ret: ST = optInEventPort match {
       case Some(p) =>
         val feedback: ST = p match {
-          case a:AadlEventDataPort => st"""api.logInfo(s"  received $$value")"""
-          case a:AadlEventPort => st"""api.logInfo("  received event")"""
+          case a: AadlEventDataPort => st"""api.logInfo(s"  received $$value")"""
+          case a: AadlEventPort => st"""api.logInfo("  received event")"""
           case _ => halt("Infeasible as we're generating a handler method for an event port")
         }
         val methodName = genMethodName(EntryPoints.compute, optInEventPort)
-        st"""api.logInfo("example $methodName implementation")
-            |$feedback
-            |${if (includeApiUsage) Some(exampleApiGetterUsage) else None[ST]()}"""
+        // ideally this would be single ST block, but inserting exampleApiGetUsage as an Option[ST]
+        // results in a black line when it's None so using seq expansion instead
+        var lines = ISZ[ST](st"""api.logInfo("example $methodName implementation")""", feedback)
+        if (includeApiUsage) {
+          lines = lines :+ exampleApiGetterUsage
+        }
+        st"${(lines, "\n")}"
       case _ => // must be time triggered method
         if(includeApiUsage) exampleApiGetterUsage else st""
     }
@@ -210,12 +221,13 @@ object BehaviorEntryPointProviders {
     @strictpure def wrapString(v: ISZ[String], sep: String): Option[ST] = if(v.isEmpty) None() else Some(st"${(v, sep)}")
     @strictpure def wrapST(v: ISZ[ST], sep: String): Option[ST] = if(v.isEmpty) None() else Some(st"${(v, sep)}")
 
-    val body = wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preMethodBlocks) ++
+    val body = wrapST(
+      entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preMethodBlocks) ++
       entries.map((f: BehaviorEntryPointFullContributions) => f.method) ++
       entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postMethodBlocks), "\n\n")
 
     // remove duplicate tags
-    val tags: Set[String] = (Set.empty + "#Sireum") ++ entries.flatMap((f: BehaviorEntryPointFullContributions) => f.tags)
+    val tags: Set[String] = (Set.empty[String] + "#Sireum") ++ entries.flatMap((f: BehaviorEntryPointFullContributions) => f.tags)
 
     return (
     st"""// ${(tags.elements, " ")}
