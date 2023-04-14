@@ -144,9 +144,11 @@ object BehaviorEntryPointFullContributions {
 
 @sig trait ContractBlock
 
-@datatype class CaseContractBlock(val cases: ISZ[ST]) extends ContractBlock
+@datatype class CaseContractBlock(val imports: ISZ[String],
+                                  val cases: ISZ[ST]) extends ContractBlock
 
-@datatype class NonCaseContractBlock(val contractReads: ISZ[ST],
+@datatype class NonCaseContractBlock(val imports: ISZ[String],
+                                     val contractReads: ISZ[ST],
                                      val contractRequires: ISZ[ST],
                                      val contractModifies: ISZ[ST],
                                      val contractEnsures: ISZ[ST],
@@ -157,7 +159,8 @@ object BehaviorEntryPointFullContributions {
   @pure def canHandle(entryPoint: EntryPoints.Type,
                       optInEventPort: Option[AadlPort],
                       component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                      symbolTable: SymbolTable): B
 
   // allows a plugin to provide contributions to the generated code for
   // an entrypoint. BehaviorEntryPointProviderPlugins will not be called

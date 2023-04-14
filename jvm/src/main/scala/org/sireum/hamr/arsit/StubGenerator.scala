@@ -4,11 +4,8 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
-import org.sireum.hamr.arsit.bts.{BTSGen, BTSResults}
-import org.sireum.hamr.arsit.gcl.GumboGen.{GclEntryPointPeriodicCompute, GclEntryPointSporadicCompute}
-import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointContributions, BehaviorEntryPointFullContributions, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
 import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
-import org.sireum.hamr.arsit.plugin.ArsitPlugin
+import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointFullContributions, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -17,7 +14,7 @@ import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
-import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
 
 @record class StubGenerator(dirs: ProjectDirectories,
@@ -32,13 +29,9 @@ import org.sireum.hamr.ir._
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[Resource] = ISZ()
 
-  val processBTSNodes: B = ExperimentalOptions.processBtsNodes(arsitOptions.experimentalOptions)
-
   def generate(): Result = {
 
     gen(rootSystem)
-
-    processAnnexLibraries()
 
     return PhaseResult(
       resources = previousPhase.resources() ++ resources,
@@ -115,11 +108,6 @@ import org.sireum.hamr.ir._
       return
     }
 
-    val btsAnnexes: ISZ[AnnexClauseInfo] =
-      symbolTable.annexClauseInfos.get(m).get.filter(m => m.isInstanceOf[BTSAnnexInfo])
-
-    val genBlessEntryPoints: B = btsAnnexes.nonEmpty && processBTSNodes
-
     val annexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
       case Some(infos) => infos
       case _ => ISZ()
@@ -167,43 +155,6 @@ import org.sireum.hamr.ir._
     } else {
       var blocks: ISZ[ST] = ISZ()
       var markers: ISZ[Marker] = ISZ()
-      var preBlocks: ISZ[ST] = ISZ()
-
-      GumboGen.processSubclauseFunctions(m, symbolTable, types, basePackage) match {
-        case Some((st, marker)) =>
-          preBlocks = preBlocks :+ st
-          markers = markers :+ marker
-        case _ =>
-      }
-
-      // TODO: generalize to walk over all annexes to see if they have content that should appear before methods
-      GumboGen.processStateVars(m, symbolTable, types, basePackage) match {
-        case Some((st, marker)) =>
-          preBlocks = preBlocks :+ st
-          markers = markers :+ marker
-        case _ =>
-      }
-
-      var entryPointContracts: Map[EntryPoints.Type, GumboGen.GclEntryPointContainer] = Map.empty
-
-      GumboXGen.resetImports()
-
-      GumboGen.processInitializes(m, symbolTable, types, basePackage) match {
-        case Some(gepi) =>
-          entryPointContracts = entryPointContracts + (EntryPoints.initialise ~> gepi)
-          markers = markers ++ gepi.markers
-        case _ =>
-      }
-
-      GumboGen.processCompute(m, symbolTable, types, basePackage) match {
-        case Some(t: GclEntryPointSporadicCompute) =>
-          entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
-          markers = markers ++ t.markers
-        case Some(t: GclEntryPointPeriodicCompute) =>
-          entryPointContracts = entryPointContracts + (EntryPoints.compute ~> t)
-          markers = markers ++ t.markers
-        case _ =>
-      }
 
       GumboXGen.processCompute(m, symbolTable, types, basePackage) match {
         case Some(body) =>
@@ -260,48 +211,10 @@ import org.sireum.hamr.ir._
         }
       }
 
-      /*
-      if (!genBlessEntryPoints) {
-        val componentImplBlock = StubTemplate.componentImplBlock(
-          componentType = names.componentSingletonType,
-          names = names,
-          dispatchProtocol = m.dispatchProtocol,
-          ports = ports,
-          excludeComponentImpl = arsitOptions.excludeImpl,
-          preBlocks = preBlocks,
-          entryPointContracts = entryPointContracts,
-          symbolTable = symbolTable
-        )
-        blocks = blocks :+ componentImplBlock
-      } else {
-        assert(btsAnnexes.size == 1, s"Expecting exactly one BTS annex but found ${btsAnnexes.size}")
-
-        val btsAnnexInfo = btsAnnexes(0).asInstanceOf[BTSAnnexInfo]
-
-        val br: BTSResults = BTSGen(
-          directories = dirs,
-          basePackage = basePackage,
-          aadlComponent = m,
-          componentNames = names,
-
-          symbolTable = symbolTable,
-          btsSymbolTable = btsAnnexInfo.btsSymbolTable,
-          aadlTypes = types,
-
-          addViz = F,
-          genDebugObjects = F).process(btsAnnexInfo.annex)
-
-        assert(br.maxPort == -1 && br.maxComponent == -1 && br.optVizEntries.isEmpty) // TODO
-
-        blocks = blocks :+ br.component
-
-        resources = resources ++ br.resources
-      }
-
-       */
-
       genSubprograms(m) match {
-        case Some(x) => blocks = blocks :+ x
+        case Some(x) =>
+          blocks = blocks :+ x
+          halt("Need to revisit subprograms")
         case _ =>
       }
 
@@ -313,15 +226,6 @@ import org.sireum.hamr.ir._
 
       // add markers
       markers = markers ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointFullContributions) => f.markers)
-/*
-      val componentImpl = StubTemplate.slangPreamble(
-        inSlang = T,
-        packageName = names.packageName,
-        topLevelPackageName = basePackage,
-        imports = GumboGen.imports,
-        blocks = blocks)
-*/
-
     }
 
     var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
@@ -391,16 +295,6 @@ import org.sireum.hamr.ir._
       return Some(body)
     } else {
       return None[ST]()
-    }
-  }
-
-  def processAnnexLibraries(): Unit = {
-    for (annexLibInfo <- symbolTable.annexLibInfos) {
-      GumboGen.processLibrary(annexLibInfo, symbolTable, types, basePackage) match {
-        case Some((st, filename)) =>
-          addResource(dirs.componentDir, filename, st, T)
-        case _ =>
-      }
     }
   }
 

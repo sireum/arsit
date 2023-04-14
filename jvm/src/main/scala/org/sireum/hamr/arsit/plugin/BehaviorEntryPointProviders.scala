@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
-import org.sireum.hamr.arsit.templates.StringTemplate
+import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.toolName
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlEventPort, AadlPort, AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
@@ -33,7 +33,7 @@ object BehaviorEntryPointProviders {
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
-    for(p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos) && !reporter.hasError) {
+    for(p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos, symbolTable) && !reporter.hasError) {
       p.handle(entryPoint, optInEventPort, m, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
         case b: BehaviorEntryPointFullContributions =>
           if (plugins.size > 1) {
@@ -236,7 +236,7 @@ object BehaviorEntryPointProviders {
         |
         |import org.sireum._
         |import ${names.basePackage}._
-        |${wrapString(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.imports), "\n")}
+        |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.imports))}
         |
         |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preObjectBlocks), "\n\n")}
         |${StringTemplate.safeToEditComment()}
