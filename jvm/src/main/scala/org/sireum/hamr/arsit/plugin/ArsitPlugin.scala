@@ -16,7 +16,7 @@ import org.sireum.message.Reporter
 
 object ArsitPlugin {
 
-  val defaultPlugins: MSZ[Plugin] = MSZ(
+  @strictpure def defaultPlugins: MSZ[Plugin] = MSZ(
     BlessBehaviorProviderPlugin(),
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
