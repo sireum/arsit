@@ -3,7 +3,8 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{BehaviorEntryPointContributions, BehaviorEntryPointPartialContributions, BehaviorEntryPointProviderPlugin, NonCaseContractBlock}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, BehaviorEntryPointPartialContributions, NonCaseContractBlock}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._

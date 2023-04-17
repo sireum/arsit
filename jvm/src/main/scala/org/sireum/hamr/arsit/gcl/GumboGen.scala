@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.gcl.GumboGen._
-import org.sireum.hamr.arsit.plugin.{ContractBlock, NonCaseContractBlock}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin._
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker

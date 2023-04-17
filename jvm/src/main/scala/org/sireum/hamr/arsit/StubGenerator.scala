@@ -5,7 +5,8 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
-import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointFullContributions, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.BehaviorEntryPointFullContributions
+import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointElementProvider, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -189,8 +190,8 @@ import org.sireum.hamr.ir._
               f.asInstanceOf[AadlFeatureEvent].direction == Direction.In).map((m: AadlFeature) => m.asInstanceOf[AadlPort])
             var isFirst = T
             for(inEventPort <- inEventPorts) {
-              val methodSig: String = BehaviorEntryPointProviders.genMethodSignature(entryPoint, names, Some(inEventPort))
-              val defaultMethodBody: ST = BehaviorEntryPointProviders.genComputeMethodBody(Some(inEventPort), m, isFirst)
+                val methodSig: String = BehaviorEntryPointElementProvider.genMethodSignature(entryPoint, names, Some(inEventPort))
+              val defaultMethodBody: ST = BehaviorEntryPointElementProvider.genComputeMethodBody(Some(inEventPort), m, isFirst, arsitOptions.excludeImpl)
 
               behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
                 entryPoint, Some(inEventPort), m, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
@@ -199,10 +200,10 @@ import org.sireum.hamr.ir._
               isFirst = F
             }
           case _ =>
-            val methodSig: String = BehaviorEntryPointProviders.genMethodSignature(entryPoint, names, None())
+            val methodSig: String = BehaviorEntryPointElementProvider.genMethodSignature(entryPoint, names, None())
             val defaultMethodBody: ST = entryPoint match {
-              case EntryPoints.compute => BehaviorEntryPointProviders.genComputeMethodBody(None(), m, T)
-              case _ => BehaviorEntryPointProviders.genMethodBody(entryPoint, m)
+              case EntryPoints.compute => BehaviorEntryPointElementProvider.genComputeMethodBody(None(), m, T, arsitOptions.excludeImpl)
+              case _ => BehaviorEntryPointElementProvider.genMethodBody(entryPoint, m, arsitOptions.excludeImpl)
             }
 
             behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(), m,
@@ -218,7 +219,7 @@ import org.sireum.hamr.ir._
         case _ =>
       }
 
-      val componentImpl: ST = BehaviorEntryPointProviders.genComponentImpl(names, behaviorCodeContributions)
+      val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)
       addResourceWithMarkers(filename, ISZ(), componentImpl, markers, F)
 
       // add external resources

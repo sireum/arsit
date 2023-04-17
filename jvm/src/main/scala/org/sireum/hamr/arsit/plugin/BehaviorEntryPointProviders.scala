@@ -3,11 +3,12 @@
 package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
-import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointFullContributions, BehaviorEntryPointPartialContributions, CaseContractBlock, NonCaseContractBlock}
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
+import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.toolName
 import org.sireum.hamr.codegen.common.plugin.Plugin
-import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlEventPort, AadlPort, AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
+import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.Direction
@@ -33,7 +34,7 @@ object BehaviorEntryPointProviders {
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
-    for(p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos, symbolTable) && !reporter.hasError) {
+    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos, symbolTable) && !reporter.hasError) {
       p.handle(entryPoint, optInEventPort, m, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
         case b: BehaviorEntryPointFullContributions =>
           if (plugins.size > 1) {
@@ -62,7 +63,7 @@ object BehaviorEntryPointProviders {
             case Some(i: NonCaseContractBlock) => noncases = noncases :+ i
             case _ =>
           }
-          if(cases.nonEmpty && noncases.nonEmpty) {
+          if (cases.nonEmpty && noncases.nonEmpty) {
             reporter.error(None(), toolName, "Logika doesn't support a mix of contract cases and general contracts")
           }
       }
@@ -70,10 +71,11 @@ object BehaviorEntryPointProviders {
 
     @pure def processNonCases(entries: ISZ[NonCaseContractBlock]): ST = {
       @strictpure def wrap(prefix: String, es: ISZ[ST]): Option[ST] =
-        if(es.isEmpty) None()
-        else Some(st"""$prefix(
-                      |  ${(es, ",\n")}
-                      |)""")
+        if (es.isEmpty) None()
+        else Some(
+          st"""$prefix(
+              |  ${(es, ",\n")}
+              |)""")
 
       val _entries = ISZ(
         wrap("Reads", entries.flatMap(f => f.contractReads)),
@@ -89,16 +91,16 @@ object BehaviorEntryPointProviders {
 
 
     val optContract: Option[ST] =
-      if(cases.nonEmpty ) Some(
+      if (cases.nonEmpty) Some(
         st"""Contract(
             |  ${(cases, ",\n")}
             |)""")
       else if (noncases.nonEmpty) Some(processNonCases(noncases))
       else None()
 
-    val body: ST = if(optBody.nonEmpty) optBody.get else defaultMethodBody
+    val body: ST = if (optBody.nonEmpty) optBody.get else defaultMethodBody
 
-    val method: ST = if(optContract.isEmpty && body.render.size == 0) {
+    val method: ST = if (optContract.isEmpty && body.render.size == 0) {
       st"$methodSig = { }"
     } else {
       st"""$methodSig = {
@@ -108,8 +110,11 @@ object BehaviorEntryPointProviders {
     }
     return ret(method = method)
   }
+}
 
-
+// TODO: could make a plugin out of the following to allow codegen to provide different
+//       component implementations (e.g. singleton vs class)
+object BehaviorEntryPointElementProvider {
   @pure def portApiUsage(p: AadlPort): ST = {
     val portType: (AadlType, String) = p match {
       case aep: AadlEventPort => (TypeUtil.EmptyType, "event")
@@ -133,43 +138,52 @@ object BehaviorEntryPointProviders {
 
   def genComputeMethodBody(optInEventPort: Option[AadlPort],
                            context: AadlThreadOrDevice,
-                           includeApiUsage: B): ST = {
+                           includeApiUsage: B,
+                           excludeImplementation: B): ST = {
 
     val inPorts: ISZ[AadlPort] = context.features.filter(f => f.isInstanceOf[AadlPort] && f.asInstanceOf[AadlPort].direction == Direction.In).map(m => m.asInstanceOf[AadlPort])
 
     val exampleApiGetterUsage: ST =
-        st"""// example api usage
-            |
-            |${(inPorts.map((p: AadlPort) => portApiUsage(p)), "\n")}"""
+      st"""// example api usage
+          |
+          |${(inPorts.map((p: AadlPort) => portApiUsage(p)), "\n")}"""
 
-    val ret: ST = optInEventPort match {
-      case Some(p) =>
-        val feedback: ST = p match {
-          case a: AadlEventDataPort => st"""api.logInfo(s"  received $$value")"""
-          case a: AadlEventPort => st"""api.logInfo("  received event")"""
-          case _ => halt("Infeasible as we're generating a handler method for an event port")
-        }
-        val methodName = genMethodName(EntryPoints.compute, optInEventPort)
-        // ideally this would be single ST block, but inserting exampleApiGetUsage as an Option[ST]
-        // results in a black line when it's None so using seq expansion instead
-        var lines = ISZ[ST](st"""api.logInfo("example $methodName implementation")""", feedback)
-        if (includeApiUsage) {
-          lines = lines :+ exampleApiGetterUsage
-        }
-        st"${(lines, "\n")}"
-      case _ => // must be time triggered method
-        if(includeApiUsage) exampleApiGetterUsage else st""
+    if (excludeImplementation) {
+      return st""
     }
-
-    return ret
+    else {
+      val ret: ST = optInEventPort match {
+        case Some(p) =>
+          val feedback: ST = p match {
+            case a: AadlEventDataPort => st"""api.logInfo(s"  received $$value")"""
+            case a: AadlEventPort => st"""api.logInfo("  received event")"""
+            case _ => halt("Infeasible as we're generating a handler method for an event port")
+          }
+          val methodName = genMethodName(EntryPoints.compute, optInEventPort)
+          // ideally this would be single ST block, but inserting exampleApiGetUsage as an Option[ST]
+          // results in a black line when it's None so using seq expansion instead
+          var lines = ISZ[ST](st"""api.logInfo("example $methodName implementation")""", feedback)
+          if (includeApiUsage) {
+            lines = lines :+ exampleApiGetterUsage
+          }
+          st"${(lines, "\n")}"
+        case _ => // must be time triggered method
+          if (includeApiUsage) exampleApiGetterUsage else st""
+      }
+      return ret
+    }
   }
 
   def genMethodBody(entryPoint: EntryPoints.Type,
-                    context: AadlThreadOrDevice): ST = {
+                    context: AadlThreadOrDevice,
+                    excludeImplementation: B): ST = {
 
-      val outPorts: ISZ[AadlPort] = context.features.filter(f => f.isInstanceOf[AadlPort] && f.asInstanceOf[AadlPort].direction == Direction.Out).map(m => m.asInstanceOf[AadlPort])
+    val outPorts: ISZ[AadlPort] = context.features.filter(f => f.isInstanceOf[AadlPort] && f.asInstanceOf[AadlPort].direction == Direction.Out).map(m => m.asInstanceOf[AadlPort])
 
-    val ret: ST = entryPoint match {
+    if (excludeImplementation) {
+      return st""
+    } else {
+      val ret: ST = entryPoint match {
         case EntryPoints.compute => halt("Infeasible - call genComputeMethodBody")
         case EntryPoints.initialise =>
           val o: Option[ST] =
@@ -187,6 +201,7 @@ object BehaviorEntryPointProviders {
           st""
       }
       return ret
+    }
   }
 
   def genMethodName(entryPoint: EntryPoints.Type, optInEventPort: Option[AadlPort]): String = {
@@ -218,33 +233,32 @@ object BehaviorEntryPointProviders {
   }
 
   def genComponentImpl(names: NameProvider, entries: ISZ[BehaviorEntryPointFullContributions]): ST = {
-    @strictpure def wrapString(v: ISZ[String], sep: String): Option[ST] = if(v.isEmpty) None() else Some(st"${(v, sep)}")
-    @strictpure def wrapST(v: ISZ[ST], sep: String): Option[ST] = if(v.isEmpty) None() else Some(st"${(v, sep)}")
+    @strictpure def wrapST(v: ISZ[ST], sep: String): Option[ST] = if (v.isEmpty) None() else Some(st"${(v, sep)}")
 
     val body = wrapST(
       entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preMethodBlocks) ++
-      entries.map((f: BehaviorEntryPointFullContributions) => f.method) ++
-      entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postMethodBlocks), "\n\n")
+        entries.map((f: BehaviorEntryPointFullContributions) => f.method) ++
+        entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postMethodBlocks), "\n\n")
 
     // remove duplicate tags
     val tags: Set[String] = (Set.empty[String] + "#Sireum") ++ entries.flatMap((f: BehaviorEntryPointFullContributions) => f.tags)
 
     return (
-    st"""// ${(tags.elements, " ")}
-        |
-        |package ${names.packageName}
-        |
-        |import org.sireum._
-        |import ${names.basePackage}._
-        |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.imports))}
-        |
-        |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preObjectBlocks), "\n\n")}
-        |${StringTemplate.safeToEditComment()}
-        |object ${names.componentSingletonType} {
-        |
-        |  $body
-        |}
-        |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postObjectBlocks), "\n\n")}
-        |""")
+      st"""// ${(tags.elements, " ")}
+          |
+          |package ${names.packageName}
+          |
+          |import org.sireum._
+          |import ${names.basePackage}._
+          |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.imports))}
+          |
+          |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preObjectBlocks), "\n\n")}
+          |${StringTemplate.safeToEditComment()}
+          |object ${names.componentSingletonType} {
+          |
+          |  $body
+          |}
+          |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postObjectBlocks), "\n\n")}
+          |""")
   }
 }
