@@ -29,7 +29,7 @@ object GumboXGenUtil {
 
   @pure def sortParam(params: ISZ[GGParam]): ISZ[GGParam] = {
     return (for (partition <-
-            (for (kind <- SymbolKind.elements) yield ops.ISZOps(params).filter(p => p.kind == kind))) yield
+                   (for (kind <- SymbolKind.elements) yield ops.ISZOps(params).filter(p => p.kind == kind))) yield
       ops.ISZOps(partition).sortWith((a, b) => a.name <= b.name)).flatMap(a => a)
   }
 

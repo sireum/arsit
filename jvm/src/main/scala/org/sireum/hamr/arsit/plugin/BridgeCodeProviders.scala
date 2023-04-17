@@ -52,8 +52,9 @@ import org.sireum.message.Reporter
     )
 
     val portOpt: Option[ST] = if (ports.isEmpty) None()
-    else Some(st"""
-                  |${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},""")
+    else Some(
+      st"""
+          |${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},""")
 
     val bridge: ST =
       st"""// #Sireum

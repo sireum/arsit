@@ -3,10 +3,11 @@
 package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointFullContributions, BehaviorEntryPointPartialContributions, CaseContractBlock, NonCaseContractBlock}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin._
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.toolName
+import org.sireum.hamr.codegen.common.containers.Marker
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
@@ -19,6 +20,11 @@ object BehaviorEntryPointProviders {
   @strictpure def getPlugins(plugins: MSZ[Plugin]): MSZ[BehaviorEntryPointProviderPlugin] =
     plugins.filter(f => f.isInstanceOf[BehaviorEntryPointProviderPlugin]).map(m => m.asInstanceOf[BehaviorEntryPointProviderPlugin])
 
+  @pure def getMarkers(entries: ISZ[BehaviorEntryPointObjectContributions]): ISZ[Marker] = {
+    return entries.filter(f => f.isInstanceOf[BehaviorEntryPointMethodContributions])
+      .map((m: BehaviorEntryPointObjectContributions) => m.asInstanceOf[BehaviorEntryPointMethodContributions]).flatMap(f => f.markers)
+  }
+
   def offer(entryPoint: EntryPoints.Type, optInEventPort: Option[AadlPort],
             m: AadlThreadOrDevice, excludeImpl: B, methodSig: String, defaultMethodBody: ST,
             annexClauseInfos: ISZ[AnnexClauseInfo],
@@ -28,23 +34,39 @@ object BehaviorEntryPointProviders {
             symbolTable: SymbolTable,
             aadlTypes: AadlTypes,
             projectDirs: ProjectDirectories,
-            reporter: Reporter): BehaviorEntryPointFullContributions = {
+            reporter: Reporter): FullMethodContributions = {
 
-    var ret = BehaviorEntryPointFullContributions.empty
+    var ret = BehaviorEntryPointProviderPlugin.emptyFullContributions
+    var optMethod: Option[ST] = None()
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
     for (p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos, symbolTable) && !reporter.hasError) {
       p.handle(entryPoint, optInEventPort, m, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
-        case b: BehaviorEntryPointFullContributions =>
-          if (plugins.size > 1) {
-            reporter.error(None(), toolName, "BehaviorEntryPointFullContributions cannot be combined with other behavior entry point provider plugins")
+        case b: FullMethodContributions =>
+          if (optMethod.nonEmpty) {
+            reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method implementation")
+          } else if (optBody.nonEmpty) {
+            reporter.error(None(), toolName, s"A behavior entry point plugin contributed a method body that cannot be combined with ${p.name}'s method")
+          } else if (cases.nonEmpty || noncases.nonEmpty) {
+            reporter.error(None(), toolName, s"A behavior entry point plugin contributed a contract block that cannot be combined with ${p.name}'s method")
+          } else {
+            optMethod = Some(b.method)
+            ret = ret(
+              tags = ret.tags ++ b.tags,
+              imports = ret.imports ++ b.imports,
+              preObjectBlocks = ret.preObjectBlocks ++ b.preObjectBlocks,
+              preMethodBlocks = ret.preMethodBlocks ++ b.preMethodBlocks,
+              postMethodBlocks = ret.postMethodBlocks ++ b.postMethodBlocks,
+              postObjectBlocks = ret.postObjectBlocks ++ b.postObjectBlocks,
+              markers = ret.markers ++ b.markers,
+              resources = ret.resources ++ b.resources
+            )
           }
-          return b
-        case b: BehaviorEntryPointPartialContributions =>
+        case b: PartialMethodContributions =>
           if (b.optBody.nonEmpty) {
             if (optBody.nonEmpty) {
-              reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method body")
+              reporter.error(None(), toolName, s"A behavior entry point plugin contributed a method body that cannot be combined with ${p.name}'s body")
             }
             optBody = b.optBody
           }
@@ -68,53 +90,86 @@ object BehaviorEntryPointProviders {
           }
       }
     }
+    assert(optMethod.nonEmpty -->: (optBody.isEmpty && cases.isEmpty && noncases.isEmpty), "Sanity check: cannot combine methods with optional method bodies")
 
-    @pure def processNonCases(entries: ISZ[NonCaseContractBlock]): ST = {
-      @strictpure def wrap(prefix: String, es: ISZ[ST]): Option[ST] =
-        if (es.isEmpty) None()
-        else Some(
-          st"""$prefix(
-              |  ${(es, ",\n")}
-              |)""")
-
-      val _entries = ISZ(
-        wrap("Reads", entries.flatMap(f => f.contractReads)),
-        wrap("Requires", entries.flatMap(f => f.contractRequires)),
-        wrap("Modifies", entries.flatMap(f => f.contractModifies)),
-        wrap("Ensures", entries.flatMap(f => f.contractEnsures)),
-        wrap("InfoFlows", entries.flatMap(f => f.contractFlows))).filter(f => f.nonEmpty).map((m: Option[ST]) => m.get)
-
-      return (st"""Contract(
-                  |  ${(_entries, ",\n")}
-                  |)""")
-    }
-
-
-    val optContract: Option[ST] =
-      if (cases.nonEmpty) Some(
-        st"""Contract(
-            |  ${(cases, ",\n")}
-            |)""")
-      else if (noncases.nonEmpty) Some(processNonCases(noncases))
-      else None()
-
-    val body: ST = if (optBody.nonEmpty) optBody.get else defaultMethodBody
-
-    val method: ST = if (optContract.isEmpty && body.render.size == 0) {
-      st"$methodSig = { }"
+    if (optMethod.nonEmpty) {
+      return ret(method = optMethod.get)
     } else {
-      st"""$methodSig = {
-          |  $optContract
-          |  $body
-          |}"""
+      @pure def processNonCases(entries: ISZ[NonCaseContractBlock]): ST = {
+        @strictpure def wrap(prefix: String, es: ISZ[ST]): Option[ST] =
+          if (es.isEmpty) None()
+          else Some(
+            st"""$prefix(
+                |  ${(es, ",\n")}
+                |)""")
+
+        val _entries = ISZ(
+          wrap("Reads", entries.flatMap(f => f.contractReads)),
+          wrap("Requires", entries.flatMap(f => f.contractRequires)),
+          wrap("Modifies", entries.flatMap(f => f.contractModifies)),
+          wrap("Ensures", entries.flatMap(f => f.contractEnsures)),
+          wrap("InfoFlows", entries.flatMap(f => f.contractFlows))).filter(f => f.nonEmpty).map((m: Option[ST]) => m.get)
+
+        return (st"""Contract(
+                    |  ${(_entries, ",\n")}
+                    |)""")
+      }
+
+      val optContract: Option[ST] =
+        if (cases.nonEmpty) Some(
+          st"""Contract(
+              |  ${(cases, ",\n")}
+              |)""")
+        else if (noncases.nonEmpty) Some(processNonCases(noncases))
+        else None()
+
+      val body: ST = if (optBody.nonEmpty) optBody.get else defaultMethodBody
+
+      val method: ST = if (optContract.isEmpty && body.render.size == 0) {
+        st"$methodSig = { }"
+      } else {
+        st"""$methodSig = {
+            |  $optContract
+            |  $body
+            |}"""
+      }
+
+      return ret(method = method)
     }
-    return ret(method = method)
   }
 }
 
-// TODO: could make a plugin out of the following to allow codegen to provide different
-//       component implementations (e.g. singleton vs class)
 object BehaviorEntryPointElementProvider {
+  def finalise(plugins: MSZ[BehaviorEntryPointProviderPlugin],
+
+               component: AadlThreadOrDevice,
+               nameProvider: NameProvider,
+               basePackageName: String,
+               symbolTable: SymbolTable,
+               aadlTypes: AadlTypes,
+               projectDirs: ProjectDirectories,
+               reporter: Reporter): ObjectContributions = {
+    var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
+    for (p <- plugins if !reporter.hasError) {
+      p.finalise(component, nameProvider, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
+        case Some(x) =>
+          ret = ret(
+            tags = ret.tags ++ x.tags,
+            imports = ret.imports ++ x.imports,
+            preObjectBlocks = ret.preObjectBlocks ++ x.preObjectBlocks,
+            preMethodBlocks = ret.preMethodBlocks ++ x.preMethodBlocks,
+            postMethodBlocks = ret.postMethodBlocks ++ x.postMethodBlocks,
+            postObjectBlocks = ret.postObjectBlocks ++ x.postObjectBlocks,
+            resources = ret.resources ++ x.resources)
+        case _ =>
+      }
+    }
+    return ret
+  }
+
+  // TODO: could make a plugin out of the following to allow codegen to provide different
+  //       component implementations (e.g. singleton vs class)
+
   @pure def portApiUsage(p: AadlPort): ST = {
     val portType: (AadlType, String) = p match {
       case aep: AadlEventPort => (TypeUtil.EmptyType, "event")
@@ -232,16 +287,19 @@ object BehaviorEntryPointElementProvider {
     return st"def $methodName(${(args, ", ")}): Unit".render
   }
 
-  def genComponentImpl(names: NameProvider, entries: ISZ[BehaviorEntryPointFullContributions]): ST = {
+  def genComponentImpl(names: NameProvider, entries: ISZ[BehaviorEntryPointObjectContributions]): ST = {
     @strictpure def wrapST(v: ISZ[ST], sep: String): Option[ST] = if (v.isEmpty) None() else Some(st"${(v, sep)}")
 
+    val methods: ISZ[ST] = for (e <- entries.filter(f => f.isInstanceOf[FullMethodContributions])
+      .map((f: BehaviorEntryPointObjectContributions) => f.asInstanceOf[FullMethodContributions])) yield e.method
+
     val body = wrapST(
-      entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preMethodBlocks) ++
-        entries.map((f: BehaviorEntryPointFullContributions) => f.method) ++
-        entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postMethodBlocks), "\n\n")
+      entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.preMethodBlocks) ++
+        methods ++
+        entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.postMethodBlocks), "\n\n")
 
     // remove duplicate tags
-    val tags: Set[String] = (Set.empty[String] + "#Sireum") ++ entries.flatMap((f: BehaviorEntryPointFullContributions) => f.tags)
+    val tags: Set[String] = (Set.empty[String] + "#Sireum") ++ entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.tags)
 
     return (
       st"""// ${(tags.elements, " ")}
@@ -250,15 +308,15 @@ object BehaviorEntryPointElementProvider {
           |
           |import org.sireum._
           |import ${names.basePackage}._
-          |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.imports))}
+          |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.imports))}
           |
-          |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.preObjectBlocks), "\n\n")}
+          |${wrapST(entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.preObjectBlocks), "\n\n")}
           |${StringTemplate.safeToEditComment()}
           |object ${names.componentSingletonType} {
           |
           |  $body
           |}
-          |${wrapST(entries.flatMap((f: BehaviorEntryPointFullContributions) => f.postObjectBlocks), "\n\n")}
+          |${wrapST(entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.postObjectBlocks), "\n\n")}
           |""")
   }
 }

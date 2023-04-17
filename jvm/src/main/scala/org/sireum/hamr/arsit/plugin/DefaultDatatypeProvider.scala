@@ -41,7 +41,7 @@ object DefaultDatatypeProvider {
 
     aadlType match {
       case at: ArrayType if at.dimensions.size > 1 =>
-        reporter.error(None(), CommonUtil.toolName, s"Codegen currently only supports single dimension arrays, but ${aadlType.name} specifies a ${at.dimensions.size} dimensional array" )
+        reporter.error(None(), CommonUtil.toolName, s"Codegen currently only supports single dimension arrays, but ${aadlType.name} specifies a ${at.dimensions.size} dimensional array")
       case _ =>
     }
     return DatatypeContribution(

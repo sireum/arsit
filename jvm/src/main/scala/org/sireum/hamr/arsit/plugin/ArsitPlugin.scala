@@ -3,8 +3,8 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.bts.BlessBehaviorProviderPlugin
-import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin}
-import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.BehaviorEntryPointContributions
+import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin, GumboXPlugin}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ObjectContributions}
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
@@ -22,6 +22,7 @@ object ArsitPlugin {
     SingletonEntryPointProviderPlugin(),
     GumboDatatypeProviderPlugin(),
     GumboPlugin(),
+    GumboXPlugin(),
     DefaultDatatypeProvider())
 
   @memoize def getDatatypeProviders(plugins: MSZ[Plugin]): MSZ[DatatypeProviderPlugin] = {
@@ -95,53 +96,82 @@ object ArsitPlugin {
 }
 
 object BehaviorEntryPointProviderPlugin {
+
+  @strictpure def emptyObjectContributions: ObjectContributions =
+    ObjectContributions(ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ())
+
+  @strictpure def emptyPartialContributions: PartialMethodContributions =
+    PartialMethodContributions(ISZ(), ISZ(), ISZ(), ISZ(), None(), None(), ISZ(), ISZ(), ISZ(), ISZ())
+
+  @strictpure def emptyFullContributions: FullMethodContributions =
+    FullMethodContributions(ISZ(), ISZ(), ISZ(), ISZ(), st"", ISZ(), ISZ(), ISZ(), ISZ())
+
   @sig trait BehaviorEntryPointContributions
 
-  object BehaviorEntryPointPartialContributions {
-    @strictpure def empty: BehaviorEntryPointPartialContributions =
-      BehaviorEntryPointPartialContributions(ISZ(), ISZ(), ISZ(), ISZ(), None(), None(), ISZ(), ISZ(), ISZ(), ISZ())
+  @sig trait BehaviorEntryPointObjectContributions extends BehaviorEntryPointContributions {
+    def tags: ISZ[String]
+
+    def imports: ISZ[String]
+
+    def preObjectBlocks: ISZ[ST]
+
+    def preMethodBlocks: ISZ[ST]
+
+    def postMethodBlocks: ISZ[ST]
+
+    def postObjectBlocks: ISZ[ST]
+
+    def resources: ISZ[Resource]
   }
 
-  object BehaviorEntryPointFullContributions {
-    @strictpure def empty: BehaviorEntryPointFullContributions =
-      BehaviorEntryPointFullContributions(ISZ(), ISZ(), ISZ(), ISZ(), st"", ISZ(), ISZ(), ISZ(), ISZ())
+  @datatype class ObjectContributions(val tags: ISZ[String],
+                                      val imports: ISZ[String],
+                                      val preObjectBlocks: ISZ[ST],
+                                      val preMethodBlocks: ISZ[ST],
+                                      val postMethodBlocks: ISZ[ST],
+                                      val postObjectBlocks: ISZ[ST],
+                                      val resources: ISZ[Resource]) extends BehaviorEntryPointObjectContributions
+
+  @sig trait BehaviorEntryPointMethodContributions extends BehaviorEntryPointObjectContributions {
+    def markers: ISZ[Marker]
   }
 
   // allows plugin to fully provide the behavior code for a method.  An error will be thrown
-  // if there are more than one of these plugins for a pipeline
-  @datatype class BehaviorEntryPointFullContributions(val tags: ISZ[String],
-                                                      val imports: ISZ[String],
-                                                      val preObjectBlocks: ISZ[ST],
+  // if there are more than one of these plugins for a pipeline, or if BehaviorEntryPointPartialContributions
+  // contributes a body or contract block
+  @datatype class FullMethodContributions(val tags: ISZ[String],
+                                          val imports: ISZ[String],
+                                          val preObjectBlocks: ISZ[ST],
 
-                                                      val preMethodBlocks: ISZ[ST],
-                                                      val method: ST, // includes the method sig, optional contract, and body
-                                                      val postMethodBlocks: ISZ[ST],
+                                          val preMethodBlocks: ISZ[ST],
+                                          val method: ST, // includes the method sig, optional contract, and body
+                                          val postMethodBlocks: ISZ[ST],
 
-                                                      val postObjectBlocks: ISZ[ST],
+                                          val postObjectBlocks: ISZ[ST],
 
-                                                      val markers: ISZ[Marker],
-                                                      val resources: ISZ[Resource]) extends BehaviorEntryPointContributions
+                                          val markers: ISZ[Marker],
+                                          val resources: ISZ[Resource]) extends BehaviorEntryPointMethodContributions
 
   // allows plugin to provide parts of the behavior code for a method that will be
   // combined with those from other plugins in the same pipeline.
   // ContractBlock types must be the same for all plugins (all return cases or general)
   // an error will be thrown if more than one plugin provides an optBody
-  @datatype class BehaviorEntryPointPartialContributions(val tags: ISZ[String],
-                                                         val imports: ISZ[String],
-                                                         val preObjectBlocks: ISZ[ST],
+  @datatype class PartialMethodContributions(val tags: ISZ[String],
+                                             val imports: ISZ[String],
+                                             val preObjectBlocks: ISZ[ST],
 
-                                                         val preMethodBlocks: ISZ[ST],
+                                             val preMethodBlocks: ISZ[ST],
 
-                                                         val contractBlock: Option[ContractBlock],
+                                             val contractBlock: Option[ContractBlock],
 
-                                                         val optBody: Option[ST],
+                                             val optBody: Option[ST],
 
-                                                         val postMethodBlocks: ISZ[ST],
+                                             val postMethodBlocks: ISZ[ST],
 
-                                                         val postObjectBlocks: ISZ[ST],
+                                             val postObjectBlocks: ISZ[ST],
 
-                                                         val markers: ISZ[Marker],
-                                                         val resources: ISZ[Resource]) extends BehaviorEntryPointContributions
+                                             val markers: ISZ[Marker],
+                                             val resources: ISZ[Resource]) extends BehaviorEntryPointMethodContributions
 
   @sig trait ContractBlock
 
@@ -183,6 +213,19 @@ object BehaviorEntryPointProviderPlugin {
              aadlTypes: AadlTypes,
              projectDirectories: ProjectDirectories,
              reporter: Reporter): BehaviorEntryPointContributions
+
+  // Called prior to codegen writing out the behavior code for the component.
+  // This allows plugins the ability, for e.g., to write out blocks they've been
+  // collecting to an external resource.
+  def finalise(component: AadlThreadOrDevice,
+               nameProvider: NameProvider,
+               basePackageName: String,
+               symbolTable: SymbolTable,
+               aadlTypes: AadlTypes,
+               projectDirectories: ProjectDirectories,
+               reporter: Reporter): Option[ObjectContributions] = {
+    return None()
+  }
 }
 
 @msig trait BridgeCodeProviderPlugin extends ArsitPlugin {

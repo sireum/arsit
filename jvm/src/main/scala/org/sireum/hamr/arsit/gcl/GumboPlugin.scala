@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
-import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, BehaviorEntryPointPartialContributions, NonCaseContractBlock}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, NonCaseContractBlock}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._
@@ -29,6 +29,7 @@ import org.sireum.message.Reporter
                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                 symbolTable: SymbolTable): B = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
+      // GCL's symbol resolver ensures there's at most one GCL clause per component
       case ISZ(GclAnnexClauseInfo(annex, _)) =>
         return (!handledAnnexLibraries && getAnnexLibraries(symbolTable).nonEmpty) ||
           (annex.state.nonEmpty && !handledStateVars.contains(component)) ||
@@ -114,7 +115,7 @@ import org.sireum.message.Reporter
         }
 
         val contractBlock = NonCaseContractBlock(imports, reads, requires, modifies, ensures, flows)
-        val ret = BehaviorEntryPointPartialContributions.empty
+        val ret = BehaviorEntryPointProviderPlugin.emptyPartialContributions
         return ret(imports = imports, preMethodBlocks = preMethodBlocks, markers = markers, contractBlock = Some(contractBlock))
       case _ => halt("Infeasible")
     }
