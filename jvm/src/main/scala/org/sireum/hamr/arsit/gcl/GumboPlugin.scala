@@ -9,6 +9,7 @@ import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.message.Reporter
 
@@ -43,6 +44,7 @@ import org.sireum.message.Reporter
   def handle(entryPoint: EntryPoints.Type,
              optInEventPort: Option[AadlPort], // will be populated if processing the event handler for a sporadic component
              component: AadlThreadOrDevice,
+             componentNames: NameProvider,
              excludeComponentImplementation: B,
              methodSignature: String,
              defaultMethodBody: ST,

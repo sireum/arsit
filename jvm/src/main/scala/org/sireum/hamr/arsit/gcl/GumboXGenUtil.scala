@@ -2,12 +2,17 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
+import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
 import org.sireum.hamr.ir
+import org.sireum.hamr.ir.Direction
 import org.sireum.lang.ast.Typed
 import org.sireum.lang.{ast => AST}
 
 object GumboXGenUtil {
+  @pure def isInPort(p: AadlFeature): B = {
+    return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.In
+  }
 
   def getSlangType(typ: Typed, aadlTypes: AadlTypes): String = {
     @pure def toAadl(ids: ISZ[String]): String = {
@@ -18,7 +23,11 @@ object GumboXGenUtil {
       case i: AST.Typed.Name =>
         if (i.ids == AST.Typed.optionName) {
           val typeKey = toAadl(i.args(0).asInstanceOf[AST.Typed.Name].ids)
-          return s"Option[${aadlTypes.typeMap.get(typeKey).get.nameProvider.qualifiedReferencedTypeName}]"
+          return (
+            if (typeKey == "art::Empty")
+              "Option[art.Empty]"
+            else
+              s"Option[${aadlTypes.typeMap.get(typeKey).get.nameProvider.qualifiedReferencedTypeName}]")
         } else {
           val typeKey = toAadl(i.ids)
           return aadlTypes.typeMap.get(typeKey).get.nameProvider.qualifiedReferencedTypeName
@@ -35,6 +44,7 @@ object GumboXGenUtil {
 
 
   @enum object SymbolKind {
+    "Integration"
     "StateVarPre"
     "StateVar"
     "ApiVar"
@@ -43,9 +53,18 @@ object GumboXGenUtil {
 
   @datatype class GGParam(val name: String,
                           val aadlType: AadlType,
-                          val slangType: AST.Typed,
+                          val isOptional: B,
+                          val slangType: Option[AST.Typed],
                           val kind: SymbolKind.Type,
-                          val origin: AST.Exp)
+                          val origin: Option[AST.Exp]) {
+    @pure def getType: String = {
+      return if (isOptional) s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]" else aadlType.nameProvider.qualifiedReferencedTypeName
+    }
+
+    @pure def getParamDef: String = {
+      return s"$name: ${getType}"
+    }
+  }
 
   @datatype class GGExpParamHolder(val params: Set[GGParam],
                                    val exp: AST.Exp)
@@ -53,9 +72,11 @@ object GumboXGenUtil {
   @record class EE(aadlTypes: AadlTypes) extends ir.MTransformer {
     var params: Set[GGParam] = Set.empty
 
-    def getAadlType(typ: AST.Typed.Name): AadlType = {
+    def getAadlType(typ: AST.Typed.Name): (AadlType, B) = {
+      var isOptional: B = F
       val ids: ISZ[String] = typ match {
         case AST.Typed.Name(AST.Typed.optionName, ISZ(i: AST.Typed.Name)) =>
+          isOptional = T
           i.ids
         case _ => typ.ids
       }
@@ -63,7 +84,11 @@ object GumboXGenUtil {
         if (ids(ids.size - 1) == "Type") ops.ISZOps(typ.ids).dropRight(1)
         else ids
       val key = st"${(_ids, "::")}".render
-      return aadlTypes.typeMap.get(key).get
+      if (key == "art::Empty") {
+        return (TypeUtil.EmptyType, isOptional)
+      } else {
+        return (aadlTypes.typeMap.get(key).get, isOptional)
+      }
     }
 
     override def pre_langastExpSelect(o: AST.Exp.Select): ir.MTransformer.PreResult[AST.Exp] = {
@@ -71,7 +96,8 @@ object GumboXGenUtil {
         case AST.Exp.Select(Some(AST.Exp.Ident(AST.Id("api"))), id, attr) =>
           val typed = o.attr.typedOpt.get.asInstanceOf[AST.Typed.Name]
           val paramName = s"api_${id.value}"
-          params = params + GGParam(paramName, getAadlType(typed), typed, SymbolKind.ApiVar, o)
+          val (typ, isOptional) = getAadlType(typed)
+          params = params + GGParam(paramName, typ, isOptional, Some(typed), SymbolKind.ApiVar, Some(o))
           return ir.MTransformer.PreResult(
             F,
             MSome(AST.Exp.Ident(id = AST.Id(value = paramName, attr = AST.Attr(None())), attr = o.attr)))
@@ -94,8 +120,8 @@ object GumboXGenUtil {
             case Some(atn: AST.Typed.Name) => atn
             case x => halt(s"Infeasible ${x}")
           }
-
-          params = params + GGParam(name, getAadlType(typed), typed, kind, o)
+          val (typ, isOptional) = getAadlType(typed)
+          params = params + GGParam(name, typ, isOptional, Some(typed), kind, Some(o))
           AST.Exp.Ident(id = AST.Id(value = name, attr = o.attr), attr = i.attr)
         case _ => halt(s"Unexpected ${o.exp}")
       }
@@ -105,7 +131,8 @@ object GumboXGenUtil {
     override def pre_langastExpIdent(o: AST.Exp.Ident): ir.MTransformer.PreResult[AST.Exp] = {
       o.attr.typedOpt.get match {
         case typed: AST.Typed.Name =>
-          params = params + GGParam(o.id.value, getAadlType(typed), typed, SymbolKind.StateVar, o)
+          val (typ, isOptional) = getAadlType(typed)
+          params = params + GGParam(o.id.value, typ, isOptional, Some(typed), SymbolKind.StateVar, Some(o))
         case _ =>
       }
       return ir.MTransformer.PreResult(F, MNone[AST.Exp]())
@@ -119,5 +146,21 @@ object GumboXGenUtil {
       case _ => GGExpParamHolder(e.params, exp)
     }
     return ret
+  }
+
+
+  def paramsToComment(params: ISZ[GGParam]): ISZ[ST] = {
+    var comments: ISZ[ST] = ISZ()
+    for (p <- params) {
+      val kind: String = p.kind match {
+        case SymbolKind.Integration => "integration variable"
+        case SymbolKind.StateVarPre => "pre-state state variable"
+        case SymbolKind.StateVar => "post-state state variable"
+        case SymbolKind.ApiVar => "port variable"
+        case SymbolKind.Parameter => "parameter to handler method"
+      }
+      comments = comments :+ st"* @param ${p.name} ${kind}"
+    }
+    return comments
   }
 }

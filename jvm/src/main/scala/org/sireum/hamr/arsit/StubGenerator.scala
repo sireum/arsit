@@ -4,10 +4,10 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
-import org.sireum.hamr.arsit.gcl.{GumboGen, GumboXGen}
-import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointObjectContributions, FullMethodContributions}
+import org.sireum.hamr.arsit.gcl.GumboGen
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.BehaviorEntryPointObjectContributions
 import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointElementProvider, BehaviorEntryPointProviderPlugin, BehaviorEntryPointProviders}
-import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate, StubTemplate, TestTemplate}
+import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.CommonUtil
@@ -171,7 +171,7 @@ import org.sireum.hamr.ir._
               val defaultMethodBody: ST = BehaviorEntryPointElementProvider.genComputeMethodBody(Some(inEventPort), m, isFirst, arsitOptions.excludeImpl)
 
               behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
-                entryPoint, Some(inEventPort), m, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
+                entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
                 basePackage, symbolTable, types, dirs, reporter)
 
               isFirst = F
@@ -183,7 +183,8 @@ import org.sireum.hamr.ir._
               case _ => BehaviorEntryPointElementProvider.genMethodBody(entryPoint, m, arsitOptions.excludeImpl)
             }
 
-            behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(), m,
+            behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(),
+              m, names,
               arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
               basePackage, symbolTable, types, dirs, reporter)
         }
@@ -197,7 +198,7 @@ import org.sireum.hamr.ir._
       }
 
       behaviorCodeContributions = behaviorCodeContributions :+
-        BehaviorEntryPointElementProvider.finalise(beppp, m, names, basePackage, symbolTable, types, dirs, reporter)
+        BehaviorEntryPointProviders.finalise(beppp, m, names, basePackage, symbolTable, types, dirs, reporter)
 
       val markers = BehaviorEntryPointProviders.getMarkers(behaviorCodeContributions)
       val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)

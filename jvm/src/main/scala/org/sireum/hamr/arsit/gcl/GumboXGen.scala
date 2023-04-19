@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, SymbolKind}
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, paramsToComment}
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
@@ -57,6 +57,19 @@ object GumboXGen {
     imports = imports ++ gen.imports
   }
 
+  def getDatatypesWithInvariants(aadlTypes: AadlTypes, symbolTable: SymbolTable): ISZ[AadlType] = {
+    @pure def hasInvariant(aadlType: AadlType): B = {
+      return getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+    }
+
+    var datatypesWithInvariant: ISZ[AadlType] = ISZ()
+    for (aadlType <- aadlTypes.typeMap.values if hasInvariant(aadlType)) {
+      datatypesWithInvariant = datatypesWithInvariant :+ aadlType
+    }
+    return datatypesWithInvariant
+  }
+
+
   @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexClauseInfo] = {
     val aadlComponent = symbolTable.componentMap.get(componentPath).get
     val annexInfos: ISZ[GclAnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
@@ -73,43 +86,11 @@ object GumboXGen {
                       symbolTable: SymbolTable,
                       aadlTypes: AadlTypes,
                       basePackageName: String): BehaviorEntryPointProviderPlugin.PartialMethodContributions = {
-    var datatypesWithInvariant: ISZ[AadlType] = ISZ()
-    for (aadlType <- aadlTypes.typeMap.values if hasInvariant(aadlType, symbolTable)) {
-      datatypesWithInvariant = datatypesWithInvariant :+ aadlType
-    }
 
     val gg = GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
-    val ret = gg.processCompute2(annex.compute.get, m, datatypesWithInvariant)
+    val ret = gg.processCompute2(annex.compute.get, m, getDatatypesWithInvariants(aadlTypes, symbolTable))
     addImports(gg)
     return ret
-  }
-
-  def processCompute(m: AadlThreadOrDevice,
-                     symbolTable: SymbolTable,
-                     aadlTypes: AadlTypes,
-                     basePackageName: String): Option[ST] = {
-    val ais = getGclAnnexInfos(m.path, symbolTable)
-
-    if (ais.nonEmpty) {
-      val sc = ais(0).annex
-      val gclSymbolTable = ais(0).gclSymbolTable
-
-      var datatypesWithInvariant: ISZ[AadlType] = ISZ()
-      for (aadlType <- aadlTypes.typeMap.values if hasInvariant(aadlType, symbolTable)) {
-        datatypesWithInvariant = datatypesWithInvariant :+ aadlType
-      }
-
-      if (sc.compute.nonEmpty) {
-        val gg = GumboXGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
-        val ret = gg.processCompute(sc.compute.get, m, datatypesWithInvariant)
-        addImports(gg)
-        return ret
-      } else {
-        return None()
-      }
-    } else {
-      return None()
-    }
   }
 
   def processDescriptor(descriptor: Option[String], pad: String): Option[ST] = {
@@ -143,9 +124,6 @@ object GumboXGen {
     return ret
   }
 
-  @pure def hasInvariant(aadlType: AadlType, symbolTable: SymbolTable): B = {
-    return getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
-  }
 
   def processInvariant(aadlType: AadlType,
                        symbolTable: SymbolTable,
@@ -193,20 +171,6 @@ object GumboXGen {
       }
     }
     return ret
-  }
-
-  def paramsToComment(params: ISZ[GGParam]): ISZ[ST] = {
-    var comments: ISZ[ST] = ISZ()
-    for (p <- params) {
-      val kind: String = p.kind match {
-        case SymbolKind.StateVarPre => "pre-state state variable"
-        case SymbolKind.StateVar => "post-state state variable"
-        case SymbolKind.ApiVar => "port variable"
-        case SymbolKind.Parameter => "parameter to handler method"
-      }
-      comments = comments :+ st"* @param ${p.name} ${kind}"
-    }
-    return comments
   }
 
   def processInvariants(aadlType: AadlType, invariants: ISZ[GclInvariant]): ISZ[ST] = {
@@ -262,10 +226,9 @@ object GumboXGen {
           oracleParams = oracleParams ++ gg.params.elements
 
           val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-          val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-          oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+          oracleComputeSpecCalls = oracleComputeSpecCalls :+
+            st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
           val method =
             st"""/** guarantees ${g.id}
@@ -273,7 +236,7 @@ object GumboXGen {
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def $methodName(
-                |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+                |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                 |  ${gg.exp}"""
 
           computeSpecRequires = computeSpecRequires :+ method
@@ -294,10 +257,8 @@ object GumboXGen {
         oracleParams = oracleParams ++ gg.params.elements
 
         val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-        val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-        oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+        oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
         val descriptor = GumboXGen.processDescriptor(generalCase.descriptor, "*   ")
         val method =
@@ -306,7 +267,7 @@ object GumboXGen {
               |  ${(paramsToComment(sortedParams), "\n")}
               |  */
               |@strictpure def $methodName(
-              |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+              |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
               |  ${gg.exp}"""
 
         computeSpecRequires = computeSpecRequires :+ method
@@ -337,10 +298,8 @@ object GumboXGen {
                   allHandlerParams = allHandlerParams ++ gg.params.elements
 
                   val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-                  val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-                    ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-                  oracleCalls = oracleCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+                  oracleCalls = oracleCalls :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
                   val descriptor = GumboXGen.processDescriptor(g.descriptor, "*   ")
                   st"""/** guarantees ${g.id}
@@ -348,7 +307,7 @@ object GumboXGen {
                       |  ${(paramsToComment(sortedParams), "\n")}
                       |  */
                       |@strictpure def $methodName(
-                      |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+                      |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                       |  ${gg.exp}"""
                 })
 
@@ -359,9 +318,6 @@ object GumboXGen {
         }
 
         val sortedParams = GumboXGenUtil.sortParam((oracleParams ++ allHandlerParams.elements).elements)
-        val handlerParams: ISZ[(String, String)] =
-          for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
         var invariantBlocks: ISZ[ST] = ISZ()
         for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
@@ -376,7 +332,7 @@ object GumboXGen {
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def ${eventPort.identifier}_oracle(
-                |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+                |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                 |  ${(blocks, " &\n")}"""
         }
       } // end for loop
@@ -384,9 +340,6 @@ object GumboXGen {
     else {
       // periodic component
       val sortedParams = GumboXGenUtil.sortParam(oracleParams.elements)
-      val handlerParams: ISZ[(String, String)] =
-        for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
       var invariantBlocks: ISZ[ST] = ISZ()
       for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
@@ -401,7 +354,7 @@ object GumboXGen {
               |  ${(paramsToComment(sortedParams), "\n")}
               |  */
               |@strictpure def time_triggered_oracle(
-              |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+              |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
               |  ${(blocks, " &\n")}"""
       }
     }
@@ -445,10 +398,8 @@ object GumboXGen {
           oracleParams = oracleParams ++ gg.params.elements
 
           val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-          val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-          oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+          oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
           val method =
             st"""/** guarantees ${g.id}
@@ -456,7 +407,7 @@ object GumboXGen {
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def $methodName(
-                |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+                |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                 |  ${gg.exp}"""
 
           computeSpecRequires = computeSpecRequires :+ method
@@ -477,10 +428,8 @@ object GumboXGen {
         oracleParams = oracleParams ++ gg.params.elements
 
         val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-        val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-        oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+        oracleComputeSpecCalls = oracleComputeSpecCalls :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
         val descriptor = GumboXGen.processDescriptor(generalCase.descriptor, "*   ")
         val method =
@@ -489,7 +438,7 @@ object GumboXGen {
               |  ${(paramsToComment(sortedParams), "\n")}
               |  */
               |@strictpure def $methodName(
-              |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+              |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
               |  ${gg.exp}"""
 
         computeSpecRequires = computeSpecRequires :+ method
@@ -520,10 +469,8 @@ object GumboXGen {
                   allHandlerParams = allHandlerParams ++ gg.params.elements
 
                   val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-                  val params: ISZ[(String, String)] = for (param <- sortedParams) yield
-                    ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
-                  oracleCalls = oracleCalls :+ st"$methodName(${(for (p <- params) yield p._1, ", ")})"
+                  oracleCalls = oracleCalls :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
 
                   val descriptor = GumboXGen.processDescriptor(g.descriptor, "*   ")
                   st"""/** guarantees ${g.id}
@@ -531,7 +478,7 @@ object GumboXGen {
                       |  ${(paramsToComment(sortedParams), "\n")}
                       |  */
                       |@strictpure def $methodName(
-                      |    ${(for (p <- params) yield s"${p._1}: ${p._2}", ",\n")}): B =
+                      |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                       |  ${gg.exp}"""
                 })
 
@@ -542,9 +489,6 @@ object GumboXGen {
         }
 
         val sortedParams = GumboXGenUtil.sortParam((oracleParams ++ allHandlerParams.elements).elements)
-        val handlerParams: ISZ[(String, String)] =
-          for (param <- sortedParams) yield
-            ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
         var invariantBlocks: ISZ[ST] = ISZ()
         for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
@@ -559,7 +503,7 @@ object GumboXGen {
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
                 |@strictpure def ${eventPort.identifier}_oracle(
-                |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+                |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
                 |  ${(blocks, " &\n")}"""
         }
       } // end for loop
@@ -567,9 +511,6 @@ object GumboXGen {
     else {
       // periodic component
       val sortedParams = GumboXGenUtil.sortParam(oracleParams.elements)
-      val handlerParams: ISZ[(String, String)] =
-        for (param <- sortedParams) yield
-          ((param.name, GumboXGenUtil.getSlangType(param.slangType, aadlTypes)))
 
       var invariantBlocks: ISZ[ST] = ISZ()
       for (sortedParam <- sortedParams if ops.ISZOps(hasInvariant).contains(sortedParam.aadlType)) {
@@ -584,7 +525,7 @@ object GumboXGen {
               |  ${(paramsToComment(sortedParams), "\n")}
               |  */
               |@strictpure def time_triggered_oracle(
-              |    ${(for (p <- handlerParams) yield st"${p._1}: ${p._2}", ",\n")}): B =
+              |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
               |  ${(blocks, " &\n")}"""
       }
     }

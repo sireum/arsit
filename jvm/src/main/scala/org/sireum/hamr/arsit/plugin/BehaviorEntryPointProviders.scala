@@ -25,8 +25,13 @@ object BehaviorEntryPointProviders {
       .map((m: BehaviorEntryPointObjectContributions) => m.asInstanceOf[BehaviorEntryPointMethodContributions]).flatMap(f => f.markers)
   }
 
-  def offer(entryPoint: EntryPoints.Type, optInEventPort: Option[AadlPort],
-            m: AadlThreadOrDevice, excludeImpl: B, methodSig: String, defaultMethodBody: ST,
+  def offer(entryPoint: EntryPoints.Type,
+            optInEventPort: Option[AadlPort],
+            component: AadlThreadOrDevice,
+            componentNames: NameProvider,
+            excludeImpl: B,
+            methodSig: String,
+            defaultMethodBody: ST,
             annexClauseInfos: ISZ[AnnexClauseInfo],
             plugins: MSZ[BehaviorEntryPointProviderPlugin],
 
@@ -41,8 +46,8 @@ object BehaviorEntryPointProviders {
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
-    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, m, annexClauseInfos, symbolTable) && !reporter.hasError) {
-      p.handle(entryPoint, optInEventPort, m, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
+    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, component, annexClauseInfos, symbolTable) && !reporter.hasError) {
+      p.handle(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
         case b: FullMethodContributions =>
           if (optMethod.nonEmpty) {
             reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method implementation")
@@ -137,9 +142,7 @@ object BehaviorEntryPointProviders {
       return ret(method = method)
     }
   }
-}
 
-object BehaviorEntryPointElementProvider {
   def finalise(plugins: MSZ[BehaviorEntryPointProviderPlugin],
 
                component: AadlThreadOrDevice,
@@ -166,7 +169,9 @@ object BehaviorEntryPointElementProvider {
     }
     return ret
   }
+}
 
+object BehaviorEntryPointElementProvider {
   // TODO: could make a plugin out of the following to allow codegen to provide different
   //       component implementations (e.g. singleton vs class)
 

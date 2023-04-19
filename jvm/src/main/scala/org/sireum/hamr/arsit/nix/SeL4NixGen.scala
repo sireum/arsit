@@ -450,7 +450,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     val sourcePaths: ISZ[String] = ISZ(
       Util.pathAppend(dirs.mainDir, ISZ("bridge")),
       Util.pathAppend(dirs.mainDir, ISZ("component")),
-      Util.pathAppend(dirs.seL4NixDir, names.path))
+      Util.pathAppend(dirs.seL4NixDir, names.packagePathI))
 
     val excludes: ISZ[String] = if (arsitOptions.excludeImpl) {
       components.map(c => {

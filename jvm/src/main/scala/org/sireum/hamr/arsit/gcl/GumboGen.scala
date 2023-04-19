@@ -213,8 +213,7 @@ object GumboGen {
           val fqAadlTypeName = st"${(atn.ids, "::")}".render
           val aadlType = aadlTypes.typeMap.get(fqAadlTypeName).get
 
-          val slangTypeName = aadlType.nameProvider.qualifiedReferencedTypeName
-          val splitSlangTypeName = ops.StringOps(slangTypeName).split((c: C) => c == '.')
+          val splitSlangTypeName = aadlType.nameProvider.qualifiedReferencedTypeNameI
 
           val name = AST.Name(ids = splitSlangTypeName.map((a: String) => AST.Id(value = a, attr = AST.Attr(None()))), attr = AST.Attr(None()))
           val slangTypedName = AST.Type.Named(name = name, typeArgs = ISZ(), attr = o.attr)
@@ -229,8 +228,7 @@ object GumboGen {
         case arm: AST.ResolvedInfo.Method if arm.mode == AST.MethodMode.Constructor =>
           val componentName = s"${convertSelects(o.receiverOpt)}::${o.ident.id.value}"
           val path: IdPath = aadlTypes.typeMap.get(componentName) match {
-            case Some(t) =>
-              ops.StringOps(t.nameProvider.qualifiedReferencedTypeName).split((c: C) => c == '.')
+            case Some(t) => t.nameProvider.qualifiedReferencedTypeNameI
             case _ => halt(s"Couldn't find an AADL data component corresponding to '${componentName}''")
           }
           val receiver = convertToSelect(ops.ISZOps(path).dropRight(1))

@@ -55,30 +55,6 @@ import org.sireum.ops.ISZOps
         val dpContributions = dpProvider.handle(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
           resolvedAnnexSubclauses, symbolTable, types, reporter)
         resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
-
-        val invariants = GumboXGen.processInvariant(aadlType, symbolTable, types, aadlType.nameProvider.basePackageName)
-        if (invariants.nonEmpty) {
-          val objectName = GumboXGen.createInvariantObjectName(aadlType)
-
-          val resourceST =
-            st"""// #Sireum
-                |
-                |package ${aadlType.nameProvider.qualifiedPackageName}
-                |
-                |import org.sireum._
-                |import ${basePackage}._
-                |${StubTemplate.addImports(GumboXGen.imports)}
-                |
-                |${StringTemplate.doNotEditComment(None())}
-                |object ${objectName} {
-                |  ${(invariants, "\n\n")}
-                |}"""
-
-          addResource(
-            directories.dataDir, ISZ(aadlType.nameProvider.outputDirectory, s"${objectName}.scala"),
-            resourceST, T
-          )
-        }
       }
     }
 
