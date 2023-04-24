@@ -2,8 +2,8 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlPort}
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventPort, AadlFeature, AadlPort}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeResolver, TypeUtil}
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.Direction
 import org.sireum.lang.ast.Typed
@@ -13,6 +13,15 @@ object GumboXGenUtil {
   @pure def isInPort(p: AadlFeature): B = {
     return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.In
   }
+
+  @pure def isDataPort(p: AadlFeature): B = {
+    return p.isInstanceOf[AadlDataPort]
+  }
+
+  @pure def isEventPort(p: AadlFeature): B = {
+    return p.isInstanceOf[AadlEventPort]
+  }
+
 
   def getSlangType(typ: Typed, aadlTypes: AadlTypes): String = {
     @pure def toAadl(ids: ISZ[String]): String = {
@@ -54,9 +63,9 @@ object GumboXGenUtil {
   @datatype class GGParam(val name: String,
                           val aadlType: AadlType,
                           val isOptional: B,
-                          val slangType: Option[AST.Typed],
                           val kind: SymbolKind.Type,
-                          val origin: Option[AST.Exp]) {
+                          @hidden val slangType: Option[AST.Typed],
+                          @hidden val origin: Option[AST.Exp]) {
     @pure def getType: String = {
       return if (isOptional) s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]" else aadlType.nameProvider.qualifiedReferencedTypeName
     }
@@ -83,10 +92,14 @@ object GumboXGenUtil {
       val _ids: ISZ[String] =
         if (ids(ids.size - 1) == "Type") ops.ISZOps(typ.ids).dropRight(1)
         else ids
-      val key = st"${(_ids, "::")}".render
-      if (key == "art::Empty") {
+
+      if (_ids.size == 2 && _ids(0) == "art" && _ids(1) == "Empty") {
         return (TypeUtil.EmptyType, isOptional)
+      } else if (_ids.size == 3 && _ids(0) == "org" && _ids(1) == "sireum") {
+        val aadlType = TypeResolver.getAadlBaseFromSlangType(_ids)
+        return (aadlTypes.typeMap.get(aadlType).get, isOptional)
       } else {
+        val key = st"${(_ids, "::")}".render
         return (aadlTypes.typeMap.get(key).get, isOptional)
       }
     }
@@ -97,7 +110,7 @@ object GumboXGenUtil {
           val typed = o.attr.typedOpt.get.asInstanceOf[AST.Typed.Name]
           val paramName = s"api_${id.value}"
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(paramName, typ, isOptional, Some(typed), SymbolKind.ApiVar, Some(o))
+          params = params + GGParam(paramName, typ, isOptional, SymbolKind.ApiVar, Some(typed), Some(o))
           return ir.MTransformer.PreResult(
             F,
             MSome(AST.Exp.Ident(id = AST.Id(value = paramName, attr = AST.Attr(None())), attr = o.attr)))
@@ -121,7 +134,7 @@ object GumboXGenUtil {
             case x => halt(s"Infeasible ${x}")
           }
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(name, typ, isOptional, Some(typed), kind, Some(o))
+          params = params + GGParam(name, typ, isOptional, kind, Some(typed), Some(o))
           AST.Exp.Ident(id = AST.Id(value = name, attr = o.attr), attr = i.attr)
         case _ => halt(s"Unexpected ${o.exp}")
       }
@@ -132,7 +145,7 @@ object GumboXGenUtil {
       o.attr.typedOpt.get match {
         case typed: AST.Typed.Name =>
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(o.id.value, typ, isOptional, Some(typed), SymbolKind.StateVar, Some(o))
+          params = params + GGParam(o.id.value, typ, isOptional, SymbolKind.StateVar, Some(typed), Some(o))
         case _ =>
       }
       return ir.MTransformer.PreResult(F, MNone[AST.Exp]())

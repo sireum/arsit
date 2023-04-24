@@ -144,6 +144,7 @@ object BehaviorEntryPointProviders {
   }
 
   def finalise(plugins: MSZ[BehaviorEntryPointProviderPlugin],
+               annexClauseInfos: ISZ[AnnexClauseInfo],
 
                component: AadlThreadOrDevice,
                nameProvider: NameProvider,
@@ -154,7 +155,7 @@ object BehaviorEntryPointProviders {
                reporter: Reporter): ObjectContributions = {
     var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
     for (p <- plugins if !reporter.hasError) {
-      p.finalise(component, nameProvider, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
+      p.finalise(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
         case Some(x) =>
           ret = ret(
             tags = ret.tags ++ x.tags,

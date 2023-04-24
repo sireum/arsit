@@ -4,7 +4,6 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
-import org.sireum.hamr.arsit.gcl.GumboXGen
 import org.sireum.hamr.arsit.nix.NixGen
 import org.sireum.hamr.arsit.plugin.{ArsitPlugin, DefaultDatatypeProvider}
 import org.sireum.hamr.arsit.templates._

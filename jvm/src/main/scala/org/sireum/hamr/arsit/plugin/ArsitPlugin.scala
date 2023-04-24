@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.bts.BlessBehaviorProviderPlugin
-import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin, GumboXPlugin, GumboXPluginz}
+import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin, GumboXPlugin}
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ObjectContributions}
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
@@ -23,7 +23,6 @@ object ArsitPlugin {
     GumboDatatypeProviderPlugin(),
     GumboPlugin(),
     GumboXPlugin(),
-    GumboXPluginz(),
     DefaultDatatypeProvider())
 
   @memoize def getDatatypeProviders(plugins: MSZ[Plugin]): MSZ[DatatypeProviderPlugin] = {
@@ -221,6 +220,7 @@ object BehaviorEntryPointProviderPlugin {
   // collecting to an external resource.
   def finalise(component: AadlThreadOrDevice,
                nameProvider: NameProvider,
+               resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                basePackageName: String,
                symbolTable: SymbolTable,
                aadlTypes: AadlTypes,

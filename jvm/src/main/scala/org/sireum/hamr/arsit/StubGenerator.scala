@@ -198,7 +198,7 @@ import org.sireum.hamr.ir._
       }
 
       behaviorCodeContributions = behaviorCodeContributions :+
-        BehaviorEntryPointProviders.finalise(beppp, m, names, basePackage, symbolTable, types, dirs, reporter)
+        BehaviorEntryPointProviders.finalise(beppp, annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, reporter)
 
       val markers = BehaviorEntryPointProviders.getMarkers(behaviorCodeContributions)
       val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)
