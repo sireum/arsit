@@ -61,6 +61,7 @@ object GumboXGenUtil {
   }
 
   @datatype class GGParam(val name: String,
+                          val originName: String,
                           val aadlType: AadlType,
                           val isOptional: B,
                           val kind: SymbolKind.Type,
@@ -110,7 +111,7 @@ object GumboXGenUtil {
           val typed = o.attr.typedOpt.get.asInstanceOf[AST.Typed.Name]
           val paramName = s"api_${id.value}"
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(paramName, typ, isOptional, SymbolKind.ApiVar, Some(typed), Some(o))
+          params = params + GGParam(paramName, paramName, typ, isOptional, SymbolKind.ApiVar, Some(typed), Some(o))
           return ir.MTransformer.PreResult(
             F,
             MSome(AST.Exp.Ident(id = AST.Id(value = paramName, attr = AST.Attr(None())), attr = o.attr)))
@@ -134,7 +135,7 @@ object GumboXGenUtil {
             case x => halt(s"Infeasible ${x}")
           }
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(name, typ, isOptional, kind, Some(typed), Some(o))
+          params = params + GGParam(name, name, typ, isOptional, kind, Some(typed), Some(o))
           AST.Exp.Ident(id = AST.Id(value = name, attr = o.attr), attr = i.attr)
         case _ => halt(s"Unexpected ${o.exp}")
       }
@@ -145,7 +146,7 @@ object GumboXGenUtil {
       o.attr.typedOpt.get match {
         case typed: AST.Typed.Name =>
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(o.id.value, typ, isOptional, SymbolKind.StateVar, Some(typed), Some(o))
+          params = params + GGParam(o.id.value, o.id.value, typ, isOptional, SymbolKind.StateVar, Some(typed), Some(o))
         case _ =>
       }
       return ir.MTransformer.PreResult(F, MNone[AST.Exp]())

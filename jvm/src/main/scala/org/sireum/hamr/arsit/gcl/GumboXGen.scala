@@ -424,7 +424,8 @@ object GumboXGen {
         for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
           val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
           val paramName = s"${ops.ISZOps(pair._1).last}_IEP_Guar"
-          I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, aadlType, T, SymbolKind.ApiVar, None(), None())
+          val originName = ops.ISZOps(pair._1).last
+          I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
           I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
         }
       case _ =>
@@ -557,7 +558,7 @@ object GumboXGen {
               |@strictpure def ${simpleName} (
               |    ${(for (p <- sorted_CEP_T_Assm_Params) yield p.getParamDef, ",\n")}): B =
               |  ${(topLevelAssumeCallsCombined, " &\n")}"""
-        CEP_T_Guar = Some(
+        CEP_T_Assm = Some(
           ContractHolder(CEP_T_Assm_MethodName, sorted_CEP_T_Assm_Params, imports, content)
         )
       }
@@ -658,9 +659,10 @@ object GumboXGen {
         case Some(clauses) =>
           for (pair <- clauses if GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val paramName = s"${ops.ISZOps(pair._1).last}_IEP_Assm"
+            val origin = ops.ISZOps(pair._1).last
+            val paramName = s"${origin}_IEP_Assm"
             val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
-            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
+            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, origin, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
             I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
@@ -669,7 +671,8 @@ object GumboXGen {
       var D_Inv_Guards: ISZ[ST] = ISZ()
       for (sortedParam <- sortParam(I_Assm_Guard_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
         val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)._2
-        D_Inv_Guards = D_Inv_Guards :+ st"${(d_inv_guard_MethodName, ".")}(${sortedParam.name})"
+        val wrapDataPort: String = if(!sortedParam.isOptional) s"Some(${sortedParam.name})" else sortedParam.name
+        D_Inv_Guards = D_Inv_Guards :+ st"${(d_inv_guard_MethodName, ".")}($wrapDataPort)"
       }
 
       if (I_Assm_Guard.nonEmpty || CEP_T_Assm.nonEmpty) {
@@ -739,8 +742,9 @@ object GumboXGen {
         case Some(clauses) =>
           for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val paramName = s"${ops.ISZOps(pair._1).last}_IEP_Guar"
-            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, aadlType, T, SymbolKind.ApiVar, None(), None())
+            val origin = ops.ISZOps(pair._1).last
+            val paramName = s"${origin}_IEP_Guar"
+            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, origin, aadlType, T, SymbolKind.ApiVar, None(), None())
             I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
@@ -899,43 +903,41 @@ object GumboXGen {
       val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
       val outPorts = component.getPorts().filter(f => f.direction == Direction.Out)
 
-      var testComputeCB_Params: Set[GGParam] = Set.empty
-      var testComputeCBwL_Params: Set[GGParam] = Set.empty
+      var inPortParams: Set[GGParam] = Set.empty
       for(inPort <- inPorts) {
         inPort match {
           case i: AadlDataPort =>
-            testComputeCB_Params = testComputeCB_Params +
-              GGParam(inPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
+            inPortParams = inPortParams +
+              GGParam(inPort.identifier, inPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
           case i: AadlEventDataPort =>
-            testComputeCB_Params = testComputeCB_Params +
-              GGParam(inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
+            inPortParams = inPortParams +
+              GGParam(inPort.identifier, inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
           case i: AadlEventPort =>
-            testComputeCB_Params = testComputeCB_Params +
-              GGParam(inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar,  None(), None())
+            inPortParams = inPortParams +
+              GGParam(inPort.identifier, inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar,  None(), None())
           case _ => halt("Infeasible")
         }
       }
 
-      testComputeCBwL_Params = testComputeCB_Params
-
+      var preStateParams: Set[GGParam] = inPortParams
       var saveInLocal: ISZ[ST] = ISZ()
       for(stateVar <- annex.state) {
         val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
-        testComputeCBwL_Params = testComputeCBwL_Params +
-          GGParam(stateVar.name, aadlType, F, SymbolKind.StateVar, None(), None())
+        val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, F, SymbolKind.StateVarPre, None(), None())
+        preStateParams = preStateParams + stateParam
 
         saveInLocal = saveInLocal :+
-          st"val In_${stateVar.name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+          st"val ${stateParam.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
       }
 
       var cbblocks: ISZ[ST]= ISZ()
       if (saveInLocal.nonEmpty) {
         cbblocks = cbblocks :+
-          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retreived from the component state
+          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
               |${(saveInLocal, "\n")}"""
       } else {
         cbblocks = cbblocks :+
-          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retreived from the component state
+          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
               |//   ${component.identifier} does not have incoming ports or state variables"""
       }
 
@@ -944,10 +946,9 @@ object GumboXGen {
           val sortedPreParams = sortParam(pre.params)
           cbblocks = cbblocks :+
             st"""// Step 2 [CheckPre]: check/filter based on pre-condition (exiting with true if the pre-condition is not satisfied).
-                |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.name, ", ")})
+                |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.originName, ", ")})
                 |if (!CEP_Pre_Result) {
-                |  // TODO: should return something more meaningful to allow SlangCheck to retry
-                |  return T
+                |  return GumboXResult.Pre_Condition_Unsat
                 |}"""
         case _ =>
           cbblocks = cbblocks :+
@@ -972,8 +973,6 @@ object GumboXGen {
               |//   ${component.identifier} does not have incoming ports"""
       }
 
-      val sortedCBPorts = sortParam(testComputeCB_Params.elements)
-
       cbblocks = cbblocks :+
         st"""// Step 4 [InvokeEntryPoint]: invoke the entry point test method
             |testCompute()"""
@@ -982,34 +981,56 @@ object GumboXGen {
       var step5PostValues: ISZ[ST] = ISZ()
       for(outPort <- outPorts) {
         val ggParam: GGParam = outPort match {
-          case i: AadlDataPort => GGParam(outPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventDataPort => GGParam(outPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventPort => GGParam(outPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
+          case i: AadlDataPort => GGParam(outPort.identifier, outPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
+          case i: AadlEventDataPort => GGParam(outPort.identifier, outPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
+          case i: AadlEventPort => GGParam(outPort.identifier, outPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
           case _ => halt("Infeasible")
         }
         postOracleParams = postOracleParams + ggParam
         val suffix: String = if (!ggParam.isOptional) ".get" else ""
-        step5PostValues = step5PostValues :+ st"val ${ggParam.name}: ${ggParam.getType} = get_${ggParam.name}()${suffix}"
+        step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.name}()${suffix}"
       }
 
       for(stateVar <- annex.state) {
         val typ = aadlTypes.typeMap.get(stateVar.classifier).get
-        step5PostValues = step5PostValues :+ st"val ${stateVar.name}: ${typ.nameProvider.qualifiedReferencedTypeName} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+        val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
+        postOracleParams = postOracleParams + postSVGG
+        step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
       }
 
       if(step5PostValues.nonEmpty) {
         cbblocks = cbblocks :+
-          st"""// Step 5 [RetrieveOutState]: retrieve values of the outport ports via get operations and GUMBO declared local state variables
+          st"""// Step 5 [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variables
               |${(step5PostValues, "\n")}"""
       }
 
 
+      val testComputeCB_Params: Set[GGParam] = preStateParams ++ postOracleParams.elements
+      val sortedCB_Params = sortParam(testComputeCB_Params.elements)
+      //var testComputeCBwL_Params: Set[GGParam] = Set.empty
+      //testComputeCBwL_Params = testComputeCB_Params
+      //val sortedCBPorts = sortParam(testComputeCB_Params.elements)
+
+      if (cepHolder.CEP_Post.nonEmpty) {
+        cbblocks = cbblocks :+
+          st"""// Step 6 [CheckPost]: invoke the oracle function
+              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for(p <- sortedCB_Params) yield p.name, ", ")})
+              |if (!postResult) {
+              |  return GumboXResult.Post_Condition_Fail
+              |}"""
+      } else {
+        cbblocks = cbblocks :+
+          st"""// Step 6 [CheckPost]: invoke the oracle function
+              |  ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
+      }
+
+      val sortedInPortParams = sortParam(inPortParams.elements)
       val testComputeCB =
         st"""def testComputeCB(
-            |    ${(for (sortedParam <- sortedCBPorts) yield sortedParam.getParamDef, ",\n")}): B = {
+            |    ${(for (sortedParam <- sortedInPortParams) yield sortedParam.getParamDef, ",\n")}): GumboXResult.Type = {
             |  ${(cbblocks, "\n\n")}
             |
-            |  return T
+            |  return GumboXResult.Post_Condition_Pass
             |}"""
 
       blocks = blocks :+ testComputeCB
@@ -1031,7 +1052,20 @@ object GumboXGen {
             |"""
 
       val path = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${simpleName}.scala"
-      val resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(path, content, T))
+      var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(path, content, T))
+
+      val utilPath = s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/GumboXUtil.scala"
+      val utilContent: ST = st"""// #Sireum
+                                |package ${componentNames.basePackage}
+                                |
+                                |import org.sireum._
+                                |
+                                |@enum object GumboXResult {
+                                |  "Pre_Condition_Unsat"
+                                |  "Post_Condition_Pass"
+                                |  "Post_Condition_Fail"
+                                |}"""
+      resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
 
       return emptyObjectContributions(resources = resources)
     } else {
