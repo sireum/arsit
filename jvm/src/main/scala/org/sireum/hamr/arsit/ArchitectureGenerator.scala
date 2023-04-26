@@ -10,7 +10,7 @@ import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers._
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
@@ -38,7 +38,7 @@ import org.sireum.ops.ISZOps
 
   var resources: ISZ[Resource] = ISZ()
 
-  def generate(): PhaseResult = {
+  def generate(): Result = {
     if (!types.rawConnections) {
       // TODO allow for customizations of base types
       for (aadlType <- types.typeMap.values if !aadlType.isInstanceOf[BaseType]) {
@@ -60,13 +60,21 @@ import org.sireum.ops.ISZOps
     val baseTypes = TypeTemplate.Base_Types(basePackage)
     addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
 
+    val slangCheckOptions = SireumToolsSlangcheckOption(
+      datatypeFiles = resources,
+      outputDir = ISZ(directories.dataDir),
+      testDir = ISZ(directories.testDir))
+
     generateInternal()
 
-    return PhaseResult(
+    return ArsitResult(
       resources = resources,
       maxPort = portId,
       maxComponent = componentId,
-      maxConnection = connections.size)
+      maxConnection = connections.size,
+      transpilerOptions = ISZ(),
+      slangCheckOptions = ISZ(slangCheckOptions)
+    )
   }
 
   def generateInternal(): Unit = {

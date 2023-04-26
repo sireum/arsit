@@ -908,13 +908,13 @@ object GumboXGen {
         inPort match {
           case i: AadlDataPort =>
             inPortParams = inPortParams +
-              GGParam(inPort.identifier, inPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
+              GGParam(s"api_${inPort.identifier}", inPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
           case i: AadlEventDataPort =>
             inPortParams = inPortParams +
-              GGParam(inPort.identifier, inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
+              GGParam(s"api_${inPort.identifier}", inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
           case i: AadlEventPort =>
             inPortParams = inPortParams +
-              GGParam(inPort.identifier, inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar,  None(), None())
+              GGParam(s"api_${inPort.identifier}", inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar,  None(), None())
           case _ => halt("Infeasible")
         }
       }
@@ -956,13 +956,14 @@ object GumboXGen {
                 |//   ${component.identifier}'s compute entry point does not have top level assume clauses"""
       }
 
-      if (inPorts.nonEmpty) {
+      if (inPortParams.nonEmpty) {
         var putters: ISZ[ST] = ISZ()
-        for(inPort <- inPorts) {
+        for (inPort <- sortParam(inPortParams.elements)) {
+          val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
           val optArg: Option[String] =
-            if(GumboXGenUtil.isEventPort(symbolTable.featureMap.get(inPort.path).get)) None()
-            else Some(inPort.identifier)
-          putters = putters :+ st"put_${inPort.identifier}(${optArg})"
+            if(GumboXGenUtil.isEventPort(cport)) None()
+            else Some(inPort.name)
+          putters = putters :+ st"put_${inPort.originName}(${optArg})"
         }
         cbblocks = cbblocks :+
           st"""// Step 3 [PutInPorts]: put values on the input ports
@@ -979,6 +980,15 @@ object GumboXGen {
 
       var postOracleParams: Set[GGParam] = Set.empty
       var step5PostValues: ISZ[ST] = ISZ()
+
+      if (cepHolder.CEP_Post.nonEmpty) {
+        for(ggParam <- cepHolder.CEP_Post.get.params.filter(p => p.kind == SymbolKind.ApiVar)) {
+          postOracleParams = postOracleParams + ggParam
+          val suffix: String = if (!ggParam.isOptional) ".get" else ""
+          step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.originName}()${suffix}"
+        }
+      }
+      /*
       for(outPort <- outPorts) {
         val ggParam: GGParam = outPort match {
           case i: AadlDataPort => GGParam(outPort.identifier, outPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
@@ -990,7 +1000,7 @@ object GumboXGen {
         val suffix: String = if (!ggParam.isOptional) ".get" else ""
         step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.name}()${suffix}"
       }
-
+      */
       for(stateVar <- annex.state) {
         val typ = aadlTypes.typeMap.get(stateVar.classifier).get
         val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
@@ -1004,17 +1014,11 @@ object GumboXGen {
               |${(step5PostValues, "\n")}"""
       }
 
-
-      val testComputeCB_Params: Set[GGParam] = preStateParams ++ postOracleParams.elements
-      val sortedCB_Params = sortParam(testComputeCB_Params.elements)
-      //var testComputeCBwL_Params: Set[GGParam] = Set.empty
-      //testComputeCBwL_Params = testComputeCB_Params
-      //val sortedCBPorts = sortParam(testComputeCB_Params.elements)
-
       if (cepHolder.CEP_Post.nonEmpty) {
+        val sortedCepPostParams = sortParam(cepHolder.CEP_Post.get.params)
         cbblocks = cbblocks :+
           st"""// Step 6 [CheckPost]: invoke the oracle function
-              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for(p <- sortedCB_Params) yield p.name, ", ")})
+              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for(p <- sortedCepPostParams) yield p.name, ", ")})
               |if (!postResult) {
               |  return GumboXResult.Post_Condition_Fail
               |}"""

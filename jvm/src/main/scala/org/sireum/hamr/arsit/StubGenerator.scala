@@ -34,11 +34,14 @@ import org.sireum.hamr.ir._
 
     gen(rootSystem)
 
-    return PhaseResult(
+    return ArsitResult(
       resources = previousPhase.resources() ++ resources,
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
-      maxConnection = previousPhase.maxConnection)
+      maxConnection = previousPhase.maxConnection,
+      transpilerOptions = previousPhase.transpilerOptions,
+      slangCheckOptions = previousPhase.slangCheckOptions
+    )
   }
 
   def gen(m: AadlComponent): Unit = {

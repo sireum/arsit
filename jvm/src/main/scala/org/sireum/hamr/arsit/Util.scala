@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{Resource, SireumToolsSlangcheckOption, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types._
@@ -275,15 +275,15 @@ object HAMR {
   def maxComponent: Z
 
   def maxConnection: Z
-}
 
-@datatype class PhaseResult(val resources: ISZ[Resource],
-                            val maxPort: Z,
-                            val maxComponent: Z,
-                            val maxConnection: Z) extends Result
+  def transpilerOptions: ISZ[TranspilerConfig]
+
+  def slangCheckOptions: ISZ[SireumToolsSlangcheckOption]
+}
 
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
                             val maxConnection: Z,
-                            val transpilerOptions: ISZ[TranspilerConfig]) extends Result
+                            val transpilerOptions: ISZ[TranspilerConfig],
+                            val slangCheckOptions: ISZ[SireumToolsSlangcheckOption]) extends Result

@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{Resource, SireumToolsSlangcheckOption, TranspilerConfig}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
@@ -35,7 +35,7 @@ object Arsit {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig]())
+      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig](), ISZ[SireumToolsSlangcheckOption]())
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
@@ -60,7 +60,8 @@ object Arsit {
       nixPhase.maxPort,
       nixPhase.maxComponent,
       nixPhase.maxConnection,
-      nixPhase.transpilerOptions)
+      nixPhase.transpilerOptions,
+      nixPhase.slangCheckOptions)
   }
 
   def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {

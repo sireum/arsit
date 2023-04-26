@@ -53,7 +53,8 @@ import org.sireum.hamr.ir.Direction
       maxPort = portId,
       maxComponent = previousPhase.maxComponent,
       maxConnection = previousPhase.maxConnection,
-      transpilerOptions = transpilerOptions)
+      transpilerOptions = transpilerOptions,
+      slangCheckOptions = previousPhase.slangCheckOptions)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
