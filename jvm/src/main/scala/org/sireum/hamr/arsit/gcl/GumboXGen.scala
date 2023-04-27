@@ -423,8 +423,8 @@ object GumboXGen {
       case Some(clauses) =>
         for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
           val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-          val paramName = s"${ops.ISZOps(pair._1).last}_IEP_Guar"
           val originName = ops.ISZOps(pair._1).last
+          val paramName = s"${originName}_IEP_Guar"
           I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
           I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
         }
@@ -659,10 +659,10 @@ object GumboXGen {
         case Some(clauses) =>
           for (pair <- clauses if GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val origin = ops.ISZOps(pair._1).last
-            val paramName = s"${origin}_IEP_Assm"
+            val originName = ops.ISZOps(pair._1).last
+            val paramName = s"${originName}_IEP_Assm"
             val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
-            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, origin, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
+            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
             I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
@@ -742,9 +742,9 @@ object GumboXGen {
         case Some(clauses) =>
           for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val origin = ops.ISZOps(pair._1).last
-            val paramName = s"${origin}_IEP_Guar"
-            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, origin, aadlType, T, SymbolKind.ApiVar, None(), None())
+            val originName = ops.ISZOps(pair._1).last
+            val paramName = s"${originName}_IEP_Guar"
+            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
             I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
@@ -946,7 +946,7 @@ object GumboXGen {
           val sortedPreParams = sortParam(pre.params)
           cbblocks = cbblocks :+
             st"""// Step 2 [CheckPre]: check/filter based on pre-condition (exiting with true if the pre-condition is not satisfied).
-                |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.originName, ", ")})
+                |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.name, ", ")})
                 |if (!CEP_Pre_Result) {
                 |  return GumboXResult.Pre_Condition_Unsat
                 |}"""
@@ -983,24 +983,15 @@ object GumboXGen {
 
       if (cepHolder.CEP_Post.nonEmpty) {
         for(ggParam <- cepHolder.CEP_Post.get.params.filter(p => p.kind == SymbolKind.ApiVar)) {
-          postOracleParams = postOracleParams + ggParam
-          val suffix: String = if (!ggParam.isOptional) ".get" else ""
-          step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.originName}()${suffix}"
+          val cport = symbolTable.featureMap.get(component.path :+ ggParam.originName).get
+          if (!GumboXGenUtil.isInPort(cport)) {
+            postOracleParams = postOracleParams + ggParam
+            val suffix: String = if (!ggParam.isOptional) ".get" else ""
+            step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.originName}()${suffix}"
+          }
         }
       }
-      /*
-      for(outPort <- outPorts) {
-        val ggParam: GGParam = outPort match {
-          case i: AadlDataPort => GGParam(outPort.identifier, outPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventDataPort => GGParam(outPort.identifier, outPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventPort => GGParam(outPort.identifier, outPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
-          case _ => halt("Infeasible")
-        }
-        postOracleParams = postOracleParams + ggParam
-        val suffix: String = if (!ggParam.isOptional) ".get" else ""
-        step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.name}()${suffix}"
-      }
-      */
+
       for(stateVar <- annex.state) {
         val typ = aadlTypes.typeMap.get(stateVar.classifier).get
         val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
