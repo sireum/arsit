@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.symbols._
@@ -23,6 +24,7 @@ import org.sireum.message.Reporter
                          optInEventPort: Option[AadlPort],
                          component: AadlThreadOrDevice,
                          resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                         arsitOptions: ArsitOptions,
                          symbolTable: SymbolTable): B = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       // GCL's symbol resolver ensures there's at most one GCL clause per component
@@ -46,6 +48,7 @@ import org.sireum.message.Reporter
                       symbolTable: SymbolTable,
                       aadlTypes: AadlTypes,
                       projectDirectories: ProjectDirectories,
+                      arsitOptions: ArsitOptions,
                       reporter: Reporter): BehaviorEntryPointProviderPlugin.BehaviorEntryPointContributions = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
@@ -64,13 +67,14 @@ import org.sireum.message.Reporter
                         symbolTable: SymbolTable,
                         aadlTypes: AadlTypes,
                         projectDirectories: ProjectDirectories,
+                        arsitOptions: ArsitOptions,
                         reporter: Reporter): Option[ObjectContributions] = {
 
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
         val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
 
-        val testHarness = gumboXGen.createTestHarness(component, componentNames, annex, gclSymbolTable, symbolTable, aadlTypes, projectDirectories)
+        val testHarness = gumboXGen.createTestHarness(component, componentNames, annex, gclSymbolTable, arsitOptions.slangCheckJarExists, symbolTable, aadlTypes, projectDirectories)
 
         return Some(gumbox(resources = gumbox.resources ++ testHarness.resources))
       case _ =>

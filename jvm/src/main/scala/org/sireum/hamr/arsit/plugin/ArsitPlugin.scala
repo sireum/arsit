@@ -6,6 +6,7 @@ import org.sireum.hamr.arsit.bts.BlessBehaviorProviderPlugin
 import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin, GumboXPlugin}
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ObjectContributions}
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
@@ -192,6 +193,7 @@ object BehaviorEntryPointProviderPlugin {
                       optInEventPort: Option[AadlPort],
                       component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                      arsitOptions: ArsitOptions,
                       symbolTable: SymbolTable): B
 
   // allows a plugin to provide contributions to the generated code for
@@ -213,6 +215,7 @@ object BehaviorEntryPointProviderPlugin {
              symbolTable: SymbolTable,
              aadlTypes: AadlTypes,
              projectDirectories: ProjectDirectories,
+             arsitOptions: ArsitOptions,
              reporter: Reporter): BehaviorEntryPointContributions
 
   // Called prior to codegen writing out the behavior code for the component.
@@ -221,10 +224,12 @@ object BehaviorEntryPointProviderPlugin {
   def finalise(component: AadlThreadOrDevice,
                nameProvider: NameProvider,
                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
                basePackageName: String,
                symbolTable: SymbolTable,
                aadlTypes: AadlTypes,
                projectDirectories: ProjectDirectories,
+               arsitOptions: ArsitOptions,
                reporter: Reporter): Option[ObjectContributions] = {
     return None()
   }

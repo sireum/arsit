@@ -175,7 +175,7 @@ import org.sireum.hamr.ir._
 
               behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
                 entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
-                basePackage, symbolTable, types, dirs, reporter)
+                basePackage, symbolTable, types, dirs, arsitOptions, reporter)
 
               isFirst = F
             }
@@ -189,7 +189,7 @@ import org.sireum.hamr.ir._
             behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(),
               m, names,
               arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
-              basePackage, symbolTable, types, dirs, reporter)
+              basePackage, symbolTable, types, dirs, arsitOptions, reporter)
         }
       }
 
@@ -201,7 +201,7 @@ import org.sireum.hamr.ir._
       }
 
       behaviorCodeContributions = behaviorCodeContributions :+
-        BehaviorEntryPointProviders.finalise(beppp, annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, reporter)
+        BehaviorEntryPointProviders.finalise(beppp, annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, arsitOptions, reporter)
 
       val markers = BehaviorEntryPointProviders.getMarkers(behaviorCodeContributions)
       val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)

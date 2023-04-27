@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, NonCaseContractBlock}
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
 import org.sireum.hamr.codegen.common.symbols._
@@ -28,6 +29,7 @@ import org.sireum.message.Reporter
                 optInEventPort: Option[AadlPort],
                 component: AadlThreadOrDevice,
                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                arsitOptions: ArsitOptions,
                 symbolTable: SymbolTable): B = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       // GCL's symbol resolver ensures there's at most one GCL clause per component
@@ -54,6 +56,7 @@ import org.sireum.message.Reporter
              symbolTable: SymbolTable,
              aadlTypes: AadlTypes,
              projectDirectories: ProjectDirectories,
+             arsitOptions: ArsitOptions,
              reporter: Reporter): BehaviorEntryPointContributions = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>

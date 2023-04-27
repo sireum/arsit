@@ -33,4 +33,7 @@ import org.sireum._
                              maxStringSize: Z,
                              maxArraySize: Z,
                              pathSeparator: C,
+
+                             slangCheckJarExists: B, // TODO: remove once slang check is part of kekinian
+
                              experimentalOptions: ISZ[String])

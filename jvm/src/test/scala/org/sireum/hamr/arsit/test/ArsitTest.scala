@@ -334,7 +334,9 @@ object ArsitTest {
     maxStringSize = 256,
     maxArraySize = 1,
     pathSeparator = '/',
-    experimentalOptions = ISZ()
+    experimentalOptions = ISZ(),
+
+    slangCheckJarExists = F
   )
 
   def filterTestsSet(): Option[B] = {

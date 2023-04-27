@@ -892,6 +892,7 @@ object GumboXGen {
 
   def createTestHarness(component: AadlThreadOrDevice, componentNames: NameProvider,
                         annex: GclSubclause, gclSymbolTable: GclSymbolTable,
+                        slangCheckJarExists: B,
                         symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories): ObjectContributions = {
 
     resetImports()
@@ -901,7 +902,6 @@ object GumboXGen {
 
       var blocks: ISZ[ST]= ISZ()
       val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
-      val outPorts = component.getPorts().filter(f => f.direction == Direction.Out)
 
       var inPortParams: Set[GGParam] = Set.empty
       for(inPort <- inPorts) {
@@ -1061,6 +1061,10 @@ object GumboXGen {
                                 |  "Post_Condition_Fail"
                                 |}"""
       resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
+
+      if (slangCheckJarExists) {
+
+      }
 
       return emptyObjectContributions(resources = resources)
     } else {

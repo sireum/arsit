@@ -5,6 +5,7 @@ package org.sireum.hamr.arsit.plugin
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin._
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
+import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.toolName
 import org.sireum.hamr.codegen.common.containers.Marker
@@ -39,6 +40,7 @@ object BehaviorEntryPointProviders {
             symbolTable: SymbolTable,
             aadlTypes: AadlTypes,
             projectDirs: ProjectDirectories,
+            arsitOptions: ArsitOptions,
             reporter: Reporter): FullMethodContributions = {
 
     var ret = BehaviorEntryPointProviderPlugin.emptyFullContributions
@@ -46,8 +48,8 @@ object BehaviorEntryPointProviders {
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
-    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, component, annexClauseInfos, symbolTable) && !reporter.hasError) {
-      p.handle(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
+    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable) && !reporter.hasError) {
+      p.handle(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case b: FullMethodContributions =>
           if (optMethod.nonEmpty) {
             reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method implementation")
@@ -152,10 +154,11 @@ object BehaviorEntryPointProviders {
                symbolTable: SymbolTable,
                aadlTypes: AadlTypes,
                projectDirs: ProjectDirectories,
+               arsitOptions: ArsitOptions,
                reporter: Reporter): ObjectContributions = {
     var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
     for (p <- plugins if !reporter.hasError) {
-      p.finalise(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, reporter) match {
+      p.finalise(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case Some(x) =>
           ret = ret(
             tags = ret.tags ++ x.tags,
