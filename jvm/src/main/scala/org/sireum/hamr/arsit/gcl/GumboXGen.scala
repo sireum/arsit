@@ -141,6 +141,9 @@ object GumboXGen {
     return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_TestHarness"
   }
 
+  def createTestCasesGumboXClassName(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_Tests"
+  }
 
   def processDescriptor(descriptor: Option[String], pad: String): Option[ST] = {
     def getPipeLoc(cis: ISZ[C]): Z = {
@@ -1031,9 +1034,9 @@ object GumboXGen {
       blocks = blocks :+ testComputeCB
 
       val testHarnessClassName = GumboXGen.createTestHarnessGumboXClassName(componentNames)
-      val simpleName = ops.ISZOps(testHarnessClassName).last
+      val simpleTestHarnessName = ops.ISZOps(testHarnessClassName).last
 
-      val content =
+      val testHarnessContent =
         st"""package ${componentNames.packageName}
             |
             |import org.sireum._
@@ -1041,13 +1044,13 @@ object GumboXGen {
             |${StubTemplate.addImports(imports)}
             |
             |${StringTemplate.doNotEditComment(None())}
-            |abstract class ${simpleName} extends ${componentNames.testApisName} {
+            |abstract class ${simpleTestHarnessName} extends ${componentNames.testApisName} {
             |  ${(blocks, "\n\n")}
             |}
             |"""
 
-      val path = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${simpleName}.scala"
-      var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(path, content, T))
+      val testHarnessPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${simpleTestHarnessName}.scala"
+      var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(testHarnessPath, testHarnessContent, T))
 
       val utilPath = s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/GumboXUtil.scala"
       val utilContent: ST = st"""// #Sireum
@@ -1064,6 +1067,61 @@ object GumboXGen {
 
       if (slangCheckJarExists) {
 
+        val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
+        val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
+
+        val tq = s"\"\"\""
+        val testCaseBlocks: ISZ[ST] = ISZ()
+        var inportDecls: ISZ[ST] = ISZ()
+        var inportActuals: ISZ[ST] = ISZ()
+        var inportActualsPretty: ISZ[ST] = ISZ()
+        val testCaseContent =
+          st"""package ${componentNames.packageName}
+              |
+              |import org.sireum._
+              |import ${componentNames.packageName}._
+              |import ${componentNames.basePackage}.GumboXResult
+              |import ${componentNames.basePackage}.RandomLib
+              |import org.sireum.Random.Impl.Xoshiro256
+              |
+              |${StringTemplate.doNotEditComment(None())}
+              |class ${simpleTestCasesName} extends ${simpleTestHarnessName} {
+              |
+              |  {
+              |    ${(testCaseBlocks, "\n\n")}
+              |
+              |    for (i <- 0 to 100) {
+              |      this.registerTest(i.toString) {
+              |        var retry: B = T
+              |
+              |        for (j <- 0 to 100) {
+              |          ${(inportDecls, "\n")}
+              |
+              |          println(st$tq$${if (j > 0) s"Retry $$j:" else ""}Testing with
+              |                      ${(inportActualsPretty, "\n")}$tq.render)
+              |
+              |          testComputeCB(${(inportActuals, ", ")}) match {
+              |            case GumboXResult.Pre_Condition_Unsat =>
+              |            case GumboXResult.Post_Condition_Fail =>
+              |              fail ("Post condition did not hold")
+              |              retry = F
+              |            case GumboXResult.Post_Condition_Pass =>
+              |              // success
+              |              println ("Success!")
+              |              retry = F
+              |          }
+              |        }
+              |
+              |        if (retry) {
+              |          fail ("Unable to satisfy precondition")
+              |        }
+              |      }
+              |    }
+              |  }
+              |}"""
+
+        val testCasesPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${simpleTestCasesName}.scala"
+        resources = resources :+ ResourceUtil.createResource(testCasesPath, testCaseContent, T)
       }
 
       return emptyObjectContributions(resources = resources)
