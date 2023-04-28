@@ -11,7 +11,7 @@ import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BaseType, EnumType, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
@@ -1070,11 +1070,33 @@ object GumboXGen {
         val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
         val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
 
-        val tq = s"\"\"\""
-        val testCaseBlocks: ISZ[ST] = ISZ()
+        var randLibs: ISZ[ST] = ISZ()
         var inportDecls: ISZ[ST] = ISZ()
         var inportActuals: ISZ[ST] = ISZ()
         var inportActualsPretty: ISZ[ST] = ISZ()
+
+        if (inPortParams.nonEmpty) {
+          for (inPort <- sortParam(inPortParams.elements)) {
+            val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
+
+            val tn = ops.ISZOps(inPort.aadlType.nameProvider.qualifiedReferencedTypeNameI)
+            val pn = st"${(tn.dropRight(1), "_")}"
+            val tname: ST = inPort.aadlType match {
+              case i: EnumType => st"${pn}${i.nameProvider.typeName}Type"
+              case i: BaseType => st"${i.slangType.name}"
+              case i => st"${pn}${i.nameProvider.typeName}"
+            }
+
+            randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.create))"
+            inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${tname}()"
+            inportActuals = inportActuals :+st"${inPort.name}"
+            inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
+          }
+        } else {
+
+        }
+
+        val tq = s"\"\"\""
         val testCaseContent =
           st"""package ${componentNames.packageName}
               |
@@ -1088,16 +1110,16 @@ object GumboXGen {
               |class ${simpleTestCasesName} extends ${simpleTestHarnessName} {
               |
               |  {
-              |    ${(testCaseBlocks, "\n\n")}
+              |    ${(randLibs, "\n")}
               |
               |    for (i <- 0 to 100) {
               |      this.registerTest(i.toString) {
               |        var retry: B = T
               |
-              |        for (j <- 0 to 100) {
+              |        for (j <- 0 to 100 if retry) {
               |          ${(inportDecls, "\n")}
               |
-              |          println(st$tq$${if (j > 0) s"Retry $$j:" else ""}Testing with
+              |          println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
               |                      ${(inportActualsPretty, "\n")}$tq.render)
               |
               |          testComputeCB(${(inportActuals, ", ")}) match {
