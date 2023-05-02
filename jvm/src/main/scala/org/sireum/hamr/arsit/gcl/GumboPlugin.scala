@@ -30,7 +30,8 @@ import org.sireum.message.Reporter
                 component: AadlThreadOrDevice,
                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                 arsitOptions: ArsitOptions,
-                symbolTable: SymbolTable): B = {
+                symbolTable: SymbolTable,
+                aadlTypes: AadlTypes): B = {
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       // GCL's symbol resolver ensures there's at most one GCL clause per component
       case ISZ(GclAnnexClauseInfo(annex, _)) =>

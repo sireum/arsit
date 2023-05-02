@@ -48,7 +48,7 @@ object BehaviorEntryPointProviders {
     var cases: ISZ[CaseContractBlock] = ISZ()
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
     var optBody: Option[ST] = None()
-    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable) && !reporter.hasError) {
+    for (p <- plugins if p.canHandle(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes) && !reporter.hasError) {
       p.handle(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case b: FullMethodContributions =>
           if (optMethod.nonEmpty) {

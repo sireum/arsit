@@ -194,7 +194,8 @@ object BehaviorEntryPointProviderPlugin {
                       component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                       arsitOptions: ArsitOptions,
-                      symbolTable: SymbolTable): B
+                      symbolTable: SymbolTable,
+                      aadlTypes: AadlTypes): B
 
   // allows a plugin to provide contributions to the generated code for
   // an entrypoint. BehaviorEntryPointProviderPlugins will not be called

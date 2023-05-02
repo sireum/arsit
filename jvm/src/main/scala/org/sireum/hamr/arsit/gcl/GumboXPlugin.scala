@@ -11,10 +11,13 @@ import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin extends BehaviorEntryPointProviderPlugin {
   val name: String = "GumboX Plugin"
+
+  var processedDatatypeInvariants: B = F
 
   var handledComponents: Set[IdPath] = Set.empty
 
@@ -25,14 +28,24 @@ import org.sireum.message.Reporter
                          component: AadlThreadOrDevice,
                          resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                          arsitOptions: ArsitOptions,
-                         symbolTable: SymbolTable): B = {
-    resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
-      // GCL's symbol resolver ensures there's at most one GCL clause per component
-      case ISZ(GclAnnexClauseInfo(annex, _)) =>
-        return (!handledComponents.contains(component.path) &&
-          (annex.integration.nonEmpty || annex.initializes.nonEmpty || annex.compute.nonEmpty))
-      case _ => return F
+                         symbolTable: SymbolTable,
+                         aadlTypes: AadlTypes): B = {
+    @pure def hasDatatypeInvariants: B = {
+      for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
+        return T
+      }
+      return F
     }
+
+    val hasGumboSubclauseInfo: B =
+      resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
+        // GCL's symbol resolver ensures there's at most one GCL clause per component
+        case ISZ(GclAnnexClauseInfo(annex, _)) =>
+          annex.integration.nonEmpty || annex.initializes.nonEmpty || annex.compute.nonEmpty
+        case _ => F
+      }
+
+    return !handledComponents.contains(component.path) && (hasDatatypeInvariants || hasGumboSubclauseInfo)
   }
 
   override def handle(entryPoint: EntryPoints.Type,
@@ -50,13 +63,22 @@ import org.sireum.message.Reporter
                       projectDirectories: ProjectDirectories,
                       arsitOptions: ArsitOptions,
                       reporter: Reporter): BehaviorEntryPointProviderPlugin.BehaviorEntryPointContributions = {
-    resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
-      case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
-        gumboXGen.processAnnex(component, componentNames, annex, gclSymbolTable, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
-        handledComponents = handledComponents + component.path
-        return BehaviorEntryPointProviderPlugin.emptyPartialContributions
-      case _ => halt("Infeasible as handle only called when plugin's canHandle returns T")
+    if (!processedDatatypeInvariants) {
+      gumboXGen.processDatatypes(basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+      processedDatatypeInvariants = T
     }
+
+    val gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)] = resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
+      case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) => Some((annex, gclSymbolTable))
+      case _ => None()
+    }
+
+    gumboXGen.processAnnex(component, componentNames,
+      gclSubclauseInfo,
+      basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+    handledComponents = handledComponents + component.path
+
+    return BehaviorEntryPointProviderPlugin.emptyPartialContributions
   }
 
   override def finalise(component: AadlThreadOrDevice,
@@ -70,15 +92,15 @@ import org.sireum.message.Reporter
                         arsitOptions: ArsitOptions,
                         reporter: Reporter): Option[ObjectContributions] = {
 
-    resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
-      case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
-        val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
-
-        val testHarness = gumboXGen.createTestHarness(component, componentNames, annex, gclSymbolTable, arsitOptions.slangCheckJarExists, symbolTable, aadlTypes, projectDirectories)
-
-        return Some(gumbox(resources = gumbox.resources ++ testHarness.resources))
-      case _ =>
-        return None()
+    val annexInfo: Option[(GclSubclause, GclSymbolTable)] = resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
+      case ISZ(GclAnnexClauseInfo(annex_, gclSymbolTable_)) => Some((annex_, gclSymbolTable_))
+      case _ => None()
     }
+
+    val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
+
+    val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.slangCheckJarExists, symbolTable, aadlTypes, projectDirectories)
+
+    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources))
   }
 }

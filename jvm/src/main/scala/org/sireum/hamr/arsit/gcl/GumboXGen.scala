@@ -3,15 +3,15 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.ProjectDirectories
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, SymbolKind, paramsToComment, sortParam}
 import org.sireum.hamr.arsit.gcl.GumboXGen._
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, SymbolKind, paramsToComment, sortParam}
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, BaseType, EnumType, TypeUtil}
+import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
@@ -205,246 +205,260 @@ object GumboXGen {
   // {component path -> holder}
   var computeEntryPointHolder: Map[IdPath, ComputeEntryPointHolder] = Map.empty
 
-  def processAnnex(component: AadlThreadOrDevice, componentNames: NameProvider, annex: GclSubclause, gclSymbolTable: GclSymbolTable,
+  def processAnnex(component: AadlThreadOrDevice, componentNames: NameProvider,
+                   gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
                    basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes,
                    projectDirectories: ProjectDirectories, reporter: Reporter): Unit = {
 
-    processDatatypes(basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+    processIntegerationConstraints(component, componentNames, gclSubclauseInfo, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
 
-    processIntegerationConstraints(component, componentNames, annex, gclSymbolTable, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+    processInitializeEntrypoint(component, componentNames, gclSubclauseInfo, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
 
-    if (annex.initializes.nonEmpty && annex.initializes.get.guarantees.nonEmpty) {
-      processInitializeEntrypoint(component, annex.initializes.get, componentNames, gclSymbolTable, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+    processComputeEntrypoints(component, componentNames, gclSubclauseInfo, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+  }
+
+  def processDatatypes(basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
+    assert(dataInvariants.isEmpty, "Unexpected: processDatatypes should only be called once per project")
+
+    for (aadlType <- aadlTypes.typeMap.values) {
+      val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
+      if (ais.nonEmpty) {
+        assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
+        val ai = ais(0)
+
+        resetImports()
+
+        var ret: ISZ[ST] = ISZ()
+
+        var methodNames: ISZ[String] = ISZ()
+        for (i <- ai.annex.invariants) {
+          val methodName = convertInvariantToMethodName(i.id, aadlType)
+
+          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
+
+          val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
+          methodNames = methodNames :+ methodName
+          ret = ret :+
+            st"""/** invariant ${i.id}
+                |  ${descriptor}
+                |  */
+                |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+                |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, ai.gclSymbolTable))}"""
+        }
+
+        val objectName = GumboXGen.createInvariantObjectName(aadlType)
+        val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
+
+        val simple = ops.ISZOps(d_inv_method_name).last
+        ret = ret :+
+          st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+              |  */
+              |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+              |  (${(methodNames, "(value) &\n")}(value))"""
+
+        ret = ret :+
+          st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+              |  */
+              |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
+              |  value.nonEmpty -->: $simple(value.get)"""
+
+        val content =
+          st"""// #Sireum
+              |
+              |package ${aadlType.nameProvider.qualifiedPackageName}
+              |
+              |import org.sireum._
+              |import ${basePackageName}._
+              |${StubTemplate.addImports(imports)}
+              |
+              |${StringTemplate.doNotEditComment(None())}
+              |object ${ops.ISZOps(objectName).last} {
+              |  ${(ret, "\n\n")}
+              |}"""
+
+        val path = s"${directories.dataDir}/${aadlType.nameProvider.outputDirectory}/${ops.ISZOps(objectName).last}.scala"
+        dataInvariants = dataInvariants + aadlType.name ~>
+          DataInvariantHolder(
+            D_Inv_Method_Name = d_inv_method_name,
+            D_Inv_Guard_Method_Name = d_inv_guard_method_name,
+            resource = ResourceUtil.createResource(path, content, T)
+          )
+      }
     }
+  }
 
-    annex.compute match {
-      case Some(c) if c.cases.nonEmpty || c.handlers.nonEmpty || c.specs.nonEmpty =>
-        processComputeEntrypoints(component, c, componentNames, gclSymbolTable, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
+  def processIntegerationConstraints(component: AadlThreadOrDevice, componentNames: NameProvider,
+                                     gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
+                                     basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
+    resetImports()
+
+    gclSubclauseInfo match {
+      case Some((annex, gclSymbolTable)) =>
+        val ports = component.features.filter(p => p.isInstanceOf[AadlPort]).map((m: AadlFeature) => m.asInstanceOf[AadlPort])
+        for (port <- ports if gclSymbolTable.integrationMap.contains(port)) {
+
+          val (aadlType, portType) = GumboXGen.getPortInfo(port)
+
+          val clause = gclSymbolTable.integrationMap.get(port).get
+          val rexp = getRExp(clause.exp, basePackageName, aadlTypes, gclSymbolTable)
+
+          clause match {
+            case i: GclAssume =>
+              val (i_assm_name, i_assm_guard_name) = GumboXGen.createIntegrationMethodName(F, port, componentNames)
+              val simple = ops.ISZOps(i_assm_name).last
+              val I_Assm =
+                st"""/** I-Assm: Integration constraint on ${component.identifier}'s incoming $portType port ${port.identifier}
+                    |  *
+                    |  * assume ${i.id}
+                    |  ${GumboXGen.processDescriptor(i.descriptor, "*   ")}
+                    |  */
+                    |@strictpure def $simple(${port.identifier}: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+                    |  $rexp"""
+
+              val typ: (String, ST) =
+                if (!GumboXGenUtil.isDataPort(symbolTable.featureMap.get(port.path).get))
+                  (s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]", st"${port.identifier}.nonEmpty -->: $simple(${port.identifier}.get)")
+                else (aadlType.nameProvider.qualifiedReferencedTypeName, st"$simple(${port.identifier})")
+
+              val I_Assm_Guard =
+                st"""// I-Assm-Guard: Integration constraint on ${component.identifier}'s incoming $portType port ${port.identifier}
+                    |@strictpure def ${ops.ISZOps(i_assm_guard_name).last}(${port.identifier}: ${typ._1}): B =
+                    |  ${typ._2}"""
+
+              integrationClauses = integrationClauses + component.path ~> (
+                integrationClauses.getOrElse(component.path, ISZ()) :+
+                  (port.path, IntegrationAssumeHolder(
+                    ContractHolder(i_assm_name, ISZ(), imports, I_Assm),
+                    ContractHolder(i_assm_guard_name, ISZ(), imports, I_Assm_Guard))))
+            case i: GclGuarantee =>
+              val (i_guar_name, i_guar_guard_name) = GumboXGen.createIntegrationMethodName(T, port, componentNames)
+              val simple = ops.ISZOps(i_guar_name).last
+
+              val I_Guar =
+                st"""/** I-Guar: Integration constraint on ${component.identifier}'s outgoing $portType port ${port.identifier}
+                    |  *
+                    |  * guarantee ${i.id}
+                    |  ${GumboXGen.processDescriptor(i.descriptor, "*   ")}
+                    |  */
+                    |@strictpure def $simple(${port.identifier}: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+                    |  $rexp"""
+
+              val I_Guar_Guard =
+                st"""// I_Guar-Guard: Integration constraint on ${component.identifier}'s outgoing $portType port ${port.identifier}
+                    |@strictpure def ${ops.ISZOps(i_guar_guard_name).last}(${port.identifier}: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
+                    |  ${port.identifier}.nonEmpty -->: $simple(${port.identifier}.get)"""
+
+              integrationClauses = integrationClauses + component.path ~> (
+                integrationClauses.getOrElse(component.path, ISZ()) :+
+                  (port.path, IntegrationGuaranteeHolder(
+                    ContractHolder(i_guar_name, ISZ(), imports, I_Guar),
+                    ContractHolder(i_guar_guard_name, ISZ(), imports, I_Guar_Guard))))
+            case _ => halt("Infeasible")
+          }
+        }
       case _ =>
     }
   }
 
+  def processInitializeEntrypoint(component: AadlThreadOrDevice, componentNames: NameProvider,
+                                  gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
+                                  basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
+    resetImports()
 
-  def processDatatypes(basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
-    if (dataInvariants.isEmpty) {
-      for (aadlType <- aadlTypes.typeMap.values) {
-        val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
-        if (ais.nonEmpty) {
-          assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
-          val ai = ais(0)
+    var IEP_Guard: ISZ[ST] = ISZ()
+    var IEP_Guard_Blocks: ISZ[ST] = ISZ()
+    var IEP_Guar_Params: Set[GGParam] = Set.empty[GGParam] ++
+      GumboXGenUtil.outPortsToParams(component) ++
+      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, F, aadlTypes)
 
-          resetImports()
+    gclSubclauseInfo match {
+      case Some((GclSubclause(_, _, _, Some(initializes), _, _), gclSymbolTable)) =>
 
-          var ret: ISZ[ST] = ISZ()
+        var requiresMethods: ISZ[(ISZ[String], ST)] = ISZ()
+        var combinedSpecCalls: ISZ[ST] = ISZ()
 
-          var methodNames: ISZ[String] = ISZ()
-          for (i <- ai.annex.invariants) {
-            val methodName = convertInvariantToMethodName(i.id, aadlType)
+        // process each guarantee clause
+        for (spec <- initializes.guarantees) {
+          val rspec = gclSymbolTable.rexprs.get(spec.exp).get
+          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
-            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
+          val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
 
-            val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
-            methodNames = methodNames :+ methodName
-            ret = ret :+
-              st"""/** invariant ${i.id}
-                  |  ${descriptor}
-                  |  */
-                  |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                  |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, ai.gclSymbolTable))}"""
-          }
+          val methodName = GumboXGen.getInitializeGuaranteeMethodName(spec.id, componentNames)
+          val simpleMethodName = ops.ISZOps(methodName).last
 
-          val objectName = GumboXGen.createInvariantObjectName(aadlType)
-          val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
+          val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+          IEP_Guar_Params = IEP_Guar_Params ++ gg.params.elements
+          val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
 
-          val simple = ops.ISZOps(d_inv_method_name).last
-          ret = ret :+
-            st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+          combinedSpecCalls = combinedSpecCalls :+ st"$simpleMethodName(${(for (p <- sortedParams) yield p.name, ", ")})"
+
+          val method =
+            st"""/** Initialize Entrypoint Contract
+                |  *
+                |  * guarantees ${spec.id}
+                |  ${descriptor}
+                |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
-                |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                |  (${(methodNames, "(value) &\n")}(value))"""
+                |@strictpure def $simpleMethodName (
+                |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
+                |  ${gg.exp}"""
 
-          ret = ret :+
-            st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
-                |  */
-                |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
-                |  value.nonEmpty -->: $simple(value.get)"""
-
-          val content =
-            st"""// #Sireum
-                |
-                |package ${aadlType.nameProvider.qualifiedPackageName}
-                |
-                |import org.sireum._
-                |import ${basePackageName}._
-                |${StubTemplate.addImports(imports)}
-                |
-                |${StringTemplate.doNotEditComment(None())}
-                |object ${ops.ISZOps(objectName).last} {
-                |  ${(ret, "\n\n")}
-                |}"""
-
-          val path = s"${directories.dataDir}/${aadlType.nameProvider.outputDirectory}/${ops.ISZOps(objectName).last}.scala"
-          dataInvariants = dataInvariants + aadlType.name ~>
-            DataInvariantHolder(
-              D_Inv_Method_Name = d_inv_method_name,
-              D_Inv_Guard_Method_Name = d_inv_guard_method_name,
-              resource = ResourceUtil.createResource(path, content, T)
-            )
+          requiresMethods = requiresMethods :+ (methodName, method)
         }
-      }
-    }
-  }
 
-  def processIntegerationConstraints(component: AadlThreadOrDevice, componentNames: NameProvider, annex: GclSubclause,
-                                     gclSymbolTable: GclSymbolTable, basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
-    resetImports()
-    val ports = component.features.filter(p => p.isInstanceOf[AadlPort]).map((m: AadlFeature) => m.asInstanceOf[AadlPort])
-    for (port <- ports if gclSymbolTable.integrationMap.contains(port)) {
+        val sorted_IEP_Guar_Params = GumboXGenUtil.sortParam(IEP_Guar_Params.elements)
 
-      val (aadlType, portType) = GumboXGen.getPortInfo(port)
-
-      val clause = gclSymbolTable.integrationMap.get(port).get
-      val rexp = getRExp(clause.exp, basePackageName, aadlTypes, gclSymbolTable)
-
-      clause match {
-        case i: GclAssume =>
-          val (i_assm_name, i_assm_guard_name) = GumboXGen.createIntegrationMethodName(F, port, componentNames)
-          val simple = ops.ISZOps(i_assm_name).last
-          val I_Assm =
-            st"""/** I-Assm: Integration constraint on ${component.identifier}'s incoming $portType port ${port.identifier}
+        // create IEP-Guar that calls the individual guarantee clauses
+        val (iep_guar_methodName, iep_guar_content): (ISZ[String], ST) = {
+          val combinedInitializeMethodName = GumboXGen.getInitialize_IEP_Guar_Methodname(componentNames)
+          val simpleName = ops.ISZOps(combinedInitializeMethodName).last
+          val content =
+            st"""${(for (r <- requiresMethods) yield r._2, "\n\n")}
+                |
+                |/** IEP-Guar: Initialize Entrypoint Contracts for ${component.identifier}
                 |  *
-                |  * assume ${i.id}
-                |  ${GumboXGen.processDescriptor(i.descriptor, "*   ")}
+                |  ${(paramsToComment(sorted_IEP_Guar_Params), "\n")}
                 |  */
-                |@strictpure def $simple(${port.identifier}: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                |  $rexp"""
+                |@strictpure def ${simpleName} (
+                |    ${(for (p <- sorted_IEP_Guar_Params) yield p.getParamDef, ",\n")}): B =
+                |  ${(combinedSpecCalls, " &\n")}"""
+          (combinedInitializeMethodName, content)
+        }
 
-          val typ: (String, ST) =
-            if (!GumboXGenUtil.isDataPort(symbolTable.featureMap.get(port.path).get))
-              (s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]", st"${port.identifier}.nonEmpty -->: $simple(${port.identifier}.get)")
-            else (aadlType.nameProvider.qualifiedReferencedTypeName, st"$simple(${port.identifier})")
-
-          val I_Assm_Guard =
-            st"""// I-Assm-Guard: Integration constraint on ${component.identifier}'s incoming $portType port ${port.identifier}
-                |@strictpure def ${ops.ISZOps(i_assm_guard_name).last}(${port.identifier}: ${typ._1}): B =
-                |  ${typ._2}"""
-
-          integrationClauses = integrationClauses + component.path ~> (
-            integrationClauses.getOrElse(component.path, ISZ()) :+
-              (port.path, IntegrationAssumeHolder(
-                ContractHolder(i_assm_name, ISZ(), imports, I_Assm),
-                ContractHolder(i_assm_guard_name, ISZ(), imports, I_Assm_Guard))))
-        case i: GclGuarantee =>
-          val (i_guar_name, i_guar_guard_name) = GumboXGen.createIntegrationMethodName(T, port, componentNames)
-          val simple = ops.ISZOps(i_guar_name).last
-
-          val I_Guar =
-            st"""/** I-Guar: Integration constraint on ${component.identifier}'s outgoing $portType port ${port.identifier}
-                |  *
-                |  * guarantee ${i.id}
-                |  ${GumboXGen.processDescriptor(i.descriptor, "*   ")}
-                |  */
-                |@strictpure def $simple(${port.identifier}: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                |  $rexp"""
-
-          val I_Guar_Guard =
-            st"""// I_Guar-Guard: Integration constraint on ${component.identifier}'s outgoing $portType port ${port.identifier}
-                |@strictpure def ${ops.ISZOps(i_guar_guard_name).last}(${port.identifier}: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
-                |  ${port.identifier}.nonEmpty -->: $simple(${port.identifier}.get)"""
-
-          integrationClauses = integrationClauses + component.path ~> (
-            integrationClauses.getOrElse(component.path, ISZ()) :+
-              (port.path, IntegrationGuaranteeHolder(
-                ContractHolder(i_guar_name, ISZ(), imports, I_Guar),
-                ContractHolder(i_guar_guard_name, ISZ(), imports, I_Guar_Guard))))
-        case _ => halt("Infeasible")
-      }
-    }
-  }
-
-  def processInitializeEntrypoint(component: AadlThreadOrDevice, initializes: GclInitialize, componentNames: NameProvider, gclSymbolTable: GclSymbolTable, basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
-    resetImports()
-
-    var requiresMethods: ISZ[(ISZ[String], ST)] = ISZ()
-    var combinedSpecCalls: ISZ[ST] = ISZ()
-
-    var IEP_Guar_Params: Set[GGParam] = Set.empty
-    // process each guarantee clause
-    for (spec <- initializes.guarantees) {
-      val rspec = gclSymbolTable.rexprs.get(spec.exp).get
-      imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
-
-      val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
-
-      val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
-      val methodName = GumboXGen.getInitializeGuaranteeMethodName(spec.id, componentNames)
-      val simpleMethodName = ops.ISZOps(methodName).last
-
-      IEP_Guar_Params = IEP_Guar_Params ++ gg.params.elements
-      val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-
-      combinedSpecCalls = combinedSpecCalls :+ st"$simpleMethodName(${(for (p <- sortedParams) yield p.name, ", ")})"
-
-      val method =
-        st"""/** Initialize Entrypoint Contract
-            |  *
-            |  * guarantees ${spec.id}
-            |  ${descriptor}
-            |  ${(paramsToComment(sortedParams), "\n")}
-            |  */
-            |@strictpure def $simpleMethodName (
-            |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
-            |  ${gg.exp}"""
-
-      requiresMethods = requiresMethods :+ (methodName, method)
-    }
-
-    val sorted_IEP_Guar_Params = GumboXGenUtil.sortParam(IEP_Guar_Params.elements)
-
-    // create IEP-Guar that calls the individual guarantee clauses
-    val (iep_guar_methodName, iep_guar_content): (ISZ[String], ST) = if (requiresMethods.size > 1) {
-      val combinedInitializeMethodName = GumboXGen.getInitialize_IEP_Guar_Methodname(componentNames)
-      val simpleName = ops.ISZOps(combinedInitializeMethodName).last
-      val content =
-        st"""${(for (r <- requiresMethods) yield r._2, "\n\n")}
-            |
-            |/** IEP-Guar: Initialize Entrypoint Contracts for ${component.identifier}
-            |  *
-            |  ${(paramsToComment(sorted_IEP_Guar_Params), "\n")}
-            |  */
-            |@strictpure def ${simpleName} (
-            |    ${(for (p <- sorted_IEP_Guar_Params) yield p.getParamDef, ",\n")}): B =
-            |  ${(combinedSpecCalls, " &\n")}"""
-      (combinedInitializeMethodName, content)
-    } else {
-      (requiresMethods(0)._1, requiresMethods(0)._2)
+        // call the invariant
+        IEP_Guard = IEP_Guard :+ st"${ops.ISZOps(iep_guar_methodName).last}(${(for (p <- sorted_IEP_Guar_Params) yield p.name, ", ")})"
+        IEP_Guard_Blocks = IEP_Guard_Blocks :+ iep_guar_content
+      case _ =>
     }
 
     var I_Guar_Guar_Params: Set[GGParam] = Set.empty
     var I_Guar_Guard: ISZ[ST] = ISZ()
     integrationClauses.get(component.path) match {
       case Some(clauses) =>
-        for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
+        for (pair <- clauses if GumboXGenUtil.isOutPort(symbolTable.featureMap.get(pair._1).get)) {
           val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
           val originName = ops.ISZOps(pair._1).last
-          val paramName = s"${originName}_IEP_Guar"
+          //val paramName = s"${originName}_IEP_Guar"
+          val paramName = s"api_${originName}"
           I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
           I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
         }
       case _ =>
     }
 
-    var D_Inv_Guards: ISZ[ST] = ISZ()
-    for (sortedParam <- sortParam(I_Guar_Guar_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
-      val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)._2
-      D_Inv_Guards = D_Inv_Guards :+ st"${(d_inv_guard_MethodName, ".")}(${sortedParam.name})"
-    }
-
-    // call the invariant
-    val IEP_Guard = st"${ops.ISZOps(iep_guar_methodName).last}(${(for (p <- sorted_IEP_Guar_Params) yield p.name, ", ")})"
-
     val IEP_Post_Params: Set[GGParam] = IEP_Guar_Params ++ I_Guar_Guar_Params.elements
     val sorted_IEP_Post_Params = sortParam(IEP_Post_Params.elements)
+
+    var D_Inv_Guards: ISZ[ST] = ISZ()
+    for (sortedParam <- sorted_IEP_Post_Params if dataInvariants.contains(sortedParam.aadlType.name)) {
+      val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)
+      val methodToUse: ISZ[String] =
+        if (!sortedParam.isOptional) d_inv_guard_MethodName._1
+        else d_inv_guard_MethodName._2
+      D_Inv_Guards = D_Inv_Guards :+ st"${(methodToUse, ".")}(${sortedParam.name})"
+    }
+
 
     // create IEP-Post that:
     //   - calls I-Guar-Guard for each of the output ports of the component
@@ -453,203 +467,231 @@ object GumboXGen {
     val iepPostMethodName = GumboXGen.getInitialize_IEP_Post_MethodName(componentNames)
     val simple_IEP_Post = ops.ISZOps(iepPostMethodName).last
 
-    @strictpure def opt(sts: ISZ[ST], desc: String): Option[ST] =
-      if (sts.isEmpty) None() else
-        Some(
-          st"""// $desc
-              |${(sts, " & \n")} &
-              |""")
+    var segments: ISZ[ST] = ISZ()
+    if (D_Inv_Guards.nonEmpty) {
+      segments = segments :+
+        st"""// D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier}'s state variables and outgoing ports
+            |${(D_Inv_Guards, " &\n")}"""
+    }
+    if (I_Guar_Guard.nonEmpty) {
+      segments = segments :+
+        st"""// I-Guar-Guard: Integration constraints for ${component.identifier}'s outgoing ports"
+            |${(I_Guar_Guard, " &\n")}"""
+    }
+    if (IEP_Guard.nonEmpty) {
+      segments = segments :+
+        st"""// IEP-Guar: Initialize Entrypoint contract for ${component.identifier}
+            |${(IEP_Guard, " &\n")}"""
+    }
 
-    val iep_post =
-      st"""/** IEP-Post: Initialize Entrypoint Post-Condition
-          |  *
-          |  ${(paramsToComment(sorted_IEP_Post_Params), "\n")}
-          |  */
-          |@strictpure def ${simple_IEP_Post} (
-          |    ${(for (p <- sorted_IEP_Post_Params) yield p.getParamDef, ",\n")}): B =
-          |  (${opt(I_Guar_Guard, s"I-Guar-Guard: Integration constraints for ${component.identifier}'s outgoing ports")}
-          |   ${opt(D_Inv_Guards, s"D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier} outgoing ports")}
-          |   // IEP-Guar: Initialize Entrypoint contract for ${component.identifier}
-          |   $IEP_Guard)"""
+    if (segments.nonEmpty) {
+      val iep_post =
+        st"""/** IEP-Post: Initialize Entrypoint Post-Condition
+            |  *
+            |  ${(paramsToComment(sorted_IEP_Post_Params), "\n")}
+            |  */
+            |@strictpure def ${simple_IEP_Post} (
+            |    ${(for (p <- sorted_IEP_Post_Params) yield p.getParamDef, ",\n")}): B =
+            |  (${(segments, " & \n\n")})"""
 
-    val ret = st"${(ISZ(iep_guar_content, iep_post), "\n\n")}"
+      val ret = st"${(IEP_Guard_Blocks :+ iep_post, "\n\n")}"
 
-    initializeClauses = initializeClauses + component.path ~>
-      InitializeEntryPointHolder(ContractHolder(iepPostMethodName, sorted_IEP_Post_Params, imports, ret))
+      initializeClauses = initializeClauses + component.path ~>
+        InitializeEntryPointHolder(ContractHolder(iepPostMethodName, sorted_IEP_Post_Params, imports, ret))
+    }
   }
 
-  def processComputeEntrypoints(component: AadlThreadOrDevice, gclCompute: GclCompute, componentNames: NameProvider, gclSymbolTable: GclSymbolTable, basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
+  def processComputeEntrypoints(component: AadlThreadOrDevice, componentNames: NameProvider,
+                                gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
+                                basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
     resetImports()
+
+    var CEP_T_Case: Option[ContractHolder] = None()
 
     var CEP_T_Assm: Option[ContractHolder] = None()
     var CEP_T_Guar: Option[ContractHolder] = None()
 
-    {
-      var CEP_T_Assm_Params: Set[GGParam] = Set.empty
-      var topLevelAssumes: ISZ[ST] = ISZ()
-      var topLevelAssumeCallsCombined: ISZ[ST] = ISZ()
+    var CEP_Pre_Params: Set[GGParam] = Set.empty[GGParam] ++
+      GumboXGenUtil.inPortsToParams(component) ++
+      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, T, aadlTypes)
 
-      var CEP_T_Guar_Params: Set[GGParam] = Set.empty
-      var topLevelGuarantees: ISZ[ST] = ISZ()
-      var topLevelGuaranteesCombined: ISZ[ST] = ISZ()
-      for (spec <- gclCompute.specs) {
-        val rspec = gclSymbolTable.rexprs.get(spec.exp).get
-        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
+    var CEP_Post_Params: Set[GGParam] = Set.empty[GGParam] ++
+      GumboXGenUtil.outPortsToParams(component) ++
+      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, T, aadlTypes) ++
+      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, F, aadlTypes)
 
-        val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
+    gclSubclauseInfo match {
+      case Some((GclSubclause(_, _, _, _, _, Some(gclCompute)), gclSymbolTable)) => {
+        { // process top level assume/guarantees
 
-        spec match {
-          case g: GclAssume =>
-            val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
-            val methodName = st"compute_spec_${g.id}_assume"
+          var CEP_T_Assm_Params: Set[GGParam] = Set.empty
+          var topLevelAssumes: ISZ[ST] = ISZ()
+          var topLevelAssumeCallsCombined: ISZ[ST] = ISZ()
 
-            CEP_T_Assm_Params = CEP_T_Assm_Params ++ gg.params.elements
+          var CEP_T_Guar_Params: Set[GGParam] = Set.empty
+          var topLevelGuarantees: ISZ[ST] = ISZ()
+          var topLevelGuaranteesCombined: ISZ[ST] = ISZ()
+          for (spec <- gclCompute.specs) {
+            val rspec = gclSymbolTable.rexprs.get(spec.exp).get
+            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
-            val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
+            val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
 
-            topLevelAssumeCallsCombined = topLevelAssumeCallsCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
+            spec match {
+              case g: GclAssume =>
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+                val methodName = st"compute_spec_${g.id}_assume"
 
-            val method =
-              st"""/** Compute Entrypoint Contract
+                CEP_T_Assm_Params = CEP_T_Assm_Params ++ gg.params.elements
+
+                val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
+
+                topLevelAssumeCallsCombined = topLevelAssumeCallsCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
+
+                val method =
+                  st"""/** Compute Entrypoint Contract
+                      |  *
+                      |  * assumes ${g.id}
+                      |  ${descriptor}
+                      |  ${(paramsToComment(sortedParams), "\n")}
+                      |  */
+                      |@strictpure def $methodName(
+                      |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
+                      |  ${gg.exp}"""
+
+                topLevelAssumes = topLevelAssumes :+ method
+
+              case g: GclGuarantee =>
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+                val methodName = st"compute_spec_${g.id}_guarantee"
+
+                CEP_T_Guar_Params = CEP_T_Guar_Params ++ gg.params.elements
+
+                val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
+
+                topLevelGuaranteesCombined = topLevelGuaranteesCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
+
+                val method =
+                  st"""/** Compute Entrypoint Contract
+                      |  *
+                      |  * guarantees ${g.id}
+                      |  ${descriptor}
+                      |  ${(paramsToComment(sortedParams), "\n")}
+                      |  */
+                      |@strictpure def $methodName(
+                      |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
+                      |  ${gg.exp}"""
+
+                topLevelGuarantees = topLevelGuarantees :+ method
+            }
+          }
+
+          if (topLevelAssumes.nonEmpty) {
+            val sorted_CEP_T_Assm_Params = sortParam(CEP_T_Assm_Params.elements)
+            val CEP_T_Assm_MethodName = GumboXGen.getCompute_CEP_T_Assm_MethodName(componentNames)
+            val simpleName = ops.ISZOps(CEP_T_Assm_MethodName).last
+            val content =
+              st"""${(topLevelAssumes, "\n\n")}
+                  |
+                  |/** CEP-T-Assm: Top-level assume contracts for ${component.identifier}'s compute entrypoint
                   |  *
-                  |  * assumes ${g.id}
-                  |  ${descriptor}
-                  |  ${(paramsToComment(sortedParams), "\n")}
+                  |  * ${(paramsToComment(sorted_CEP_T_Assm_Params), "\n")}
                   |  */
-                  |@strictpure def $methodName(
-                  |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
-                  |  ${gg.exp}"""
+                  |@strictpure def ${simpleName} (
+                  |    ${(for (p <- sorted_CEP_T_Assm_Params) yield p.getParamDef, ",\n")}): B =
+                  |  ${(topLevelAssumeCallsCombined, " &\n")}"""
+            CEP_T_Assm = Some(
+              ContractHolder(CEP_T_Assm_MethodName, sorted_CEP_T_Assm_Params, imports, content)
+            )
+          }
 
-            topLevelAssumes = topLevelAssumes :+ method
-
-          case g: GclGuarantee =>
-            val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
-            val methodName = st"compute_spec_${g.id}_guarantee"
-
-            CEP_T_Guar_Params = CEP_T_Guar_Params ++ gg.params.elements
-
-            val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
-
-            topLevelGuaranteesCombined = topLevelGuaranteesCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
-
-            val method =
-              st"""/** Compute Entrypoint Contract
+          if (topLevelGuarantees.nonEmpty) {
+            val sorted_CEP_T_Guar_Params = sortParam(CEP_T_Guar_Params.elements)
+            val CEP_T_Guar_MethodName = GumboXGen.getCompute_CEP_T_Guar_MethodName(componentNames)
+            val simpleName = ops.ISZOps(CEP_T_Guar_MethodName).last
+            val content =
+              st"""${(topLevelGuarantees, "\n\n")}
+                  |
+                  |/** CEP-T-Guar: Top-level guarantee contracts for ${component.identifier}'s compute entrypoint
                   |  *
-                  |  * guarantees ${g.id}
-                  |  ${descriptor}
-                  |  ${(paramsToComment(sortedParams), "\n")}
+                  |  ${(paramsToComment(sorted_CEP_T_Guar_Params), "\n")}
                   |  */
-                  |@strictpure def $methodName(
-                  |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
-                  |  ${gg.exp}"""
-
-            topLevelGuarantees = topLevelGuarantees :+ method
+                  |@strictpure def ${simpleName} (
+                  |    ${(for (p <- sorted_CEP_T_Guar_Params) yield p.getParamDef, ",\n")}): B =
+                  |  ${(topLevelGuaranteesCombined, " &\n")}"""
+            CEP_T_Guar = Some(
+              ContractHolder(CEP_T_Guar_MethodName, sorted_CEP_T_Guar_Params, imports, content)
+            )
+          }
         }
+
+        if (gclCompute.cases.nonEmpty) { // process contract cases
+          var CEP_T_Case_Params: Set[GGParam] = Set.empty
+          var caseMethods: ISZ[ST] = ISZ()
+          var caseCallsCombined: ISZ[ST] = ISZ()
+
+          for (generalCase <- gclCompute.cases) {
+            val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
+            val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
+            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
+
+            val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, aadlTypes)
+
+            val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
+            imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
+
+            val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, aadlTypes)
+            val methodName = st"compute_case_${generalCase.id}"
+
+            val combinedAssmGuarParam = ggAssm.params ++ ggGuar.params.elements
+            CEP_T_Case_Params = CEP_T_Case_Params ++ combinedAssmGuarParam.elements
+
+            val sortedParams = GumboXGenUtil.sortParam(combinedAssmGuarParam.elements)
+
+            caseCallsCombined = caseCallsCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
+
+            val descriptor = GumboXGen.processDescriptor(generalCase.descriptor, "*   ")
+            val method =
+              st"""/** guarantees ${generalCase.id}
+                  |  ${descriptor}
+                  |  ${(paramsToComment(sortedParams), "\n")}
+                  |  */
+                  |@strictpure def $methodName(
+                  |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
+                  |  (${ggAssm.exp}) -->:
+                  |    (${ggGuar.exp})"""
+
+            caseMethods = caseMethods :+ method
+          }
+
+          val sorted_CEP_T_Case_Params = sortParam(CEP_T_Case_Params.elements)
+          val CEP_T_Case_MethodName = GumboXGen.getCompute_CEP_T_Case_MethodName(componentNames)
+          val simpleName = ops.ISZOps(CEP_T_Case_MethodName).last
+          val content =
+            st"""${(caseMethods, "\n\n")}
+                |
+                |/** CEP-T-Case: Top-Level case contracts for ${component.identifier}'s compute entrypoint
+                |  *
+                |  ${(paramsToComment(sorted_CEP_T_Case_Params))}
+                |  */
+                |@strictpure def ${simpleName} (
+                |    ${(for (p <- sorted_CEP_T_Case_Params) yield p.getParamDef, ",\n")}): B =
+                |  ${(caseCallsCombined, " &\n")}"""
+          CEP_T_Case = Some(
+            ContractHolder(CEP_T_Case_MethodName, sorted_CEP_T_Case_Params, imports, content)
+          )
+        }
+
+        // NOTE: gcl symbol resolver disallows handlers for periodic threads
+
+        var CEP_H_Assm: Option[ContractHolder] = None()
+        var CEP_H_Guar: Option[ContractHolder] = None()
+        if (gclCompute.handlers.nonEmpty) {
+          // TODO TBD
+        }
+
       }
-
-      if (topLevelAssumes.nonEmpty) {
-        val sorted_CEP_T_Assm_Params = sortParam(CEP_T_Assm_Params.elements)
-        val CEP_T_Assm_MethodName = GumboXGen.getCompute_CEP_T_Assm_MethodName(componentNames)
-        val simpleName = ops.ISZOps(CEP_T_Assm_MethodName).last
-        val content =
-          st"""${(topLevelAssumes, "\n\n")}
-              |
-              |/** CEP-T-Assm: Top-level assume contracts for ${component.identifier}'s compute entrypoint
-              |  *
-              |  * ${(paramsToComment(sorted_CEP_T_Assm_Params), "\n")}
-              |  */
-              |@strictpure def ${simpleName} (
-              |    ${(for (p <- sorted_CEP_T_Assm_Params) yield p.getParamDef, ",\n")}): B =
-              |  ${(topLevelAssumeCallsCombined, " &\n")}"""
-        CEP_T_Assm = Some(
-          ContractHolder(CEP_T_Assm_MethodName, sorted_CEP_T_Assm_Params, imports, content)
-        )
-      }
-
-      if (topLevelGuarantees.nonEmpty) {
-        val sorted_CEP_T_Guar_Params = sortParam(CEP_T_Guar_Params.elements)
-        val CEP_T_Guar_MethodName = GumboXGen.getCompute_CEP_T_Guar_MethodName(componentNames)
-        val simpleName = ops.ISZOps(CEP_T_Guar_MethodName).last
-        val content =
-          st"""${(topLevelGuarantees, "\n\n")}
-              |
-              |/** CEP-T-Guar: Top-level guarantee contracts for ${component.identifier}'s compute entrypoint
-              |  *
-              |  ${(paramsToComment(sorted_CEP_T_Guar_Params), "\n")}
-              |  */
-              |@strictpure def ${simpleName} (
-              |    ${(for (p <- sorted_CEP_T_Guar_Params) yield p.getParamDef, ",\n")}): B =
-              |  ${(topLevelGuaranteesCombined, " &\n")}"""
-        CEP_T_Guar = Some(
-          ContractHolder(CEP_T_Guar_MethodName, sorted_CEP_T_Guar_Params, imports, content)
-        )
-      }
-    }
-
-    var CEP_T_Case: Option[ContractHolder] = None()
-    if (gclCompute.cases.nonEmpty) {
-      var CEP_T_Case_Params: Set[GGParam] = Set.empty
-      var caseMethods: ISZ[ST] = ISZ()
-      var caseCallsCombined: ISZ[ST] = ISZ()
-
-      for (generalCase <- gclCompute.cases) {
-        val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
-        val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
-        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
-
-        val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, aadlTypes)
-
-        val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
-        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
-
-        val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, aadlTypes)
-        val methodName = st"compute_case_${generalCase.id}"
-
-        var combinedAssmGuarParam = ggAssm.params ++ ggGuar.params.elements
-        CEP_T_Case_Params = CEP_T_Case_Params ++ combinedAssmGuarParam.elements
-
-        val sortedParams = GumboXGenUtil.sortParam(combinedAssmGuarParam.elements)
-
-        caseCallsCombined = caseCallsCombined :+ st"$methodName(${(for (p <- sortedParams) yield p.name, ", ")})"
-
-        val descriptor = GumboXGen.processDescriptor(generalCase.descriptor, "*   ")
-        val method =
-          st"""/** guarantees ${generalCase.id}
-              |  ${descriptor}
-              |  ${(paramsToComment(sortedParams), "\n")}
-              |  */
-              |@strictpure def $methodName(
-              |    ${(for (p <- sortedParams) yield p.getParamDef, ",\n")}): B =
-              |  (${ggAssm.exp}) -->:
-              |    (${ggGuar.exp})"""
-
-        caseMethods = caseMethods :+ method
-      }
-
-      val sorted_CEP_T_Case_Params = sortParam(CEP_T_Case_Params.elements)
-      val CEP_T_Case_MethodName = GumboXGen.getCompute_CEP_T_Case_MethodName(componentNames)
-      val simpleName = ops.ISZOps(CEP_T_Case_MethodName).last
-      val content =
-        st"""${(caseMethods, "\n\n")}
-            |
-            |/** CEP-T-Case: Top-Level case contracts for ${component.identifier}'s compute entrypoint
-            |  *
-            |  ${(paramsToComment(sorted_CEP_T_Case_Params))}
-            |  */
-            |@strictpure def ${simpleName} (
-            |    ${(for (p <- sorted_CEP_T_Case_Params) yield p.getParamDef, ",\n")}): B =
-            |  ${(caseCallsCombined, " &\n")}"""
-      CEP_T_Case = Some(
-        ContractHolder(CEP_T_Case_MethodName, sorted_CEP_T_Case_Params, imports, content)
-      )
-    }
-
-    // NOTE: gcl symbol resolver disallows handlers for periodic threads
-
-    var CEP_H_Assm: Option[ContractHolder] = None()
-    var CEP_H_Guar: Option[ContractHolder] = None()
-    if (gclCompute.handlers.nonEmpty) {
-      // TODO TBD
+      case _ =>
     }
 
     var CEP_Pre: Option[ContractHolder] = None()
@@ -663,7 +705,7 @@ object GumboXGen {
           for (pair <- clauses if GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
             val originName = ops.ISZOps(pair._1).last
-            val paramName = s"${originName}_IEP_Assm"
+            val paramName = s"api_${originName}"
             val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
             I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
             I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
@@ -672,16 +714,18 @@ object GumboXGen {
       }
 
       var D_Inv_Guards: ISZ[ST] = ISZ()
-      for (sortedParam <- sortParam(I_Assm_Guard_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
-        val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)._2
-        val wrapDataPort: String = if(!sortedParam.isOptional) s"Some(${sortedParam.name})" else sortedParam.name
-        D_Inv_Guards = D_Inv_Guards :+ st"${(d_inv_guard_MethodName, ".")}($wrapDataPort)"
+      for (sortedParam <- sortParam(CEP_Pre_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
+        val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)
+        val nameToUse: ISZ[String] =
+          if (sortedParam.isOptional) d_inv_guard_MethodName._2
+          else d_inv_guard_MethodName._1
+        D_Inv_Guards = D_Inv_Guards :+ st"${(nameToUse, ".")}(${sortedParam.name})"
       }
 
-      if (I_Assm_Guard.nonEmpty || CEP_T_Assm.nonEmpty) {
+      if (I_Assm_Guard.nonEmpty || CEP_T_Assm.nonEmpty || D_Inv_Guards.nonEmpty) {
         // CREATE CEP-Pre
 
-        var CEP_Pre_Params: Set[GGParam] = I_Assm_Guard_Params
+        //var CEP_Pre_Params: Set[GGParam] = I_Assm_Guard_Params
 
         val CEP_Assm_call: Option[ST] = CEP_T_Assm match {
           case Some(i) =>
@@ -705,11 +749,11 @@ object GumboXGen {
         val sorted_Cep_Pre_Params = sortParam(CEP_Pre_Params.elements)
 
         var segments: ISZ[ST] = ISZ()
+        if (D_Inv_Guards.nonEmpty) {
+          segments = segments :+ pre_opt(D_Inv_Guards, s"D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier}'s state variables and incoming ports")
+        }
         if (I_Assm_Guard.nonEmpty) {
           segments = segments :+ pre_opt(I_Assm_Guard, s"I-Assm-Guard: Integration constraints for ${component.identifier}'s incoming ports")
-        }
-        if (D_Inv_Guards.nonEmpty) {
-          segments = segments :+ pre_opt(D_Inv_Guards, s"D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier} incoming ports")
         }
         if (CEP_Assm_call.nonEmpty) {
           segments = segments :+ pre_opt(ISZ(CEP_Assm_call.get), s"CEP-Assm: assume clauses of ${component.identifier}'s compute entrypoint")
@@ -743,25 +787,29 @@ object GumboXGen {
       var I_Guar_Guard: ISZ[ST] = ISZ()
       integrationClauses.get(component.path) match {
         case Some(clauses) =>
-          for (pair <- clauses if !GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
+          for (pair <- clauses if GumboXGenUtil.isOutPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
             val originName = ops.ISZOps(pair._1).last
-            val paramName = s"${originName}_IEP_Guar"
+            val paramName = s"api_${originName}"
             I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
             I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
       }
+
       var D_Inv_Guards: ISZ[ST] = ISZ()
-      for (sortedParam <- sortParam(I_Guar_Guard_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
-        val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)._2
-        D_Inv_Guards = D_Inv_Guards :+ st"${(d_inv_guard_MethodName, ".")}(${sortedParam.name})"
+      for (sortedParam <- sortParam(CEP_Post_Params.elements) if dataInvariants.contains(sortedParam.aadlType.name)) {
+        val d_inv_guard_MethodName = createInvariantMethodName(sortedParam.aadlType)
+        val nameToUse: ISZ[String] =
+          if (sortedParam.isOptional) d_inv_guard_MethodName._2
+          else d_inv_guard_MethodName._1
+        D_Inv_Guards = D_Inv_Guards :+ st"${(nameToUse, ".")}(${sortedParam.name})"
       }
 
-      if (I_Guar_Guard.nonEmpty || CEP_T_Guar.nonEmpty || CEP_T_Case.nonEmpty) {
+      if (I_Guar_Guard.nonEmpty || CEP_T_Guar.nonEmpty || CEP_T_Case.nonEmpty || D_Inv_Guards.nonEmpty) {
         // CREATE CEP-Post
 
-        var CEP_Post_Params: Set[GGParam] = I_Guar_Guard_Params
+        //var CEP_Post_Params: Set[GGParam] = I_Guar_Guard_Params
         var CEP_Post_blocks: ISZ[ST] = ISZ()
 
         // create call to the top level guarantee statements
@@ -801,11 +849,11 @@ object GumboXGen {
         val sorted_Cep_Post_Params = sortParam(CEP_Post_Params.elements)
 
         var segments: ISZ[ST] = ISZ()
+        if (D_Inv_Guards.nonEmpty) {
+          segments = segments :+ opt(D_Inv_Guards, s"D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier}'s state variables and outgoing ports")
+        }
         if (I_Guar_Guard.nonEmpty) {
           segments = segments :+ opt(I_Guar_Guard, s"I-Guar-Guard: Integration constraints for ${component.identifier}'s outgoing ports")
-        }
-        if (D_Inv_Guards.nonEmpty) {
-          segments = segments :+ opt(D_Inv_Guards, s"D-Inv-Guard: Datatype invariants for the types associated with ${component.identifier} outgoing ports")
         }
         if (CEP_Guar_call.nonEmpty) {
           segments = segments :+ opt(ISZ(CEP_Guar_call.get), s"CEP-Guar: guarantee clauses of ${component.identifier}'s compute entrypoint")
@@ -894,7 +942,7 @@ object GumboXGen {
   }
 
   def createTestHarness(component: AadlThreadOrDevice, componentNames: NameProvider,
-                        annex: GclSubclause, gclSymbolTable: GclSymbolTable,
+                        annexInfo: Option[(GclSubclause, GclSymbolTable)],
                         slangCheckJarExists: B,
                         symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories): ObjectContributions = {
 
@@ -903,11 +951,11 @@ object GumboXGen {
     if (component.isPeriodic() && computeEntryPointHolder.contains(component.path)) {
       val cepHolder = computeEntryPointHolder.get(component.path).get
 
-      var blocks: ISZ[ST]= ISZ()
+      var blocks: ISZ[ST] = ISZ()
       val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
 
       var inPortParams: Set[GGParam] = Set.empty
-      for(inPort <- inPorts) {
+      for (inPort <- inPorts) {
         inPort match {
           case i: AadlDataPort =>
             inPortParams = inPortParams +
@@ -917,23 +965,27 @@ object GumboXGen {
               GGParam(s"api_${inPort.identifier}", inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
           case i: AadlEventPort =>
             inPortParams = inPortParams +
-              GGParam(s"api_${inPort.identifier}", inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar,  None(), None())
+              GGParam(s"api_${inPort.identifier}", inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
           case _ => halt("Infeasible")
         }
       }
 
       var preStateParams: Set[GGParam] = inPortParams
       var saveInLocal: ISZ[ST] = ISZ()
-      for(stateVar <- annex.state) {
-        val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
-        val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, F, SymbolKind.StateVarPre, None(), None())
-        preStateParams = preStateParams + stateParam
+      annexInfo match {
+        case Some((annex, _)) =>
+          for (stateVar <- annex.state) {
+            val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
+            val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, F, SymbolKind.StateVarPre, None(), None())
+            preStateParams = preStateParams + stateParam
 
-        saveInLocal = saveInLocal :+
-          st"val ${stateParam.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+            saveInLocal = saveInLocal :+
+              st"val ${stateParam.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+          }
+        case _ =>
       }
 
-      var cbblocks: ISZ[ST]= ISZ()
+      var cbblocks: ISZ[ST] = ISZ()
       if (saveInLocal.nonEmpty) {
         cbblocks = cbblocks :+
           st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
@@ -964,7 +1016,7 @@ object GumboXGen {
         for (inPort <- sortParam(inPortParams.elements)) {
           val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
           val optArg: Option[String] =
-            if(GumboXGenUtil.isEventPort(cport)) None()
+            if (GumboXGenUtil.isEventPort(cport)) None()
             else Some(inPort.name)
           putters = putters :+ st"put_${inPort.originName}(${optArg})"
         }
@@ -985,7 +1037,7 @@ object GumboXGen {
       var step5PostValues: ISZ[ST] = ISZ()
 
       if (cepHolder.CEP_Post.nonEmpty) {
-        for(ggParam <- cepHolder.CEP_Post.get.params.filter(p => p.kind == SymbolKind.ApiVar)) {
+        for (ggParam <- cepHolder.CEP_Post.get.params.filter(p => p.kind == SymbolKind.ApiVar)) {
           val cport = symbolTable.featureMap.get(component.path :+ ggParam.originName).get
           if (!GumboXGenUtil.isInPort(cport)) {
             postOracleParams = postOracleParams + ggParam
@@ -995,14 +1047,18 @@ object GumboXGen {
         }
       }
 
-      for(stateVar <- annex.state) {
-        val typ = aadlTypes.typeMap.get(stateVar.classifier).get
-        val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
-        postOracleParams = postOracleParams + postSVGG
-        step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+      annexInfo match {
+        case Some((annex, _)) =>
+          for (stateVar <- annex.state) {
+            val typ = aadlTypes.typeMap.get(stateVar.classifier).get
+            val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
+            postOracleParams = postOracleParams + postSVGG
+            step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+          }
+        case _ =>
       }
 
-      if(step5PostValues.nonEmpty) {
+      if (step5PostValues.nonEmpty) {
         cbblocks = cbblocks :+
           st"""// Step 5 [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variables
               |${(step5PostValues, "\n")}"""
@@ -1012,7 +1068,7 @@ object GumboXGen {
         val sortedCepPostParams = sortParam(cepHolder.CEP_Post.get.params)
         cbblocks = cbblocks :+
           st"""// Step 6 [CheckPost]: invoke the oracle function
-              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for(p <- sortedCepPostParams) yield p.name, ", ")})
+              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for (p <- sortedCepPostParams) yield p.name, ", ")})
               |if (!postResult) {
               |  return GumboXResult.Post_Condition_Fail
               |}"""
@@ -1053,16 +1109,17 @@ object GumboXGen {
       var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(testHarnessPath, testHarnessContent, T))
 
       val utilPath = s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/GumboXUtil.scala"
-      val utilContent: ST = st"""// #Sireum
-                                |package ${componentNames.basePackage}
-                                |
-                                |import org.sireum._
-                                |
-                                |@enum object GumboXResult {
-                                |  "Pre_Condition_Unsat"
-                                |  "Post_Condition_Pass"
-                                |  "Post_Condition_Fail"
-                                |}"""
+      val utilContent: ST =
+        st"""// #Sireum
+            |package ${componentNames.basePackage}
+            |
+            |import org.sireum._
+            |
+            |@enum object GumboXResult {
+            |  "Pre_Condition_Unsat"
+            |  "Post_Condition_Pass"
+            |  "Post_Condition_Fail"
+            |}"""
       resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
 
       if (slangCheckJarExists) {
@@ -1089,7 +1146,7 @@ object GumboXGen {
 
             randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.create))"
             inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${tname}()"
-            inportActuals = inportActuals :+st"${inPort.name}"
+            inportActuals = inportActuals :+ st"${inPort.name}"
             inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
           }
         } else {

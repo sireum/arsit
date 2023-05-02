@@ -2,16 +2,61 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventPort, AadlFeature, AadlPort}
+import org.sireum.hamr.codegen.common.symbols.{AadlDataPort, AadlEventDataPort, AadlEventPort, AadlFeature, AadlPort, AadlThreadOrDevice, GclSymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeResolver, TypeUtil}
 import org.sireum.hamr.ir
-import org.sireum.hamr.ir.Direction
+import org.sireum.hamr.ir.{Direction, GclStateVar, GclSubclause}
 import org.sireum.lang.ast.Typed
 import org.sireum.lang.{ast => AST}
 
 object GumboXGenUtil {
+  @pure def inPortsToParams(component: AadlThreadOrDevice): ISZ[GGParam] = {
+    return portsToParams(component, isInPort _)
+  }
+
+  @pure def outPortsToParams(component: AadlThreadOrDevice): ISZ[GGParam] = {
+    return portsToParams(component, isOutPort _)
+  }
+
+  @pure def portsToParams(component: AadlThreadOrDevice, filter: AadlFeature => B): ISZ[GGParam] = {
+    val ports: ISZ[AadlPort] = for(p <- component.features.filter(f => filter(f))) yield p.asInstanceOf[AadlPort]
+    var ret: ISZ[GGParam] = ISZ()
+    for(o <- ports) {
+      o match {
+        case i: AadlEventPort =>
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
+        case i: AadlEventDataPort =>
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
+        case i: AadlDataPort =>
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
+        case _ => halt("Infeasible")
+      }
+    }
+    return ret
+  }
+
+  def stateVarsToParams(gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)], isPre: B, aadlTypes: AadlTypes): ISZ[GGParam] = {
+    var ret: ISZ[GGParam] = ISZ()
+    gclSubclauseInfo match {
+      case Some((GclSubclause(stateVars, _, _, _, _, _), _)) =>
+
+        for (stateVar <- stateVars) {
+          val typ = aadlTypes.typeMap.get(stateVar.classifier).get
+          val kind: SymbolKind.Type = if (isPre) SymbolKind.StateVarPre else SymbolKind.StateVar
+          val name = s"${if (isPre) "In_" else ""}${stateVar.name}"
+          ret = ret :+ GGParam(name, stateVar.name, typ, F, kind, None(), None())
+        }
+      case _ =>
+    }
+    return ret
+  }
+
   @pure def isInPort(p: AadlFeature): B = {
     return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.In
+  }
+
+  @pure def isOutPort(p: AadlFeature): B = {
+    return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.Out
   }
 
   @pure def isDataPort(p: AadlFeature): B = {
