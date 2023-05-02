@@ -65,6 +65,9 @@ import org.sireum.ops.ISZOps
       outputDir = ISZ(directories.dataDir),
       testDir = ISZ(directories.testDir))
 
+    val sergen = TypeTemplate.genSerGen(basePackage, directories.slangBinDir, resources)
+    addExeResource(directories.slangBinDir, ISZ("sergen.cmd"), sergen, T)
+
     generateInternal()
 
     return ArsitResult(
@@ -125,9 +128,6 @@ import org.sireum.ops.ISZOps
 
     val inspectorDemo = InspectorTemplate.inspectorDemo(basePackage)
     addResource(directories.inspectorDir, ISZ(basePackage, "InspectorDemo.scala"), inspectorDemo, T)
-
-    val genSerializers = InspectorTemplate.genSeralizersScript()
-    addExeResource(directories.dataDir, ISZ(basePackage, "sergen.sh"), genSerializers, T)
   }
 
   def getComponentId(): Z = {
