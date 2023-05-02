@@ -595,7 +595,7 @@ object GumboXGen {
                   |
                   |/** CEP-T-Assm: Top-level assume contracts for ${component.identifier}'s compute entrypoint
                   |  *
-                  |  * ${(paramsToComment(sorted_CEP_T_Assm_Params), "\n")}
+                  |  ${(paramsToComment(sorted_CEP_T_Assm_Params), "\n")}
                   |  */
                   |@strictpure def ${simpleName} (
                   |    ${(for (p <- sorted_CEP_T_Assm_Params) yield p.getParamDef, ",\n")}): B =
@@ -672,7 +672,7 @@ object GumboXGen {
                 |
                 |/** CEP-T-Case: Top-Level case contracts for ${component.identifier}'s compute entrypoint
                 |  *
-                |  ${(paramsToComment(sorted_CEP_T_Case_Params))}
+                |  ${(paramsToComment(sorted_CEP_T_Case_Params), "\n")}
                 |  */
                 |@strictpure def ${simpleName} (
                 |    ${(for (p <- sorted_CEP_T_Case_Params) yield p.getParamDef, ",\n")}): B =
@@ -954,23 +954,9 @@ object GumboXGen {
       var blocks: ISZ[ST] = ISZ()
       val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
 
-      var inPortParams: Set[GGParam] = Set.empty
-      for (inPort <- inPorts) {
-        inPort match {
-          case i: AadlDataPort =>
-            inPortParams = inPortParams +
-              GGParam(s"api_${inPort.identifier}", inPort.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventDataPort =>
-            inPortParams = inPortParams +
-              GGParam(s"api_${inPort.identifier}", inPort.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
-          case i: AadlEventPort =>
-            inPortParams = inPortParams +
-              GGParam(s"api_${inPort.identifier}", inPort.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
-          case _ => halt("Infeasible")
-        }
-      }
+      var inPortParams: ISZ[GGParam] = GumboXGenUtil.inPortsToParams(component)
 
-      var preStateParams: Set[GGParam] = inPortParams
+      var preStateParams: Set[GGParam] = Set.empty[GGParam] ++ inPortParams
       var saveInLocal: ISZ[ST] = ISZ()
       annexInfo match {
         case Some((annex, _)) =>
@@ -1013,7 +999,7 @@ object GumboXGen {
 
       if (inPortParams.nonEmpty) {
         var putters: ISZ[ST] = ISZ()
-        for (inPort <- sortParam(inPortParams.elements)) {
+        for (inPort <- sortParam(inPortParams)) {
           val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
           val optArg: Option[String] =
             if (GumboXGenUtil.isEventPort(cport)) None()
@@ -1078,7 +1064,7 @@ object GumboXGen {
               |  ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
       }
 
-      val sortedInPortParams = sortParam(inPortParams.elements)
+      val sortedInPortParams = sortParam(inPortParams)
       val testComputeCB =
         st"""def testComputeCB(
             |    ${(for (sortedParam <- sortedInPortParams) yield sortedParam.getParamDef, ",\n")}): GumboXResult.Type = {
@@ -1097,6 +1083,7 @@ object GumboXGen {
             |
             |import org.sireum._
             |import ${componentNames.basePackage}._
+            |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
             |${StubTemplate.addImports(imports)}
             |
             |${StringTemplate.doNotEditComment(None())}
@@ -1115,10 +1102,15 @@ object GumboXGen {
             |
             |import org.sireum._
             |
-            |@enum object GumboXResult {
-            |  "Pre_Condition_Unsat"
-            |  "Post_Condition_Pass"
-            |  "Post_Condition_Fail"
+            |object GumboXUtil {
+            |
+            |  var numRetries: Z = 100
+            |
+            |  @enum object GumboXResult {
+            |    "Pre_Condition_Unsat"
+            |    "Post_Condition_Pass"
+            |    "Post_Condition_Fail"
+            |  }
             |}"""
       resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
 
@@ -1131,11 +1123,9 @@ object GumboXGen {
         var inportDecls: ISZ[ST] = ISZ()
         var inportActuals: ISZ[ST] = ISZ()
         var inportActualsPretty: ISZ[ST] = ISZ()
-
+        var encapsulatingDataType: ISZ[String] = ISZ()
         if (inPortParams.nonEmpty) {
-          for (inPort <- sortParam(inPortParams.elements)) {
-            val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
-
+          for (inPort <- sortParam(inPortParams)) {
             val tn = ops.ISZOps(inPort.aadlType.nameProvider.qualifiedReferencedTypeNameI)
             val pn = st"${(tn.dropRight(1), "_")}"
             val tname: ST = inPort.aadlType match {
@@ -1148,10 +1138,26 @@ object GumboXGen {
             inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${tname}()"
             inportActuals = inportActuals :+ st"${inPort.name}"
             inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
+            encapsulatingDataType = encapsulatingDataType :+ inPort.getParamDef
           }
         } else {
 
         }
+
+        val simpleECName = s"${componentNames.componentSingletonType}_Container"
+        val encapsulatingType =
+          st"""// #Sireum
+              |
+              |package ${componentNames.packageName}
+              |
+              |import org.sireum._
+              |import ${componentNames.basePackage}._
+              |
+              |@datatype class ${simpleECName} (
+              |  ${(encapsulatingDataType, ",\n")})
+              |"""
+        val ecPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${simpleECName}.scala"
+        resources = resources :+ ResourceUtil.createResourceH(ecPath, encapsulatingType, T, T)
 
         val tq = s"\"\"\""
         val testCaseContent =
@@ -1159,7 +1165,8 @@ object GumboXGen {
               |
               |import org.sireum._
               |import ${componentNames.packageName}._
-              |import ${componentNames.basePackage}.GumboXResult
+              |import ${componentNames.basePackage}.GumboXUtil
+              |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
               |import ${componentNames.basePackage}.RandomLib
               |import org.sireum.Random.Impl.Xoshiro256
               |
@@ -1173,7 +1180,8 @@ object GumboXGen {
               |      this.registerTest(i.toString) {
               |        var retry: B = T
               |
-              |        for (j <- 0 to 100 if retry) {
+              |        var j: Z = 0
+              |        while (j < GumboXUtil.numRetries && retry) {
               |          ${(inportDecls, "\n")}
               |
               |          println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
@@ -1189,6 +1197,7 @@ object GumboXGen {
               |              println ("Success!")
               |              retry = F
               |          }
+              |          j = j + 1
               |        }
               |
               |        if (retry) {

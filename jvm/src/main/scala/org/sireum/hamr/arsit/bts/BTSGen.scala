@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.templates.BlessST
 import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.{Resource, SireumToolsSlangcheckOption, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -160,8 +160,7 @@ import org.sireum.ops._
       maxConnection = -1,
       component = ci,
       optVizEntries = vizEntries,
-      transpilerOptions = ISZ(),
-      slangCheckOptions = ISZ())
+      transpilerOptions = ISZ())
   }
 
   def buildExecutionStateMachine(stateName: String, transitions: ISZ[GuardedTransition]): ST = {
@@ -859,7 +858,6 @@ import org.sireum.ops._
                            val maxComponent: Z,
                            val maxConnection: Z,
                            val transpilerOptions: ISZ[TranspilerConfig],
-                           val slangCheckOptions: ISZ[SireumToolsSlangcheckOption],
 
                            component: ST,
                            optVizEntries: ISZ[ST]) extends Result

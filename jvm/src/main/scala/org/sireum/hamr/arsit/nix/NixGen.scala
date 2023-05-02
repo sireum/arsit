@@ -808,8 +808,7 @@ object NixGenDispatch {
           maxPort = previousPhase.maxPort,
           maxComponent = previousPhase.maxComponent,
           maxConnection = previousPhase.maxConnection,
-          transpilerOptions = ISZ(),
-          slangCheckOptions = previousPhase.slangCheckOptions
+          transpilerOptions = ISZ()
         )
     }
     return ret

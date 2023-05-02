@@ -58,15 +58,7 @@ import org.sireum.ops.ISZOps
     }
 
     val baseTypes = TypeTemplate.Base_Types(basePackage)
-    addResource(directories.dataDir, ISZ(basePackage, "Base_Types.scala"), baseTypes, T)
-
-    val slangCheckOptions = SireumToolsSlangcheckOption(
-      datatypeFiles = resources,
-      outputDir = ISZ(directories.dataDir),
-      testDir = ISZ(directories.testDir))
-
-    val sergen = TypeTemplate.genSerGen(basePackage, directories.slangBinDir, resources)
-    addExeResource(directories.slangBinDir, ISZ("sergen.cmd"), sergen, T)
+    resources = resources :+ ResourceUtil.createResourceH(Util.pathAppend(directories.dataDir, ISZ(basePackage, "Base_Types.scala")), baseTypes, T, T)
 
     generateInternal()
 
@@ -75,8 +67,7 @@ import org.sireum.ops.ISZOps
       maxPort = portId,
       maxComponent = componentId,
       maxConnection = connections.size,
-      transpilerOptions = ISZ(),
-      slangCheckOptions = ISZ(slangCheckOptions)
+      transpilerOptions = ISZ()
     )
   }
 

@@ -44,8 +44,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
       maxConnection = previousPhase.maxConnection,
-      transpilerOptions = transpilerOptions,
-      slangCheckOptions = previousPhase.slangCheckOptions
+      transpilerOptions = transpilerOptions
     )
   }
 

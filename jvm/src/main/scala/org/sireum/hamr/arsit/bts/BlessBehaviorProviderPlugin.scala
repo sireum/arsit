@@ -48,7 +48,8 @@ object BlessBehaviorProviderPlugin {
               markers = ISZ(),
               overwrite = t.overwrite,
               makeExecutable = F,
-              makeCRLF = F)
+              makeCRLF = F,
+              isDatatype = F)
 
           case p: BTSPath =>
             EResource(

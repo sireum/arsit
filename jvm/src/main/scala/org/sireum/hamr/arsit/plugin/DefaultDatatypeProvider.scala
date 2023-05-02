@@ -51,7 +51,8 @@ object DefaultDatatypeProvider {
         markers = ISZ(),
         overwrite = datatypeTemplate.willBeOverwritten,
         makeExecutable = F,
-        makeCRLF = F),
+        makeCRLF = F,
+        isDatatype = T),
       resources = ISZ()
     )
   }

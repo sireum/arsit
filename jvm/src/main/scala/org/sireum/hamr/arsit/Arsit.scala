@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
-import org.sireum.hamr.codegen.common.containers.{Resource, SireumToolsSlangcheckOption, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{IResource, Resource, SireumToolsSlangcheckOption, TranspilerConfig}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
@@ -35,7 +35,7 @@ object Arsit {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig](), ISZ[SireumToolsSlangcheckOption]())
+      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig]())
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
@@ -56,12 +56,15 @@ object Arsit {
     artResources = artResources ++ createBuildArtifacts(
       CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
-    return ArsitResult(nixPhase.resources ++ artResources,
+    val datatypeResources: ISZ[Resource] = for(r <- nixPhase.resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
+    val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
+    val sergenResource = ResourceUtil.createResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
+
+    return ArsitResult(nixPhase.resources ++ artResources :+ sergenResource,
       nixPhase.maxPort,
       nixPhase.maxComponent,
       nixPhase.maxConnection,
-      nixPhase.transpilerOptions,
-      nixPhase.slangCheckOptions)
+      nixPhase.transpilerOptions)
   }
 
   def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {

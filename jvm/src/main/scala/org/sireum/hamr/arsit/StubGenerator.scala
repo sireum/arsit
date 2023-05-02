@@ -39,8 +39,7 @@ import org.sireum.hamr.ir._
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
       maxConnection = previousPhase.maxConnection,
-      transpilerOptions = previousPhase.transpilerOptions,
-      slangCheckOptions = previousPhase.slangCheckOptions
+      transpilerOptions = previousPhase.transpilerOptions
     )
   }
 

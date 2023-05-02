@@ -61,7 +61,8 @@ import org.sireum.message.Reporter
             markers = ISZ(),
             overwrite = T,
             makeExecutable = F,
-            makeCRLF = F),
+            makeCRLF = F,
+            isDatatype = T),
           resources = ISZ())
 
       case en: EnumTemplate =>

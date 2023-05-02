@@ -277,13 +277,10 @@ object HAMR {
   def maxConnection: Z
 
   def transpilerOptions: ISZ[TranspilerConfig]
-
-  def slangCheckOptions: ISZ[SireumToolsSlangcheckOption]
 }
 
 @datatype class ArsitResult(val resources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
                             val maxConnection: Z,
-                            val transpilerOptions: ISZ[TranspilerConfig],
-                            val slangCheckOptions: ISZ[SireumToolsSlangcheckOption]) extends Result
+                            val transpilerOptions: ISZ[TranspilerConfig]) extends Result
