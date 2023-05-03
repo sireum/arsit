@@ -1127,18 +1127,19 @@ object GumboXGen {
         if (inPortParams.nonEmpty) {
           for (inPort <- sortParam(inPortParams)) {
             val tn = ops.ISZOps(inPort.aadlType.nameProvider.qualifiedReferencedTypeNameI)
-            val pn = st"${(tn.dropRight(1), "_")}"
-            val tname: ST = inPort.aadlType match {
-              case i: EnumType => st"${pn}${i.nameProvider.typeName}Type"
-              case i: BaseType => st"${i.slangType.name}"
-              case i => st"${pn}${i.nameProvider.typeName}"
+            val u = st"${(tn.dropRight(1), "_")}".render
+
+            val (rangenName, slangName): (String, String) = inPort.aadlType match {
+              case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
+              case i: BaseType => (i.slangType.name, i.slangType.name)
+              case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
             }
 
             randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.create))"
-            inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${tname}()"
+            inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${rangenName}()"
             inportActuals = inportActuals :+ st"${inPort.name}"
             inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
-            encapsulatingDataType = encapsulatingDataType :+ inPort.getParamDef
+            encapsulatingDataType = encapsulatingDataType :+ s"val ${inPort.name}: $slangName"
           }
         } else {
 
@@ -1153,6 +1154,9 @@ object GumboXGen {
               |import org.sireum._
               |import ${componentNames.basePackage}._
               |
+              |${StringTemplate.doNotEditComment(None())}
+              |
+              |// SlangCheck test container to hold the incoming port values for ${component.identifier}
               |@datatype class ${simpleECName} (
               |  ${(encapsulatingDataType, ",\n")})
               |"""

@@ -48,19 +48,20 @@ object Arsit {
           ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins).generate()
         ).generate())
 
-    var artResources: ISZ[Resource] = ISZ()
+    var resources: ISZ[Resource] = ISZ()
     if (!arsitOptions.noEmbedArt) {
-      artResources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art")
+      // sergen requires art.DataContent so only generate the script when art is being embedded
+      val datatypeResources: ISZ[Resource] = for (r <- nixPhase.resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
+      val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
+      val sergenResource = ResourceUtil.createResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
+
+      resources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art") :+ sergenResource
     }
 
-    artResources = artResources ++ createBuildArtifacts(
+    resources = resources ++ createBuildArtifacts(
       CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
-    val datatypeResources: ISZ[Resource] = for(r <- nixPhase.resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
-    val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
-    val sergenResource = ResourceUtil.createResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
-
-    return ArsitResult(nixPhase.resources ++ artResources :+ sergenResource,
+    return ArsitResult(nixPhase.resources ++ resources,
       nixPhase.maxPort,
       nixPhase.maxComponent,
       nixPhase.maxConnection,
