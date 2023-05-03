@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
-import org.sireum.hamr.codegen.common.containers.{IResource, Resource, SireumToolsSlangcheckOption, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{IResource, Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes

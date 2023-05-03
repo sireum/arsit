@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
-import org.sireum.hamr.codegen.common.containers.{Resource, SireumToolsSlangcheckOption, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types._
