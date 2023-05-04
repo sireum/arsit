@@ -986,14 +986,14 @@ object GumboXGen {
         case Some(pre) =>
           val sortedPreParams = sortParam(pre.params)
           cbblocks = cbblocks :+
-            st"""// Step 2 [CheckPre]: check/filter based on pre-condition (exiting with true if the pre-condition is not satisfied).
+            st"""// Step 2 [CheckPre]: check/filter based on pre-condition.
                 |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.name, ", ")})
                 |if (!CEP_Pre_Result) {
                 |  return GumboXResult.Pre_Condition_Unsat
                 |}"""
         case _ =>
           cbblocks = cbblocks :+
-            st"""// Step 2 [CheckPre]: check/filter based on pre-condition (exiting with true if the pre-condition is not satisfied).
+            st"""// Step 2 [CheckPre]: check/filter based on pre-condition.
                 |//   ${component.identifier}'s compute entry point does not have top level assume clauses"""
       }
 
