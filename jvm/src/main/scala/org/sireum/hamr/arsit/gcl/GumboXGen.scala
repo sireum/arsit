@@ -1119,7 +1119,7 @@ object GumboXGen {
         val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
         val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
 
-        var randLibs: ISZ[ST] = ISZ()
+        var randLibs: ISZ[ST] = ISZ(st"val seedGen = new Random.Gen64Impl(Xoshiro256.create)")
         var inportDecls: ISZ[ST] = ISZ()
         var inportActuals: ISZ[ST] = ISZ()
         var inportActualsPretty: ISZ[ST] = ISZ()
@@ -1135,7 +1135,7 @@ object GumboXGen {
               case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
             }
 
-            randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.create))"
+            randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
             inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${rangenName}()"
             inportActuals = inportActuals :+ st"${inPort.name}"
             inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
