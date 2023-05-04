@@ -101,8 +101,7 @@ import org.sireum.hamr.ir._
 
     val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
 
-    val bridgeTestApis: ST = TestTemplate.bridgeTestApis(basePackage, names, ports)
-    addResource(dirs.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala"), bridgeTestApis, T)
+    resources = resources ++ TestTemplate.bridgeTestApis(basePackage, names, dirs, ports)
 
     val bridgeTestSuite: ST = TestTemplate.bridgeTestSuite(names.packageName, names)
     addResource(dirs.testBridgeDir, ISZ(names.packagePath, s"${names.testName}.scala"), bridgeTestSuite, F)
@@ -209,10 +208,6 @@ import org.sireum.hamr.ir._
       // add external resources
       resources = resources ++ behaviorCodeContributions.flatMap((f: BehaviorEntryPointObjectContributions) => f.resources)
     }
-
-    var testSuite = Util.getLibraryFile("BridgeTestSuite.scala").render
-    testSuite = ops.StringOps(testSuite).replaceAllLiterally("__BASE_PACKAGE_NAME__", basePackage)
-    addResource(dirs.testUtilDir, ISZ(basePackage, "BridgeTestSuite.scala"), st"${testSuite}", T)
 
     seenComponents = seenComponents + filename
   }

@@ -53,7 +53,7 @@ object Arsit {
       // sergen requires art.DataContent so only generate the script when art is being embedded
       val datatypeResources: ISZ[Resource] = for (r <- nixPhase.resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
       val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
-      val sergenResource = ResourceUtil.createResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
+      val sergenResource = ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
 
       resources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art") :+ sergenResource
     }

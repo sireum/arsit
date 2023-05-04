@@ -2,9 +2,11 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.Port
+import org.sireum.hamr.arsit.{Port, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.CommonUtil
+import org.sireum.hamr.codegen.common.containers.Resource
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir.FeatureCategory
 
 object TestTemplate {
@@ -22,7 +24,7 @@ object TestTemplate {
           |import ${basePackage}._
           |
           |${StringTemplate.safeToEditComment()}
-          |class ${names.testName} extends ${names.testApisName} {
+          |class ${names.testName} extends ${names.testScalaTestName} {
           |
           |  test("Example Unit Test for Initialise Entry Point"){
           |    // Initialise Entry Point doesn't read input port values, so just proceed with
@@ -45,8 +47,10 @@ object TestTemplate {
 
   @pure def bridgeTestApis(basePackage: String,
                            names: NameProvider,
-                           ports: ISZ[Port]): ST = {
+                           projectDirectories: ProjectDirectories,
+                           ports: ISZ[Port]): ISZ[Resource] = {
 
+    var resources: ISZ[Resource] = ISZ()
     var concretePutParams: ISZ[ST] = ISZ()
     var concretePutBlocks: ISZ[ST] = ISZ()
     var concretePutScalaDoc: ISZ[ST] = ISZ()
@@ -108,7 +112,7 @@ object TestTemplate {
 
       st"""// setter for in ${p.feature.category}
           |def ${putMethodName}(${putParamName}): Unit = {
-          |  ArtNative_Ext.insertInPortValue(bridge.operational_api.${p.name}_Id, ${putArgName})
+          |  ArtNative.insertInPortValue(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
           |}
           |"""
     })
@@ -161,7 +165,7 @@ object TestTemplate {
                   |// TODO: event data port getter should return all of the events/payloads
                   |//       received on event data ports when queue sizes > 1 support is added
                   |//       to ART
-                  |if(${getterName}().nonEmpty) ${portNameValue} = ${portNameValue} :+ ${getterName}().get"""
+                  |if(${getterName}().nonEmpty) { ${portNameValue} = ${portNameValue} :+ ${getterName}().get }"""
             val scalaDoc =
               st"""* @param ${portName} method that will be called with the payloads to be sent
                   |*        on the outgoing event data port '${portName}'."""
@@ -177,8 +181,7 @@ object TestTemplate {
 
       concreteCheckScalaDoc = concreteCheckScalaDoc :+ checkScalaDoc
 
-      concreteCheckParams = concreteCheckParams :+
-        st"${portName}: ${checkParamType} => B = ${portName}Param => {T}"
+      concreteCheckParams = concreteCheckParams :+ st"${portName}: ${checkParamType} => B"
 
       concreteCheckBlocks = concreteCheckBlocks :+
         st"""${concretePreamble}
@@ -190,7 +193,7 @@ object TestTemplate {
           |def ${getterName}(): Option[${typeName}] = {
           |  val value: Option[${typeName}] = ${payloadGetterName} match {
           |    case Some(${_match}) => Some(${value})
-          |    case Some(v) => fail(s"Unexpected payload on port ${portName}.  Expecting '${payloadType}' but received $${v}")
+          |    case Some(v) => halt(s"Unexpected payload on port ${portName}.  Expecting '${payloadType}' but received $${v}")
           |    case _ => None[${typeName}]()
           |  }
           |  return value
@@ -198,7 +201,7 @@ object TestTemplate {
           |
           |// payload getter for out ${p.feature.category}
           |def ${payloadGetterName}: Option[${payloadType}] = {
-          |  return ArtNative_Ext.observeOutPortValue(bridge.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
+          |  return ArtNative.observeOutPortValue(${names.archInstanceName}.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
           |}
           |"""
     })
@@ -226,20 +229,100 @@ object TestTemplate {
       }
 
     val ret: ST =
-      st"""package ${names.packageName}
+      st"""// #Sireum
+          |
+          |package ${names.packageName}
           |
           |import org.sireum._
-          |import art.{ArtNative_Ext, Empty}
+          |import art.{Art, ArtNative, Empty}
           |import ${basePackage}._
           |
           |${StringTemplate.doNotEditComment(None())}
-          |abstract class ${names.testApisName} extends BridgeTestSuite[${names.bridge}](Arch.${names.instanceName}) {
+          |@msig trait ${names.testApisName} {
+          |
+          |  def BeforeEach(): Unit = {
+          |    Art.initTest(${names.archInstanceName})
+          |  }
+          |
+          |  def AfterEach(): Unit = {
+          |    Art.finalizeTest(${names.archInstanceName})
+          |  }
+          |
+          |  def testCompute(): Unit = {
+          |    Art.manuallyClearOutput()
+          |    Art.testCompute(${names.archInstanceName})
+          |  }
+          |
+          |  def testInitialise(): Unit = {
+          |    Art.manuallyClearOutput()
+          |    Art.testInitialise(${names.archInstanceName})
+          |  }
           |
           |  ${concretePutter}
           |  ${concreteChecker}
           |  ${(setters ++ getters, "\n")}
           |}
           |"""
-    return ret
+
+    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(projectDirectories.testUtilDir, ISZ(names.packagePath, s"${names.testApisName}.scala")), ret, T)
+    resources = resources :+ slang2ScalaTestWrapper(projectDirectories, names, None())
+
+    return resources
+  }
+
+  def slang2ScalaTestWrapper(projectDirectories: ProjectDirectories, names: NameProvider, altName: Option[(String, String)]): Resource = {
+    val className2Use: String = if (altName.isEmpty) names.testScalaTestName else altName.get._1
+    val extendsName2Use: String = if (altName.isEmpty) names.testApisName else altName.get._2
+    val ret: ST =
+      st"""package ${names.packageName}
+          |
+          |import org.scalatest.{BeforeAndAfterEach, OneInstancePerTest}
+          |import org.scalatest.funsuite.AnyFunSuite
+          |import org.sireum.$$internal.MutableMarker
+          |
+          |${StringTemplate.doNotEditComment(None())}
+          |abstract class ${className2Use} extends
+          |  AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with
+          |  ${extendsName2Use} {
+          |
+          |  var clonable: Boolean = true
+          |  var owned: Boolean = false
+          |
+          |  override def string: org.sireum.String = {
+          |    this.toString()
+          |  }
+          |
+          |  override def $$clonable: Boolean = {
+          |    return clonable
+          |  }
+          |
+          |  override def $$clonable_=(b: Boolean): MutableMarker = {
+          |    clonable = b
+          |    return this
+          |  }
+          |
+          |  override def $$owned: Boolean = {
+          |    return owned
+          |  }
+          |
+          |  override def $$owned_=(b: Boolean): MutableMarker = {
+          |    owned = b
+          |    return this
+          |  }
+          |
+          |  override def $$clone: MutableMarker = {
+          |    // not expecting users to want to clone realizations of this abstract class
+          |    return this
+          |  }
+          |
+          |  override def beforeEach(): Unit = {
+          |    BeforeEach()
+          |  }
+          |
+          |  override def afterEach(): Unit = {
+          |    AfterEach()
+          |  }
+          |}"""
+    return ResourceUtil.createResource(Util.pathAppend(projectDirectories.testUtilDir, ISZ(names.packagePath, s"${className2Use}.scala")), ret, T)
   }
 }

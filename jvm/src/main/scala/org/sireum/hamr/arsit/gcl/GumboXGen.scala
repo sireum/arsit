@@ -6,7 +6,7 @@ import org.sireum.hamr.arsit.ProjectDirectories
 import org.sireum.hamr.arsit.gcl.GumboXGen._
 import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, SymbolKind, paramsToComment, sortParam}
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
-import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
+import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Resource
@@ -1077,9 +1077,12 @@ object GumboXGen {
 
       val testHarnessClassName = GumboXGen.createTestHarnessGumboXClassName(componentNames)
       val simpleTestHarnessName = ops.ISZOps(testHarnessClassName).last
+      val simpleTestHarnessSlang2ScalaTestName = s"${simpleTestHarnessName}_ScalaTest"
 
       val testHarnessContent =
-        st"""package ${componentNames.packageName}
+        st"""// #Sireum
+            |
+            |package ${componentNames.packageName}
             |
             |import org.sireum._
             |import ${componentNames.basePackage}._
@@ -1087,13 +1090,15 @@ object GumboXGen {
             |${StubTemplate.addImports(imports)}
             |
             |${StringTemplate.doNotEditComment(None())}
-            |abstract class ${simpleTestHarnessName} extends ${componentNames.testApisName} {
+            |@msig trait ${simpleTestHarnessName} extends ${componentNames.testApisName} {
             |  ${(blocks, "\n\n")}
             |}
             |"""
 
       val testHarnessPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${simpleTestHarnessName}.scala"
       var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(testHarnessPath, testHarnessContent, T))
+
+      resources = resources :+ TestTemplate.slang2ScalaTestWrapper(projectDirectories, componentNames, Some((simpleTestHarnessSlang2ScalaTestName, simpleTestHarnessName)))
 
       val utilPath = s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/GumboXUtil.scala"
       val utilContent: ST =
@@ -1175,7 +1180,7 @@ object GumboXGen {
               |import org.sireum.Random.Impl.Xoshiro256
               |
               |${StringTemplate.doNotEditComment(None())}
-              |class ${simpleTestCasesName} extends ${simpleTestHarnessName} {
+              |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
               |
               |  {
               |    ${(randLibs, "\n")}
