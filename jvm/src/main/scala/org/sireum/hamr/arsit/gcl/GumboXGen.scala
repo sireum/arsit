@@ -141,6 +141,10 @@ object GumboXGen {
     return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_TestHarness"
   }
 
+  @pure def createSlangCheckTestRunnerClassName(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_SlangCheck_TestRunner"
+  }
+
   def createTestCasesGumboXClassName(componentNames: NameProvider): ISZ[String] = {
     return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_Tests"
   }
@@ -387,7 +391,7 @@ object GumboXGen {
           val methodName = GumboXGen.getInitializeGuaranteeMethodName(spec.id, componentNames)
           val simpleMethodName = ops.ISZOps(methodName).last
 
-          val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+          val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
           IEP_Guar_Params = IEP_Guar_Params ++ gg.params.elements
           val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
 
@@ -439,10 +443,12 @@ object GumboXGen {
         for (pair <- clauses if GumboXGenUtil.isOutPort(symbolTable.featureMap.get(pair._1).get)) {
           val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
           val originName = ops.ISZOps(pair._1).last
-          //val paramName = s"${originName}_IEP_Guar"
           val paramName = s"api_${originName}"
-          I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
-          I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
+          val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
+          val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
+          val methodToUse: ISZ[String] = if (isOptional) pair._2.guard.methodName else pair._2.method.methodName
+          I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
+          I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}($paramName)"
         }
       case _ =>
     }
@@ -539,7 +545,7 @@ object GumboXGen {
 
             spec match {
               case g: GclAssume =>
-                val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
                 val methodName = st"compute_spec_${g.id}_assume"
 
                 CEP_T_Assm_Params = CEP_T_Assm_Params ++ gg.params.elements
@@ -562,7 +568,7 @@ object GumboXGen {
                 topLevelAssumes = topLevelAssumes :+ method
 
               case g: GclGuarantee =>
-                val gg = GumboXGenUtil.rewriteToExpX(rspec, aadlTypes)
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
                 val methodName = st"compute_spec_${g.id}_guarantee"
 
                 CEP_T_Guar_Params = CEP_T_Guar_Params ++ gg.params.elements
@@ -635,12 +641,12 @@ object GumboXGen {
             val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
 
-            val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, aadlTypes)
+            val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, component, aadlTypes)
 
             val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
-            val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, aadlTypes)
+            val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, component, aadlTypes)
             val methodName = st"compute_case_${generalCase.id}"
 
             val combinedAssmGuarParam = ggAssm.params ++ ggGuar.params.elements
@@ -707,7 +713,8 @@ object GumboXGen {
             val originName = ops.ISZOps(pair._1).last
             val paramName = s"api_${originName}"
             val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
-            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, SymbolKind.ApiVar, None(), None())
+            val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
+            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
             I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
           }
         case _ =>
@@ -791,8 +798,11 @@ object GumboXGen {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
             val originName = ops.ISZOps(pair._1).last
             val paramName = s"api_${originName}"
-            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, originName, aadlType, T, SymbolKind.ApiVar, None(), None())
-            I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
+            val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
+            val methodToUse: ISZ[String] = if (isOptional) pair._2.guard.methodName else pair._2.method.methodName
+            val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
+            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
+            I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}($paramName)"
           }
         case _ =>
       }
@@ -962,7 +972,8 @@ object GumboXGen {
         case Some((annex, _)) =>
           for (stateVar <- annex.state) {
             val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
-            val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, F, SymbolKind.StateVarPre, None(), None())
+            val isOptional: B = F // state vars cannot be optional
+            val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, isOptional, SymbolKind.StateVarPre, None(), None())
             preStateParams = preStateParams + stateParam
 
             saveInLocal = saveInLocal :+
@@ -1023,13 +1034,10 @@ object GumboXGen {
       var step5PostValues: ISZ[ST] = ISZ()
 
       if (cepHolder.CEP_Post.nonEmpty) {
-        for (ggParam <- cepHolder.CEP_Post.get.params.filter(p => p.kind == SymbolKind.ApiVar)) {
-          val cport = symbolTable.featureMap.get(component.path :+ ggParam.originName).get
-          if (!GumboXGenUtil.isInPort(cport)) {
-            postOracleParams = postOracleParams + ggParam
-            val suffix: String = if (!ggParam.isOptional) ".get" else ""
-            step5PostValues = step5PostValues :+ st"val ${ggParam.getParamDef} = get_${ggParam.originName}()${suffix}"
-          }
+        for (outPortParam <- GumboXGenUtil.filterOutPorts(cepHolder.CEP_Post.get.params)) {
+          postOracleParams = postOracleParams + outPortParam
+          val suffix: String = if (!outPortParam.isOptional) ".get" else ""
+          step5PostValues = step5PostValues :+ st"val ${outPortParam.getParamDef} = get_${outPortParam.originName}()${suffix}"
         }
       }
 
@@ -1037,7 +1045,8 @@ object GumboXGen {
         case Some((annex, _)) =>
           for (stateVar <- annex.state) {
             val typ = aadlTypes.typeMap.get(stateVar.classifier).get
-            val postSVGG = GGParam(stateVar.name, stateVar.name, typ, F, SymbolKind.StateVar, None(), None())
+            val isOptional: B = F // state var cannot be optional
+            val postSVGG = GGParam(stateVar.name, stateVar.name, typ, isOptional, SymbolKind.StateVar, None(), None())
             postOracleParams = postOracleParams + postSVGG
             step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
           }
@@ -1061,7 +1070,7 @@ object GumboXGen {
       } else {
         cbblocks = cbblocks :+
           st"""// Step 6 [CheckPost]: invoke the oracle function
-              |  ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
+              |//   ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
       }
 
       val sortedInPortParams = sortParam(inPortParams)
@@ -1124,15 +1133,19 @@ object GumboXGen {
         val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
         val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
 
-        var randLibs: ISZ[ST] = ISZ(st"val seedGen = new Random.Gen64Impl(Xoshiro256.create)")
+        var randLibs: ISZ[ST] = ISZ(st"val seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)")
         var inportDecls: ISZ[ST] = ISZ()
         var inportActuals: ISZ[ST] = ISZ()
         var inportActualsPretty: ISZ[ST] = ISZ()
-        var encapsulatingDataType: ISZ[String] = ISZ()
+        var slangCheckContainterType: ISZ[String] = ISZ()
+
         if (inPortParams.nonEmpty) {
           for (inPort <- sortParam(inPortParams)) {
             val tn = ops.ISZOps(inPort.aadlType.nameProvider.qualifiedReferencedTypeNameI)
             val u = st"${(tn.dropRight(1), "_")}".render
+
+            @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
+            @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Some($s) // TODO: call option's next once slang check supports traits" else s
 
             val (rangenName, slangName): (String, String) = inPort.aadlType match {
               case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
@@ -1140,17 +1153,17 @@ object GumboXGen {
               case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
             }
 
-            randLibs = randLibs :+ st"val ranLib${inPort.originName} = new RandomLib(new Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
-            inportDecls = inportDecls :+ st"val ${inPort.name} = ranLib${inPort.originName}.next_${rangenName}()"
+            randLibs = randLibs :+ st"val ranLib${inPort.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
+            inportDecls = inportDecls :+ st"val ${inPort.name} = ${wrapS(s"ranLib${inPort.originName}.next_${rangenName}()", inPort.isOptional)}"
             inportActuals = inportActuals :+ st"${inPort.name}"
-            inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$${inPort.name}"
-            encapsulatingDataType = encapsulatingDataType :+ s"val ${inPort.name}: $slangName"
+            inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$o.${inPort.name}"
+            slangCheckContainterType = slangCheckContainterType :+ s"val ${inPort.name}: ${wrapO(slangName, inPort.isOptional)}"
           }
         } else {
 
         }
-
-        val simpleECName = s"${componentNames.componentSingletonType}_Container"
+        val slangCheckContainerSuffix = "SlangCheckContainer"
+        val simpleEncapsulatingTypeName = s"${componentNames.componentSingletonType}_${slangCheckContainerSuffix}"
         val encapsulatingType =
           st"""// #Sireum
               |
@@ -1162,11 +1175,25 @@ object GumboXGen {
               |${StringTemplate.doNotEditComment(None())}
               |
               |// SlangCheck test container to hold the incoming port values for ${component.identifier}
-              |@datatype class ${simpleECName} (
-              |  ${(encapsulatingDataType, ",\n")})
+              |@datatype class ${simpleEncapsulatingTypeName} (
+              |  ${(slangCheckContainterType, ",\n")})
               |"""
-        val ecPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${simpleECName}.scala"
+        val ecPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${simpleEncapsulatingTypeName}.scala"
+
         resources = resources :+ ResourceUtil.createResourceH(ecPath, encapsulatingType, T, T)
+        val containerExtractions: ISZ[String] = for(p <- sortParam(inPortParams)) yield s"o.${p.name}"
+
+        val getInputMethod: ST =
+          st"""// getInputs - needed
+              |def getInputs(): Option[$simpleEncapsulatingTypeName] = {
+              |  try {
+              |    ${(inportDecls, "\n")}
+              |
+              |    return Some(${simpleEncapsulatingTypeName}(${(inportActuals, ",")}))
+              |  } catch {
+              |    case e: AssertionError => return None()
+              |  }
+              |}"""
 
         val tq = s"\"\"\""
         val testCaseContent =
@@ -1177,13 +1204,18 @@ object GumboXGen {
               |import ${componentNames.basePackage}.GumboXUtil
               |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
               |import ${componentNames.basePackage}.RandomLib
+              |import org.sireum.Random.Gen64
               |import org.sireum.Random.Impl.Xoshiro256
               |
               |${StringTemplate.doNotEditComment(None())}
               |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
               |
+              |  val failOnUnsatPreconditions: B = F
+              |
               |  {
               |    ${(randLibs, "\n")}
+              |
+              |    $getInputMethod
               |
               |    for (i <- 0 to 100) {
               |      this.registerTest(i.toString) {
@@ -1191,26 +1223,33 @@ object GumboXGen {
               |
               |        var j: Z = 0
               |        while (j < GumboXUtil.numRetries && retry) {
-              |          ${(inportDecls, "\n")}
+              |          getInputs() match {
+              |            case Some(o) =>
               |
-              |          println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
-              |                      ${(inportActualsPretty, "\n")}$tq.render)
+              |              println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
+              |                        ${(inportActualsPretty, "\n")}$tq.render)
               |
-              |          testComputeCB(${(inportActuals, ", ")}) match {
-              |            case GumboXResult.Pre_Condition_Unsat =>
-              |            case GumboXResult.Post_Condition_Fail =>
-              |              fail ("Post condition did not hold")
-              |              retry = F
-              |            case GumboXResult.Post_Condition_Pass =>
-              |              // success
-              |              println ("Success!")
-              |              retry = F
+              |              testComputeCB(${(containerExtractions, ", ")}) match {
+              |                case GumboXResult.Pre_Condition_Unsat =>
+              |                case GumboXResult.Post_Condition_Fail =>
+              |                  fail ("Post condition did not hold")
+              |                  retry = F
+              |                case GumboXResult.Post_Condition_Pass =>
+              |                  // success
+              |                  println ("Success!")
+              |                  retry = F
+              |              }
+              |            case _ =>
               |          }
               |          j = j + 1
               |        }
               |
               |        if (retry) {
-              |          fail ("Unable to satisfy precondition")
+              |          if (failOnUnsatPreconditions) {
+              |            fail ("Unable to satisfy precondition")
+              |          } else {
+              |            cprintln(T, "Unable to satisfy precondition")
+              |          }
               |        }
               |      }
               |    }
@@ -1219,6 +1258,62 @@ object GumboXGen {
 
         val testCasesPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${simpleTestCasesName}.scala"
         resources = resources :+ ResourceUtil.createResource(testCasesPath, testCaseContent, T)
+
+        val slangCheckTestRunnerSimpleName = ops.ISZOps(GumboXGen.createSlangCheckTestRunnerClassName(componentNames)).last
+        val sergenName = st"${(ops.ISZOps(componentNames.componentSingletonTypeQualifiedNameI).drop(1), "")}"
+        val jsonFromMethodName = st"${componentNames.basePackage}.JSON.from${sergenName}_${slangCheckContainerSuffix}"
+        val jsonToMethodName = st"${componentNames.basePackage}.JSON.to${sergenName}_${slangCheckContainerSuffix}"
+
+
+        val dscRunnerContent =
+          st"""// #Sireum
+              |
+              |package ${componentNames.packageName}
+              |
+              |import org.sireum._
+              |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
+              |import ${componentNames.basePackage}.RandomLib
+              |import org.sireum.Random.Gen64
+              |import org.sireum.Random.Impl.Xoshiro256
+              |
+              |${StringTemplate.doNotEditComment(None())}
+              |@record class ${slangCheckTestRunnerSimpleName}
+              |  extends Random.Gen.TestRunner[${simpleEncapsulatingTypeName}]
+              |  with ${simpleTestHarnessName} {
+              |
+              |  ${(randLibs, "\n")}
+              |
+              |  override def next(): ${simpleEncapsulatingTypeName} = {
+              |    ${(inportDecls, "\n")}
+              |    return ${simpleEncapsulatingTypeName}(
+              |      ${(for(inport <- sortParam(inPortParams)) yield inport.name, ", ")}
+              |    )
+              |  }
+              |
+              |  override def toCompactJson(o: ${simpleEncapsulatingTypeName}): String = {
+              |    return ${jsonFromMethodName}(o, T)
+              |  }
+              |
+              |  override def fromJson(json: String): ${simpleEncapsulatingTypeName} = {
+              |    ${jsonToMethodName}(json) match {
+              |      case Either.Left(o) => return o
+              |      case Either.Right(msg) => halt(msg.string)
+              |    }
+              |  }
+              |
+              |  override def test(o: ${simpleEncapsulatingTypeName}): B = {
+              |    BeforeEntrypoint()
+              |    val r: B = testComputeCB(${(containerExtractions, ", ")}) match {
+              |      case GumboXResult.Pre_Condition_Unsat => T
+              |      case GumboXResult.Post_Condition_Fail => F
+              |      case GumboXResult.Post_Condition_Pass => T
+              |    }
+              |    AfterEntrypoint()
+              |    return r
+              |  }
+              |}"""
+        val testRunnerPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${slangCheckTestRunnerSimpleName}.scala"
+        resources = resources :+ ResourceUtil.createResource(testRunnerPath, dscRunnerContent, T)
       }
 
       return emptyObjectContributions(resources = resources)

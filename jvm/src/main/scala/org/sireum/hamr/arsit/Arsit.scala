@@ -48,20 +48,22 @@ object Arsit {
           ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins).generate()
         ).generate())
 
-    var resources: ISZ[Resource] = ISZ()
+    var resources: ISZ[Resource] = nixPhase.resources
     if (!arsitOptions.noEmbedArt) {
-      // sergen requires art.DataContent so only generate the script when art is being embedded
-      val datatypeResources: ISZ[Resource] = for (r <- nixPhase.resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
-      val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
-      val sergenResource = ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
+      // embed art
+      resources = resources ++ copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art")
 
-      resources = copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art") :+ sergenResource
+      // sergen requires art.DataContent so only generate the script when art is being embedded
+      val datatypeResources: ISZ[Resource] = for (r <- resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
+      //val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
+      val sergen = ToolsTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
+      resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
     }
 
     resources = resources ++ createBuildArtifacts(
       CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
-    return ArsitResult(nixPhase.resources ++ resources,
+    return ArsitResult(resources,
       nixPhase.maxPort,
       nixPhase.maxComponent,
       nixPhase.maxConnection,
@@ -96,7 +98,16 @@ object Arsit {
 
       resources = resources :+ ResourceUtil.createStringResource(Util.pathAppend(outputDir, ISZ(entry._1)), _c, T)
     }
-    return resources
+
+    for (i <- 0 until resources.size if resources(i).name == "DataContent.scala") {
+      var resource = (resources(i).asInstanceOf[IResource])
+      resource = resource(isDatatype = T)
+      val o = ops.ISZOps(resources)
+      val ret = (o.slice(0, i) :+ resource) ++ o.slice(i + 1, resources.size)
+      return ret
+    }
+
+    halt("Infeasible")
   }
 
   def createBuildArtifacts(projectName: String,

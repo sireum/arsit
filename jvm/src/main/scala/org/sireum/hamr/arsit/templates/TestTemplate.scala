@@ -240,11 +240,11 @@ object TestTemplate {
           |${StringTemplate.doNotEditComment(None())}
           |@msig trait ${names.testApisName} {
           |
-          |  def BeforeEach(): Unit = {
+          |  def BeforeEntrypoint(): Unit = {
           |    Art.initTest(${names.archInstanceName})
           |  }
           |
-          |  def AfterEach(): Unit = {
+          |  def AfterEntrypoint(): Unit = {
           |    Art.finalizeTest(${names.archInstanceName})
           |  }
           |
@@ -316,11 +316,11 @@ object TestTemplate {
           |  }
           |
           |  override def beforeEach(): Unit = {
-          |    BeforeEach()
+          |    BeforeEntrypoint()
           |  }
           |
           |  override def afterEach(): Unit = {
-          |    AfterEach()
+          |    AfterEntrypoint()
           |  }
           |}"""
     return ResourceUtil.createResource(Util.pathAppend(projectDirectories.testUtilDir, ISZ(names.packagePath, s"${className2Use}.scala")), ret, T)

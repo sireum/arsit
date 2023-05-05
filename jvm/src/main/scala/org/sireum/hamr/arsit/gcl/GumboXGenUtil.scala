@@ -10,25 +10,54 @@ import org.sireum.lang.ast.Typed
 import org.sireum.lang.{ast => AST}
 
 object GumboXGenUtil {
+
+  @pure def filterOutPorts(params: ISZ[GGParam]): ISZ[GGParam] = {
+    return params.filter(p => p.kind == SymbolKind.ApiVarOutData || p.kind == SymbolKind.ApiVarOutEvent || p.kind == SymbolKind.ApiVarOutEventData)
+  }
+
+  @pure def filterInPorts(params: ISZ[GGParam]): ISZ[GGParam] = {
+    return params.filter(p => p.kind == SymbolKind.ApiVarInData || p.kind == SymbolKind.ApiVarInEvent || p.kind == SymbolKind.ApiVarInEventData)
+  }
+
+  @pure def getPort(portId: String, context: AadlThreadOrDevice): AadlPort = {
+    context.getPorts().filter(p => p.identifier == portId) match {
+      case ISZ(p) => return p
+      case _ => halt(s"Couldn't find $portId")
+    }
+  }
+
+  @pure def getPortKind(port: AadlPort): SymbolKind.Type = {
+    val ret: SymbolKind.Type = port match {
+      case i: AadlEventPort => if (port.direction == Direction.In) SymbolKind.ApiVarInEvent else SymbolKind.ApiVarOutEvent
+      case i: AadlEventDataPort => if (port.direction == Direction.In) SymbolKind.ApiVarInEventData else SymbolKind.ApiVarOutEventData
+      case i: AadlDataPort => if (port.direction == Direction.In) SymbolKind.ApiVarInData else SymbolKind.ApiVarOutData
+      case _ => halt("Infeasible")
+    }
+    return ret
+  }
+
   @pure def inPortsToParams(component: AadlThreadOrDevice): ISZ[GGParam] = {
-    return portsToParams(component, isInPort _)
+    return portsToParams(component, T, isInPort _)
   }
 
   @pure def outPortsToParams(component: AadlThreadOrDevice): ISZ[GGParam] = {
-    return portsToParams(component, isOutPort _)
+    return portsToParams(component, F, isOutPort _)
   }
 
-  @pure def portsToParams(component: AadlThreadOrDevice, filter: AadlFeature => B): ISZ[GGParam] = {
+  @pure def portsToParams(component: AadlThreadOrDevice, isIn: B, filter: AadlFeature => B): ISZ[GGParam] = {
     val ports: ISZ[AadlPort] = for(p <- component.features.filter(f => filter(f))) yield p.asInstanceOf[AadlPort]
     var ret: ISZ[GGParam] = ISZ()
     for(o <- ports) {
       o match {
         case i: AadlEventPort =>
-          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, TypeUtil.EmptyType, T, SymbolKind.ApiVar, None(), None())
+          val kind: SymbolKind.Type = if(isIn) SymbolKind.ApiVarInEvent else SymbolKind.ApiVarOutEvent
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, TypeUtil.EmptyType, T, kind, None(), None())
         case i: AadlEventDataPort =>
-          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, T, SymbolKind.ApiVar, None(), None())
+          val kind: SymbolKind.Type = if(isIn) SymbolKind.ApiVarInEventData else SymbolKind.ApiVarOutEventData
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, T, kind, None(), None())
         case i: AadlDataPort =>
-          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, F, SymbolKind.ApiVar, None(), None())
+          val kind: SymbolKind.Type = if(isIn) SymbolKind.ApiVarInData else SymbolKind.ApiVarOutData
+          ret = ret :+ GGParam(s"api_${o.identifier}", o.identifier, i.aadlType, F, kind, None(), None())
         case _ => halt("Infeasible")
       }
     }
@@ -99,9 +128,19 @@ object GumboXGenUtil {
 
   @enum object SymbolKind {
     "Integration"
+
     "StateVarPre"
     "StateVar"
-    "ApiVar"
+
+    //"ApiVar"
+    "ApiVarInEvent"
+    "ApiVarInEventData"
+    "ApiVarInData"
+
+    "ApiVarOutEvent"
+    "ApiVarOutEventData"
+    "ApiVarOutData"
+
     "Parameter"
   }
 
@@ -124,7 +163,7 @@ object GumboXGenUtil {
   @datatype class GGExpParamHolder(val params: Set[GGParam],
                                    val exp: AST.Exp)
 
-  @record class EE(aadlTypes: AadlTypes) extends ir.MTransformer {
+  @record class EE(context: AadlThreadOrDevice, aadlTypes: AadlTypes) extends ir.MTransformer {
     var params: Set[GGParam] = Set.empty
 
     def getAadlType(typ: AST.Typed.Name): (AadlType, B) = {
@@ -156,7 +195,7 @@ object GumboXGenUtil {
           val typed = o.attr.typedOpt.get.asInstanceOf[AST.Typed.Name]
           val paramName = s"api_${id.value}"
           val (typ, isOptional) = getAadlType(typed)
-          params = params + GGParam(paramName, id.value, typ, isOptional, SymbolKind.ApiVar, Some(typed), Some(o))
+          params = params + GGParam(paramName, id.value, typ, isOptional, getPortKind(getPort(id.value, context)), Some(typed), Some(o))
           return ir.MTransformer.PreResult(
             F,
             MSome(AST.Exp.Ident(id = AST.Id(value = paramName, attr = AST.Attr(None())), attr = o.attr)))
@@ -198,8 +237,8 @@ object GumboXGenUtil {
     }
   }
 
-  def rewriteToExpX(exp: AST.Exp, aadlTypes: AadlTypes): GGExpParamHolder = {
-    val e = EE(aadlTypes)
+  def rewriteToExpX(exp: AST.Exp, context: AadlThreadOrDevice, aadlTypes: AadlTypes): GGExpParamHolder = {
+    val e = EE(context, aadlTypes)
     val ret: GGExpParamHolder = e.transform_langastExp(exp) match {
       case MSome(x) => GGExpParamHolder(e.params, x)
       case _ => GGExpParamHolder(e.params, exp)
@@ -213,9 +252,18 @@ object GumboXGenUtil {
     for (p <- params) {
       val kind: String = p.kind match {
         case SymbolKind.Integration => "integration variable"
+
         case SymbolKind.StateVarPre => "pre-state state variable"
         case SymbolKind.StateVar => "post-state state variable"
-        case SymbolKind.ApiVar => "port variable"
+
+        case SymbolKind.ApiVarInData => "incoming data port"
+        case SymbolKind.ApiVarInEvent => "incoming event port"
+        case SymbolKind.ApiVarInEventData => "incoming event data port"
+
+        case SymbolKind.ApiVarOutData => "outgoing data port"
+        case SymbolKind.ApiVarOutEvent => "outgoing event port"
+        case SymbolKind.ApiVarOutEventData => "outgoing event data port"
+
         case SymbolKind.Parameter => "parameter to handler method"
       }
       comments = comments :+ st"* @param ${p.name} ${kind}"
