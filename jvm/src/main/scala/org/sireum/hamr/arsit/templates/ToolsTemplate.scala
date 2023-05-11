@@ -30,7 +30,7 @@ object ToolsTemplate {
       |val sireum = Os.path(Os.env("SIREUM_HOME").get) / "bin" / (if (Os.isWin) "sireum.bat" else "sireum")"""
 
   def toISString(rootDir: Os.Path, resources: ISZ[Resource]): ST = {
-    val relResources = for(r <- resources) yield s"\"${rootDir.relativize(Os.path(r.dstPath))}\""
+    val relResources: ISZ[String] = for(r <- resources) yield s"\"${rootDir.relativize(Os.path(r.dstPath))}\""
     val r: ST =
       st"""val files: ISZ[String] = ISZ(${(relResources, ",\n")})
           |

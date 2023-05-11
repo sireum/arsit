@@ -48,13 +48,18 @@ object GumboXGen {
                                           val CEP_Post: Option[ContractHolder])
 
   @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexClauseInfo] = {
-    val aadlComponent = symbolTable.componentMap.get(componentPath).get
-    val annexInfos: ISZ[GclAnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
-      case Some(annexInfos) =>
-        annexInfos.filter(f => f.isInstanceOf[GclAnnexClauseInfo]).map(m => m.asInstanceOf[GclAnnexClauseInfo])
-      case _ => ISZ()
+    symbolTable.componentMap.get(componentPath) match {
+      case Some(aadlComponent) =>
+        symbolTable.annexClauseInfos.get(aadlComponent) match {
+          case Some(annexInfos) =>
+            return annexInfos.filter(f => f.isInstanceOf[GclAnnexClauseInfo]).map(m => m.asInstanceOf[GclAnnexClauseInfo])
+          case _ => return ISZ()
+        }
+      case _ if componentPath == ISZ(TypeUtil.SlangEmbeddedBitTypeName) =>
+        return ISZ()
+      case _ =>
+        halt(s"Infeasible: couldn't find $componentPath")
     }
-    return annexInfos
   }
 
   @record class InvariantRewriter() extends org.sireum.hamr.ir.MTransformer {
