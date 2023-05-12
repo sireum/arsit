@@ -227,8 +227,8 @@ object GumboXGenUtil {
     }
 
     override def pre_langastExpIdent(o: AST.Exp.Ident): ir.MTransformer.PreResult[AST.Exp] = {
-      o.attr.typedOpt.get match {
-        case typed: AST.Typed.Name =>
+      o.attr.typedOpt match {
+        case Some(typed: AST.Typed.Name) =>
           val (typ, isOptional) = getAadlType(typed)
           params = params + GGParam(o.id.value, o.id.value, typ, isOptional, SymbolKind.StateVar, Some(typed), Some(o))
         case _ =>

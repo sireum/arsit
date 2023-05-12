@@ -41,7 +41,12 @@ import org.sireum.message.Reporter
       resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
         // GCL's symbol resolver ensures there's at most one GCL clause per component
         case ISZ(GclAnnexClauseInfo(annex, _)) =>
-          annex.integration.nonEmpty || annex.initializes.nonEmpty || annex.compute.nonEmpty
+          val hasInitContracts: B = annex.initializes.nonEmpty && annex.initializes.get.guarantees.nonEmpty
+          val hasComputeContracts: B = annex.compute match {
+            case Some(c) => c.cases.nonEmpty || c.specs.nonEmpty || c.handlers.nonEmpty
+            case _ => F
+          }
+          annex.integration.nonEmpty || hasInitContracts || hasComputeContracts
         case _ => F
       }
 
@@ -99,7 +104,7 @@ import org.sireum.message.Reporter
 
     val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
 
-    val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.slangCheckJarExists, symbolTable, aadlTypes, projectDirectories)
+    val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
 
     return Some(gumbox(resources = gumbox.resources ++ testHarness.resources))
   }

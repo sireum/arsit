@@ -336,7 +336,7 @@ object ArsitTest {
     pathSeparator = '/',
     experimentalOptions = ISZ(),
 
-    slangCheckJarExists = F
+    runSlangCheck = F
   )
 
   def filterTestsSet(): Option[B] = {

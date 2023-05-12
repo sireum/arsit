@@ -388,7 +388,7 @@ object GumboXGen {
 
         // process each guarantee clause
         for (spec <- initializes.guarantees) {
-          val rspec = gclSymbolTable.rexprs.get(spec.exp).get
+          val rspec = getRExp(spec.exp, basePackageName, aadlTypes, gclSymbolTable)
           imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
           val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
@@ -838,7 +838,7 @@ object GumboXGen {
         }
 
         // create call to the top level case contracts
-        var CEP_T_Case_call: Option[ST] = CEP_T_Case match {
+        val CEP_T_Case_call: Option[ST] = CEP_T_Case match {
           case Some(cep_T_Case_content) =>
             CEP_Post_blocks = CEP_Post_blocks :+ cep_T_Case_content.content
             CEP_Post_Params = CEP_Post_Params ++ cep_T_Case_content.params
@@ -958,7 +958,7 @@ object GumboXGen {
 
   def createTestHarness(component: AadlThreadOrDevice, componentNames: NameProvider,
                         annexInfo: Option[(GclSubclause, GclSymbolTable)],
-                        slangCheckJarExists: B,
+                        runSlangCheck: B,
                         symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories): ObjectContributions = {
 
     resetImports()
@@ -967,9 +967,9 @@ object GumboXGen {
       val cepHolder = computeEntryPointHolder.get(component.path).get
 
       var blocks: ISZ[ST] = ISZ()
-      val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
+      //val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
 
-      var inPortParams: ISZ[GGParam] = GumboXGenUtil.inPortsToParams(component)
+      val inPortParams: ISZ[GGParam] = GumboXGenUtil.inPortsToParams(component)
 
       var preStateParams: Set[GGParam] = Set.empty[GGParam] ++ inPortParams
       var saveInLocal: ISZ[ST] = ISZ()
@@ -1133,7 +1133,7 @@ object GumboXGen {
             |}"""
       resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
 
-      if (slangCheckJarExists) {
+      if (runSlangCheck) {
 
         val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
         val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
