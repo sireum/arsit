@@ -316,7 +316,7 @@ import org.sireum.hamr.ir.Direction
     val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
     val legacyTranspiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
-      verbose = arsitOptions.verbose,
+      verbose = F,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
       outputDir = Os.path(dirs.cNixDir),
@@ -361,7 +361,7 @@ import org.sireum.hamr.ir.Direction
     val _extensions: ISZ[String] = ISZ(dirs.cExt_schedule_Dir, dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
     val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
-      verbose = arsitOptions.verbose,
+      verbose = F,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
       outputDir = Os.path(dirs.cNixDir),
