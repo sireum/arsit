@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.codegen.common.containers
 import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.util.PathUtil
 
 object ToolsTemplate {
   val header: ST =
@@ -30,7 +31,7 @@ object ToolsTemplate {
       |val sireum = Os.path(Os.env("SIREUM_HOME").get) / "bin" / (if (Os.isWin) "sireum.bat" else "sireum")"""
 
   def toISString(rootDir: Os.Path, resources: ISZ[Resource]): ST = {
-    val relResources: ISZ[String] = for(r <- resources) yield s"\"${rootDir.relativize(Os.path(r.dstPath))}\""
+    val relResources: ISZ[String] = for(r <- resources) yield s"\"${PathUtil.convertWinPathSepToNix(rootDir.relativize(Os.path(r.dstPath)).value)}\""
     val r: ST =
       st"""val files: ISZ[String] = ISZ(${(relResources, ",\n")})
           |
@@ -40,7 +41,7 @@ object ToolsTemplate {
 
   def slangCheck(resources: ISZ[containers.Resource], basePackage: String, outputdir: String, slangBinDir: String): ST = {
     val slangDir = Os.path(slangBinDir)
-    val outDir = slangDir.relativize(Os.path(outputdir))
+    val outDir = PathUtil.convertWinPathSepToNix(slangDir.relativize(Os.path(outputdir)).value)
 
     val ret: ST =
       st"""$header
