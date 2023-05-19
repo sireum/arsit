@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
-import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, NonCaseContractBlock}
+import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ContractBlock, NonCaseContractBlock}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
@@ -32,16 +32,20 @@ import org.sireum.message.Reporter
                 arsitOptions: ArsitOptions,
                 symbolTable: SymbolTable,
                 aadlTypes: AadlTypes): B = {
-    resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
+
+    val needToProcessGclAnnexLibraries = !handledAnnexLibraries && getAnnexLibraries(symbolTable).nonEmpty
+
+    val needToProcessComponentsGclSubclause: B = resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       // GCL's symbol resolver ensures there's at most one GCL clause per component
       case ISZ(GclAnnexClauseInfo(annex, _)) =>
-        return (!handledAnnexLibraries && getAnnexLibraries(symbolTable).nonEmpty) ||
-          (annex.state.nonEmpty && !handledStateVars.contains(component)) ||
+        (annex.state.nonEmpty && !handledStateVars.contains(component)) ||
           (annex.methods.nonEmpty && !handledSubClauseFunctions.contains(component)) ||
           (entryPoint == EntryPoints.initialise && annex.initializes.nonEmpty) ||
           (entryPoint == EntryPoints.compute && annex.compute.nonEmpty)
-      case _ => return F
+      case _ => F
     }
+
+    return needToProcessGclAnnexLibraries || needToProcessComponentsGclSubclause
   }
 
   def handle(entryPoint: EntryPoints.Type,
@@ -59,26 +63,30 @@ import org.sireum.message.Reporter
              projectDirectories: ProjectDirectories,
              arsitOptions: ArsitOptions,
              reporter: Reporter): BehaviorEntryPointContributions = {
+
+    var imports: ISZ[String] = ISZ()
+    var preMethodBlocks: ISZ[ST] = ISZ()
+    var markers: ISZ[Marker] = ISZ()
+    var reads: ISZ[ST] = ISZ()
+    var requires: ISZ[ST] = ISZ()
+    var modifies: ISZ[ST] = ISZ()
+    var ensures: ISZ[ST] = ISZ()
+    var flows: ISZ[ST] = ISZ()
+    var resources: ISZ[Resource] = ISZ()
+
+    if (!handledAnnexLibraries) {
+      for (gclLib <- getAnnexLibraries(symbolTable)) {
+        val (content, filename) = GumboGen.processGclLibrary(gclLib, symbolTable, aadlTypes, basePackageName)
+        resources = resources :+ ResourceUtil.createResource(
+          Util.pathAppend(projectDirectories.componentDir, filename), content, T)
+      }
+      handledAnnexLibraries = T
+    }
+
+    var optSubclauseContractBlock: Option[ContractBlock] = None()
+
     resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
-        var imports: ISZ[String] = ISZ()
-        var preMethodBlocks: ISZ[ST] = ISZ()
-        var markers: ISZ[Marker] = ISZ()
-        var reads: ISZ[ST] = ISZ()
-        var requires: ISZ[ST] = ISZ()
-        var modifies: ISZ[ST] = ISZ()
-        var ensures: ISZ[ST] = ISZ()
-        var flows: ISZ[ST] = ISZ()
-        var resources: ISZ[Resource] = ISZ()
-
-        if (!handledAnnexLibraries) {
-          for (gclLib <- getAnnexLibraries(symbolTable)) {
-            val (content, filename) = GumboGen.processGclLibrary(gclLib, symbolTable, aadlTypes, basePackageName)
-            resources = resources :+ ResourceUtil.createResource(
-              Util.pathAppend(projectDirectories.componentDir, filename), content, T)
-          }
-          handledAnnexLibraries = T
-        }
 
         if (annex.state.nonEmpty && !handledStateVars.contains(component)) {
           val p = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(annex.state)
@@ -120,10 +128,26 @@ import org.sireum.message.Reporter
           case _ => // gumbo contracts cannot currently be placed on the other entrypoints
         }
 
-        val contractBlock = NonCaseContractBlock(imports, reads, requires, modifies, ensures, flows)
-        val ret = BehaviorEntryPointProviderPlugin.emptyPartialContributions
-        return ret(imports = imports, preMethodBlocks = preMethodBlocks, markers = markers, contractBlock = Some(contractBlock))
-      case _ => halt("Infeasible")
+        optSubclauseContractBlock = Some(NonCaseContractBlock(imports, reads, requires, modifies, ensures, flows))
+
+      case _ =>
+        if (!getAnnexLibraries(symbolTable).nonEmpty) {
+          halt(s"Infeasible: the system doesn't have GCL annex libraries and ${component.identifier} does not have a GCL subclause so why did the ${this.name} offer agree to handle the component?")
+        }
     }
+
+    return (BehaviorEntryPointProviderPlugin.PartialMethodContributions (
+      imports = imports,
+      preMethodBlocks = preMethodBlocks,
+      markers = markers,
+      contractBlock = optSubclauseContractBlock,
+      resources = resources,
+
+
+      tags = ISZ(),
+      preObjectBlocks = ISZ(),
+      optBody = None(),
+      postMethodBlocks = ISZ(),
+      postObjectBlocks = ISZ()))
   }
 }
