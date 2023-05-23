@@ -263,8 +263,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
 
     val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)))
-    addExeResource(dirs.slangBinDir, ISZ("transpile-sel4.cmd"), slashTranspileScript, T)
-
+    resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile-sel4.cmd")), slashTranspileScript, T)
   }
 
   def genGlobals(ports: ISZ[Port],
