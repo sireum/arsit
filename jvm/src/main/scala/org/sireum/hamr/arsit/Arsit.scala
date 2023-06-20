@@ -55,7 +55,6 @@ object Arsit {
 
       // sergen requires art.DataContent so only generate the script when art is being embedded
       val datatypeResources: ISZ[Resource] = for (r <- resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
-      //val sergen = TypeTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
       val sergen = ToolsTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
       resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
     }

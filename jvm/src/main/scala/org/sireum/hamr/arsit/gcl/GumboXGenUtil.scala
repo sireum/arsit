@@ -158,6 +158,12 @@ object GumboXGenUtil {
     @pure def getParamDef: String = {
       return s"$name: ${getType}"
     }
+
+    val isInPort: B = kind == SymbolKind.ApiVarInData || kind == SymbolKind.ApiVarInEventData || kind == SymbolKind.ApiVarInEvent
+
+    val isOutPort: B = kind == SymbolKind.ApiVarOutData || kind == SymbolKind.ApiVarOutEventData || kind == SymbolKind.ApiVarOutEvent
+
+    val isStateVar: B = kind == SymbolKind.StateVar || kind == SymbolKind.StateVarPre
   }
 
   @datatype class GGExpParamHolder(val params: Set[GGParam],

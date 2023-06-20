@@ -146,8 +146,8 @@ object GumboXGen {
     return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_TestHarness"
   }
 
-  @pure def createSlangCheckTestRunnerClassName(componentNames: NameProvider): ISZ[String] = {
-    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_SlangCheck_TestRunner"
+  @pure def createDSCTestRunnerClassName(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_DSC_TestRunner"
   }
 
   def createTestCasesGumboXClassName(componentNames: NameProvider): ISZ[String] = {
@@ -209,7 +209,7 @@ object GumboXGen {
   var integrationClauses: Map[IdPath, ISZ[(IdPath, IntegrationHolder)]] = Map.empty
 
   // {component path -> holder}
-  var initializeClauses: Map[IdPath, InitializeEntryPointHolder] = Map.empty
+  var initializeEntryPointHolder: Map[IdPath, InitializeEntryPointHolder] = Map.empty
 
   // {component path -> holder}
   var computeEntryPointHolder: Map[IdPath, ComputeEntryPointHolder] = Map.empty
@@ -507,7 +507,7 @@ object GumboXGen {
 
       val ret = st"${(IEP_Guard_Blocks :+ iep_post, "\n\n")}"
 
-      initializeClauses = initializeClauses + component.path ~>
+      initializeEntryPointHolder = initializeEntryPointHolder + component.path ~>
         InitializeEntryPointHolder(ContractHolder(iepPostMethodName, sorted_IEP_Post_Params, imports, ret))
     }
   }
@@ -911,7 +911,7 @@ object GumboXGen {
       case _ =>
     }
 
-    initializeClauses.get(component.path) match {
+    initializeEntryPointHolder.get(component.path) match {
       case Some(iholder) =>
         blocks = blocks :+ iholder.IEP_Guar.content
         imports = imports ++ iholder.IEP_Guar.imports
@@ -963,86 +963,151 @@ object GumboXGen {
 
     resetImports()
 
-    if (component.isPeriodic() && computeEntryPointHolder.contains(component.path)) {
-      val cepHolder = computeEntryPointHolder.get(component.path).get
+    val testHarnessClassName = GumboXGen.createTestHarnessGumboXClassName(componentNames)
+    val simpleTestHarnessName = ops.ISZOps(testHarnessClassName).last
+    val simpleTestHarnessSlang2ScalaTestName = s"${simpleTestHarnessName}_ScalaTest"
 
-      var blocks: ISZ[ST] = ISZ()
-      //val inPorts = component.getPorts().filter(f => f.direction == Direction.In)
+    val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
+    val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
 
-      val inPortParams: ISZ[GGParam] = GumboXGenUtil.inPortsToParams(component)
+    var testingBlocks: ISZ[ST] = ISZ()
 
-      var preStateParams: Set[GGParam] = Set.empty[GGParam] ++ inPortParams
-      var saveInLocal: ISZ[ST] = ISZ()
-      annexInfo match {
-        case Some((annex, _)) =>
-          for (stateVar <- annex.state) {
-            val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
-            val isOptional: B = F // state vars cannot be optional
-            val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, isOptional, SymbolKind.StateVarPre, None(), None())
-            preStateParams = preStateParams + stateParam
+    var resources: ISZ[Resource] = ISZ()
 
-            saveInLocal = saveInLocal :+
-              st"val ${stateParam.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+    var dscAllRandLibs: Set[String] = Set.empty
+    var scalaTests: ISZ[ST] = ISZ()
+    var dscGetTestVectors: ISZ[ST] = ISZ[ST]()
+    var dscTestVectorContainers: Set[String] = Set.empty
+    var dscTestRunners: ISZ[ST] = ISZ[ST]()
+
+
+    def process(testMethodName: String,
+                _dscRunnerSimpleName: String,
+                _dscContainerType: String,
+                suffix: String,
+
+                entrypoint: String,
+                isInitialize: B,
+
+                captureStateVars: B,
+                stateVars: ISZ[GclStateVar],
+
+                preMethodName: Option[String], preParams: ISZ[GGParam],
+                postMethodName: Option[String], postParams: ISZ[GGParam]): Unit = {
+
+      assert (isInitialize -->: stateVars.isEmpty)
+
+      val testCBMethodName = s"${testMethodName}CB$suffix"
+      val dscRunnerSimpleName = s"${_dscRunnerSimpleName}$suffix"
+      val dscContainerType = s"${_dscContainerType}$suffix"
+
+      val inPortParams: ISZ[GGParam] = if (isInitialize) ISZ() else GumboXGenUtil.inPortsToParams(component)
+
+      var preStateParams: Set[GGParam] = Set.empty[GGParam]
+
+      var saveInLocalAsVar: ISZ[ST] = ISZ()
+      var setInLocal: ISZ[ST] = ISZ()
+
+      for (stateVar <- stateVars) {
+        val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
+        val isOptional: B = F // state vars cannot be optional
+        val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, isOptional, SymbolKind.StateVarPre, None(), None())
+
+        preStateParams = preStateParams + stateParam
+
+        saveInLocalAsVar = saveInLocalAsVar :+
+          st"val ${stateParam.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+
+        setInLocal = setInLocal :+
+          st"${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name} = ${stateParam.name}"
+      }
+
+      // ignored for initialize entrypoint and when state vars are passed in
+      val step1: Option[ST] = {
+        if (!isInitialize && captureStateVars)
+          (if (saveInLocalAsVar.nonEmpty)
+            Some(st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
+                     |${(saveInLocalAsVar, "\n")}""")
+          else
+            Some(st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
+                     |//   ${component.identifier} does not have incoming ports or state variables"""))
+        else None()
+      }
+
+
+      val step2: Option[ST] = {
+        if (!isInitialize) {
+          if (preParams.nonEmpty) {
+            val sortedPreParams = sortParam(preParams)
+            Some(
+              st"""// [CheckPre]: check/filter based on pre-condition.
+                  |val CEP_Pre_Result: B = ${preMethodName.get} (${(for (sortedParam <- sortedPreParams) yield sortedParam.name, ", ")})
+                  |if (!CEP_Pre_Result) {
+                  |  return GumboXResult.Pre_Condition_Unsat
+                  |}""")
+          } else {
+            Some(
+              st"""// [CheckPre]: check/filter based on pre-condition.
+                  |//   ${component.identifier}'s compute entry point does not have top level assume clauses""")
           }
-        case _ =>
-      }
-
-      var cbblocks: ISZ[ST] = ISZ()
-      if (saveInLocal.nonEmpty) {
-        cbblocks = cbblocks :+
-          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
-              |${(saveInLocal, "\n")}"""
-      } else {
-        cbblocks = cbblocks :+
-          st"""// Step 1 [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
-              |//   ${component.identifier} does not have incoming ports or state variables"""
-      }
-
-      cepHolder.CEP_Pre match {
-        case Some(pre) =>
-          val sortedPreParams = sortParam(pre.params)
-          cbblocks = cbblocks :+
-            st"""// Step 2 [CheckPre]: check/filter based on pre-condition.
-                |val CEP_Pre_Result: B = ${(pre.methodName, ".")} (${(for (sortedParam <- sortedPreParams) yield sortedParam.name, ", ")})
-                |if (!CEP_Pre_Result) {
-                |  return GumboXResult.Pre_Condition_Unsat
-                |}"""
-        case _ =>
-          cbblocks = cbblocks :+
-            st"""// Step 2 [CheckPre]: check/filter based on pre-condition.
-                |//   ${component.identifier}'s compute entry point does not have top level assume clauses"""
-      }
-
-      if (inPortParams.nonEmpty) {
-        var putters: ISZ[ST] = ISZ()
-        for (inPort <- sortParam(inPortParams)) {
-          val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
-          val optArg: Option[String] =
-            if (GumboXGenUtil.isEventPort(cport)) None()
-            else Some(inPort.name)
-          putters = putters :+ st"put_${inPort.originName}(${optArg})"
         }
-        cbblocks = cbblocks :+
-          st"""// Step 3 [PutInPorts]: put values on the input ports
-              |${(putters, "\n")}"""
-      } else {
-        cbblocks = cbblocks :+
-          st"""// Step 3 [PutInPorts]: put values on the input ports
-              |//   ${component.identifier} does not have incoming ports"""
+        else {
+          None()
+        }
       }
 
-      cbblocks = cbblocks :+
-        st"""// Step 4 [InvokeEntryPoint]: invoke the entry point test method
-            |testCompute()"""
+      var step3: Option[ST] = None()
+      if(!isInitialize) {
+        val putInPorts: ST = {
+          if (inPortParams.nonEmpty) {
+            var putters: ISZ[ST] = ISZ()
+            for (inPort <- sortParam(inPortParams)) {
+              val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
+              val optArg: Option[String] =
+                if (GumboXGenUtil.isEventPort(cport)) None()
+                else Some(inPort.name)
+              putters = putters :+ st"put_${inPort.originName}(${optArg})"
+            }
+            st"""// [PutInPorts]: put values on the input ports
+                |${(putters, "\n")}"""
+          } else {
+            st"""// [PutInPorts]: put values on the input ports
+                |//   ${component.identifier} does not have incoming ports"""
+          }
+        }
+
+        val s3: ST =
+          if (captureStateVars) {
+            putInPorts
+          } else {
+            if (setInLocal.nonEmpty) {
+              st"""$putInPorts
+                  |
+                  |// [SetInStateVars]: set the pre-state values of state variables
+                  |${(setInLocal, "\n")}"""
+            } else {
+              st"""$putInPorts
+                  |
+                  |// [SetInStateVars]: set the pre-state values of state variables
+                  |//   ${component.identifier} does not contain state variables"""
+            }
+          }
+
+        step3 = Some(s3)
+      }
+
+      val step4: ST =
+        st"""// [InvokeEntryPoint]: invoke the entry point test method
+            |$testMethodName()"""
 
       var postOracleParams: Set[GGParam] = Set.empty
       var step5PostValues: ISZ[ST] = ISZ()
 
-      if (cepHolder.CEP_Post.nonEmpty) {
-        for (outPortParam <- GumboXGenUtil.filterOutPorts(cepHolder.CEP_Post.get.params)) {
+      if (postParams.nonEmpty) {
+        for (outPortParam <- GumboXGenUtil.filterOutPorts(postParams)) {
           postOracleParams = postOracleParams + outPortParam
-          val suffix: String = if (!outPortParam.isOptional) ".get" else ""
-          step5PostValues = step5PostValues :+ st"val ${outPortParam.getParamDef} = get_${outPortParam.originName}()${suffix}"
+          val optGet: String = if (!outPortParam.isOptional) ".get" else ""
+          step5PostValues = step5PostValues :+ st"val ${outPortParam.getParamDef} = get_${outPortParam.originName}()${optGet}"
         }
       }
 
@@ -1058,40 +1123,155 @@ object GumboXGen {
         case _ =>
       }
 
-      if (step5PostValues.nonEmpty) {
-        cbblocks = cbblocks :+
-          st"""// Step 5 [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variables
+      val step5: ST =
+        if (step5PostValues.nonEmpty)
+          st"""// [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variable
               |${(step5PostValues, "\n")}"""
-      }
+        else
+          st"""// [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variable
+              |//   ${component.identifier} does not have outgoing ports or state variables"""
 
-      if (cepHolder.CEP_Post.nonEmpty) {
-        val sortedCepPostParams = sortParam(cepHolder.CEP_Post.get.params)
-        cbblocks = cbblocks :+
-          st"""// Step 6 [CheckPost]: invoke the oracle function
-              |val postResult = ${(cepHolder.CEP_Post.get.methodName, ".")}(${(for (p <- sortedCepPostParams) yield p.name, ", ")})
+      val step6: ST = {
+        if (postParams.nonEmpty) {
+          val sortedCepPostParams = sortParam(postParams)
+          st"""// [CheckPost]: invoke the oracle function
+              |val postResult = ${postMethodName.get}(${(for (p <- sortedCepPostParams) yield p.name, ", ")})
               |if (!postResult) {
               |  return GumboXResult.Post_Condition_Fail
               |}"""
-      } else {
-        cbblocks = cbblocks :+
-          st"""// Step 6 [CheckPost]: invoke the oracle function
+        } else {
+          st"""// [CheckPost]: invoke the oracle function
               |//   ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
+        }
       }
 
-      val sortedInPortParams = sortParam(inPortParams)
+      val steps: ISZ[ST] = ISZ[Option[ST]](step1, step2, step3, Some(step4), Some(step5), Some(step6)).filter(f => f.nonEmpty).map(m => m.get)
+
+      val sortedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
       val testComputeCB =
-        st"""def testComputeCB(
-            |    ${(for (sortedParam <- sortedInPortParams) yield sortedParam.getParamDef, ",\n")}): GumboXResult.Type = {
-            |  ${(cbblocks, "\n\n")}
+        st"""/** Contract-based test harness for the $entrypoint entry point
+            |  ${(paramsToComment(sortedParams), "\n")}
+            |  */
+            |def $testCBMethodName(
+            |    ${(for (sortedParam <- sortedParams) yield sortedParam.getParamDef, ",\n")}): GumboXResult.Type = {
+            |  ${(steps, "\n\n")}
             |
             |  return GumboXResult.Post_Condition_Pass
             |}"""
 
-      blocks = blocks :+ testComputeCB
+      testingBlocks = testingBlocks :+ testComputeCB
 
-      val testHarnessClassName = GumboXGen.createTestHarnessGumboXClassName(componentNames)
-      val simpleTestHarnessName = ops.ISZOps(testHarnessClassName).last
-      val simpleTestHarnessSlang2ScalaTestName = s"${simpleTestHarnessName}_ScalaTest"
+      // initialize entrypoints shouldn't access in ports or state variables so
+      // running DSC would be pointless
+      if (isInitialize) {
+        scalaTests = scalaTests :+ DSCTemplate.genInitializeScalaTests(testCBMethodName)
+      } else {
+        var localRandLibs: ISZ[ST] = ISZ(st"val seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)")
+
+        var symDecls: ISZ[ST] = ISZ()
+        var symActuals: ISZ[ST] = ISZ()
+        var symActualsPretty: ISZ[ST] = ISZ()
+        var dscFieldDeclarations: ISZ[ST] = ISZ()
+        var symContainerExtractors: ISZ[ST] = ISZ()
+
+        val combinedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
+        for (param <- combinedParams) {
+          val tn = ops.ISZOps(param.aadlType.nameProvider.qualifiedReferencedTypeNameI)
+          val u = st"${(tn.dropRight(1), "_")}".render
+
+          @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
+
+          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Some($s) // TODO: call option's next once slang check supports traits" else s
+
+          val (rangenName, slangName): (String, String) = param.aadlType match {
+            case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
+            case i: BaseType => (i.slangType.name, i.slangType.name)
+            case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
+          }
+
+          localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
+          symDecls = symDecls :+ st"val ${param.name} = ${wrapS(s"ranLib${param.originName}.next_${rangenName}()", param.isOptional)}"
+          symActuals = symActuals :+ st"${param.name}"
+          symActualsPretty = symActualsPretty :+ st"|    ${param.originName} = $$o.${param.name}"
+          dscFieldDeclarations = dscFieldDeclarations :+ st"val ${param.name}: ${wrapO(slangName, param.isOptional)}"
+          symContainerExtractors = symContainerExtractors :+ st"o.${param.name}"
+        }
+
+        dscAllRandLibs = dscAllRandLibs ++ (for (s <- localRandLibs) yield s.render)
+
+        dscTestVectorContainers = dscTestVectorContainers + DSCTemplate.genTestVectorContainer(dscContainerType, dscFieldDeclarations).render
+
+        val testVectorMethodName = s"getTestVector$suffix"
+
+        dscGetTestVectors = dscGetTestVectors :+ DSCTemplate.getTestVectorGen(
+          testVectorMethodName, dscContainerType, symDecls, symActuals)
+
+        scalaTests = scalaTests :+ DSCTemplate.genScalaTests(
+          testCBMethodName,
+          testVectorMethodName, symActualsPretty, st"${testCBMethodName}(${(symContainerExtractors, ", ")})")
+
+        val computeCBMethodCall = st"${testCBMethodName}(${(symContainerExtractors, ", ")})"
+        val next = DSCTemplate.nextMethod(localRandLibs, dscContainerType, symDecls, combinedParams)
+        dscTestRunners = dscTestRunners :+ DSCTemplate.dscTestRunner(
+          componentNames, dscRunnerSimpleName, dscContainerType,
+          simpleTestHarnessName, next, computeCBMethodCall)
+      }
+    }
+
+    val dscContainerType = s"${componentNames.componentSingletonType}_${DSCTemplate.dscContainerSuffix}"
+    val dscTestRunnerSimpleName = ops.ISZOps(GumboXGen.createDSCTestRunnerClassName(componentNames)).last
+
+    if (component.isPeriodic() && computeEntryPointHolder.contains(component.path)) {
+
+      val stateVars: ISZ[GclStateVar] = annexInfo match {
+        case Some((annex, _)) => annex.state
+        case _ => ISZ()
+      }
+
+      val (postInitMethodName, postInitParams): (Option[String], ISZ[GGParam]) = {
+        initializeEntryPointHolder.get(component.path) match {
+          case Some(InitializeEntryPointHolder(ContractHolder(mName, params, _, _))) => (Some(st"${(mName, ".")}".render), params)
+          case _ => (None(), ISZ())
+        }
+      }
+
+      val (preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams): (Option[String], ISZ[GGParam], Option[String], ISZ[GGParam]) = {
+        val (_preMethodName, _preParams): (Option[String], ISZ[GGParam]) =
+          computeEntryPointHolder.get(component.path).get.CEP_Pre match {
+            case Some(ContractHolder(mName, params, _, _)) => (Some(st"${(mName, ".")}".render), params)
+            case _ => (None(), ISZ())
+          }
+
+        val (_postMethodName, _postParams): (Option[String], ISZ[GGParam]) =
+          computeEntryPointHolder.get(component.path).get.CEP_Post match {
+            case Some(ContractHolder(mName, params, _, _)) => (Some(st"${(mName, ".")}".render), params)
+            case _ => (None(), ISZ())
+          }
+
+        (_preMethodName, _preParams, _postMethodName, _postParams)
+      }
+
+      if (postInitMethodName.nonEmpty) {
+        process("testInitialise", dscTestRunnerSimpleName, dscContainerType, "",
+          "initialise",
+          T, F, ISZ(),
+          None(), ISZ(), postInitMethodName, postInitParams)
+      }
+
+      process("testCompute", dscTestRunnerSimpleName, dscContainerType, "",
+        "compute",
+        F, T, stateVars,
+        preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams)
+
+      if (stateVars.nonEmpty) {
+        process("testCompute", dscTestRunnerSimpleName, dscContainerType, "wL",
+          "compute",
+          F, F, stateVars,
+          preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams)
+      }
+    }
+
+    if (testingBlocks.nonEmpty) {
 
       val testHarnessContent =
         st"""// #Sireum
@@ -1105,12 +1285,12 @@ object GumboXGen {
             |
             |${StringTemplate.doNotEditComment(None())}
             |@msig trait ${simpleTestHarnessName} extends ${componentNames.testApisName} {
-            |  ${(blocks, "\n\n")}
+            |  ${(testingBlocks, "\n\n")}
             |}
             |"""
 
       val testHarnessPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${simpleTestHarnessName}.scala"
-      var resources: ISZ[Resource] = ISZ(ResourceUtil.createResource(testHarnessPath, testHarnessContent, T))
+      resources = resources :+ ResourceUtil.createResource(testHarnessPath, testHarnessContent, T)
 
       resources = resources :+ TestTemplate.slang2ScalaTestWrapper(projectDirectories, componentNames, Some((simpleTestHarnessSlang2ScalaTestName, simpleTestHarnessName)))
 
@@ -1123,7 +1303,9 @@ object GumboXGen {
             |
             |object GumboXUtil {
             |
-            |  var numRetries: Z = 100
+            |  var numTests: Z = 100
+            |
+            |  var numTestVectorGenRetries: Z = 100
             |
             |  @enum object GumboXResult {
             |    "Pre_Condition_Unsat"
@@ -1132,200 +1314,60 @@ object GumboXGen {
             |  }
             |}"""
       resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
-
-      if (runSlangCheck) {
-
-        val gumboxTestCasesClassName = GumboXGen.createTestCasesGumboXClassName(componentNames)
-        val simpleTestCasesName = ops.ISZOps(gumboxTestCasesClassName).last
-
-        var randLibs: ISZ[ST] = ISZ(st"val seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)")
-        var inportDecls: ISZ[ST] = ISZ()
-        var inportActuals: ISZ[ST] = ISZ()
-        var inportActualsPretty: ISZ[ST] = ISZ()
-        var slangCheckContainterType: ISZ[String] = ISZ()
-
-        if (inPortParams.nonEmpty) {
-          for (inPort <- sortParam(inPortParams)) {
-            val tn = ops.ISZOps(inPort.aadlType.nameProvider.qualifiedReferencedTypeNameI)
-            val u = st"${(tn.dropRight(1), "_")}".render
-
-            @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
-            @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Some($s) // TODO: call option's next once slang check supports traits" else s
-
-            val (rangenName, slangName): (String, String) = inPort.aadlType match {
-              case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
-              case i: BaseType => (i.slangType.name, i.slangType.name)
-              case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
-            }
-
-            randLibs = randLibs :+ st"val ranLib${inPort.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
-            inportDecls = inportDecls :+ st"val ${inPort.name} = ${wrapS(s"ranLib${inPort.originName}.next_${rangenName}()", inPort.isOptional)}"
-            inportActuals = inportActuals :+ st"${inPort.name}"
-            inportActualsPretty = inportActualsPretty :+ st"|    ${inPort.originName} = $$o.${inPort.name}"
-            slangCheckContainterType = slangCheckContainterType :+ s"val ${inPort.name}: ${wrapO(slangName, inPort.isOptional)}"
-          }
-        } else {
-
-        }
-        val slangCheckContainerSuffix = "SlangCheckContainer"
-        val simpleEncapsulatingTypeName = s"${componentNames.componentSingletonType}_${slangCheckContainerSuffix}"
-        val encapsulatingType =
-          st"""// #Sireum
-              |
-              |package ${componentNames.packageName}
-              |
-              |import org.sireum._
-              |import ${componentNames.basePackage}._
-              |
-              |${StringTemplate.doNotEditComment(None())}
-              |
-              |// SlangCheck test container to hold the incoming port values for ${component.identifier}
-              |@datatype class ${simpleEncapsulatingTypeName} (
-              |  ${(slangCheckContainterType, ",\n")})
-              |"""
-        val ecPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${simpleEncapsulatingTypeName}.scala"
-
-        resources = resources :+ ResourceUtil.createResourceH(ecPath, encapsulatingType, T, T)
-        val containerExtractions: ISZ[String] = for(p <- sortParam(inPortParams)) yield s"o.${p.name}"
-
-        val getInputMethod: ST =
-          st"""// getInputs - needed
-              |def getInputs(): Option[$simpleEncapsulatingTypeName] = {
-              |  try {
-              |    ${(inportDecls, "\n")}
-              |
-              |    return Some(${simpleEncapsulatingTypeName}(${(inportActuals, ",")}))
-              |  } catch {
-              |    case e: AssertionError => return None()
-              |  }
-              |}"""
-
-        val tq = s"\"\"\""
-        val testCaseContent =
-          st"""package ${componentNames.packageName}
-              |
-              |import org.sireum._
-              |import ${componentNames.packageName}._
-              |import ${componentNames.basePackage}.GumboXUtil
-              |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
-              |import ${componentNames.basePackage}.RandomLib
-              |import org.sireum.Random.Gen64
-              |import org.sireum.Random.Impl.Xoshiro256
-              |
-              |${StringTemplate.doNotEditComment(None())}
-              |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
-              |
-              |  val failOnUnsatPreconditions: B = F
-              |
-              |  {
-              |    ${(randLibs, "\n")}
-              |
-              |    $getInputMethod
-              |
-              |    for (i <- 0 to 100) {
-              |      this.registerTest(i.toString) {
-              |        var retry: B = T
-              |
-              |        var j: Z = 0
-              |        while (j < GumboXUtil.numRetries && retry) {
-              |          getInputs() match {
-              |            case Some(o) =>
-              |
-              |              println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
-              |                        ${(inportActualsPretty, "\n")}$tq.render)
-              |
-              |              testComputeCB(${(containerExtractions, ", ")}) match {
-              |                case GumboXResult.Pre_Condition_Unsat =>
-              |                case GumboXResult.Post_Condition_Fail =>
-              |                  fail ("Post condition did not hold")
-              |                  retry = F
-              |                case GumboXResult.Post_Condition_Pass =>
-              |                  // success
-              |                  println ("Success!")
-              |                  retry = F
-              |              }
-              |            case _ =>
-              |          }
-              |          j = j + 1
-              |        }
-              |
-              |        if (retry) {
-              |          if (failOnUnsatPreconditions) {
-              |            fail ("Unable to satisfy precondition")
-              |          } else {
-              |            cprintln(T, "Unable to satisfy precondition")
-              |          }
-              |        }
-              |      }
-              |    }
-              |  }
-              |}"""
-
-        val testCasesPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${simpleTestCasesName}.scala"
-        resources = resources :+ ResourceUtil.createResource(testCasesPath, testCaseContent, T)
-
-        val slangCheckTestRunnerSimpleName = ops.ISZOps(GumboXGen.createSlangCheckTestRunnerClassName(componentNames)).last
-        val sergenName = st"${(ops.ISZOps(componentNames.componentSingletonTypeQualifiedNameI).drop(1), "")}"
-        val jsonFromMethodName = st"${componentNames.basePackage}.JSON.from${sergenName}_${slangCheckContainerSuffix}"
-        val jsonToMethodName = st"${componentNames.basePackage}.JSON.to${sergenName}_${slangCheckContainerSuffix}"
-
-
-        val dscRunnerContent =
-          st"""// #Sireum
-              |
-              |package ${componentNames.packageName}
-              |
-              |import org.sireum._
-              |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
-              |import ${componentNames.basePackage}.RandomLib
-              |import org.sireum.Random.Gen64
-              |import org.sireum.Random.Impl.Xoshiro256
-              |
-              |${StringTemplate.doNotEditComment(None())}
-              |@record class ${slangCheckTestRunnerSimpleName}
-              |  extends Random.Gen.TestRunner[${simpleEncapsulatingTypeName}]
-              |  with ${simpleTestHarnessName} {
-              |
-              |  ${(randLibs, "\n")}
-              |
-              |  override def next(): ${simpleEncapsulatingTypeName} = {
-              |    ${(inportDecls, "\n")}
-              |    return ${simpleEncapsulatingTypeName}(
-              |      ${(for(inport <- sortParam(inPortParams)) yield inport.name, ", ")}
-              |    )
-              |  }
-              |
-              |  override def toCompactJson(o: ${simpleEncapsulatingTypeName}): String = {
-              |    return ${jsonFromMethodName}(o, T)
-              |  }
-              |
-              |  override def fromJson(json: String): ${simpleEncapsulatingTypeName} = {
-              |    ${jsonToMethodName}(json) match {
-              |      case Either.Left(o) => return o
-              |      case Either.Right(msg) => halt(msg.string)
-              |    }
-              |  }
-              |
-              |  override def test(o: ${simpleEncapsulatingTypeName}): B = {
-              |    BeforeEntrypoint()
-              |    val r: B = testComputeCB(${(containerExtractions, ", ")}) match {
-              |      case GumboXResult.Pre_Condition_Unsat => T
-              |      case GumboXResult.Post_Condition_Fail => F
-              |      case GumboXResult.Post_Condition_Pass => T
-              |    }
-              |    AfterEntrypoint()
-              |    return r
-              |  }
-              |}"""
-        val testRunnerPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${slangCheckTestRunnerSimpleName}.scala"
-        resources = resources :+ ResourceUtil.createResource(testRunnerPath, dscRunnerContent, T)
-      }
-
-      return emptyObjectContributions(resources = resources)
-    } else {
-      // TODO: sporadic components
-      return emptyObjectContributions
     }
+
+
+    if (scalaTests.nonEmpty) {
+      val testCaseContent =
+        st"""package ${componentNames.packageName}
+            |
+            |import org.sireum._
+            |import ${componentNames.packageName}._
+            |import ${componentNames.basePackage}.GumboXUtil
+            |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
+            |import ${componentNames.basePackage}.RandomLib
+            |import org.sireum.Random.Gen64
+            |import org.sireum.Random.Impl.Xoshiro256
+            |
+            |${StringTemplate.doNotEditComment(None())}
+            |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
+            |
+            |  // set failOnUnsatPreconditions to T if the unit tests should fail when either
+            |  // SlangCheck is never able to satisfy a datatype's filter or the generated
+            |  // test vectors are never able to satisfy an entry point's assume pre-condition
+            |  val failOnUnsatPreconditions: B = F
+            |
+            |  val verbose: B = F
+            |
+            |  ${(dscAllRandLibs.elements, "\n")}
+            |
+            |  ${(dscGetTestVectors, "\n\n")}
+            |
+            |  ${(scalaTests, "\n\n")}
+            |}"""
+
+      val testCasesPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${simpleTestCasesName}.scala"
+      resources = resources :+ ResourceUtil.createResource(testCasesPath, testCaseContent, T)
+
+      val dscContainersClass = DSCTemplate.genTestVectorContainerClass(
+        packageName = componentNames.packageName,
+        imports = ISZ(s"${componentNames.basePackage}._"),
+        containers = dscTestVectorContainers.elements)
+
+      val dscContainersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${dscContainerType}s.scala"
+      resources = resources :+ ResourceUtil.createResourceH(dscContainersPath, dscContainersClass, T, T)
+
+      val dscRunnerContent = DSCTemplate.dscRunnerClass(componentNames.packageName, componentNames.basePackage, dscTestRunners)
+
+      val testRunnerPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${dscTestRunnerSimpleName}s.scala"
+      resources = resources :+ ResourceUtil.createResource(testRunnerPath, dscRunnerContent, T)
+
+      resources = resources :+ ResourceUtil.createResource(
+        s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/${DSCTemplate.recordUnsatPreObjectName}.scala",
+        DSCTemplate.dscRecordUnsatPreArtifacts(componentNames.basePackage), F)
+    }
+
+    return emptyObjectContributions(resources = resources)
   }
 
   def resetImports(): Unit = {
