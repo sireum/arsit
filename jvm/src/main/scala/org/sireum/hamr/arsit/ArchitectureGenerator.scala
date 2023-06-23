@@ -15,7 +15,7 @@ import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
-import org.sireum.hamr.codegen.common.util.ResourceUtil
+import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
@@ -64,9 +64,9 @@ import org.sireum.ops.ISZOps
 
     return ArsitResult(
       resources = resources,
-      maxPort = portId,
-      maxComponent = componentId,
-      maxConnection = connections.size,
+      maxPort = ExperimentalOptions.addPortIds(portId, arsitOptions.experimentalOptions),
+      maxComponent = ExperimentalOptions.addComponentIds(componentId, arsitOptions.experimentalOptions),
+      maxConnection = ExperimentalOptions.addConnectionIds(connections.size, arsitOptions.experimentalOptions),
       transpilerOptions = ISZ()
     )
   }
