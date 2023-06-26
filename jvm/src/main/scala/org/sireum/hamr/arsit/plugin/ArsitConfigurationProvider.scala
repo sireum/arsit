@@ -19,7 +19,7 @@ object ArsitConfigurationProvider {
       maxId = p.addPortIds
       contributor = p.name
     }
-    if (maxId > n"0") {
+    if (maxId > cliOpt) {
       reporter.info(None(), toolName, s"Plugin $contributor contributed the max port id increment value of $maxId")
     }
     return maxId
@@ -32,7 +32,7 @@ object ArsitConfigurationProvider {
       maxId = p.addComponentIds
       contributor = p.name
     }
-    if (maxId > n"0") {
+    if (maxId > cliOpt) {
       reporter.info(None(), toolName, s"Plugin $contributor contributed the max component id increment value of $maxId")
     }
     return maxId
@@ -45,7 +45,7 @@ object ArsitConfigurationProvider {
       maxId = p.addConnectionIds
       contributor = p.name
     }
-    if (maxId > n"0") {
+    if (maxId > cliOpt) {
       reporter.info(None(), toolName, s"Plugin $contributor contributed the max connection id increment value of $maxId")
     }
     return maxId
