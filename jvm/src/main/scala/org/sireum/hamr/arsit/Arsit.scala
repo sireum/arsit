@@ -2,6 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
+import org.sireum.hamr.arsit.plugin.ArsitConfigurationProvider
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -9,7 +10,7 @@ import org.sireum.hamr.codegen.common.containers.{IResource, Resource, Transpile
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
-import org.sireum.hamr.codegen.common.util.ResourceUtil
+import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
 import org.sireum.hamr.ir
 import org.sireum.message._
 
@@ -49,9 +50,14 @@ object Arsit {
         ).generate())
 
     var resources: ISZ[Resource] = nixPhase.resources
+
+    val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationProvider.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins).toZ
+    val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationProvider.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins).toZ
+    val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationProvider.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins).toZ
+
     if (!arsitOptions.noEmbedArt) {
       // embed art
-      resources = resources ++ copyArtFiles(nixPhase.maxPort, nixPhase.maxComponent, nixPhase.maxConnection, s"${projectDirectories.mainDir}/art")
+      resources = resources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art")
 
       // sergen requires art.DataContent so only generate the script when art is being embedded
       val datatypeResources: ISZ[Resource] = for (r <- resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
@@ -63,9 +69,9 @@ object Arsit {
       CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
 
     return ArsitResult(resources,
-      nixPhase.maxPort,
-      nixPhase.maxComponent,
-      nixPhase.maxConnection,
+      maxPortId,
+      maxComponentId,
+      maxConnectionId,
       nixPhase.transpilerOptions)
   }
 

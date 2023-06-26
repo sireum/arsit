@@ -64,9 +64,9 @@ import org.sireum.ops.ISZOps
 
     return ArsitResult(
       resources = resources,
-      maxPort = ExperimentalOptions.addPortIds(portId, arsitOptions.experimentalOptions),
-      maxComponent = ExperimentalOptions.addComponentIds(componentId, arsitOptions.experimentalOptions),
-      maxConnection = ExperimentalOptions.addConnectionIds(connections.size, arsitOptions.experimentalOptions),
+      maxPort = portId,
+      maxComponent = componentId,
+      maxConnection = connections.size,
       transpilerOptions = ISZ()
     )
   }
