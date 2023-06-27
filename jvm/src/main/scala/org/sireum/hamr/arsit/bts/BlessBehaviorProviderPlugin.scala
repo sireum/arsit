@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit.bts
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorProviderPlugin
-import org.sireum.hamr.codegen.common.containers.{EResource, IResource, Resource}
+import org.sireum.hamr.codegen.common.containers.{EResource, IResource, FileResource}
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.ir._
@@ -34,11 +34,11 @@ object BlessBehaviorProviderPlugin {
                       componentDirectory: ISZ[String],
                       symbolTable: SymbolTable,
                       aadlTypes: AadlTypes,
-                      reporter: Reporter): ISZ[Resource] = {
+                      reporter: Reporter): ISZ[FileResource] = {
 
     val behaviorProviders = BlessBehaviorProviderPlugin.getBTSSubclauseBehaviorProvider(component)
 
-    val ret: ISZ[Resource] = behaviorProviders.flatMap((m: BTSSubclauseBehaviorProvider) =>
+    val ret: ISZ[FileResource] = behaviorProviders.flatMap((m: BTSSubclauseBehaviorProvider) =>
       m.values.map((r: BTSResource) =>
         r match {
           case t: BTSText =>

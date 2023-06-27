@@ -4,11 +4,11 @@ package org.sireum.hamr.arsit.templates
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.StringTemplate.doNotEditComment
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.types.TypeNameProvider
 
 object TypeTemplate {
-  def genSerGen(basePackage: String, slangBinDir: String, resources: ISZ[Resource]): ST = {
+  def genSerGen(basePackage: String, slangBinDir: String, resources: ISZ[FileResource]): ST = {
     return (
       st"""::/*#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF           #

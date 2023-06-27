@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.arsit.templates.{ArchitectureTemplate, CMakeTemplate, SeL4NixTemplate, TranspilerTemplate}
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{FileResource, Resource, SireumSlangTranspilersCOption}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
@@ -26,9 +26,9 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
   val basePackage: String = arsitOptions.packageName
 
-  var resources: ISZ[Resource] = ISZ()
+  var resources: ISZ[FileResource] = ISZ()
 
-  var transpilerOptions: ISZ[TranspilerConfig] = ISZ()
+  var transpilerOptions: ISZ[SireumSlangTranspilersCOption] = ISZ()
 
   val defaultMaxStackSizeInBytes: Z = z"16" * z"1024" * z"1024"
 
@@ -41,11 +41,10 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
     return ArsitResult(
       resources = previousPhase.resources() ++ resources,
+      auxResources = previousPhase.auxResources ++ transpilerOptions.asInstanceOf[ISZ[Resource]],
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
-      maxConnection = previousPhase.maxConnection,
-      transpilerOptions = transpilerOptions
-    )
+      maxConnection = previousPhase.maxConnection)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -68,7 +67,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
       p.isInstanceOf[AadlThread] || (p.isInstanceOf[AadlDevice] && arsitOptions.devicesAsThreads))
       .map(m => m.asInstanceOf[AadlThreadOrDevice])
 
-    var transpilerScripts: Map[String, (ST, TranspilerConfig)] = Map.empty
+    var transpilerScripts: Map[String, (ST, SireumSlangTranspilersCOption)] = Map.empty
 
     val typeTouches = NixGen.genTypeTouches(types)
 
@@ -259,8 +258,8 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
     } // end slang type library
 
-    val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, TranspilerConfig))) => (m._1, m._2._1))
-    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, TranspilerConfig)) => m._2)
+    val scripts: ISZ[(String, ST)] = transpilerScripts.entries.map((m: (String, (ST, SireumSlangTranspilersCOption))) => (m._1, m._2._1))
+    transpilerOptions = transpilerOptions ++ transpilerScripts.values.map((m: (ST, SireumSlangTranspilersCOption)) => m._2)
 
     val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)))
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile-sel4.cmd")), slashTranspileScript, T)
@@ -397,7 +396,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
                         extensions: ISZ[Os.Path],
                         excludes: ISZ[String],
 
-                        cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
+                        cmakeIncludes: ISZ[String]): (ST, SireumSlangTranspilersCOption) = {
     val packageName = s"${basePackage}/${instanceName}"
     val appName = s"${basePackage}.${instanceName}.${identifier}"
 
@@ -442,7 +441,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
                     numComponentOutPorts: Z,
                     cOutputDir: Os.Path,
                     cExtensions: ISZ[Os.Path],
-                    cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
+                    cmakeIncludes: ISZ[String]): (ST, SireumSlangTranspilersCOption) = {
 
     val components = symbolTable.airComponentMap.entries.filter(p =>
       CommonUtil.isThread(p._2) || (CommonUtil.isDevice(p._2) && arsitOptions.devicesAsThreads))

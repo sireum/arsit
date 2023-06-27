@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.{Port, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir.FeatureCategory
@@ -48,9 +48,9 @@ object TestTemplate {
   @pure def bridgeTestApis(basePackage: String,
                            names: NameProvider,
                            projectDirectories: ProjectDirectories,
-                           ports: ISZ[Port]): ISZ[Resource] = {
+                           ports: ISZ[Port]): ISZ[FileResource] = {
 
-    var resources: ISZ[Resource] = ISZ()
+    var resources: ISZ[FileResource] = ISZ()
     var concretePutParams: ISZ[ST] = ISZ()
     var concretePutBlocks: ISZ[ST] = ISZ()
     var concretePutScalaDoc: ISZ[ST] = ISZ()
@@ -270,7 +270,7 @@ object TestTemplate {
     return resources
   }
 
-  def slang2ScalaTestWrapper(projectDirectories: ProjectDirectories, names: NameProvider, altName: Option[(String, String)]): Resource = {
+  def slang2ScalaTestWrapper(projectDirectories: ProjectDirectories, names: NameProvider, altName: Option[(String, String)]): FileResource = {
     val className2Use: String = if (altName.isEmpty) names.testScalaTestName else altName.get._1
     val extendsName2Use: String = if (altName.isEmpty) names.testApisName else altName.get._2
     val ret: ST =

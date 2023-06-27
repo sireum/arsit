@@ -5,7 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.templates.BlessST
 import org.sireum.hamr.arsit.{ProjectDirectories, Result, Util}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{FileResource, Resource, SireumSlangTranspilersCOption}
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, BTSSymbolTable, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -45,7 +45,7 @@ import org.sireum.ops._
 
   var vizEntries: ISZ[ST] = ISZ()
 
-  var resources: ISZ[Resource] = ISZ()
+  var resources: ISZ[FileResource] = ISZ()
 
   def process(a: BTSBLESSAnnexClause): BTSResults = {
     if (a.assertions.nonEmpty) {
@@ -155,6 +155,7 @@ import org.sireum.ops._
 
     return BTSResults(
       resources = resources,
+      auxResources = ISZ(),
       maxPort = -1,
       maxComponent = -1,
       maxConnection = -1,
@@ -853,11 +854,12 @@ import org.sireum.ops._
                           initExp: ST
                          )
 
-@datatype class BTSResults(val resources: ISZ[Resource],
+@datatype class BTSResults(val resources: ISZ[FileResource],
+                           val auxResources: ISZ[Resource],
                            val maxPort: Z,
                            val maxComponent: Z,
                            val maxConnection: Z,
-                           val transpilerOptions: ISZ[TranspilerConfig],
+                           val transpilerOptions: ISZ[SireumSlangTranspilersCOption],
 
                            component: ST,
                            optVizEntries: ISZ[ST]) extends Result

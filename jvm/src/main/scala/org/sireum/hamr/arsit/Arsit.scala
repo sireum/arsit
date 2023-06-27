@@ -5,12 +5,12 @@ import org.sireum._
 import org.sireum.hamr.arsit.plugin.ArsitConfigurationProvider
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
-import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
-import org.sireum.hamr.codegen.common.containers.{IResource, Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
+import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
 import org.sireum.message._
 
@@ -36,7 +36,7 @@ object Arsit {
 
     if (model.components.isEmpty) {
       ReporterUtil.reporter.error(None(), Util.toolName, "Model is empty")
-      return ArsitResult(ISZ(), 0, 0, 0, ISZ[TranspilerConfig]())
+      return ArsitResult(ISZ(), ISZ(), 0, 0, 0)
     }
 
     assert(model.components.size == 1, "Expecting a single root component")
@@ -49,38 +49,45 @@ object Arsit {
           ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins).generate()
         ).generate())
 
-    var resources: ISZ[Resource] = nixPhase.resources
+    var fileResources: ISZ[FileResource] = nixPhase.resources
+    var addAuxResources: ISZ[Resource] = nixPhase.auxResources
 
     val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationProvider.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins).toZ
     val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationProvider.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins).toZ
     val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationProvider.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins).toZ
 
-    if (!arsitOptions.noEmbedArt) {
+    if (!arsitOptions.noEmbedArt) { // sergen requires art.DataContent so only generate the script when art is being embedded
       // embed art
-      resources = resources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art")
+      fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art")
 
-      // sergen requires art.DataContent so only generate the script when art is being embedded
-      val datatypeResources: ISZ[Resource] = for (r <- resources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
-      val sergen = ToolsTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangBinDir, datatypeResources)
-      resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergen, T)
+      val datatypeResources: ISZ[FileResource] = for (r <- fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
+      val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangOutputDir, projectDirectories.slangBinDir, datatypeResources)
+      fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergenCmd, T)
+      addAuxResources = addAuxResources :+ sergenConfig
+
+      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, projectDirectories.dataDir, projectDirectories.slangBinDir)
+      fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
+      addAuxResources = addAuxResources :+ slangCheckConfig
     }
 
-    resources = resources ++ createBuildArtifacts(
-      CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, nixPhase.resources, ReporterUtil.reporter)
+    fileResources = fileResources ++ createBuildArtifacts(
+      CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, fileResources, ReporterUtil.reporter)
 
-    return ArsitResult(resources,
+    return ArsitResult(
+      fileResources,
+      addAuxResources,
       maxPortId,
       maxComponentId,
-      maxConnectionId,
-      nixPhase.transpilerOptions)
+      maxConnectionId)
   }
 
-  def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[Resource] = {
-    var resources: ISZ[Resource] = ISZ()
+  def copyArtFiles(maxPort: Z, maxComponent: Z, maxConnections: Z, outputDir: String): ISZ[FileResource] = {
+    var resources: ISZ[FileResource] = ISZ()
     for (entry <- ArsitLibrary.getFiles if ops.StringOps(entry._1).contains("art")) {
       val _c: String =
         if (ops.StringOps(entry._1).contains("Art.scala")) {
-          @strictpure def atLeast0(i: Z): Z = if(i < 0) 0 else i
+          @strictpure def atLeast0(i: Z): Z = if (i < 0) 0 else i
+
           val subs: ISZ[(String, String)] = ISZ(
             ("@range(min = 0, index = T) class BridgeId", s"  @range(min = 0, max = ${atLeast0(maxComponent - 1)}, index = T) class BridgeId"),
             ("@range(min = 0, index = T) class PortId", s"  @range(min = 0, max = ${atLeast0(maxPort - 1)}, index = T) class PortId"),
@@ -89,12 +96,14 @@ object Arsit {
             ("val numPorts:", s"  val numPorts: Z = $maxPort"),
             ("val numConnections:", s"  val numConnections: Z = $maxConnections")
           )
+
           def sub(str: String): String = {
-            for(s <- subs if ops.StringOps(str).contains(s._1)) {
+            for (s <- subs if ops.StringOps(str).contains(s._1)) {
               return s._2
             }
             return str
           }
+
           val lines = StringUtil.split_PreserveEmptySegments(entry._2, (c: C) => c == '\n').map((s: String) => sub(s))
           st"${(lines, "\n")}".render
         } else {
@@ -118,14 +127,14 @@ object Arsit {
   def createBuildArtifacts(projectName: String,
                            options: ArsitOptions,
                            projDirs: ProjectDirectories,
-                           resources: ISZ[Resource],
-                           reporter: Reporter): ISZ[Resource] = {
+                           resources: ISZ[FileResource],
+                           reporter: Reporter): ISZ[FileResource] = {
 
-    var ret: ISZ[Resource] = ISZ()
+    var ret: ISZ[FileResource] = ISZ()
     val root = options.outputDir
 
     val demoScalaPath: String = {
-      val candidate: ISZ[Resource] = resources.filter(p => ops.StringOps(p.dstPath).endsWith("Demo.scala"))
+      val candidate: ISZ[FileResource] = resources.filter(p => ops.StringOps(p.dstPath).endsWith("Demo.scala"))
       if (candidate.nonEmpty) root.relativize(Os.path(candidate(0).dstPath)).value
       else "??"
     }

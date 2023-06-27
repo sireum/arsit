@@ -11,7 +11,7 @@ import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
+import org.sireum.hamr.codegen.common.containers.{Marker, FileResource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
@@ -28,7 +28,7 @@ import org.sireum.hamr.ir._
 
   val basePackage: String = arsitOptions.packageName
   var seenComponents: HashSet[String] = HashSet.empty
-  var resources: ISZ[Resource] = ISZ()
+  var resources: ISZ[FileResource] = ISZ()
 
   def generate(): Result = {
 
@@ -36,10 +36,10 @@ import org.sireum.hamr.ir._
 
     return ArsitResult(
       resources = previousPhase.resources() ++ resources,
+      auxResources = previousPhase.auxResources,
       maxPort = previousPhase.maxPort,
       maxComponent = previousPhase.maxComponent,
-      maxConnection = previousPhase.maxConnection,
-      transpilerOptions = previousPhase.transpilerOptions
+      maxConnection = previousPhase.maxConnection
     )
   }
 

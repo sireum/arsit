@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.Util
 import org.sireum.hamr.arsit.util.ArsitLibrary
-import org.sireum.hamr.codegen.common.containers.TranspilerConfig
+import org.sireum.hamr.codegen.common.containers.SireumSlangTranspilersCOption
 import org.sireum.hamr.codegen.common.types.TypeUtil
 
 object TranspilerTemplate {
@@ -28,7 +28,7 @@ object TranspilerTemplate {
                        extensions: ISZ[String],
                        excludes: ISZ[String],
                        buildApps: B,
-                       cmakeIncludes: ISZ[String]): (ST, TranspilerConfig) = {
+                       cmakeIncludes: ISZ[String]): (ST, SireumSlangTranspilersCOption) = {
 
     val _stackSizeInBytes: String = if (stackSizeInBytes < 0) {
       "16*1024*1024" // default set in org.sireum.transpilers.cli.cTranspiler
@@ -37,7 +37,7 @@ object TranspilerTemplate {
     }
 
     val transpilerOptions =
-      TranspilerConfig(
+      SireumSlangTranspilersCOption(
         help = "",
         args = ISZ(),
         sourcepath = sourcepaths,
@@ -68,7 +68,7 @@ object TranspilerTemplate {
     return (st, transpilerOptions)
   }
 
-  @pure def transpilerX(opts: TranspilerConfig,
+  @pure def transpilerX(opts: SireumSlangTranspilersCOption,
                         binDir: String): ST = {
     val script_home = s"$${${SCRIPT_HOME}}"
 

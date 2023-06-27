@@ -5,19 +5,19 @@ import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, SymbolTable}
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil
 import org.sireum.message.Reporter
 
 @datatype class BridgeCodeContributions(bridge: ST,
-                                        resources: ISZ[Resource])
+                                        resources: ISZ[FileResource])
 
 @datatype class EntryPointContributions(imports: ISZ[String],
                                         bridgeCompanionBlocks: ISZ[String],
                                         entryPoint: ST,
-                                        resources: ISZ[Resource])
+                                        resources: ISZ[FileResource])
 
 
 @record class SingletonBridgeCodeProviderPlugin extends BridgeCodeProviderPlugin {

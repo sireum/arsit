@@ -9,7 +9,7 @@ import org.sireum.hamr.arsit.templates.{SchedulerTemplate, SeL4NixTemplate, Tran
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, IpcMechanism}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{FileResource, Resource, SireumSlangTranspilersCOption}
 import org.sireum.hamr.codegen.common.properties.PropertyUtil
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.TemplateUtil
@@ -27,9 +27,9 @@ import org.sireum.hamr.ir.Direction
 
   val basePackage: String = arsitOptions.packageName
 
-  var resources: ISZ[Resource] = ISZ()
+  var resources: ISZ[FileResource] = ISZ()
 
-  var transpilerOptions: ISZ[TranspilerConfig] = ISZ()
+  var transpilerOptions: ISZ[SireumSlangTranspilersCOption] = ISZ()
 
   var maxPortsForComponents: Z = 0
   var numConnections: Z = 0
@@ -50,10 +50,10 @@ import org.sireum.hamr.ir.Direction
 
     return ArsitResult(
       resources = previousPhase.resources() ++ resources,
+      auxResources = previousPhase.auxResources ++ transpilerOptions.asInstanceOf[ISZ[Resource]],
       maxPort = portId,
       maxComponent = previousPhase.maxComponent,
-      maxConnection = previousPhase.maxConnection,
-      transpilerOptions = transpilerOptions)
+      maxConnection = previousPhase.maxConnection)
   }
 
   def addExeResource(outDir: String, path: ISZ[String], content: ST, overwrite: B): Unit = {
@@ -315,7 +315,7 @@ import org.sireum.hamr.ir.Direction
 
     val _legacyextensions: ISZ[String] = ISZ(dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val legacyTranspiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
+    val legacyTranspiler: (ST, SireumSlangTranspilersCOption) = TranspilerTemplate.transpiler(
       verbose = F,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
@@ -360,7 +360,7 @@ import org.sireum.hamr.ir.Direction
 
     val _extensions: ISZ[String] = ISZ(dirs.cExt_schedule_Dir, dirs.cExt_c_Dir, dirs.cEtcDir) ++ arsitOptions.auxCodeDirs
 
-    val transpiler: (ST, TranspilerConfig) = TranspilerTemplate.transpiler(
+    val transpiler: (ST, SireumSlangTranspilersCOption) = TranspilerTemplate.transpiler(
       verbose = F,
       libraryName = "main",
       sourcepaths = ISZ(dirs.mainDir),
@@ -388,10 +388,10 @@ import org.sireum.hamr.ir.Direction
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile.cmd")), slashTranspileScript, T)
   }
 
-  def genSchedulerFiles(packageName: String, archBridgeInstanceNames: ISZ[String]): ISZ[Resource] = {
+  def genSchedulerFiles(packageName: String, archBridgeInstanceNames: ISZ[String]): ISZ[FileResource] = {
     val roundRobinFile = "round_robin.c"
     val staticSchedulerFile = "static_scheduler.c"
-    val ret: ISZ[Resource] =
+    val ret: ISZ[FileResource] =
       ISZ(ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ("legacy.c")), SchedulerTemplate.c_legacy(), F),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(roundRobinFile)), SchedulerTemplate.c_roundRobin(packageName, archBridgeInstanceNames, roundRobinFile), F),
         ResourceUtil.createResource(Util.pathAppend(dirs.cExt_schedule_Dir, ISZ(staticSchedulerFile)), SchedulerTemplate.c_static_schedule(packageName, archBridgeInstanceNames, staticSchedulerFile), F),

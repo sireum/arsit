@@ -9,7 +9,7 @@ import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectCont
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
-import org.sireum.hamr.codegen.common.containers.Resource
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -40,7 +40,7 @@ object GumboXGen {
   @datatype class DataInvariantHolder(val D_Inv_Method_Name: ISZ[String],
                                       val D_Inv_Guard_Method_Name: ISZ[String],
                                       //val D_Inv_Mem_FQ_MethodName: ISZ[String], // TODO
-                                      val resource: Resource)
+                                      val resource: FileResource)
 
   @datatype class InitializeEntryPointHolder(val IEP_Guar: ContractHolder)
 
@@ -972,7 +972,7 @@ object GumboXGen {
 
     var testingBlocks: ISZ[ST] = ISZ()
 
-    var resources: ISZ[Resource] = ISZ()
+    var resources: ISZ[FileResource] = ISZ()
 
     var dscAllRandLibs: Set[String] = Set.empty
     var scalaTests: ISZ[ST] = ISZ()

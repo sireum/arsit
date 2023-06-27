@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit
 
 import org.sireum._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, IpcMechanism}
-import org.sireum.hamr.codegen.common.containers.{Resource, TranspilerConfig}
+import org.sireum.hamr.codegen.common.containers.{FileResource, Resource, SireumSlangTranspilersCOption}
 import org.sireum.hamr.codegen.common.properties.{OsateProperties, PropertyUtil}
 import org.sireum.hamr.codegen.common.symbols.{AadlFeature, AadlThreadOrDevice}
 import org.sireum.hamr.codegen.common.types._
@@ -268,19 +268,19 @@ object HAMR {
 }
 
 @sig trait Result {
-  def resources: ISZ[Resource]
+  def resources: ISZ[FileResource]
+
+  def auxResources: ISZ[Resource]
 
   def maxPort: Z
 
   def maxComponent: Z
 
   def maxConnection: Z
-
-  def transpilerOptions: ISZ[TranspilerConfig]
 }
 
-@datatype class ArsitResult(val resources: ISZ[Resource],
+@datatype class ArsitResult(val resources: ISZ[FileResource],
+                            val auxResources: ISZ[Resource],
                             val maxPort: Z,
                             val maxComponent: Z,
-                            val maxConnection: Z,
-                            val transpilerOptions: ISZ[TranspilerConfig]) extends Result
+                            val maxConnection: Z) extends Result

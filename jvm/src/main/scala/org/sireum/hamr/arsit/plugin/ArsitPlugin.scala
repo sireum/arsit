@@ -8,7 +8,7 @@ import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEn
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
-import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
+import org.sireum.hamr.codegen.common.containers.{Marker, FileResource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
@@ -93,7 +93,7 @@ object ArsitPlugin {
              symbolTable: SymbolTable,
              aadlTypes: AadlTypes,
 
-             reporter: Reporter): ISZ[Resource]
+             reporter: Reporter): ISZ[FileResource]
 }
 
 object BehaviorEntryPointProviderPlugin {
@@ -122,7 +122,7 @@ object BehaviorEntryPointProviderPlugin {
 
     def postObjectBlocks: ISZ[ST]
 
-    def resources: ISZ[Resource]
+    def resources: ISZ[FileResource]
   }
 
   @datatype class ObjectContributions(val tags: ISZ[String],
@@ -131,7 +131,7 @@ object BehaviorEntryPointProviderPlugin {
                                       val preMethodBlocks: ISZ[ST],
                                       val postMethodBlocks: ISZ[ST],
                                       val postObjectBlocks: ISZ[ST],
-                                      val resources: ISZ[Resource]) extends BehaviorEntryPointObjectContributions
+                                      val resources: ISZ[FileResource]) extends BehaviorEntryPointObjectContributions
 
   @sig trait BehaviorEntryPointMethodContributions extends BehaviorEntryPointObjectContributions {
     def markers: ISZ[Marker]
@@ -151,7 +151,7 @@ object BehaviorEntryPointProviderPlugin {
                                           val postObjectBlocks: ISZ[ST],
 
                                           val markers: ISZ[Marker],
-                                          val resources: ISZ[Resource]) extends BehaviorEntryPointMethodContributions
+                                          val resources: ISZ[FileResource]) extends BehaviorEntryPointMethodContributions
 
   // allows plugin to provide parts of the behavior code for a method that will be
   // combined with those from other plugins in the same pipeline.
@@ -172,7 +172,7 @@ object BehaviorEntryPointProviderPlugin {
                                              val postObjectBlocks: ISZ[ST],
 
                                              val markers: ISZ[Marker],
-                                             val resources: ISZ[Resource]) extends BehaviorEntryPointMethodContributions
+                                             val resources: ISZ[FileResource]) extends BehaviorEntryPointMethodContributions
 
   @sig trait ContractBlock
 
@@ -265,8 +265,8 @@ object BehaviorEntryPointProviderPlugin {
              reporter: Reporter): EntryPointContributions
 }
 
-@datatype class DatatypeContribution(val datatype: Resource,
-                                     val resources: ISZ[Resource])
+@datatype class DatatypeContribution(val datatype: FileResource,
+                                     val resources: ISZ[FileResource])
 
 @msig trait DatatypeProviderPlugin extends ArsitPlugin {
   @pure def canHandle(aadlType: AadlType,

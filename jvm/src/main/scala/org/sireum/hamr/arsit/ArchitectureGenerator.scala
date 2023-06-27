@@ -36,7 +36,7 @@ import org.sireum.ops.ISZOps
 
   var seenConnections: HashMap[ir.Name, ISZ[ir.Name]] = HashMap.empty
 
-  var resources: ISZ[Resource] = ISZ()
+  var resources: ISZ[FileResource] = ISZ()
 
   def generate(): Result = {
     if (!types.rawConnections) {
@@ -64,10 +64,10 @@ import org.sireum.ops.ISZOps
 
     return ArsitResult(
       resources = resources,
+      auxResources = ISZ(),
       maxPort = portId,
       maxComponent = componentId,
-      maxConnection = connections.size,
-      transpilerOptions = ISZ()
+      maxConnection = connections.size
     )
   }
 

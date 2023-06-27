@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ContractBlock, NonCaseContractBlock}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories, Util}
-import org.sireum.hamr.codegen.common.containers.{Marker, Resource}
+import org.sireum.hamr.codegen.common.containers.{Marker, FileResource}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -72,7 +72,7 @@ import org.sireum.message.Reporter
     var modifies: ISZ[ST] = ISZ()
     var ensures: ISZ[ST] = ISZ()
     var flows: ISZ[ST] = ISZ()
-    var resources: ISZ[Resource] = ISZ()
+    var resources: ISZ[FileResource] = ISZ()
 
     if (!handledAnnexLibraries) {
       for (gclLib <- getAnnexLibraries(symbolTable)) {
