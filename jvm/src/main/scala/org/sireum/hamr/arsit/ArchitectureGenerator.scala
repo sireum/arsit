@@ -24,8 +24,7 @@ import org.sireum.ops.ISZOps
                                     val rootSystem: AadlSystem,
                                     val arsitOptions: ArsitOptions,
                                     val symbolTable: SymbolTable,
-                                    val types: AadlTypes,
-                                    val plugins: MSZ[Plugin]) {
+                                    val types: AadlTypes) {
   var componentId: Z = 0
   var portId: Z = 0
 
@@ -38,7 +37,7 @@ import org.sireum.ops.ISZOps
 
   var resources: ISZ[FileResource] = ISZ()
 
-  def generate(): Result = {
+  def generate(plugins: MSZ[Plugin]): Result = {
     if (!types.rawConnections) {
       // TODO allow for customizations of base types
       for (aadlType <- types.typeMap.values if !aadlType.isInstanceOf[BaseType]) {

@@ -23,16 +23,15 @@ import org.sireum.hamr.ir._
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
                             types: AadlTypes,
-                            plugins: MSZ[Plugin],
                             previousPhase: Result) {
 
   val basePackage: String = arsitOptions.packageName
   var seenComponents: HashSet[String] = HashSet.empty
   var resources: ISZ[FileResource] = ISZ()
 
-  def generate(): Result = {
+  def generate(plugins: MSZ[Plugin]): Result = {
 
-    gen(rootSystem)
+    gen(rootSystem, plugins)
 
     return ArsitResult(
       resources = previousPhase.resources() ++ resources,
@@ -43,35 +42,35 @@ import org.sireum.hamr.ir._
     )
   }
 
-  def gen(m: AadlComponent): Unit = {
+  def gen(m: AadlComponent, plugins: MSZ[Plugin]): Unit = {
     m match {
-      case s: AadlSystem => genContainer(s)
-      case s: AadlProcess => genContainer(s)
+      case s: AadlSystem => genContainer(s, plugins)
+      case s: AadlProcess => genContainer(s, plugins)
 
-      case s: AadlThreadGroup => genThreadGroup(s)
+      case s: AadlThreadGroup => genThreadGroup(s, plugins)
 
       case _ =>
         for (_c <- m.subComponents) {
-          gen(_c)
+          gen(_c, plugins)
         }
     }
   }
 
-  def genContainer(m: AadlComponent): Unit = {
+  def genContainer(m: AadlComponent, plugins: MSZ[Plugin]): Unit = {
     assert(m.isInstanceOf[AadlSystem] || m.isInstanceOf[AadlProcess])
 
     for (c <- m.subComponents) {
       c match {
-        case s: AadlSystem => genContainer(s)
-        case s: AadlProcess => genContainer(s)
+        case s: AadlSystem => genContainer(s, plugins)
+        case s: AadlProcess => genContainer(s, plugins)
 
-        case s: AadlThreadGroup => genThreadGroup(s)
+        case s: AadlThreadGroup => genThreadGroup(s, plugins)
 
-        case s: AadlThread => genThread(s)
+        case s: AadlThread => genThread(s, plugins)
 
         case s: AadlDevice =>
           if (arsitOptions.devicesAsThreads) {
-            genThread(s)
+            genThread(s, plugins)
           }
 
         case s: AadlSubprogram => // ignore
@@ -82,18 +81,18 @@ import org.sireum.hamr.ir._
     }
   }
 
-  def genThreadGroup(m: AadlThreadGroup): Unit = {
+  def genThreadGroup(m: AadlThreadGroup, plugins: MSZ[Plugin]): Unit = {
 
     for (c <- m.subComponents) {
       c match {
-        case s: AadlThread => genThread(s)
+        case s: AadlThread => genThread(s, plugins)
 
         case x => halt(s"Unexpected Thread Group subcomponent: ${x}")
       }
     }
   }
 
-  def genThread(m: AadlThreadOrDevice): Unit = {
+  def genThread(m: AadlThreadOrDevice, plugins: MSZ[Plugin]): Unit = {
     assert(!m.isInstanceOf[AadlDevice] || arsitOptions.devicesAsThreads)
 
     val names = nameProvider(m.component, basePackage)
@@ -157,8 +156,6 @@ import org.sireum.hamr.ir._
     } else {
       var blocks: ISZ[ST] = ISZ()
 
-      val beppp: MSZ[BehaviorEntryPointProviderPlugin] = BehaviorEntryPointProviders.getPlugins(plugins)
-
       var behaviorCodeContributions: ISZ[BehaviorEntryPointObjectContributions] = ISZ()
       for(entryPoint <- ISZ(EntryPoints.initialise, EntryPoints.compute, EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.recover)) {
         entryPoint match {
@@ -172,8 +169,8 @@ import org.sireum.hamr.ir._
               val defaultMethodBody: ST = BehaviorEntryPointElementProvider.genComputeMethodBody(Some(inEventPort), m, isFirst, arsitOptions.excludeImpl)
 
               behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
-                entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
-                basePackage, symbolTable, types, dirs, arsitOptions, reporter)
+                entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos,
+                basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
 
               isFirst = F
             }
@@ -186,8 +183,8 @@ import org.sireum.hamr.ir._
 
             behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(),
               m, names,
-              arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, beppp,
-              basePackage, symbolTable, types, dirs, arsitOptions, reporter)
+              arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos,
+              basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
         }
       }
 
@@ -199,7 +196,7 @@ import org.sireum.hamr.ir._
       }
 
       behaviorCodeContributions = behaviorCodeContributions :+
-        BehaviorEntryPointProviders.finalise(beppp, annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, arsitOptions, reporter)
+        BehaviorEntryPointProviders.finalise(annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
 
       val markers = BehaviorEntryPointProviders.getMarkers(behaviorCodeContributions)
       val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)

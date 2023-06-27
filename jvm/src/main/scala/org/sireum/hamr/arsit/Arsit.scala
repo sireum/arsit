@@ -45,9 +45,9 @@ object Arsit {
 
     val nixPhase =
       nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
-        StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins,
-          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes, plugins).generate()
-        ).generate())
+        StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
+          ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes).generate(plugins)
+        ).generate(plugins))
 
     var fileResources: ISZ[FileResource] = nixPhase.resources
     var addAuxResources: ISZ[Resource] = nixPhase.auxResources
@@ -60,12 +60,13 @@ object Arsit {
       // embed art
       fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art")
 
+      val outDir = s"${projectDirectories.dataDir}/${arsitOptions.packageName}"
       val datatypeResources: ISZ[FileResource] = for (r <- fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
-      val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, projectDirectories.slangOutputDir, projectDirectories.slangBinDir, datatypeResources)
+      val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, outDir, projectDirectories.slangBinDir, datatypeResources)
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergenCmd, T)
       addAuxResources = addAuxResources :+ sergenConfig
 
-      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, projectDirectories.dataDir, projectDirectories.slangBinDir)
+      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
       addAuxResources = addAuxResources :+ slangCheckConfig
     }

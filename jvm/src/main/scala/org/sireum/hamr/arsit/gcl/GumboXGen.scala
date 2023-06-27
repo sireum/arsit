@@ -1181,7 +1181,7 @@ object GumboXGen {
 
           @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
 
-          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Some($s) // TODO: call option's next once slang check supports traits" else s
+          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option_$s" else s
 
           val (rangenName, slangName): (String, String) = param.aadlType match {
             case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
@@ -1190,7 +1190,7 @@ object GumboXGen {
           }
 
           localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
-          symDecls = symDecls :+ st"val ${param.name} = ${wrapS(s"ranLib${param.originName}.next_${rangenName}()", param.isOptional)}"
+          symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(rangenName, param.isOptional)}()"
           symActuals = symActuals :+ st"${param.name}"
           symActualsPretty = symActualsPretty :+ st"|    ${param.originName} = $$o.${param.name}"
           dscFieldDeclarations = dscFieldDeclarations :+ st"val ${param.name}: ${wrapO(slangName, param.isOptional)}"

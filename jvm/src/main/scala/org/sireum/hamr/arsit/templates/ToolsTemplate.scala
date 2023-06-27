@@ -39,9 +39,9 @@ object ToolsTemplate {
     return r
   }
 
-  def slangCheck(resources: ISZ[containers.FileResource], basePackage: String, outputdir: String, slangBinDir: String): (ST, SireumToolsSlangcheckGeneratorOption) = {
+  def slangCheck(resources: ISZ[containers.FileResource], basePackage: String, outputDir: String, slangBinDir: String): (ST, SireumToolsSlangcheckGeneratorOption) = {
     val slangDir = Os.path(slangBinDir)
-    val outDir = PathUtil.convertWinPathSepToNix(slangDir.relativize(Os.path(outputdir)).value)
+    val outDir = PathUtil.convertWinPathSepToNix(slangDir.relativize(Os.path(outputDir)).value)
 
     val ret: ST =
       st"""$header
@@ -69,14 +69,16 @@ object ToolsTemplate {
     val o = SireumToolsSlangcheckGeneratorOption(
       help = "",
       args = for(r <- resources) yield r.dstPath,
-      outputDir = Some(outputdir),
+      license = None(),
+      packageName = ISZ(basePackage),
+      outputDir = Some(outputDir),
       testDir = None())
 
     return (ret, o)
 
   }
 
-  def genSerGen(basePackage: String, slangOutputDir: String, slangBinDir: String, resources: ISZ[FileResource]): (ST, SireumToolsSergenOption) = {
+  def genSerGen(basePackage: String, outputDir: String, slangBinDir: String, resources: ISZ[FileResource]): (ST, SireumToolsSergenOption) = {
     val ret: ST =
       st"""$header
           |
@@ -94,7 +96,7 @@ object ToolsTemplate {
       packageName = ISZ(basePackage),
       name = None(),
       license = None(),
-      outputDir = Some(s"${slangOutputDir}/src/main/data/${basePackage}"))
+      outputDir = Some(outputDir))
 
     return (ret, o)
   }

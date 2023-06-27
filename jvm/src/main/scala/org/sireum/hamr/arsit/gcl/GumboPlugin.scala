@@ -77,8 +77,10 @@ import org.sireum.message.Reporter
     if (!handledAnnexLibraries) {
       for (gclLib <- getAnnexLibraries(symbolTable)) {
         val (content, filename) = GumboGen.processGclLibrary(gclLib, symbolTable, aadlTypes, basePackageName)
-        resources = resources :+ ResourceUtil.createResource(
-          Util.pathAppend(projectDirectories.componentDir, filename), content, T)
+        // TODO: treat libraries as datatype files since datatype invariants may use the libraries functions
+        //       (i.e. the file containing the library will need to be given to slangcheck)
+        resources = resources :+ ResourceUtil.createResourceH(
+          Util.pathAppend(projectDirectories.componentDir, filename), content, T, T)
       }
       handledAnnexLibraries = T
     }
