@@ -8,7 +8,7 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, Re
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
-import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.types.{AadlTypes, ArrayType}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 import org.sireum.hamr.ir
@@ -66,9 +66,13 @@ object Arsit {
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergenCmd, T)
       addAuxResources = addAuxResources :+ sergenConfig
 
-      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
-      fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
-      addAuxResources = addAuxResources :+ slangCheckConfig
+      // TODO: slangcheck doesn't currently handle sequence types
+      val noArrayTypes: B = !ops.ISZOps(aadlTypes.typeMap.values).exists(t => t.isInstanceOf[ArrayType])
+      if (noArrayTypes) {
+        val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
+        fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
+        addAuxResources = addAuxResources :+ slangCheckConfig
+      }
     }
 
     fileResources = fileResources ++ createBuildArtifacts(
