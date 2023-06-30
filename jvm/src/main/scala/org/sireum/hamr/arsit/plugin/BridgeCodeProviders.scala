@@ -66,7 +66,7 @@ import org.sireum.message.Reporter
           |import ${nameProvider.basePackage}._
           |${addImports(imports ++ entryPointContributions.imports.map((m: String) => st"$m"))}
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |@datatype class ${nameProvider.bridge}(
           |  val id: Art.BridgeId,

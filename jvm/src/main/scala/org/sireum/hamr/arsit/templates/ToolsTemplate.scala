@@ -40,30 +40,16 @@ object ToolsTemplate {
   }
 
   def slangCheck(resources: ISZ[containers.FileResource], basePackage: String, outputDir: String, slangBinDir: String): (ST, SireumToolsSlangcheckGeneratorOption) = {
-    val slangDir = Os.path(slangBinDir)
-    val outDir = PathUtil.convertWinPathSepToNix(slangDir.relativize(Os.path(outputDir)).value)
-
     val ret: ST =
       st"""$header
           |
-          |// create SlangCheck generators for the types used in the project
+          |${StringTemplate.doNotEditComment()}
           |
-          |val slangCheckJar: Os.Path = {
-          |  Os.env("SLANG_CHECK_JAR") match {
-          |    case Some(p) =>
-          |      val cand = Os.path(p)
-          |      if (!cand.exists) {
-          |        halt(s"SLANG_CHECK_JAR is not a file: $$p")
-          |      } else {
-          |        cand
-          |      }
-          |    case _ => halt(s"SLANG_CHECK_JAR is not defined")
-          |  }
-          |}
+          |// create SlangCheck generators for the Slang types used in the project
           |
-          |${toISString(slangDir, resources)}
+          |${toISString(Os.path(slangBinDir), resources)}
           |
-          |proc"java -jar $$slangCheckJar tools slangcheck -p $basePackage -o $outDir $$toolargs".at(Os.slashDir).console.runCheck()
+          |proc"$$sireum tools slangcheck generator -p $basePackage -o $${Os.slashDir.up}/src/main/data/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
     val o = SireumToolsSlangcheckGeneratorOption(
@@ -81,6 +67,8 @@ object ToolsTemplate {
   def genSerGen(basePackage: String, outputDir: String, slangBinDir: String, resources: ISZ[FileResource]): (ST, SireumToolsSergenOption) = {
     val ret: ST =
       st"""$header
+          |
+          |${StringTemplate.doNotEditComment()}
           |
           |// create serializers/deserializers for the Slang types used in the project
           |

@@ -237,7 +237,7 @@ object TestTemplate {
           |import art.{Art, ArtNative, Empty}
           |import ${basePackage}._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |@msig trait ${names.testApisName} {
           |
           |  def BeforeEntrypoint(): Unit = {
@@ -280,7 +280,7 @@ object TestTemplate {
           |import org.scalatest.funsuite.AnyFunSuite
           |import org.sireum.$$internal.MutableMarker
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |abstract class ${className2Use} extends
           |  AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with
           |  ${extendsName2Use} {

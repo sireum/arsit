@@ -92,7 +92,7 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""// #Sireum
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |package ${packageName}
           |
@@ -224,7 +224,7 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""// #Sireum
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |package ${packageName}.${instanceName}
           |

@@ -28,7 +28,7 @@ object DSCTemplate {
           |import org.sireum._
           |${(_imports, "\n")}
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |// Test vector containers for Distributed SlangCheck testing
           |
@@ -176,7 +176,7 @@ object DSCTemplate {
           |import org.sireum.Random.Gen64
           |import org.sireum.Random.Impl.Xoshiro256
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |// Distribute SlangCheck test runners
           |

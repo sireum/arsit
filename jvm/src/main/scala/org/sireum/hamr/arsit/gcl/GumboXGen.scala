@@ -280,7 +280,7 @@ object GumboXGen {
               |import ${basePackageName}._
               |${StubTemplate.addImports(imports)}
               |
-              |${StringTemplate.doNotEditComment(None())}
+              |${StringTemplate.doNotEditComment()}
               |object ${ops.ISZOps(objectName).last} {
               |  ${(ret, "\n\n")}
               |}"""
@@ -943,7 +943,7 @@ object GumboXGen {
             |import ${componentNames.basePackage}._
             |${StubTemplate.addImports(imports.elements)}
             |
-            |${StringTemplate.doNotEditComment(None())}
+            |${StringTemplate.doNotEditComment()}
             |object ${simpleName} {
             |  ${(blocks, "\n\n")}
             |}
@@ -1283,7 +1283,7 @@ object GumboXGen {
             |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
             |${StubTemplate.addImports(imports)}
             |
-            |${StringTemplate.doNotEditComment(None())}
+            |${StringTemplate.doNotEditComment()}
             |@msig trait ${simpleTestHarnessName} extends ${componentNames.testApisName} {
             |  ${(testingBlocks, "\n\n")}
             |}
@@ -1329,7 +1329,7 @@ object GumboXGen {
             |import org.sireum.Random.Gen64
             |import org.sireum.Random.Impl.Xoshiro256
             |
-            |${StringTemplate.doNotEditComment(None())}
+            |${StringTemplate.doNotEditComment()}
             |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
             |
             |  // set failOnUnsatPreconditions to T if the unit tests should fail when either

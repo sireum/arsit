@@ -185,7 +185,7 @@ object ArtNixTemplate {
           |import art.Art.PortId._
           |import art.scheduling.nop.NopScheduler
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object ${objectName} extends App {
           |
@@ -263,7 +263,7 @@ object ArtNixTemplate {
           |import art._
           |import art.Art.PortId._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object IPCPorts {
           |  ${(ports, "\n")}
@@ -292,7 +292,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object ArtNix {
           |
@@ -426,7 +426,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object LegacyDemo extends App {
           |  def main(args: ISZ[String]): Z = {
@@ -461,7 +461,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |@ext object SharedMemory {
           |  def create(id: Z): Z = $$
@@ -482,7 +482,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object SharedMemory_Ext {
           |  def create(id: Z): Z = halt("stub")
@@ -505,7 +505,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |@ext object Platform {
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = $$
@@ -526,7 +526,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object Platform_Ext {
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = halt("stub")
@@ -577,7 +577,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object PlatformNix {
           |
@@ -626,7 +626,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art.Art
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |@ext object Process {
           |  def sleep(n: Z): Unit = $$
@@ -644,7 +644,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art.Art
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object Process_Ext {
           |  def sleep(millis: Z): Unit = halt("stub")
@@ -678,7 +678,7 @@ object ArtNixTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |val home = Os.slashDir
           |

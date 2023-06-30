@@ -55,7 +55,7 @@ object TypeTemplate {
           |import org.sireum.U32._
           |import org.sireum.U64._
           |
-          |${doNotEditComment(None())}
+          |${doNotEditComment()}
           |
           |object Base_Types {
           |
@@ -265,7 +265,7 @@ object TypeTemplate {
                   canOverwrite: B): ST = {
     val overwrite: ST = if (canOverwrite) {
       st"""
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |"""
     } else {
       st""

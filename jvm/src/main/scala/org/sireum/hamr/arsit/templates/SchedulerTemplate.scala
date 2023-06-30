@@ -23,7 +23,7 @@ object SchedulerTemplate {
           |import art.scheduling.static.Schedule.{DSchedule, DScheduleSpec, Slot}
           |import art.scheduling.static.StaticScheduler
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |@datatype class ProcessorTimingProperties(val clockPeriod: Option[Z],
           |                                          val framePeriod: Option[Z],
@@ -98,7 +98,7 @@ object SchedulerTemplate {
           |import art.Art
           |import art.scheduling.static.Schedule.DScheduleSpec
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |object ScheduleProvider {
           |
@@ -302,7 +302,7 @@ object SchedulerTemplate {
           |#include <sys/time.h>
           |#include <time.h>
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |/** Returns current system time in milliseconds
           |  * NOTE: this requires returning 64bit ints

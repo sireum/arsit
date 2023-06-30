@@ -166,7 +166,7 @@ object TranspilerTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir
           |val PATH_SEP: String = Os.pathSep
@@ -221,7 +221,7 @@ object TranspilerTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.doNotEditComment(None())}
+          |${StringTemplate.doNotEditComment()}
           |$preBlocksOpt
           |
           |val SCRIPT_HOME: Os.Path = Os.slashDir

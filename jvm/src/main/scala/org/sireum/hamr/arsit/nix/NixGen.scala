@@ -494,8 +494,8 @@ object NixGen {
       // api helper methods (cakeml ffi's link against the c helper apis)
       if (arsitOptions.excludeImpl || threadOrDevice.isCakeMLComponent()) {
 
-        var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
-        var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment(None())}")
+        var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment()}")
+        var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment()}")
 
         for (p <- ports) {
           val typeNames = p._portType.nameProvider
