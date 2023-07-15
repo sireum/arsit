@@ -9,7 +9,7 @@ import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.types.{AadlTypes, ArrayType}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
@@ -30,6 +30,12 @@ import org.sireum.message.Reporter
                          arsitOptions: ArsitOptions,
                          symbolTable: SymbolTable,
                          aadlTypes: AadlTypes): B = {
+    val noArrayTypes: B = !ops.ISZOps(aadlTypes.typeMap.values).exists(t => t.isInstanceOf[ArrayType])
+
+    if (!noArrayTypes) {
+      return F
+    }
+
     @pure def hasDatatypeInvariants: B = {
       for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
         return T
