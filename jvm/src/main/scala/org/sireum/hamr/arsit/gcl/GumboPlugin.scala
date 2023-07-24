@@ -115,7 +115,8 @@ import org.sireum.message.Reporter
             imports = imports ++ r.imports
 
           case EntryPoints.compute if annex.compute.nonEmpty =>
-            GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute2(annex.compute.get, optInEventPort, component) match {
+            GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(
+              annex.compute.get, optInEventPort, component) match {
               case (n: NonCaseContractBlock, mmarkers) =>
                 markers = markers ++ mmarkers
                 reads = reads ++ n.contractReads

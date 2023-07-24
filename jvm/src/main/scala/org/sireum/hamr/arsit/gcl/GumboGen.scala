@@ -352,7 +352,7 @@ object GumboGen {
             None()
           }
 
-        val generalRequires = addOutgoingEventPortRequires(m)
+        val generalRequires = addBuiltInOutgoingEventPortRequires(m)
         val optRequires: Option[ST] =
           if (generalRequires.nonEmpty) {
             markers = markers :+ InitializesRequiresMarker
@@ -502,30 +502,33 @@ object GumboGen {
     }
   }
 
-  def processCompute(m: AadlThreadOrDevice,
-                     symbolTable: SymbolTable,
-                     aadlTypes: AadlTypes,
-                     basePackageName: String): Option[GclEntryPointContainer] = {
-    val ais = getGclAnnexInfos(m.path, symbolTable)
+  def addBuiltInInEventPortAssumes(context: AadlThreadOrDevice, inEventPort: AadlPort): GclRequiresHolder = {
 
-    if (ais.nonEmpty) {
-      val sc = ais(0).annex
-      val gclSymbolTable = ais(0).gclSymbolTable
-
-      if (sc.compute.nonEmpty) {
-        val gg = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName)
-        val ret = gg.processCompute(sc.compute.get, m)
-        addImports(gg)
-        return Some(ret)
-      } else {
-        return None()
-      }
+    if (inEventPort.isInstanceOf[AadlEventDataPort]) {
+      return GclRequiresHolder(
+        id = "HAMR-Guarantee built-in",
+        descriptor = Some(
+          st"""//   The spec var corresponding to the handled event must be non-empty and
+              |//   the passed in payload must be the same as the spec var's value"""),
+        requires =
+          st"""api.${inEventPort.identifier}.nonEmpty &&
+              |api.${inEventPort.identifier}.get == value"""
+      )
+    } else if (inEventPort.isInstanceOf[AadlEventPort]) {
+      return GclRequiresHolder(
+        id = "HAMR-Guarantee built-in",
+        descriptor = Some(
+          st"""//   The spec var corresponding to the handled event must be non-empty"""),
+        requires =
+          st"""api.${inEventPort.identifier}.nonEmpty"""
+      )
     } else {
-      return None()
+      halt("Unexpected")
     }
+
   }
 
-  def addOutgoingEventPortRequires(context: AadlThreadOrDevice): ISZ[GclHolder] = {
+  def addBuiltInOutgoingEventPortRequires(context: AadlThreadOrDevice): ISZ[GclHolder] = {
     val outgoingEventPorts = context.getPorts().filter((p: AadlPort) => p.isInstanceOf[AadlFeatureEvent] && p.direction == Direction.Out)
 
     var ret: ISZ[GclHolder] = ISZ()
@@ -533,7 +536,7 @@ object GumboGen {
       val ensures: ISZ[ST] = outgoingEventPorts.map((m: AadlPort) => st"api.${m.identifier}.isEmpty")
       ret = ret :+ GclRequiresHolder(
         id = "AADL_Requirement",
-        descriptor = Some(st"//   All outgoing event data ports must be empty"),
+        descriptor = Some(st"//   All outgoing event ports must be empty"),
         requires = st"${(ensures, ",\n")}"
       )
     }
@@ -615,279 +618,7 @@ object GumboGen {
     return ret
   }
 
-  def processCompute(compute: GclCompute, context: AadlThreadOrDevice): GumboGen.GclEntryPointContainer = {
-    var markers: Set[Marker] = Set.empty
-
-    def genComputeMarkerCreator(id: String, typ: String): Marker = {
-      val m = Marker(
-        s"// BEGIN COMPUTE ${typ} ${id}",
-        s"// END COMPUTE ${typ} ${id}")
-
-      markers = markers + m
-      return m
-    }
-
-    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${e}"))
-
-    var generalHolder: ISZ[GclHolder] = ISZ()
-
-    generalHolder = generalHolder ++ addOutgoingEventPortRequires(context)
-
-    for (spec <- compute.specs) {
-      val rspec = gclSymbolTable.rexprs.get(spec.exp).get
-      imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
-
-      val id = spec.id
-      val descriptor = GumboGen.processDescriptor(spec.descriptor, "//   ")
-
-      val genHolder: GclGeneralHolder = spec match {
-        case g: GclAssume =>
-          val rassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rspec)
-          GclRequiresHolder(id, descriptor, st"$rassume")
-        case g: GclGuarantee => GclEnsuresHolder(id, descriptor, st"$rspec")
-      }
-
-      generalHolder = generalHolder :+ genHolder
-    }
-
-    if (compute.cases.nonEmpty) {
-      // fill in general case
-      for (generalCase <- compute.cases) {
-
-        val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
-        val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
-        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
-
-        val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
-        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
-
-        generalHolder = generalHolder :+ GclCaseHolder(
-          caseId = generalCase.id,
-          descriptor = GumboGen.processDescriptor(generalCase.descriptor, "//   "),
-          requires = st"${rrassume}",
-          ensures = st"${rguarantee}")
-      }
-    }
-
-    var generalFlows: ISZ[ST] = ISZ()
-
-    for (f <- compute.flows) {
-      val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(e).get
-      val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(e).get
-      generalFlows = generalFlows :+
-        st"""// infoflow ${f.id}
-            |${GumboGen.processDescriptor(f.descriptor, "//   ")}
-            |Flow("${f.id}",
-            |  From(${(froms, ", ")}),
-            |  To(${(tos, ", ")})
-            |)"""
-    }
-
-    val generalRequires: ISZ[GclRequiresHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclRequiresHolder]).map((m: GclHolder) => m.asInstanceOf[GclRequiresHolder])
-    val generalEnsures: ISZ[GclEnsuresHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclEnsuresHolder]).map((m: GclHolder) => m.asInstanceOf[GclEnsuresHolder])
-    val generalCases: ISZ[GclCaseHolder] = generalHolder.filter((p: GclHolder) => p.isInstanceOf[GclCaseHolder]).map((m: GclHolder) => m.asInstanceOf[GclCaseHolder])
-
-    if (context.isSporadic()) {
-      var handlerMap: HashSMap[AadlPort, GclComputeEventHolder] = HashSMap.empty
-      val inEventPorts = context.getPorts().filter((p: AadlPort) => p.direction == Direction.In && p.isInstanceOf[AadlFeatureEvent])
-      for (eventPort <- inEventPorts) {
-
-        var handlerRequires = generalRequires
-
-        if (eventPort.isInstanceOf[AadlEventDataPort]) {
-          handlerRequires = handlerRequires :+ GclRequiresHolder(
-            id = "HAMR-Guarantee",
-            descriptor = Some(
-              st"""//   passed in payload must be the same as the spec var's value
-                  |//   NOTE: this assumes the user never changes the param name"""),
-            requires = st"api.${eventPort.identifier} == value"
-          )
-        }
-
-
-        var flows: Option[ST] = None()
-        if (generalFlows.nonEmpty) {
-          val marker = genComputeMarkerCreator(eventPort.identifier, "FLOW")
-          flows = Some(
-            st"""InfoFlows(
-                |  ${marker.beginMarker}
-                |  ${(generalFlows, ",\n")}
-                |  ${marker.endMarker}
-                |)""")
-        }
-
-        fetchHandler(eventPort, compute.handlers) match {
-          case Some(handler) => {
-            val modifies: Option[ST] = if (generalModifies.nonEmpty || handler.modifies.nonEmpty) {
-              val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
-              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${m}")
-              Some(
-                st"""Modifies(
-                    |  ${modMarker.beginMarker}
-                    |  ${(handlerModifies.elements, ",\n")}
-                    |  ${modMarker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            val requires: Option[ST] = if (handlerRequires.nonEmpty) {
-              val marker = genComputeMarkerCreator(eventPort.identifier, "REQUIRES")
-              val elems = handlerRequires.map((m: GclRequiresHolder) => m.toSTMin)
-              Some(
-                st"""Requires(
-                    |  ${marker.beginMarker}
-                    |  ${(elems, ",\n")}
-                    |  ${marker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            val ensures: Option[ST] = if (generalEnsures.nonEmpty || handler.guarantees.nonEmpty || generalCases.nonEmpty) {
-              val generalElems = generalEnsures.map((m: GclEnsuresHolder) => m.toSTMin)
-              val _cases = generalCases.map((m: GclCaseHolder) => m.toSTMin)
-
-              val handlerEnsures = generalElems ++ _cases ++
-                handler.guarantees.map((g: GclGuarantee) => {
-                  val rexp = gclSymbolTable.rexprs.get(g.exp).get
-                  imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rexp)
-                  st"""// guarantees ${g.id}
-                      |${GumboGen.processDescriptor(g.descriptor, "//   ")}
-                      |${rexp}"""
-                })
-              val marker = genComputeMarkerCreator(eventPort.identifier, "ENSURES")
-              Some(
-                st"""Ensures(
-                    |  ${marker.beginMarker}
-                    |  ${(handlerEnsures, ",\n")}
-                    |  ${marker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures, flows)
-          }
-          case _ => {
-            // use the general ones
-
-            val modifies: Option[ST] = if (generalModifies.nonEmpty) {
-              val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
-              Some(
-                st"""Modifies(
-                    |  ${modMarker.beginMarker}
-                    |  ${(generalModifies.elements, ",\n")}
-                    |  ${modMarker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            val requires: Option[ST] = if (handlerRequires.nonEmpty) {
-              val marker = genComputeMarkerCreator(eventPort.identifier, "REQUIRES")
-              val elems = handlerRequires.map((m: GclRequiresHolder) => m.toSTMin)
-              Some(
-                st"""Requires(
-                    |  ${marker.beginMarker}
-                    |  ${(elems, ",\n")}
-                    |  ${marker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            val ensures: Option[ST] = if (generalEnsures.nonEmpty || generalCases.nonEmpty) {
-              val generalElems = generalEnsures.map((m: GclEnsuresHolder) => m.toSTMin)
-              val _cases = generalCases.map((m: GclCaseHolder) => m.toSTMin)
-
-              val handlerEnsures = generalElems ++ _cases
-
-              val marker = genComputeMarkerCreator(eventPort.identifier, "ENSURES")
-              Some(
-                st"""Ensures(
-                    |  ${marker.beginMarker}
-                    |  ${(handlerEnsures, ",\n")}
-                    |  ${marker.endMarker}
-                    |)""")
-            } else {
-              None()
-            }
-
-            handlerMap = handlerMap + eventPort ~> GclComputeEventHolder(modifies, requires, ensures, flows)
-          }
-        } // end handler match
-      } // end for
-
-      return GclEntryPointSporadicCompute(markers.elements, handlerMap)
-    } else {
-      // periodic component so use the general ones
-
-      if (compute.handlers.nonEmpty) {
-        halt(s"${context.identifier} is periodic but has handlers -- resolver phase should have rejected this")
-      }
-
-      val id = "timeTriggered"
-
-      val modifies: Option[ST] = if (generalModifies.nonEmpty) {
-        val modMarker = genComputeMarkerCreator(id, "MODIFIES")
-
-        Some(
-          st"""Modifies(
-              |  ${modMarker.beginMarker}
-              |  ${(generalModifies.elements, ",\n")}
-              |  ${modMarker.endMarker}
-              |)""")
-      } else {
-        None()
-      }
-
-      val requires: Option[ST] = if (generalRequires.nonEmpty) {
-        val marker = genComputeMarkerCreator(id, "REQUIRES")
-        val elems = generalRequires.map((m: GclRequiresHolder) => m.toSTMin)
-        Some(
-          st"""Requires(
-              |  ${marker.beginMarker}
-              |  ${(elems, ",\n")}
-              |  ${marker.endMarker}
-              |)""")
-      } else {
-        None()
-      }
-
-      val ensures: Option[ST] = if (generalEnsures.nonEmpty || generalCases.nonEmpty) {
-        val generalElems = generalEnsures.map((m: GclEnsuresHolder) => m.toSTMin)
-        val _cases = generalCases.map((m: GclCaseHolder) => m.toSTMin)
-
-        val handlerEnsures = generalElems ++ _cases
-
-        val marker = genComputeMarkerCreator(id, "ENSURES")
-        Some(
-          st"""Ensures(
-              |  ${marker.beginMarker}
-              |  ${(handlerEnsures, ",\n")}
-              |  ${marker.endMarker}
-              |)""")
-      } else {
-        None()
-      }
-
-      var flows: Option[ST] = None()
-      if (generalFlows.nonEmpty) {
-        val marker = genComputeMarkerCreator(context.identifier, "FLOW")
-        flows = Some(
-          st"""InfoFlows(
-              |  ${marker.beginMarker}
-              |  ${(generalFlows, ",\n")}
-              |  ${marker.endMarker}
-              |)""")
-      }
-
-      return GclEntryPointPeriodicCompute(markers.elements, modifies, requires, ensures, flows)
-    } // end periodic branch
-  }
-
-  def processCompute2(compute: GclCompute, optInEvent: Option[AadlPort], context: AadlThreadOrDevice): (ContractBlock, ISZ[Marker]) = {
+  def processCompute(compute: GclCompute, optInEvent: Option[AadlPort], context: AadlThreadOrDevice): (ContractBlock, ISZ[Marker]) = {
     resetImports()
 
     var markers: Set[Marker] = Set.empty
@@ -910,7 +641,12 @@ object GumboGen {
 
     var generalHolder: ISZ[GclHolder] = ISZ()
 
-    generalHolder = generalHolder ++ addOutgoingEventPortRequires(context)
+    if (context.isSporadic() && optInEvent.nonEmpty) {
+      generalHolder = generalHolder :+ addBuiltInInEventPortAssumes(context, optInEvent.get)
+    }
+
+    generalHolder = generalHolder ++ addBuiltInOutgoingEventPortRequires(context)
+
 
     for (spec <- compute.specs) {
       val rspec = gclSymbolTable.rexprs.get(spec.exp).get
@@ -972,16 +708,6 @@ object GumboGen {
         val eventPort = optInEvent.get
 
         var handlerRequires = generalRequires
-
-        if (eventPort.isInstanceOf[AadlEventDataPort]) {
-          handlerRequires = handlerRequires :+ GclRequiresHolder(
-            id = "HAMR-Guarantee",
-            descriptor = Some(
-              st"""//   passed in payload must be the same as the spec var's value
-                  |//   NOTE: this assumes the user never changes the param name"""),
-            requires = st"api.${eventPort.identifier} == value"
-          )
-        }
 
         if (generalFlows.nonEmpty) {
           val marker = genComputeMarkerCreator(eventPort.identifier, "FLOW")

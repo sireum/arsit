@@ -180,8 +180,8 @@ object ApiTemplate {
     val portType = st"${if (isEvent) "event " else ""}${if (isData) "data " else ""}"
 
     val specType: String =
-      if (!isIncoming && !p.aadlFeature.isInstanceOf[AadlDataPort]) s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
-      else aadlType.nameProvider.qualifiedReferencedTypeName
+      if (p.aadlFeature.isInstanceOf[AadlDataPort]) aadlType.nameProvider.qualifiedReferencedTypeName
+      else  s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
 
     var dtcontributions = ISZ(
       st"""// Logika spec var representing port state for ${portDir} ${portType}port
@@ -273,8 +273,8 @@ object ApiTemplate {
     val (optDatatypeContributions, optRequires, optEnsures) = genContracts(p, gclApiContributions)
 
     val inValue: String =
-      if(p.aadlFeature.isInstanceOf[AadlEventPort]) s"Some(Empty())"
-      else s"Some(${p.name})"
+      if(p.aadlFeature.isInstanceOf[AadlDataPort]) s"Some(${p.name})"
+      else p.name
 
     val ret: ST =
       st"""$optDatatypeContributions
