@@ -405,7 +405,7 @@ object GumboXGen {
           val method =
             st"""/** Initialize Entrypoint Contract
                 |  *
-                |  * guarantees ${spec.id}
+                |  * guarantee ${spec.id}
                 |  ${descriptor}
                 |  ${(paramsToComment(sortedParams), "\n")}
                 |  */
@@ -585,7 +585,7 @@ object GumboXGen {
                 val method =
                   st"""/** Compute Entrypoint Contract
                       |  *
-                      |  * guarantees ${g.id}
+                      |  * guarantee ${g.id}
                       |  ${descriptor}
                       |  ${(paramsToComment(sortedParams), "\n")}
                       |  */
@@ -663,7 +663,7 @@ object GumboXGen {
 
             val descriptor = GumboXGen.processDescriptor(generalCase.descriptor, "*   ")
             val method =
-              st"""/** guarantees ${generalCase.id}
+              st"""/** guarantee ${generalCase.id}
                   |  ${descriptor}
                   |  ${(paramsToComment(sortedParams), "\n")}
                   |  */
@@ -1063,11 +1063,22 @@ object GumboXGen {
             var putters: ISZ[ST] = ISZ()
             for (inPort <- sortParam(inPortParams)) {
               val cport = symbolTable.featureMap.get(component.path :+ inPort.originName).get.asInstanceOf[AadlPort]
-              val optArg: Option[String] =
-                if (GumboXGenUtil.isEventPort(cport)) None()
-                else Some(inPort.name)
-              putters = putters :+ st"put_${inPort.originName}(${optArg})"
+
+              if (cport.isInstanceOf[AadlDataPort]) {
+                putters = putters :+ st"put_${inPort.originName}(${inPort.name})"
+              } else if (cport.isInstanceOf[AadlEventPort]) {
+                putters = putters :+
+                  st"""if (${inPort.name}.nonEmpty) {
+                      |  put_${inPort.originName}()
+                      |}"""
+              } else {
+                putters = putters :+
+                  st"""if (${inPort.name}.nonEmpty) {
+                      |  put_${inPort.originName}(${inPort.name}.get)
+                      |}"""
+              }
             }
+
             st"""// [PutInPorts]: put values on the input ports
                 |${(putters, "\n")}"""
           } else {
@@ -1164,7 +1175,7 @@ object GumboXGen {
       // initialize entrypoints shouldn't access in ports or state variables so
       // running DSC would be pointless
       if (isInitialize) {
-        scalaTests = scalaTests :+ DSCTemplate.genInitializeScalaTests(testCBMethodName)
+        scalaTests = scalaTests :+ DSCTemplate.genInitializeScalaTests(testCBMethodName, testCBMethodName)
       } else {
         var localRandLibs: ISZ[ST] = ISZ(st"val seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)")
 
