@@ -465,23 +465,7 @@ object GumboGen {
     }
   }
 
-  def processSubclauseFunctions(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): Option[(ST, Marker)] = {
-    val ais = getGclAnnexInfos(m.path, symbolTable)
-    if (ais.nonEmpty) {
-      val sc = ais(0).annex
-      val gclSymTable = ais(0).gclSymbolTable
-
-      if (sc.methods.nonEmpty) {
-        return Some(processSubclauseFunctionsH(sc.methods, gclSymTable, symbolTable, aadlTypes, basePackageName))
-      } else {
-        return None()
-      }
-    } else {
-      return None()
-    }
-  }
-
-  def processSubclauseFunctionsH(gclMethods: ISZ[GclMethod], gclSymbolTable: GclSymbolTable, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): (ST, Marker) = {
+  def processSubclauseFunctions(gclMethods: ISZ[GclMethod], gclSymbolTable: GclSymbolTable, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackageName: String): (ST, Marker) = {
     return GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processSubclauseFunctions(gclMethods)
   }
 
@@ -1002,25 +986,34 @@ object GumboGen {
 
           imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(spec.exp)
 
-          // will be placed in api so don't use resolved expr
-          objectContributions = objectContributions :+
-            st"""@strictpure def $portInvariantMethodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
-                |  ${getRExp(spec.exp)}"""
-
+          var assumeOrGuar: String = "assume"
           spec match {
             case a: GclAssume =>
               // assume integration clauses can only be applied to incoming ports.  The api therefore
               // ensures that the getter's return value will satisfy the assume clause.
-              ensuresContributions = ensuresContributions :+ st"${portInvariantMethodName}(${port.identifier})"
+              ensuresContributions = ensuresContributions :+ (
+                if (isEvent)
+                  st"${port.identifier}.isEmpty || ${portInvariantMethodName}(${port.identifier}.get)"
+                else
+                  st"${portInvariantMethodName}(${port.identifier})")
 
             case g: GclGuarantee =>
               // guarantee integration clauses can only be applied to outgoing ports.  They become
               // requirements on the param value passed to the api -- the param's name will always be 'value'
               requiresContributions = requiresContributions :+ st"${portInvariantMethodName}(value)"
+
+              assumeOrGuar = "guarantee"
           }
 
+          // will be placed in api so don't use resolved expr
+          objectContributions = objectContributions :+
+            st"""// $assumeOrGuar ${spec.id}
+                |${GumboGen.processDescriptor(spec.descriptor, "//   ")}
+                |@strictpure def $portInvariantMethodName(${port.identifier}: ${dataTypeNames.qualifiedReferencedTypeName}): B =
+                |  ${getRExp(spec.exp)}"""
+
           val body: ST =
-            if (!isIncoming && isEvent) st"${port.identifier} == None[${dataTypeNames.qualifiedReferencedTypeName}]() || ${portInvariantMethodName}(${port.identifier}.get) // NOTE: isEmpty symbol undefined in CVC4"
+            if (isEvent) st"${port.identifier}.isEmpty || ${portInvariantMethodName}(${port.identifier}.get)"
             else st"${portInvariantMethodName}(${port.identifier})"
 
           datatypeContributions = datatypeContributions :+

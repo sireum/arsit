@@ -98,7 +98,7 @@ import org.sireum.message.Reporter
         }
 
         if (annex.methods.nonEmpty && !handledSubClauseFunctions.contains(component)) {
-          val (content, marker) = GumboGen.processSubclauseFunctionsH(annex.methods, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+          val (content, marker) = GumboGen.processSubclauseFunctions(annex.methods, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
           preMethodBlocks = preMethodBlocks :+ content
           markers = markers :+ marker
           handledSubClauseFunctions = handledSubClauseFunctions + component
