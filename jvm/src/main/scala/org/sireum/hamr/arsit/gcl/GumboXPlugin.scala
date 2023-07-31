@@ -30,11 +30,6 @@ import org.sireum.message.Reporter
                          arsitOptions: ArsitOptions,
                          symbolTable: SymbolTable,
                          aadlTypes: AadlTypes): B = {
-    val noArrayTypes: B = !ops.ISZOps(aadlTypes.typeMap.values).exists(t => t.isInstanceOf[ArrayType])
-
-    if (!noArrayTypes) {
-      return F
-    }
 
     @pure def hasDatatypeInvariants: B = {
       for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
