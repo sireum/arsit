@@ -57,22 +57,34 @@ object Arsit {
     val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationProvider.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins).toZ
 
     if (!arsitOptions.noEmbedArt) { // sergen requires art.DataContent so only generate the script when art is being embedded
-      // embed art
-      fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art")
 
       val outDir = s"${projectDirectories.dataDir}/${arsitOptions.packageName}"
-      val datatypeResources: ISZ[FileResource] = for (r <- fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)) yield r.asInstanceOf[IResource]
+
+      // embed art
+      fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art") :+
+        ResourceUtil.createResourceH(
+          path = s"$outDir/Aux_Types.scala",
+          content = st"""// #Sireum
+                        |
+                        |package ${arsitOptions.packageName}
+                        |
+                        |import org.sireum._
+                        |
+                        |${StringTemplate.safeToEditComment()}
+                        |
+                        |// Any datatype definitions placed in this file will be processed by sergen and SlangCheck
+                        |""",
+          overwrite = F, isDatatype = T)
+
+      val datatypeResources: ISZ[FileResource] = fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)
+
       val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, outDir, projectDirectories.slangBinDir, datatypeResources)
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergenCmd, T)
       addAuxResources = addAuxResources :+ sergenConfig
 
-      // TODO: slangcheck doesn't currently handle sequence types
-      val noArrayTypes: B = !ops.ISZOps(aadlTypes.typeMap.values).exists(t => t.isInstanceOf[ArrayType])
-      if (noArrayTypes) {
-        val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
-        fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
-        addAuxResources = addAuxResources :+ slangCheckConfig
-      }
+      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
+      fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
+      addAuxResources = addAuxResources :+ slangCheckConfig
     }
 
     fileResources = fileResources ++ createBuildArtifacts(
