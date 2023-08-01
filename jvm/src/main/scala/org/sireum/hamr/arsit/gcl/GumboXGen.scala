@@ -15,6 +15,7 @@ import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
+import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
 import org.sireum.message.Reporter
 
@@ -1187,17 +1188,23 @@ object GumboXGen {
 
         val combinedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
         for (param <- combinedParams) {
-          val tn = ops.ISZOps(param.aadlType.nameProvider.qualifiedReferencedTypeNameI)
-          val u = st"${(tn.dropRight(1), "_")}".render
 
           @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
 
-          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option_$s" else s
+          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option$s" else s
 
           val (rangenName, slangName): (String, String) = param.aadlType match {
-            case i: EnumType => (s"${u}${i.nameProvider.typeName}Type", i.nameProvider.qualifiedReferencedTypeName)
             case i: BaseType => (i.slangType.name, i.slangType.name)
-            case i => (s"${u}${i.nameProvider.typeName}", i.nameProvider.qualifiedReferencedTypeName)
+            case i: EnumType =>
+              val qname: ISZ[String] = i.nameProvider.basePackageName +: (i.nameProvider.qualifiedTypeNameI :+ "Type")
+              val r = Resolver.typeName(ISZ(i.nameProvider.basePackageName), qname).render
+              (r, i.nameProvider.qualifiedReferencedTypeName)
+            case i =>
+              val qname: ISZ[String] =
+                if (i == TypeUtil.EmptyType) i.nameProvider.qualifiedReferencedTypeNameI
+                else i.nameProvider.basePackageName +: i.nameProvider.qualifiedReferencedTypeNameI
+              val r = Resolver.typeName(ISZ(i.nameProvider.basePackageName), qname).render
+              (r, i.nameProvider.qualifiedReferencedTypeName)
           }
 
           localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"

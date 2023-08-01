@@ -258,7 +258,9 @@ object GumboGen {
 
     val filename: ISZ[String] = ISZ(basePackage) ++ annex.containingPackage.name :+ s"${GUMBO__Library}.scala"
 
-    val _imports = st"${(for(i <- gg.imports) yield s"import $i", "\n")}"
+    val _imports: Option[ST] =
+      if (gg.imports.isEmpty) None()
+      else Some(st"${(for(i <- gg.imports) yield s"import $i", "\n")}")
 
     return (
       st"""// #Sireum
