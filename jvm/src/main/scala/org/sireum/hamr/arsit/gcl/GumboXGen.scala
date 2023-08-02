@@ -1114,12 +1114,14 @@ object GumboXGen {
 
       var postOracleParams: Set[GGParam] = Set.empty
       var step5PostValues: ISZ[ST] = ISZ()
+      var step5PostValuePrinters: ISZ[ST] = ISZ()
 
       if (postParams.nonEmpty) {
         for (outPortParam <- GumboXGenUtil.filterOutPorts(postParams)) {
           postOracleParams = postOracleParams + outPortParam
           val optGet: String = if (!outPortParam.isOptional) ".get" else ""
           step5PostValues = step5PostValues :+ st"val ${outPortParam.getParamDef} = get_${outPortParam.originName}()${optGet}"
+          step5PostValuePrinters = step5PostValuePrinters :+ st"|  ${outPortParam.name} = $${${outPortParam.name}.string}"
         }
       }
 
@@ -1131,14 +1133,22 @@ object GumboXGen {
             val postSVGG = GGParam(stateVar.name, stateVar.name, typ, isOptional, SymbolKind.StateVar, None(), None())
             postOracleParams = postOracleParams + postSVGG
             step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
+            step5PostValuePrinters = step5PostValuePrinters :+ st"|  ${postSVGG.name} = $${${postSVGG.name}.string}"
           }
         case _ =>
       }
 
+      val tq: String = s"\"\"\""
+
       val step5: ST =
         if (step5PostValues.nonEmpty)
           st"""// [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variable
-              |${(step5PostValues, "\n")}"""
+              |${(step5PostValues, "\n")}
+              |
+              |if (verbose) {
+              |  println(st${tq}Post State Values:
+              |              ${(step5PostValuePrinters, "\n")}${tq}.render)
+              |}"""
         else
           st"""// [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variable
               |//   ${component.identifier} does not have outgoing ports or state variables"""
@@ -1210,7 +1220,7 @@ object GumboXGen {
           localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
           symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(rangenName, param.isOptional)}()"
           symActuals = symActuals :+ st"${param.name}"
-          symActualsPretty = symActualsPretty :+ st"|    ${param.originName} = $$o.${param.name}"
+          symActualsPretty = symActualsPretty :+ st"|  ${param.name} = $${o.${param.name}.string}"
           dscFieldDeclarations = dscFieldDeclarations :+ st"val ${param.name}: ${wrapO(slangName, param.isOptional)}"
           symContainerExtractors = symContainerExtractors :+ st"o.${param.name}"
         }
@@ -1303,6 +1313,8 @@ object GumboXGen {
             |
             |${StringTemplate.doNotEditComment()}
             |@msig trait ${simpleTestHarnessName} extends ${componentNames.testApisName} {
+            |  def verbose: B
+            |
             |  ${(testingBlocks, "\n\n")}
             |}
             |"""

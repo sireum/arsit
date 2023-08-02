@@ -70,7 +70,7 @@ object DSCTemplate {
 
     val prettyPrint: ST =
       if (testVectorPrettyPrints.nonEmpty)
-        st"""println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with
+        st"""println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with:
             |            ${(testVectorPrettyPrints, "\n")}$tq.render)"""
       else
         st"""println(st$tq$${if (j > 0) s"Retry $$j: " else ""}$tq.render)"""
@@ -199,6 +199,8 @@ object DSCTemplate {
       st"""@record class $runnerClassName
           |  extends Random.Gen.TestRunner[$dscContainerType]
           |  with $slangTestHarnessName {
+          |
+          |  val verbose: B = F
           |
           |  $nextMethod
           |
