@@ -999,6 +999,8 @@ object GumboXGen {
       assert (isInitialize -->: stateVars.isEmpty)
 
       val testCBMethodName = s"${testMethodName}CB$suffix"
+      val testCBMethodNameJson = s"${testMethodName}CB${suffix}J"
+      val testCBMethodNameVector = s"${testMethodName}CB${suffix}V"
       val dscRunnerSimpleName = s"${_dscRunnerSimpleName}$suffix"
       val dscContainerType = s"${_dscContainerType}$suffix"
 
@@ -1108,8 +1110,17 @@ object GumboXGen {
         step3 = Some(s3)
       }
 
+      val tq: String = "\"\"\""
+
+      val stateAndInPorts = sortParam(inPortParams ++ preStateParams.elements)
+
       val step4: ST =
-        st"""// [InvokeEntryPoint]: invoke the entry point test method
+        st"""if (verbose) {
+            |  println(st${tq}Pre State Values:
+            |              ${(for(p <- stateAndInPorts) yield s"|  ${p.name} = $${${p.name}.string}", "\n")}${tq}.render)
+            |}
+            |
+            |// [InvokeEntryPoint]: invoke the entry point test method
             |$testMethodName()"""
 
       var postOracleParams: Set[GGParam] = Set.empty
@@ -1138,8 +1149,6 @@ object GumboXGen {
         case _ =>
       }
 
-      val tq: String = s"\"\"\""
-
       val step5: ST =
         if (step5PostValues.nonEmpty)
           st"""// [RetrieveOutState]: retrieve values of the output ports via get operations and GUMBO declared local state variable
@@ -1158,27 +1167,48 @@ object GumboXGen {
           val sortedCepPostParams = sortParam(postParams)
           st"""// [CheckPost]: invoke the oracle function
               |val postResult = ${postMethodName.get}(${(for (p <- sortedCepPostParams) yield p.name, ", ")})
-              |if (!postResult) {
-              |  return GumboXResult.Post_Condition_Fail
-              |}"""
+              |val result: GumboXResult.Type =
+              |  if (!postResult) GumboXResult.Post_Condition_Fail
+              |  else GumboXResult.Post_Condition_Pass"""
         } else {
           st"""// [CheckPost]: invoke the oracle function
-              |//   ${component.identifier} does not contain guarantee clauses for its compute entrypoint"""
+              |//   ${component.identifier} does not contain guarantee clauses for its compute entrypoint
+              |val result: GumboXResult.Type = GumboXResult.Post_Condition_Pass"""
         }
       }
 
+      val combinedParams = sortParam(inPortParams ++ (
+        if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
+
       val steps: ISZ[ST] = ISZ[Option[ST]](step1, step2, step3, Some(step4), Some(step5), Some(step6)).filter(f => f.nonEmpty).map(m => m.get)
+      val symContainerExtractors: ISZ[ST] = for (param <- combinedParams) yield st"o.${param.name}"
+      val vectorExtractor: Option[ST] =
+        if (symContainerExtractors.nonEmpty)
+          Some(st"""def $testCBMethodNameJson(json: String): GumboXResult.Type = {
+                   |  ${DSCTemplate.jsonMethod(F, componentNames, dscContainerType)}(json) match {
+                   |    case Either.Left(o) => return $testCBMethodNameVector(o)
+                   |    case Either.Right(msg) => halt(msg.string)
+                   |  }
+                   |}
+                   |
+                   |def $testCBMethodNameVector(o: $dscContainerType): GumboXResult.Type = {
+                   |  return $testCBMethodName(${(symContainerExtractors, ",")})
+                   |}
+                   |""")
+        else None()
 
       val sortedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
       val testComputeCB =
-        st"""/** Contract-based test harness for the $entrypoint entry point
+        st"""$vectorExtractor
+            |/** Contract-based test harness for the $entrypoint entry point
             |  ${(paramsToComment(sortedParams), "\n")}
             |  */
             |def $testCBMethodName(
             |    ${(for (sortedParam <- sortedParams) yield sortedParam.getParamDef, ",\n")}): GumboXResult.Type = {
+            |
             |  ${(steps, "\n\n")}
             |
-            |  return GumboXResult.Post_Condition_Pass
+            |  return result
             |}"""
 
       testingBlocks = testingBlocks :+ testComputeCB
@@ -1194,14 +1224,8 @@ object GumboXGen {
         var symActuals: ISZ[ST] = ISZ()
         var symActualsPretty: ISZ[ST] = ISZ()
         var dscFieldDeclarations: ISZ[ST] = ISZ()
-        var symContainerExtractors: ISZ[ST] = ISZ()
 
-        val combinedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
         for (param <- combinedParams) {
-
-          @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
-
-          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option$s" else s
 
           val (rangenName, slangName): (String, String) = param.aadlType match {
             case i: BaseType => (i.slangType.name, i.slangType.name)
@@ -1217,34 +1241,48 @@ object GumboXGen {
               (r, i.nameProvider.qualifiedReferencedTypeName)
           }
 
+          @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
+
+          @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option$s" else s
+
           localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
           symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(rangenName, param.isOptional)}()"
           symActuals = symActuals :+ st"${param.name}"
           symActualsPretty = symActualsPretty :+ st"|  ${param.name} = $${o.${param.name}.string}"
           dscFieldDeclarations = dscFieldDeclarations :+ st"val ${param.name}: ${wrapO(slangName, param.isOptional)}"
-          symContainerExtractors = symContainerExtractors :+ st"o.${param.name}"
         }
 
         dscAllRandLibs = dscAllRandLibs ++ (for (s <- localRandLibs) yield s.render)
 
         dscTestVectorContainers = dscTestVectorContainers + DSCTemplate.genTestVectorContainer(dscContainerType, dscFieldDeclarations).render
 
-        val testVectorMethodName = s"getTestVector$suffix"
+        val testVectorMethodName = s"next$suffix"
 
         dscGetTestVectors = dscGetTestVectors :+ DSCTemplate.getTestVectorGen(
           testVectorMethodName, dscContainerType, symDecls, symActuals)
 
+        val methodCall: String =
+          if (symContainerExtractors.nonEmpty) s"${testCBMethodNameVector}(o)"
+          else s"${testCBMethodName}()"
+
         scalaTests = scalaTests :+ DSCTemplate.genScalaTests(
           testCBMethodName,
-          testVectorMethodName, symActualsPretty, st"${testCBMethodName}(${(symContainerExtractors, ", ")})")
+          testCBMethodNameVector,
+          testCBMethodNameJson,
 
-        val computeCBMethodCall = st"${testCBMethodName}(${(symContainerExtractors, ", ")})"
+          componentNames,
+          dscContainerType,
+
+          testVectorMethodName,
+          symActualsPretty,
+          methodCall)
+
         val next = DSCTemplate.nextMethod(localRandLibs, dscContainerType, symDecls, combinedParams)
         dscTestRunners = dscTestRunners :+ DSCTemplate.dscTestRunner(
           componentNames, dscRunnerSimpleName, dscContainerType,
-          simpleTestHarnessName, next, computeCBMethodCall)
+          simpleTestHarnessName, next, methodCall)
       }
-    }
+    } // end process method
 
     val dscContainerType = s"${componentNames.componentSingletonType}_${DSCTemplate.dscContainerSuffix}"
     val dscTestRunnerSimpleName = ops.ISZOps(GumboXGen.createDSCTestRunnerClassName(componentNames)).last
@@ -1365,9 +1403,9 @@ object GumboXGen {
             |  // set failOnUnsatPreconditions to T if the unit tests should fail when either
             |  // SlangCheck is never able to satisfy a datatype's filter or the generated
             |  // test vectors are never able to satisfy an entry point's assume pre-condition
-            |  val failOnUnsatPreconditions: B = F
+            |  var failOnUnsatPreconditions: B = F
             |
-            |  val verbose: B = F
+            |  var verbose: B = F
             |
             |  ${(dscAllRandLibs.elements, "\n")}
             |

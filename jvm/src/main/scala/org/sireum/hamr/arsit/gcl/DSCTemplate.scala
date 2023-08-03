@@ -12,7 +12,8 @@ object DSCTemplate {
 
   val recordUnsatPreObjectName: String = "DSC_RecordUnsatPre"
 
-  val tq: String = s"\"\"\""
+  val tq: String = "\"\"\""
+  val tqq: String = "\"\\\"\\\"\\\"\""
 
   def genTestVectorContainerClass(packageName: String,
                                   imports: ISZ[String],
@@ -64,20 +65,33 @@ object DSCTemplate {
 
 
   def genScalaTests(unitTestPrefix: String,
+                    testCBMethodNameVector: String,
+                    testCBMethodNameJson: String,
+
+                    nameProvider: NameProvider,
+                    dscContainerType: String,
+
                     testVectorMethodName: String,
                     testVectorPrettyPrints: ISZ[ST],
-                    testComputeMethodCall: ST): ST = {
+                    testComputeMethodCall: String): ST = {
 
-    val prettyPrint: ST =
+
+    val replay: Option[ST] =
       if (testVectorPrettyPrints.nonEmpty)
-        st"""println(st$tq$${if (j > 0) s"Retry $$j: " else ""}Testing with:
-            |            ${(testVectorPrettyPrints, "\n")}$tq.render)"""
-      else
-        st"""println(st$tq$${if (j > 0) s"Retry $$j: " else ""}$tq.render)"""
+        Some(st"""if (verbose) {
+                 |  val tq = $tqq
+                 |  println(st${tq}Replay Unit Test:
+                 |              |  test("Replay ${unitTestPrefix}_$$i") {
+                 |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
+                 |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
+                 |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
+                 |              |  }$tq.render)
+                 |}
+                 |""")
+      else None()
 
     val ret =
       st"""{
-          |
           |  for (i <- 0 to GumboXUtil.numTests) {
           |    this.registerTest(s"${unitTestPrefix}_$$i") {
           |      var retry: B = T
@@ -87,11 +101,14 @@ object DSCTemplate {
           |        $testVectorMethodName() match {
           |          case Some(o) =>
           |
-          |            if (verbose) {
-          |              $prettyPrint
+          |            if (verbose && j > 0) {
+          |              println(s"Retry $$j:")
           |            }
           |
-          |            $testComputeMethodCall match {
+          |            val results = $testComputeMethodCall
+          |
+          |            $replay
+          |            results match {
           |              case GumboXResult.Pre_Condition_Unsat =>
           |              case GumboXResult.Post_Condition_Fail =>
           |                fail ("Post condition did not hold")
@@ -194,7 +211,8 @@ object DSCTemplate {
 
                     nextMethod: ST,
 
-                    computeCBMethodCall: ST): ST = {
+                    methodCall: String
+                   ): ST = {
     val ret =
       st"""@record class $runnerClassName
           |  extends Random.Gen.TestRunner[$dscContainerType]
@@ -217,7 +235,7 @@ object DSCTemplate {
           |
           |  override def test(o: $dscContainerType): B = {
           |    BeforeEntrypoint()
-          |    val r: B = $computeCBMethodCall match {
+          |    val r: B = $methodCall match {
           |      case GumboXResult.Pre_Condition_Unsat =>
           |        ${nameProvider.basePackage}.$recordUnsatPreObjectName.report(${jsonMethod(T, nameProvider, dscContainerType)}(o, T))
           |        T
