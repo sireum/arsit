@@ -12,21 +12,21 @@ import org.sireum.message.Reporter
 @record class GumboDatatypeProviderPlugin extends DatatypeProviderPlugin {
   @strictpure def name: String = "GUMBO Datatype Provider Plugin"
 
-  @strictpure def canHandle(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
+  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
     resolvedAnnexSubclauses.filter((f: AnnexClauseInfo) => f.isInstanceOf[GclAnnexClauseInfo]).nonEmpty
 
-  @pure def handle(aadlType: AadlType,
-                   datatypeTemplate: IDatatypeTemplate,
+  @pure def handleDatatypeProvider(aadlType: AadlType,
+                                   datatypeTemplate: IDatatypeTemplate,
 
-                   suggestFilename: String,
-                   dataDirectory: String,
+                                   suggestFilename: String,
+                                   dataDirectory: String,
 
-                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                   symbolTable: SymbolTable,
-                   aadlTypes: AadlTypes,
+                                   symbolTable: SymbolTable,
+                                   aadlTypes: AadlTypes,
 
-                   reporter: Reporter): DatatypeContribution = {
+                                   reporter: Reporter): DatatypeContribution = {
 
     val subclauses = resolvedAnnexSubclauses.filter((f: AnnexClauseInfo) => f.isInstanceOf[GclAnnexClauseInfo])
     if (subclauses.size != 1) {

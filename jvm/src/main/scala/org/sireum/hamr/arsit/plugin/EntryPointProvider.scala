@@ -15,11 +15,11 @@ import org.sireum.message.Reporter
 
   @strictpure def name: String = "Singleton Entry Point Provider Plugin"
 
-  @strictpure def canHandle(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
+  @strictpure def canHandleEntryPointProvider(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
     T
 
-  @pure def handle(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port], entryPointTemplate: EntryPointTemplate,
-                   symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): EntryPointContributions = {
+  @pure def handleEntryPointProvider(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port], entryPointTemplate: EntryPointTemplate,
+                                     symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): EntryPointContributions = {
 
     return EntryPointContributions(
       imports = ISZ(),

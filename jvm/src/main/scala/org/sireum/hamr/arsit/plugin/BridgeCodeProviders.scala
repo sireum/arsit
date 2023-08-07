@@ -38,7 +38,7 @@ import org.sireum.message.Reporter
     })
 
     val entryPointTemplate = SingletonEntryPointProviderPlugin.getEntryPointTemplate(nameProvider, component, ports)
-    val entryPointContributions = entryPointProvider.handle(component, nameProvider, ports, entryPointTemplate, symbolTable, aadlTypes, reporter)
+    val entryPointContributions = entryPointProvider.handleEntryPointProvider(component, nameProvider, ports, entryPointTemplate, symbolTable, aadlTypes, reporter)
 
     val apiDecls: ISZ[ST] = ISZ(
       ApiTemplate.apiBridgeEntry(nameProvider, nameProvider.bridge, ports, T),

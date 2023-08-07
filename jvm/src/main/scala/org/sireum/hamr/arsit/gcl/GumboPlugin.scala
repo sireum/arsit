@@ -25,13 +25,13 @@ import org.sireum.message.Reporter
   @strictpure def getAnnexLibraries(symbolTable: SymbolTable): ISZ[GclAnnexLibInfo] =
     symbolTable.annexLibInfos.filter(f => f.isInstanceOf[GclAnnexLibInfo]).map(m => m.asInstanceOf[GclAnnexLibInfo])
 
-  def canHandle(entryPoint: EntryPoints.Type,
-                optInEventPort: Option[AadlPort],
-                component: AadlThreadOrDevice,
-                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                arsitOptions: ArsitOptions,
-                symbolTable: SymbolTable,
-                aadlTypes: AadlTypes): B = {
+  def canBehaviorHandleEntryPointProvider(entryPoint: EntryPoints.Type,
+                                          optInEventPort: Option[AadlPort],
+                                          component: AadlThreadOrDevice,
+                                          resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                          arsitOptions: ArsitOptions,
+                                          symbolTable: SymbolTable,
+                                          aadlTypes: AadlTypes): B = {
 
     val needToProcessGclAnnexLibraries = !handledAnnexLibraries && getAnnexLibraries(symbolTable).nonEmpty
 
@@ -48,21 +48,21 @@ import org.sireum.message.Reporter
     return needToProcessGclAnnexLibraries || needToProcessComponentsGclSubclause
   }
 
-  def handle(entryPoint: EntryPoints.Type,
-             optInEventPort: Option[AadlPort], // will be populated if processing the event handler for a sporadic component
-             component: AadlThreadOrDevice,
-             componentNames: NameProvider,
-             excludeComponentImplementation: B,
-             methodSignature: String,
-             defaultMethodBody: ST,
-             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+  def handleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type,
+                                       optInEventPort: Option[AadlPort], // will be populated if processing the event handler for a sporadic component
+                                       component: AadlThreadOrDevice,
+                                       componentNames: NameProvider,
+                                       excludeComponentImplementation: B,
+                                       methodSignature: String,
+                                       defaultMethodBody: ST,
+                                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-             basePackageName: String,
-             symbolTable: SymbolTable,
-             aadlTypes: AadlTypes,
-             projectDirectories: ProjectDirectories,
-             arsitOptions: ArsitOptions,
-             reporter: Reporter): BehaviorEntryPointContributions = {
+                                       basePackageName: String,
+                                       symbolTable: SymbolTable,
+                                       aadlTypes: AadlTypes,
+                                       projectDirectories: ProjectDirectories,
+                                       arsitOptions: ArsitOptions,
+                                       reporter: Reporter): BehaviorEntryPointContributions = {
 
     var imports: ISZ[String] = ISZ()
     var preMethodBlocks: ISZ[ST] = ISZ()

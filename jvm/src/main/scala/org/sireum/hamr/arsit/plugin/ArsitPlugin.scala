@@ -34,7 +34,7 @@ object ArsitPlugin {
                                 aadlType: AadlType,
                                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): DatatypeProviderPlugin = {
     return getDatatypeProviders(plugins).filter((p: DatatypeProviderPlugin) =>
-      p.canHandle(aadlType, resolvedAnnexSubclauses))(0)
+      p.canHandleDatatypeProvider(aadlType, resolvedAnnexSubclauses))(0)
   }
 
 
@@ -54,7 +54,7 @@ object ArsitPlugin {
   def getEntryPointProvider(plugins: MSZ[Plugin],
                             component: AadlThreadOrDevice,
                             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): EntryPointProviderPlugin = {
-    val ret = getEntryPointProviders(plugins).filter((ep: EntryPointProviderPlugin) => ep.canHandle(component, resolvedAnnexSubclauses))
+    val ret = getEntryPointProviders(plugins).filter((ep: EntryPointProviderPlugin) => ep.canHandleEntryPointProvider(component, resolvedAnnexSubclauses))
     if (ret.isEmpty) {
       halt("infeasible")
     }
@@ -70,7 +70,7 @@ object ArsitPlugin {
   def canHandleBehaviorProviders(plugins: MSZ[Plugin],
                                  component: AadlThreadOrDevice,
                                  resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
-    for (bp <- getBehaviorProviders(plugins) if bp.canHandle(component, resolvedAnnexSubclauses)) {
+    for (bp <- getBehaviorProviders(plugins) if bp.canHandleBehaviorProvider(component, resolvedAnnexSubclauses)) {
       return T
     }
     return F
@@ -81,19 +81,19 @@ object ArsitPlugin {
 
 @msig trait BehaviorProviderPlugin extends ArsitPlugin {
 
-  @pure def canHandle(component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+  @pure def canHandleBehaviorProvider(component: AadlThreadOrDevice,
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
   // allows a plugin to provide its own behavior code implementation for component
-  def handle(component: AadlThreadOrDevice,
-             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-             suggestedFilename: String,
-             componentDirectory: ISZ[String],
+  def handleBehaviorProvider(component: AadlThreadOrDevice,
+                             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                             suggestedFilename: String,
+                             componentDirectory: ISZ[String],
 
-             symbolTable: SymbolTable,
-             aadlTypes: AadlTypes,
+                             symbolTable: SymbolTable,
+                             aadlTypes: AadlTypes,
 
-             reporter: Reporter): ISZ[FileResource]
+                             reporter: Reporter): ISZ[FileResource]
 }
 
 object BehaviorEntryPointProviderPlugin {
@@ -189,49 +189,51 @@ object BehaviorEntryPointProviderPlugin {
 
 @msig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
 
-  @pure def canHandle(entryPoint: EntryPoints.Type,
-                      optInEventPort: Option[AadlPort],
-                      component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                      arsitOptions: ArsitOptions,
-                      symbolTable: SymbolTable,
-                      aadlTypes: AadlTypes): B
+  @pure def canBehaviorHandleEntryPointProvider(entryPoint: EntryPoints.Type, // the entry point
+                                                optInEventPort: Option[AadlPort], // handler's in event port
+
+                                                component: AadlThreadOrDevice,
+                                                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                                arsitOptions: ArsitOptions,
+                                                symbolTable: SymbolTable,
+                                                aadlTypes: AadlTypes): B
 
   // allows a plugin to provide contributions to the generated code for
-  // an entrypoint. BehaviorEntryPointProviderPlugins will not be called
+  // an entrypoint (ie. where developers will add behavior code).
+  // BehaviorEntryPointProviderPlugins will not be called
   // for a component if a BehaviorProviderPlugin has already handled the
   // component
-  def handle(entryPoint: EntryPoints.Type,
-             optInEventPort: Option[AadlPort],
-             component: AadlThreadOrDevice,
-             componentNames: NameProvider,
-             excludeComponentImplementation: B,
+  def handleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type, // the entry point
+                                       optInEventPort: Option[AadlPort], // handler's in event port
+                                       component: AadlThreadOrDevice,
+                                       componentNames: NameProvider,
+                                       excludeComponentImplementation: B,
 
-             methodSignature: String, // e.g. def handlePortName(value: PortType, api: ApiType): Unit
-             defaultMethodBody: ST,
+                                       methodSignature: String, // e.g. def handlePortName(value: PortType, api: ApiType): Unit
+                                       defaultMethodBody: ST,
 
-             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-             basePackageName: String,
-             symbolTable: SymbolTable,
-             aadlTypes: AadlTypes,
-             projectDirectories: ProjectDirectories,
-             arsitOptions: ArsitOptions,
-             reporter: Reporter): BehaviorEntryPointContributions
+                                       basePackageName: String,
+                                       symbolTable: SymbolTable,
+                                       aadlTypes: AadlTypes,
+                                       projectDirectories: ProjectDirectories,
+                                       arsitOptions: ArsitOptions,
+                                       reporter: Reporter): BehaviorEntryPointContributions
 
   // Called prior to codegen writing out the behavior code for the component.
   // This allows plugins the ability, for e.g., to write out blocks they've been
   // collecting to an external resource.
-  def finalise(component: AadlThreadOrDevice,
-               nameProvider: NameProvider,
-               resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+  def finaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,
+                                         nameProvider: NameProvider,
+                                         resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-               basePackageName: String,
-               symbolTable: SymbolTable,
-               aadlTypes: AadlTypes,
-               projectDirectories: ProjectDirectories,
-               arsitOptions: ArsitOptions,
-               reporter: Reporter): Option[ObjectContributions] = {
+                                         basePackageName: String,
+                                         symbolTable: SymbolTable,
+                                         aadlTypes: AadlTypes,
+                                         projectDirectories: ProjectDirectories,
+                                         arsitOptions: ArsitOptions,
+                                         reporter: Reporter): Option[ObjectContributions] = {
     return None()
   }
 }
@@ -250,41 +252,41 @@ object BehaviorEntryPointProviderPlugin {
 }
 
 @msig trait EntryPointProviderPlugin extends ArsitPlugin {
-  @pure def canHandle(component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+  @pure def canHandleEntryPointProvider(component: AadlThreadOrDevice,
+                                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
-  def handle(component: AadlThreadOrDevice,
-             nameProvider: NameProvider,
-             ports: ISZ[Port],
+  def handleEntryPointProvider(component: AadlThreadOrDevice,
+                               nameProvider: NameProvider,
+                               ports: ISZ[Port],
 
-             entryPointTemplate: EntryPointTemplate,
+                               entryPointTemplate: EntryPointTemplate,
 
-             symbolTable: SymbolTable,
-             aadlTypes: AadlTypes,
+                               symbolTable: SymbolTable,
+                               aadlTypes: AadlTypes,
 
-             reporter: Reporter): EntryPointContributions
+                               reporter: Reporter): EntryPointContributions
 }
 
 @datatype class DatatypeContribution(val datatype: FileResource,
                                      val resources: ISZ[FileResource])
 
 @msig trait DatatypeProviderPlugin extends ArsitPlugin {
-  @pure def canHandle(aadlType: AadlType,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+  @pure def canHandleDatatypeProvider(aadlType: AadlType,
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
 
-  def handle(aadlType: AadlType,
+  def handleDatatypeProvider(aadlType: AadlType,
 
-             datatypeTemplate: IDatatypeTemplate,
+                             datatypeTemplate: IDatatypeTemplate,
 
-             suggestFilename: String,
-             dataDirectory: String,
+                             suggestFilename: String,
+                             dataDirectory: String,
 
-             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                             resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-             symbolTable: SymbolTable,
-             aadlTypes: AadlTypes,
+                             symbolTable: SymbolTable,
+                             aadlTypes: AadlTypes,
 
-             reporter: Reporter): DatatypeContribution
+                             reporter: Reporter): DatatypeContribution
 }
 
 

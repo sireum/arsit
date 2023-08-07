@@ -23,18 +23,18 @@ object BlessBehaviorProviderPlugin {
     return "BLESS Behavior Provider Provider"
   }
 
-  @pure def canHandle(component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
+  @pure def canHandleBehaviorProvider(component: AadlThreadOrDevice,
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
     return BlessBehaviorProviderPlugin.getBTSSubclauseBehaviorProvider(component).nonEmpty
   }
 
-  override def handle(component: AadlThreadOrDevice,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                      filename: String,
-                      componentDirectory: ISZ[String],
-                      symbolTable: SymbolTable,
-                      aadlTypes: AadlTypes,
-                      reporter: Reporter): ISZ[FileResource] = {
+  override def handleBehaviorProvider(component: AadlThreadOrDevice,
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                      filename: String,
+                                      componentDirectory: ISZ[String],
+                                      symbolTable: SymbolTable,
+                                      aadlTypes: AadlTypes,
+                                      reporter: Reporter): ISZ[FileResource] = {
 
     val behaviorProviders = BlessBehaviorProviderPlugin.getBTSSubclauseBehaviorProvider(component)
 

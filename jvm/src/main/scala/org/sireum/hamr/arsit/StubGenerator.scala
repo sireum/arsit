@@ -144,7 +144,7 @@ import org.sireum.hamr.ir._
     if (ArsitPlugin.canHandleBehaviorProviders(plugins, m, annexClauseInfos)) {
       // TODO: probably should only allow one provider (i.e. assume the first one wins)
       for (bp <- ArsitPlugin.getBehaviorProviders(plugins)) {
-        resources = resources ++ bp.handle(
+        resources = resources ++ bp.handleBehaviorProvider(
           component = m,
           resolvedAnnexSubclauses = annexClauseInfos,
           suggestedFilename = filename,

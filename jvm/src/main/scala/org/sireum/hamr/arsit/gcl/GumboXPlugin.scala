@@ -23,13 +23,13 @@ import org.sireum.message.Reporter
 
   var gumboXGen: GumboXGen = GumboXGen()
 
-  override def canHandle(entryPoint: EntryPoints.Type,
-                         optInEventPort: Option[AadlPort],
-                         component: AadlThreadOrDevice,
-                         resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                         arsitOptions: ArsitOptions,
-                         symbolTable: SymbolTable,
-                         aadlTypes: AadlTypes): B = {
+  override def canBehaviorHandleEntryPointProvider(entryPoint: EntryPoints.Type,
+                                                   optInEventPort: Option[AadlPort],
+                                                   component: AadlThreadOrDevice,
+                                                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                                   arsitOptions: ArsitOptions,
+                                                   symbolTable: SymbolTable,
+                                                   aadlTypes: AadlTypes): B = {
 
     @pure def hasDatatypeInvariants: B = {
       for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
@@ -54,21 +54,21 @@ import org.sireum.message.Reporter
     return !handledComponents.contains(component.path) && (hasDatatypeInvariants || hasGumboSubclauseInfo)
   }
 
-  override def handle(entryPoint: EntryPoints.Type,
-                      optInEventPort: Option[AadlPort],
-                      component: AadlThreadOrDevice,
-                      componentNames: NameProvider,
-                      excludeComponentImplementation: B,
-                      methodSignature: String,
-                      defaultMethodBody: ST,
-                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+  override def handleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type,
+                                                optInEventPort: Option[AadlPort],
+                                                component: AadlThreadOrDevice,
+                                                componentNames: NameProvider,
+                                                excludeComponentImplementation: B,
+                                                methodSignature: String,
+                                                defaultMethodBody: ST,
+                                                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                      basePackageName: String,
-                      symbolTable: SymbolTable,
-                      aadlTypes: AadlTypes,
-                      projectDirectories: ProjectDirectories,
-                      arsitOptions: ArsitOptions,
-                      reporter: Reporter): BehaviorEntryPointProviderPlugin.BehaviorEntryPointContributions = {
+                                                basePackageName: String,
+                                                symbolTable: SymbolTable,
+                                                aadlTypes: AadlTypes,
+                                                projectDirectories: ProjectDirectories,
+                                                arsitOptions: ArsitOptions,
+                                                reporter: Reporter): BehaviorEntryPointProviderPlugin.BehaviorEntryPointContributions = {
     if (!processedDatatypeInvariants) {
       gumboXGen.processDatatypes(basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
       processedDatatypeInvariants = T
@@ -87,16 +87,16 @@ import org.sireum.message.Reporter
     return BehaviorEntryPointProviderPlugin.emptyPartialContributions
   }
 
-  override def finalise(component: AadlThreadOrDevice,
-                        componentNames: NameProvider,
-                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+  override def finaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,
+                                                  componentNames: NameProvider,
+                                                  resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                        basePackageName: String,
-                        symbolTable: SymbolTable,
-                        aadlTypes: AadlTypes,
-                        projectDirectories: ProjectDirectories,
-                        arsitOptions: ArsitOptions,
-                        reporter: Reporter): Option[ObjectContributions] = {
+                                                  basePackageName: String,
+                                                  symbolTable: SymbolTable,
+                                                  aadlTypes: AadlTypes,
+                                                  projectDirectories: ProjectDirectories,
+                                                  arsitOptions: ArsitOptions,
+                                                  reporter: Reporter): Option[ObjectContributions] = {
 
     val annexInfo: Option[(GclSubclause, GclSymbolTable)] = resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
       case ISZ(GclAnnexClauseInfo(annex_, gclSymbolTable_)) => Some((annex_, gclSymbolTable_))

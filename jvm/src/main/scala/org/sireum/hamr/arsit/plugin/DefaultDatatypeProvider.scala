@@ -28,16 +28,16 @@ object DefaultDatatypeProvider {
 @record class DefaultDatatypeProvider extends DatatypeProviderPlugin {
   @strictpure def name: String = "Default Datatype Provider"
 
-  @strictpure def canHandle(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = T
+  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = T
 
-  @pure def handle(aadlType: AadlType,
-                   datatypeTemplate: IDatatypeTemplate,
-                   suggestFilename: String,
-                   dataDirectory: String,
-                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
-                   symbolTable: SymbolTable,
-                   aadlTypes: AadlTypes,
-                   reporter: Reporter): DatatypeContribution = {
+  @pure def handleDatatypeProvider(aadlType: AadlType,
+                                   datatypeTemplate: IDatatypeTemplate,
+                                   suggestFilename: String,
+                                   dataDirectory: String,
+                                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                   symbolTable: SymbolTable,
+                                   aadlTypes: AadlTypes,
+                                   reporter: Reporter): DatatypeContribution = {
 
     aadlType match {
       case at: ArrayType if at.dimensions.size > 1 =>

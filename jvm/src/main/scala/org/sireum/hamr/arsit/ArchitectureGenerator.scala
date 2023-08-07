@@ -50,7 +50,7 @@ import org.sireum.ops.ISZOps
         }
 
         val dpProvider = ArsitPlugin.getDatatypeProvider(plugins, aadlType, resolvedAnnexSubclauses)
-        val dpContributions = dpProvider.handle(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
+        val dpContributions = dpProvider.handleDatatypeProvider(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
           resolvedAnnexSubclauses, symbolTable, types, reporter)
         resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
       }

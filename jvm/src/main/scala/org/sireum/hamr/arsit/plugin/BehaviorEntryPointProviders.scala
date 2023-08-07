@@ -50,11 +50,11 @@ object BehaviorEntryPointProviders {
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
 
     @strictpure def canHandle(p: Plugin): B =
-      p.isInstanceOf[BehaviorEntryPointProviderPlugin] && p.asInstanceOf[BehaviorEntryPointProviderPlugin].canHandle(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes)
+      p.isInstanceOf[BehaviorEntryPointProviderPlugin] && p.asInstanceOf[BehaviorEntryPointProviderPlugin].canBehaviorHandleEntryPointProvider(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes)
 
     var optBody: Option[ST] = None()
     for (p <- plugins if !reporter.hasError && canHandle(p)) {
-      p.asInstanceOf[BehaviorEntryPointProviderPlugin].handle(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
+      p.asInstanceOf[BehaviorEntryPointProviderPlugin].handleBehaviorEntryPointProvider(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case b: FullMethodContributions =>
           if (optMethod.nonEmpty) {
             reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method implementation")
@@ -165,7 +165,7 @@ object BehaviorEntryPointProviders {
 
     var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
     for (p <- plugins if !reporter.hasError && p.isInstanceOf[BehaviorEntryPointProviderPlugin]) {
-      p.asInstanceOf[BehaviorEntryPointProviderPlugin].finalise(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
+      p.asInstanceOf[BehaviorEntryPointProviderPlugin].finaliseBehaviorEntryPointProvider(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case Some(x) =>
           ret = ret(
             tags = ret.tags ++ x.tags,
