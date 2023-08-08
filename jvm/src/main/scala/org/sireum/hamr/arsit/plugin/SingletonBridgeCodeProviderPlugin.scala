@@ -5,20 +5,10 @@ import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, SymbolTable}
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil
 import org.sireum.message.Reporter
-
-@datatype class BridgeCodeContributions(bridge: ST,
-                                        resources: ISZ[FileResource])
-
-@datatype class EntryPointContributions(imports: ISZ[String],
-                                        bridgeCompanionBlocks: ISZ[String],
-                                        entryPoint: ST,
-                                        resources: ISZ[FileResource])
-
 
 @record class SingletonBridgeCodeProviderPlugin extends BridgeCodeProviderPlugin {
   @strictpure def name: String = "Singleton Bridge Code Provider Plugin"
@@ -26,10 +16,10 @@ import org.sireum.message.Reporter
   @pure def generate(nameProvider: NameUtil.NameProvider,
                      component: AadlThreadOrDevice,
                      ports: ISZ[Port],
-                     entryPointProvider: EntryPointProviderPlugin,
+
                      symbolTable: SymbolTable,
                      aadlTypes: AadlTypes,
-                     reporter: Reporter): BridgeCodeContributions = {
+                     reporter: Reporter): BridgeCodeProviderPlugin.BridgeCodeContributions = {
 
     val portParams: ISZ[String] = ports.map((p: Port) => {
       val artPortType: String = if (p.urgency.nonEmpty) "UrgentPort" else "Port"
@@ -38,14 +28,10 @@ import org.sireum.message.Reporter
     })
 
     val entryPointTemplate = SingletonEntryPointProviderPlugin.getEntryPointTemplate(nameProvider, component, ports)
-    val entryPointContributions = entryPointProvider.handleEntryPointProvider(component, nameProvider, ports, entryPointTemplate, symbolTable, aadlTypes, reporter)
 
     val apiDecls: ISZ[ST] = ISZ(
       ApiTemplate.apiBridgeEntry(nameProvider, nameProvider.bridge, ports, T),
       ApiTemplate.apiBridgeEntry(nameProvider, nameProvider.bridge, ports, F))
-
-    val companionObjectBlocks: Option[ST] = if (entryPointContributions.bridgeCompanionBlocks.isEmpty) None()
-    else Some(st"${(entryPointContributions.bridgeCompanionBlocks, "\n\n")}")
 
     val imports: ISZ[ST] = ISZ(
       st"${nameProvider.packageName}.{${nameProvider.componentSingletonType} => component}"
@@ -56,7 +42,7 @@ import org.sireum.message.Reporter
       st"""
           |${(ports.map((p: Port) => s"${p.name}.id"), ",\n")},""")
 
-    val bridge: ST =
+    val e = (arg: EntryPointProviderPlugin.EntryPointContributions) =>
       st"""// #Sireum
           |
           |package ${nameProvider.packageName}
@@ -64,7 +50,7 @@ import org.sireum.message.Reporter
           |import org.sireum._
           |import art._
           |import ${nameProvider.basePackage}._
-          |${addImports(imports ++ entryPointContributions.imports.map((m: String) => st"$m"))}
+          |${addImports(imports ++ arg.imports.map((m: String) => st"$m"))}
           |
           |${StringTemplate.doNotEditComment()}
           |
@@ -102,12 +88,12 @@ import org.sireum.message.Reporter
           |object ${nameProvider.bridge} {
           |
           |  ${ApiTemplate.companionObjectApiInstances(nameProvider)}
-          |  ${companionObjectBlocks}
+          |  ${(arg.bridgeCompanionBlocks, "\n\n")}
           |
-          |  ${entryPointContributions.entryPoint}
+          |  ${arg.entryPoint}
           |}"""
 
-    return BridgeCodeContributions(bridge, entryPointContributions.resources)
+    return BridgeCodeProviderPlugin.BridgeCodeContributions(entryPointTemplate, e, ISZ())
   }
 
   @pure def addImports(imports: ISZ[ST]): Option[ST] = {

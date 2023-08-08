@@ -25,7 +25,7 @@ import org.sireum.message.Reporter
   @strictpure def getAnnexLibraries(symbolTable: SymbolTable): ISZ[GclAnnexLibInfo] =
     symbolTable.annexLibInfos.filter(f => f.isInstanceOf[GclAnnexLibInfo]).map(m => m.asInstanceOf[GclAnnexLibInfo])
 
-  def canBehaviorHandleEntryPointProvider(entryPoint: EntryPoints.Type,
+  def canHandleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type,
                                           optInEventPort: Option[AadlPort],
                                           component: AadlThreadOrDevice,
                                           resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
@@ -57,7 +57,6 @@ import org.sireum.message.Reporter
                                        defaultMethodBody: ST,
                                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                                       basePackageName: String,
                                        symbolTable: SymbolTable,
                                        aadlTypes: AadlTypes,
                                        projectDirectories: ProjectDirectories,
@@ -76,7 +75,7 @@ import org.sireum.message.Reporter
 
     if (!handledAnnexLibraries) {
       for (gclLib <- getAnnexLibraries(symbolTable)) {
-        val (content, filename) = GumboGen.processGclLibrary(gclLib, symbolTable, aadlTypes, basePackageName)
+        val (content, filename) = GumboGen.processGclLibrary(gclLib, symbolTable, aadlTypes, componentNames.basePackage)
         // TODO: treat libraries as datatype files since datatype invariants may use the libraries functions
         //       (i.e. the file containing the library will need to be given to slangcheck)
         resources = resources :+ ResourceUtil.createResourceH(
@@ -91,14 +90,14 @@ import org.sireum.message.Reporter
       case ISZ(GclAnnexClauseInfo(annex, gclSymbolTable)) =>
 
         if (annex.state.nonEmpty && !handledStateVars.contains(component)) {
-          val p = GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processStateVars(annex.state)
+          val p = GumboGen(gclSymbolTable, symbolTable, aadlTypes, componentNames.basePackage).processStateVars(annex.state)
           preMethodBlocks = preMethodBlocks :+ p._1
           markers = markers :+ p._2
           handledStateVars = handledStateVars + component
         }
 
         if (annex.methods.nonEmpty && !handledSubClauseFunctions.contains(component)) {
-          val (content, marker) = GumboGen.processSubclauseFunctions(annex.methods, gclSymbolTable, symbolTable, aadlTypes, basePackageName)
+          val (content, marker) = GumboGen.processSubclauseFunctions(annex.methods, gclSymbolTable, symbolTable, aadlTypes, componentNames.basePackage)
           preMethodBlocks = preMethodBlocks :+ content
           markers = markers :+ marker
           handledSubClauseFunctions = handledSubClauseFunctions + component
@@ -106,7 +105,7 @@ import org.sireum.message.Reporter
 
         entryPoint match {
           case EntryPoints.initialise if annex.initializes.nonEmpty =>
-            val r = GumboGen.processInitializes(component, symbolTable, aadlTypes, basePackageName).get
+            val r = GumboGen.processInitializes(component, symbolTable, aadlTypes, componentNames.basePackage).get
             requires = requires ++ r.requires
             modifies = modifies ++ r.modifies
             ensures = ensures ++ r.ensures
@@ -115,7 +114,7 @@ import org.sireum.message.Reporter
             imports = imports ++ r.imports
 
           case EntryPoints.compute if annex.compute.nonEmpty =>
-            GumboGen(gclSymbolTable, symbolTable, aadlTypes, basePackageName).processCompute(
+            GumboGen(gclSymbolTable, symbolTable, aadlTypes, componentNames.basePackage).processCompute(
               annex.compute.get, optInEventPort, component) match {
               case (n: NonCaseContractBlock, mmarkers) =>
                 markers = markers ++ mmarkers

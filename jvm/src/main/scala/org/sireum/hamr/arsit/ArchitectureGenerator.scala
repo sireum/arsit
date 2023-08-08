@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.nix.NixGen
-import org.sireum.hamr.arsit.plugin.{ArsitPlugin, DefaultDatatypeProvider}
+import org.sireum.hamr.arsit.plugin.{DatatypeProviderPlugin, DefaultDatatypeProviderPlugin}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
@@ -15,7 +15,7 @@ import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
-import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.ConnectionInstance
 import org.sireum.ops.ISZOps
@@ -41,7 +41,7 @@ import org.sireum.ops.ISZOps
     if (!types.rawConnections) {
       // TODO allow for customizations of base types
       for (aadlType <- types.typeMap.values if !aadlType.isInstanceOf[BaseType]) {
-        val defaultTemplate = DefaultDatatypeProvider.genDefaultTemplate(aadlType)
+        val defaultTemplate = DefaultDatatypeProviderPlugin.genDefaultTemplate(aadlType)
 
         val aadlComponent = symbolTable.componentMap.get(ISZ(aadlType.name)).get
         val resolvedAnnexSubclauses: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
@@ -49,10 +49,17 @@ import org.sireum.ops.ISZOps
           case _ => ISZ()
         }
 
-        val dpProvider = ArsitPlugin.getDatatypeProvider(plugins, aadlType, resolvedAnnexSubclauses)
-        val dpContributions = dpProvider.handleDatatypeProvider(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
-          resolvedAnnexSubclauses, symbolTable, types, reporter)
-        resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
+        var firstServed = F
+        for (p <- plugins if !firstServed && p.isInstanceOf[DatatypeProviderPlugin] &&
+          p.asInstanceOf[DatatypeProviderPlugin].canHandleDatatypeProvider(aadlType, resolvedAnnexSubclauses)) {
+          firstServed = T
+
+          val dpContributions =
+            p.asInstanceOf[DatatypeProviderPlugin].handleDatatypeProvider(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
+              resolvedAnnexSubclauses, symbolTable, types, reporter)
+
+          resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
+        }
       }
     }
 

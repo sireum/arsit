@@ -10,7 +10,7 @@ import org.sireum.hamr.codegen.common.symbols.{AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.message.Reporter
 
-object DefaultDatatypeProvider {
+object DefaultDatatypeProviderPlugin {
   @pure def genDefaultTemplate(aadlType: AadlType): IDatatypeTemplate = {
     if (aadlType.isInstanceOf[BaseType]) {
       halt(s"Support for customizing base type ${aadlType.name} hasn't been implemented yet")
@@ -25,7 +25,7 @@ object DefaultDatatypeProvider {
   }
 }
 
-@record class DefaultDatatypeProvider extends DatatypeProviderPlugin {
+@record class DefaultDatatypeProviderPlugin extends DatatypeProviderPlugin {
   @strictpure def name: String = "Default Datatype Provider"
 
   @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = T

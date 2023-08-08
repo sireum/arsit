@@ -18,59 +18,58 @@ import org.sireum.message.Reporter
 object ArsitPlugin {
 
   @strictpure def defaultPlugins: MSZ[Plugin] = MSZ(
-    BlessBehaviorProviderPlugin(),
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
+    DefaultDatatypeProviderPlugin())
+
+  @strictpure def blessPlugins: MSZ[Plugin] = MSZ[Plugin](BlessBehaviorProviderPlugin())
+
+  @strictpure def gumboPlugins: MSZ[Plugin] = MSZ[Plugin](
     GumboDatatypeProviderPlugin(),
     GumboPlugin(),
-    GumboXPlugin(),
-    DefaultDatatypeProvider())
+    GumboXPlugin())
 
-  @memoize def getDatatypeProviders(plugins: MSZ[Plugin]): MSZ[DatatypeProviderPlugin] = {
-    return plugins.filter((p: Plugin) => p.isInstanceOf[DatatypeProviderPlugin]).map((m: Plugin) => m.asInstanceOf[DatatypeProviderPlugin])
-  }
-
-  @pure def getDatatypeProvider(plugins: MSZ[Plugin],
-                                aadlType: AadlType,
-                                resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): DatatypeProviderPlugin = {
-    return getDatatypeProviders(plugins).filter((p: DatatypeProviderPlugin) =>
-      p.canHandleDatatypeProvider(aadlType, resolvedAnnexSubclauses))(0)
-  }
+  @strictpure def gumboEnhancedPlugins: MSZ[Plugin] = gumboPlugins ++ defaultPlugins
 
 
-  @memoize def getBridgeCodeProviders(plugins: MSZ[Plugin]): BridgeCodeProviderPlugin = {
-    val ret = plugins.filter((p: Plugin) => p.isInstanceOf[BridgeCodeProviderPlugin]).map((p: Plugin) => p.asInstanceOf[BridgeCodeProviderPlugin])
+  @memoize def getBridgeCodeProvidersIndices(plugins: MSZ[Plugin]): ISZ[Z] = {
+    var ret: ISZ[Z] = ISZ()
+    for (i <- 0 until plugins.size if plugins(i).isInstanceOf[BridgeCodeProviderPlugin]) {
+      ret = ret :+ i
+    }
     if (ret.size != 1) {
       halt("Only the default bridge code provider is currently allowed")
     }
-    return ret(0)
+    return ret
   }
 
-
-  @memoize def getEntryPointProviders(plugins: MSZ[Plugin]): MSZ[EntryPointProviderPlugin] = {
-    return plugins.filter((p: Plugin) => p.isInstanceOf[EntryPointProviderPlugin]).map((p: Plugin) => p.asInstanceOf[EntryPointProviderPlugin])
-  }
-
-  def getEntryPointProvider(plugins: MSZ[Plugin],
-                            component: AadlThreadOrDevice,
-                            resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): EntryPointProviderPlugin = {
-    val ret = getEntryPointProviders(plugins).filter((ep: EntryPointProviderPlugin) => ep.canHandleEntryPointProvider(component, resolvedAnnexSubclauses))
-    if (ret.isEmpty) {
-      halt("infeasible")
+  def getEntryPointProviderIndices(plugins: MSZ[Plugin],
+                                   component: AadlThreadOrDevice,
+                                   resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                   arsitOptions: ArsitOptions,
+                                   symbolTable: SymbolTable,
+                                   aadlTypes: AadlTypes): ISZ[Z] = {
+    var ret: ISZ[Z] = ISZ()
+    for (i <- 0 until plugins.size
+         if plugins(i).isInstanceOf[EntryPointProviderPlugin] &&
+           plugins(i).asInstanceOf[EntryPointProviderPlugin]
+             .canHandleEntryPointProvider(component, resolvedAnnexSubclauses, arsitOptions, symbolTable, aadlTypes)) {
+      ret = ret :+ i
     }
-    // first ep provider who can handle component wins
-    return ret(0)
+    if (ret.isEmpty) {
+      halt("Infeasible as there is a built in entry point provider")
+    }
+    return ret
   }
 
-
-  @memoize def getBehaviorProviders(plugins: MSZ[Plugin]): MSZ[BehaviorProviderPlugin] = {
-    return plugins.filter((p: Plugin) => p.isInstanceOf[BehaviorProviderPlugin]).map((p: Plugin) => p.asInstanceOf[BehaviorProviderPlugin])
-  }
+  @strictpure def canHandleBP(p: Plugin, component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
+    p.isInstanceOf[BehaviorProviderPlugin] &&
+      p.asInstanceOf[BehaviorProviderPlugin].canHandleBehaviorProvider(component, resolvedAnnexSubclauses)
 
   def canHandleBehaviorProviders(plugins: MSZ[Plugin],
                                  component: AadlThreadOrDevice,
                                  resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B = {
-    for (bp <- getBehaviorProviders(plugins) if bp.canHandleBehaviorProvider(component, resolvedAnnexSubclauses)) {
+    for (p <- plugins if canHandleBP(p, component, resolvedAnnexSubclauses)) {
       return T
     }
     return F
@@ -189,11 +188,12 @@ object BehaviorEntryPointProviderPlugin {
 
 @msig trait BehaviorEntryPointProviderPlugin extends ArsitPlugin {
 
-  @pure def canBehaviorHandleEntryPointProvider(entryPoint: EntryPoints.Type, // the entry point
+  @pure def canHandleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type, // the entry point
                                                 optInEventPort: Option[AadlPort], // handler's in event port
 
                                                 component: AadlThreadOrDevice,
                                                 resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
                                                 arsitOptions: ArsitOptions,
                                                 symbolTable: SymbolTable,
                                                 aadlTypes: AadlTypes): B
@@ -214,7 +214,6 @@ object BehaviorEntryPointProviderPlugin {
 
                                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                                       basePackageName: String,
                                        symbolTable: SymbolTable,
                                        aadlTypes: AadlTypes,
                                        projectDirectories: ProjectDirectories,
@@ -228,7 +227,6 @@ object BehaviorEntryPointProviderPlugin {
                                          nameProvider: NameProvider,
                                          resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                                         basePackageName: String,
                                          symbolTable: SymbolTable,
                                          aadlTypes: AadlTypes,
                                          projectDirectories: ProjectDirectories,
@@ -238,33 +236,51 @@ object BehaviorEntryPointProviderPlugin {
   }
 }
 
+object BridgeCodeProviderPlugin {
+  @datatype class BridgeCodeContributions (val entryPointTemplate: EntryPointTemplate,
+                                           val e : EntryPointProviderPlugin.EntryPointContributions => ST,
+                                           val resources: ISZ[FileResource])
+}
+
 @msig trait BridgeCodeProviderPlugin extends ArsitPlugin {
   def generate(nameProvider: NameProvider,
                component: AadlThreadOrDevice,
                ports: ISZ[Port],
 
-               entryPointProvider: EntryPointProviderPlugin,
-
                symbolTable: SymbolTable,
                aadlTypes: AadlTypes,
 
-               reporter: Reporter): BridgeCodeContributions
+               reporter: Reporter): BridgeCodeProviderPlugin.BridgeCodeContributions
+}
+
+object EntryPointProviderPlugin {
+
+  @datatype class EntryPointContributions(val imports: ISZ[String],
+                                          val bridgeCompanionBlocks: ISZ[String],
+                                          val entryPoint: ST,
+                                          val resources: ISZ[FileResource])
 }
 
 @msig trait EntryPointProviderPlugin extends ArsitPlugin {
   @pure def canHandleEntryPointProvider(component: AadlThreadOrDevice,
-                                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+                                        resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
+                                        arsitOptions: ArsitOptions,
+                                        symbolTable: SymbolTable,
+                                        aadlTypes: AadlTypes): B
 
   def handleEntryPointProvider(component: AadlThreadOrDevice,
                                nameProvider: NameProvider,
                                ports: ISZ[Port],
 
+                               resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
                                entryPointTemplate: EntryPointTemplate,
 
                                symbolTable: SymbolTable,
                                aadlTypes: AadlTypes,
-
-                               reporter: Reporter): EntryPointContributions
+                               projectDirectories: ProjectDirectories,
+                               reporter: Reporter): EntryPointProviderPlugin.EntryPointContributions
 }
 
 @datatype class DatatypeContribution(val datatype: FileResource,

@@ -17,7 +17,7 @@ object DSCTemplate {
 
   def genTestVectorContainerClass(packageName: String,
                                   imports: ISZ[String],
-                                  containers: ISZ[String]): ST = {
+                                  containers: ISZ[ST]): ST = {
 
     val _imports: ISZ[ST] = for(i <- imports) yield st"import ${i}"
 
@@ -31,7 +31,7 @@ object DSCTemplate {
           |
           |${StringTemplate.doNotEditComment()}
           |
-          |// Test vector containers for Distributed SlangCheck testing
+          |// containers for the pre and post state values of ports and state variables
           |
           |${(containers, "\n\n")}
           |"""

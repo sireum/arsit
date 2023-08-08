@@ -43,6 +43,28 @@ import org.sireum.hamr.arsit.EntryPoints
     )
   }
 
+  @pure def generateCustomST(blocks: ISZ[ST],
+                             activateBody: Option[ST],
+                             initialiseBody: Option[ST],
+                             testInitialiseBody: Option[ST],
+                             computeBody: Option[ST],
+                             testComputeBody: Option[ST],
+                             deactivateBody: Option[ST],
+                             finaliseBody: Option[ST],
+                             recoverBody: Option[ST]): ST = {
+    return generate(
+      blocks = localVars ++ blocks,
+      activateBody = if (activateBody.nonEmpty) activateBody.get else defaultActivateBody,
+      initialiseBody = if (initialiseBody.nonEmpty) initialiseBody.get else defaultInitialiseBody,
+      testInitialiseBody = if (testInitialiseBody.nonEmpty) testInitialiseBody.get else defaultTestInitialiseBody,
+      computeBody = if (computeBody.nonEmpty) computeBody.get else defaultComputeBody,
+      testComputeBody = if (testComputeBody.nonEmpty) testComputeBody.get else defaultTestComputeBody,
+      deactivateBody = if (deactivateBody.nonEmpty) deactivateBody.get else defaultDeactivateBody,
+      finaliseBody = if (finaliseBody.nonEmpty) finaliseBody.get else defaultFinaliseBody,
+      recoverBody = if (recoverBody.nonEmpty) recoverBody.get else defaultRecoverBody
+    )
+  }
+
   @pure def generateDefault(): ST = {
     return generate(localVars, defaultActivateBody, defaultInitialiseBody, defaultTestInitialiseBody,
       defaultComputeBody, defaultTestComputeBody, defaultDeactivateBody, defaultFinaliseBody, defaultRecoverBody)

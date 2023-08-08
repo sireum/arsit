@@ -3,7 +3,8 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
-import org.sireum.hamr.arsit.{EntryPoints, Port}
+import org.sireum.hamr.arsit.util.ArsitOptions
+import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, AnnexClauseInfo, Dispatch_Protocol, SymbolTable}
 import org.sireum.hamr.codegen.common.types.AadlTypes
@@ -15,13 +16,18 @@ import org.sireum.message.Reporter
 
   @strictpure def name: String = "Singleton Entry Point Provider Plugin"
 
-  @strictpure def canHandleEntryPointProvider(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B =
+  @strictpure def canHandleEntryPointProvider(component: AadlThreadOrDevice, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], arsitOptions: ArsitOptions, symbolTable: SymbolTable, aadlTypes: AadlTypes): B =
     T
 
-  @pure def handleEntryPointProvider(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port], entryPointTemplate: EntryPointTemplate,
-                                     symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): EntryPointContributions = {
+  @pure def handleEntryPointProvider(component: AadlThreadOrDevice, nameProvider: NameProvider, ports: ISZ[Port],
 
-    return EntryPointContributions(
+                                     resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
+                                     entryPointTemplate: EntryPointTemplate,
+
+                                     symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories, reporter: Reporter): EntryPointProviderPlugin.EntryPointContributions = {
+
+    return EntryPointProviderPlugin.EntryPointContributions(
       imports = ISZ(),
       bridgeCompanionBlocks = ISZ(),
       entryPoint = entryPointTemplate.generateDefault(),

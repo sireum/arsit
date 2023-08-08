@@ -6,7 +6,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit.gcl.GumboGen
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.BehaviorEntryPointObjectContributions
-import org.sireum.hamr.arsit.plugin.{ArsitPlugin, BehaviorEntryPointElementProvider, BehaviorEntryPointProviders}
+import org.sireum.hamr.arsit.plugin._
 import org.sireum.hamr.arsit.templates.{ApiTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
@@ -22,7 +22,7 @@ import org.sireum.hamr.ir._
                             rootSystem: AadlSystem,
                             arsitOptions: ArsitOptions,
                             symbolTable: SymbolTable,
-                            types: AadlTypes,
+                            aadlTypes: AadlTypes,
                             previousPhase: Result) {
 
   val basePackage: String = arsitOptions.packageName
@@ -98,7 +98,7 @@ import org.sireum.hamr.ir._
     val names = nameProvider(m.component, basePackage)
     val filename: String = Util.pathAppend(dirs.componentDir, ISZ(names.packagePath, s"${names.componentSingletonType}.scala"))
 
-    val ports: ISZ[Port] = Util.getPorts(m, types, basePackage, z"-1000")
+    val ports: ISZ[Port] = Util.getPorts(m, aadlTypes, basePackage, z"-1000")
 
     resources = resources ++ TestTemplate.bridgeTestApis(basePackage, names, dirs, ports)
 
@@ -109,27 +109,41 @@ import org.sireum.hamr.ir._
       return
     }
 
-    val annexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
+    val resolvedAnnexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
       case Some(infos) => infos
       case _ => ISZ()
     }
 
-    val epp = ArsitPlugin.getEntryPointProvider(plugins, m, annexClauseInfos)
-
-    val bridgeCode = ArsitPlugin.getBridgeCodeProviders(plugins).generate(
+    val bcpIndex = ArsitPlugin.getBridgeCodeProvidersIndices(plugins)(0)
+    val bridgeContributions = plugins(bcpIndex).asInstanceOf[BridgeCodeProviderPlugin].generate(
       nameProvider = names,
       component = m,
       ports = ports,
-      entryPointProvider = epp,
+
       symbolTable = symbolTable,
-      aadlTypes = types,
+      aadlTypes = aadlTypes,
       reporter = reporter)
 
-    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridgeCode.bridge, T)
-    resources = resources ++ bridgeCode.resources
+    // now call the entrypoint provider
+    // TODO: assume first provider wins??
+    val epIndex = ArsitPlugin.getEntryPointProviderIndices(plugins, m, resolvedAnnexClauseInfos, arsitOptions, symbolTable, aadlTypes)(0)
+
+    val entryPointContributions = plugins(epIndex).asInstanceOf[EntryPointProviderPlugin].handleEntryPointProvider(
+      m, names, ports,
+
+      resolvedAnnexClauseInfos,
+
+      bridgeContributions.entryPointTemplate,
+
+      symbolTable, aadlTypes, dirs, reporter)
+
+    val bridgeCodeST = bridgeContributions.e(entryPointContributions)
+
+    addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.bridge}.scala"), bridgeCodeST, T)
+    resources = resources ++ bridgeContributions.resources ++ entryPointContributions.resources
 
 
-    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, types, basePackage)
+    val integrationContracts = GumboGen.processIntegrationContract(m, symbolTable, aadlTypes, basePackage)
 
     val api = ApiTemplate.api(
       names.packageName,
@@ -140,17 +154,20 @@ import org.sireum.hamr.ir._
 
     addResource(dirs.bridgeDir, ISZ(names.packagePath, s"${names.api}.scala"), api, T)
 
+    if (ArsitPlugin.canHandleBehaviorProviders(plugins, m, resolvedAnnexClauseInfos)) {
+      // a plugin has indicated it will fully provide the behavior code
 
-    if (ArsitPlugin.canHandleBehaviorProviders(plugins, m, annexClauseInfos)) {
-      // TODO: probably should only allow one provider (i.e. assume the first one wins)
-      for (bp <- ArsitPlugin.getBehaviorProviders(plugins)) {
-        resources = resources ++ bp.handleBehaviorProvider(
+      var firstCome = F  // only one plugin allowed
+      for (p <- plugins if !firstCome && ArsitPlugin.canHandleBP(p, m, resolvedAnnexClauseInfos)) {
+        firstCome = T
+
+        resources = resources ++ p.asInstanceOf[BehaviorProviderPlugin].handleBehaviorProvider(
           component = m,
-          resolvedAnnexSubclauses = annexClauseInfos,
+          resolvedAnnexSubclauses = resolvedAnnexClauseInfos,
           suggestedFilename = filename,
           componentDirectory = ISZ(dirs.componentDir, names.packagePath),
           symbolTable = symbolTable,
-          aadlTypes = types,
+          aadlTypes = aadlTypes,
           reporter = reporter)
       }
     } else {
@@ -169,8 +186,8 @@ import org.sireum.hamr.ir._
               val defaultMethodBody: ST = BehaviorEntryPointElementProvider.genComputeMethodBody(Some(inEventPort), m, isFirst, arsitOptions.excludeImpl)
 
               behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(
-                entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos,
-                basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
+                entryPoint, Some(inEventPort), m, names, arsitOptions.excludeImpl, methodSig, defaultMethodBody, resolvedAnnexClauseInfos,
+                basePackage, symbolTable, aadlTypes, dirs, arsitOptions, plugins, reporter)
 
               isFirst = F
             }
@@ -183,8 +200,8 @@ import org.sireum.hamr.ir._
 
             behaviorCodeContributions = behaviorCodeContributions :+ BehaviorEntryPointProviders.offer(entryPoint, None(),
               m, names,
-              arsitOptions.excludeImpl, methodSig, defaultMethodBody, annexClauseInfos,
-              basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
+              arsitOptions.excludeImpl, methodSig, defaultMethodBody, resolvedAnnexClauseInfos,
+              basePackage, symbolTable, aadlTypes, dirs, arsitOptions, plugins, reporter)
         }
       }
 
@@ -196,7 +213,7 @@ import org.sireum.hamr.ir._
       }
 
       behaviorCodeContributions = behaviorCodeContributions :+
-        BehaviorEntryPointProviders.finalise(annexClauseInfos, m, names, basePackage, symbolTable, types, dirs, arsitOptions, plugins, reporter)
+        BehaviorEntryPointProviders.finalise(resolvedAnnexClauseInfos, m, names, basePackage, symbolTable, aadlTypes, dirs, arsitOptions, plugins, reporter)
 
       val markers = BehaviorEntryPointProviders.getMarkers(behaviorCodeContributions)
       val componentImpl: ST = BehaviorEntryPointElementProvider.genComponentImpl(names, behaviorCodeContributions)
@@ -219,7 +236,7 @@ import org.sireum.hamr.ir._
       val methodName = CommonUtil.getLastName(p.identifier)
       val params: ISZ[String] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isInFeature(f))
         .map(param => {
-          val pType = Util.getFeatureEndType(param, types)
+          val pType = Util.getFeatureEndType(param, aadlTypes)
           s"${CommonUtil.getLastName(param.identifier)} : ${pType.nameProvider.qualifiedReferencedTypeName}"
         })
       val rets: ISZ[FeatureEnd] = Util.getFeatureEnds_DEPRECATED(p.features).filter(f => f.category == FeatureCategory.Parameter && CommonUtil.isOutFeature(f))
@@ -231,7 +248,7 @@ import org.sireum.hamr.ir._
           (None(), None())
         }
         else {
-          val rType: AadlType = Util.getFeatureEndType(rets(0), types)
+          val rType: AadlType = Util.getFeatureEndType(rets(0), aadlTypes)
           val _exampleValue: String = rType.nameProvider.example()
           val returnType = rType.nameProvider.qualifiedReferencedTypeName
 

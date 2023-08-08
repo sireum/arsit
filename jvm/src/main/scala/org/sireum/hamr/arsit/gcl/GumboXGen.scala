@@ -1420,7 +1420,7 @@ object GumboXGen {
       val dscContainersClass = DSCTemplate.genTestVectorContainerClass(
         packageName = componentNames.packageName,
         imports = ISZ(s"${componentNames.basePackage}._"),
-        containers = dscTestVectorContainers.elements)
+        containers = for(d <- dscTestVectorContainers.elements) yield st"$d")
 
       val dscContainersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${dscContainerType}s.scala"
       resources = resources :+ ResourceUtil.createResourceH(dscContainersPath, dscContainersClass, T, T)

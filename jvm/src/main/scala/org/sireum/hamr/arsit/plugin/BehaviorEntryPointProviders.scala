@@ -18,9 +18,6 @@ import org.sireum.message.Reporter
 
 object BehaviorEntryPointProviders {
 
-  @strictpure def getPlugins(plugins: MSZ[Plugin]): MSZ[BehaviorEntryPointProviderPlugin] =
-    plugins.filter(f => f.isInstanceOf[BehaviorEntryPointProviderPlugin]).map(m => m.asInstanceOf[BehaviorEntryPointProviderPlugin])
-
   @pure def getMarkers(entries: ISZ[BehaviorEntryPointObjectContributions]): ISZ[Marker] = {
     return entries.filter(f => f.isInstanceOf[BehaviorEntryPointMethodContributions])
       .map((m: BehaviorEntryPointObjectContributions) => m.asInstanceOf[BehaviorEntryPointMethodContributions]).flatMap(f => f.markers)
@@ -50,11 +47,15 @@ object BehaviorEntryPointProviders {
     var noncases: ISZ[NonCaseContractBlock] = ISZ()
 
     @strictpure def canHandle(p: Plugin): B =
-      p.isInstanceOf[BehaviorEntryPointProviderPlugin] && p.asInstanceOf[BehaviorEntryPointProviderPlugin].canBehaviorHandleEntryPointProvider(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes)
+      p.isInstanceOf[BehaviorEntryPointProviderPlugin] && p.asInstanceOf[BehaviorEntryPointProviderPlugin].canHandleBehaviorEntryPointProvider(entryPoint, optInEventPort, component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes)
 
     var optBody: Option[ST] = None()
     for (p <- plugins if !reporter.hasError && canHandle(p)) {
-      p.asInstanceOf[BehaviorEntryPointProviderPlugin].handleBehaviorEntryPointProvider(entryPoint, optInEventPort, component, componentNames, excludeImpl, methodSig, defaultMethodBody, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
+      p.asInstanceOf[BehaviorEntryPointProviderPlugin].handleBehaviorEntryPointProvider(
+        entryPoint, optInEventPort, component, componentNames, excludeImpl,
+        methodSig, defaultMethodBody,
+        annexClauseInfos,
+        symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case b: FullMethodContributions =>
           if (optMethod.nonEmpty) {
             reporter.error(None(), toolName, "A behavior entry point plugin has already contributed a method implementation")
@@ -165,7 +166,9 @@ object BehaviorEntryPointProviders {
 
     var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
     for (p <- plugins if !reporter.hasError && p.isInstanceOf[BehaviorEntryPointProviderPlugin]) {
-      p.asInstanceOf[BehaviorEntryPointProviderPlugin].finaliseBehaviorEntryPointProvider(component, nameProvider, annexClauseInfos, basePackageName, symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
+      p.asInstanceOf[BehaviorEntryPointProviderPlugin].finaliseBehaviorEntryPointProvider(
+        component, nameProvider, annexClauseInfos,
+        symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
         case Some(x) =>
           ret = ret(
             tags = ret.tags ++ x.tags,
