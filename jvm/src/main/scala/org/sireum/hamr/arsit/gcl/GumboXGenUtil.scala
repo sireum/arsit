@@ -2,9 +2,11 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
+import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.{Direction, GclSubclause}
 import org.sireum.lang.ast.Typed
@@ -29,23 +31,43 @@ object GumboXGenUtil {
 
   @pure def genContainers(component: AadlThreadOrDevice,
                           componentNames: NameProvider,
+                          containerPath: String,
                           gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
-                          aadlTypes: AadlTypes): ((String, ST), (String, ST)) = {
+                          aadlTypes: AadlTypes): FileResource = {
+    var containers: ISZ[ST] = ISZ()
+
     val inPorts = inPortsToParams(component)
     val inStateVars = stateVarsToParams(gclSubclauseInfo, T, aadlTypes)
-    val preContainerName = genContainerName(componentNames, T)
-    val inContainer = genContainer(preContainerName, inPorts, inStateVars)
+
+    val preContainerName = genContainerName(componentNames, T, F)
+    containers = containers :+ genContainer(preContainerName, inPorts, ISZ())
+
+    if (inStateVars.nonEmpty) {
+      val prewLContainerName = genContainerName(componentNames, T, T)
+      containers = containers :+ genContainer(prewLContainerName, inPorts, inStateVars)
+    }
 
     val outPorts = outPortsToParams(component)
     val outStateVars = stateVarsToParams(gclSubclauseInfo, F, aadlTypes)
-    val postContainerName = genContainerName(componentNames, F)
-    val outContainer = genContainer(postContainerName, outPorts, outStateVars)
 
-    return ((preContainerName, inContainer), (postContainerName, outContainer))
+    val postContainerName = genContainerName(componentNames, F, F)
+    containers = containers :+ genContainer(postContainerName, outPorts, ISZ())
+
+    if (outStateVars.nonEmpty) {
+      val postwLContainerName = genContainerName(componentNames, F, T)
+      containers = containers :+ genContainer(postwLContainerName, outPorts, outStateVars)
+    }
+
+    val containerST = DSCTemplate.genTestVectorContainerClass(
+      packageName = componentNames.packageName,
+      imports = ISZ(s"${componentNames.basePackage}._"),
+      containers = containers)
+
+    return ResourceUtil.createResourceH(containerPath, containerST, T, T)
   }
 
-  @strictpure def genContainerName(componentNames: NameProvider, isPre: B): String =
-    s"${componentNames.componentSingletonType}_${if (isPre) "Pre" else "Post"}StateContainer"
+  @strictpure def genContainerName(componentNames: NameProvider, isPre: B, hasLocals: B): String =
+    s"${componentNames.componentSingletonType}_${if (isPre) "Pre" else "Post"}State${if(hasLocals) "_wL" else "_"}Container"
 
   @pure def genContainer(containerName: String,
                          ports: ISZ[GGParam],
@@ -213,23 +235,67 @@ object GumboXGenUtil {
     return comments
   }
 
-  @datatype class GGParam(val name: String,
-                          val originName: String,
-                          val aadlType: AadlType,
-                          val isOptional: B,
-                          val kind: SymbolKind.Type,
-                          @hidden val slangType: Option[AST.Typed],
-                          @hidden val origin: Option[AST.Exp]) {
-    val isInPort: B = kind == SymbolKind.ApiVarInData || kind == SymbolKind.ApiVarInEventData || kind == SymbolKind.ApiVarInEvent
-    val isOutPort: B = kind == SymbolKind.ApiVarOutData || kind == SymbolKind.ApiVarOutEventData || kind == SymbolKind.ApiVarOutEvent
-    val isStateVar: B = kind == SymbolKind.StateVar || kind == SymbolKind.StateVarPre
+  @datatype trait GGParam {
+    def name: String
+    def originName: String
+    def componentNames: NameProvider
+
+    def getSlangType: ST
+    def fetch: ST
+
+    def aadlType: AadlType
+    def kind: SymbolKind.Type
+
 
     @pure def getParamDef: String = {
-      return s"$name: ${getType}"
+      return s"$name: ${getSlangType}"
     }
 
-    @pure def getType: String = {
-      return if (isOptional) s"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]" else aadlType.nameProvider.qualifiedReferencedTypeName
+
+  }
+
+  @datatype class GGStateVarParam(val name: String,
+                                  val originName: String,
+                                  val componentNames: NameProvider,
+                                  val aadlType: AadlType,
+                                  val kind: SymbolKind.Type,
+                                  @hidden val slangType: Option[AST.Typed],
+                                  @hidden val origin: Option[AST.Exp]) extends GGParam {
+
+    @pure def getSlangType: ST = {
+      return st"${aadlType.nameProvider.qualifiedReferencedTypeName}"
+    }
+
+    @pure def fetch: ST = {
+      return st"${componentNames.componentSingletonTypeQualifiedName}.${name}"
+    }
+  }
+
+  @datatype class GGPortParam(val name: String,
+                              val originName: String,
+                              val componentNames: NameProvider,
+                              val aadlType: AadlType,
+                              val isIn: B,
+                              val isOptional: B,
+                              val kind: SymbolKind.Type,
+                              @hidden val slangType: Option[AST.Typed],
+                              @hidden val origin: Option[AST.Exp]) extends GGParam {
+
+    val archPortId: ST = st"Arch.${componentNames.componentSingletonType}.operational_api.${originName}_Id"
+
+    @pure def getSlangType: ST = {
+      return (
+        if (isOptional) st"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
+        else st"${aadlType.nameProvider.qualifiedReferencedTypeName}")
+    }
+
+    @pure def fetch: ST = {
+      val p = st"ArtNative.observeOutPortValue(Art.observeOutPortValue($archPortId).asInstanceOf[${getSlangType }])"
+      if (!isOptional) {
+        return st"$p.get"
+      } else {
+        return p
+      }
     }
   }
 

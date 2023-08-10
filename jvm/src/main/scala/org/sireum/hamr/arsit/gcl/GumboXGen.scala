@@ -978,13 +978,12 @@ object GumboXGen {
     var dscAllRandLibs: Set[String] = Set.empty
     var scalaTests: ISZ[ST] = ISZ()
     var dscGetTestVectors: ISZ[ST] = ISZ[ST]()
-    var dscTestVectorContainers: Set[String] = Set.empty
     var dscTestRunners: ISZ[ST] = ISZ[ST]()
 
 
     def process(testMethodName: String,
                 _dscRunnerSimpleName: String,
-                _dscContainerType: String,
+                dscContainerType: String,
                 suffix: String,
 
                 entrypoint: String,
@@ -1002,7 +1001,7 @@ object GumboXGen {
       val testCBMethodNameJson = s"${testMethodName}CB${suffix}J"
       val testCBMethodNameVector = s"${testMethodName}CB${suffix}V"
       val dscRunnerSimpleName = s"${_dscRunnerSimpleName}$suffix"
-      val dscContainerType = s"${_dscContainerType}$suffix"
+      //val dscContainerType = s"${_dscContainerType}$suffix"
 
       val inPortParams: ISZ[GGParam] = if (isInitialize) ISZ() else GumboXGenUtil.inPortsToParams(component)
 
@@ -1223,7 +1222,6 @@ object GumboXGen {
         var symDecls: ISZ[ST] = ISZ()
         var symActuals: ISZ[ST] = ISZ()
         var symActualsPretty: ISZ[ST] = ISZ()
-        var dscFieldDeclarations: ISZ[ST] = ISZ()
 
         for (param <- combinedParams) {
 
@@ -1249,12 +1247,9 @@ object GumboXGen {
           symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(rangenName, param.isOptional)}()"
           symActuals = symActuals :+ st"${param.name}"
           symActualsPretty = symActualsPretty :+ st"|  ${param.name} = $${o.${param.name}.string}"
-          dscFieldDeclarations = dscFieldDeclarations :+ st"val ${param.name}: ${wrapO(slangName, param.isOptional)}"
         }
 
         dscAllRandLibs = dscAllRandLibs ++ (for (s <- localRandLibs) yield s.render)
-
-        dscTestVectorContainers = dscTestVectorContainers + DSCTemplate.genTestVectorContainer(dscContainerType, dscFieldDeclarations).render
 
         val testVectorMethodName = s"next$suffix"
 
@@ -1284,7 +1279,6 @@ object GumboXGen {
       }
     } // end process method
 
-    val dscContainerType = s"${componentNames.componentSingletonType}_${DSCTemplate.dscContainerSuffix}"
     val dscTestRunnerSimpleName = ops.ISZOps(GumboXGen.createDSCTestRunnerClassName(componentNames)).last
 
     if (component.isPeriodic() && computeEntryPointHolder.contains(component.path)) {
@@ -1318,19 +1312,21 @@ object GumboXGen {
       }
 
       if (postInitMethodName.nonEmpty) {
-        process("testInitialise", dscTestRunnerSimpleName, dscContainerType, "",
+        process("testInitialise", dscTestRunnerSimpleName, "INFEASIBLE", "",
           "initialise",
           T, F, ISZ(),
           None(), ISZ(), postInitMethodName, postInitParams)
       }
 
-      process("testCompute", dscTestRunnerSimpleName, dscContainerType, "",
+      val containerType = GumboXGenUtil.genContainerName(componentNames, T, F)
+      process("testCompute", dscTestRunnerSimpleName, containerType, "",
         "compute",
         F, T, stateVars,
         preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams)
 
       if (stateVars.nonEmpty) {
-        process("testCompute", dscTestRunnerSimpleName, dscContainerType, "wL",
+        val container_wL_Type = GumboXGenUtil.genContainerName(componentNames, T, T)
+        process("testCompute", dscTestRunnerSimpleName, container_wL_Type, "wL",
           "compute",
           F, F, stateVars,
           preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams)
@@ -1416,14 +1412,6 @@ object GumboXGen {
 
       val testCasesPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${simpleTestCasesName}.scala"
       resources = resources :+ ResourceUtil.createResource(testCasesPath, testCaseContent, T)
-
-      val dscContainersClass = DSCTemplate.genTestVectorContainerClass(
-        packageName = componentNames.packageName,
-        imports = ISZ(s"${componentNames.basePackage}._"),
-        containers = for(d <- dscTestVectorContainers.elements) yield st"$d")
-
-      val dscContainersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${dscContainerType}s.scala"
-      resources = resources :+ ResourceUtil.createResourceH(dscContainersPath, dscContainersClass, T, T)
 
       val dscRunnerContent = DSCTemplate.dscRunnerClass(componentNames.packageName, componentNames.basePackage, dscTestRunners)
 

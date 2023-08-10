@@ -121,14 +121,8 @@ import org.sireum.message.Reporter
       case _ => None()
     }
 
-    val (inContainer, outContainer) = GumboXGenUtil.genContainers(component, componentNames, annexInfo, aadlTypes)
-    val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}_Containers.scala"
-    val containerST = DSCTemplate.genTestVectorContainerClass(
-      packageName = componentNames.packageName,
-      imports = ISZ(s"${componentNames.basePackage}._"),
-      containers = ISZ(inContainer._2, outContainer._2)
-    )
-    resources = resources :+ ResourceUtil.createResourceH(containersPath, containerST, T, T)
+    val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
+    resources = resources :+ GumboXGenUtil.genContainers(component, componentNames, containersPath, annexInfo, aadlTypes)
 
     val preInitMethodName = s"pre_${EntryPoints.initialise.name}"
     val postInitMethodName = s"post_${EntryPoints.initialise.name}"
