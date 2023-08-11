@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.ProjectDirectories
 import org.sireum.hamr.arsit.gcl.GumboXGen._
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, SymbolKind, paramsToComment, sortParam}
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
 import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
@@ -15,38 +15,10 @@ import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir._
-import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
 import org.sireum.message.Reporter
 
 object GumboXGen {
-
-  @datatype class ContractHolder(val methodName: ISZ[String],
-                                 val params: ISZ[GGParam],
-                                 val imports: ISZ[String],
-                                 val content: ST)
-
-  @sig trait IntegrationHolder {
-    def method: ContractHolder
-
-    def guard: ContractHolder
-  }
-
-  @datatype class IntegrationAssumeHolder(val method: ContractHolder,
-                                          val guard: ContractHolder) extends IntegrationHolder
-
-  @datatype class IntegrationGuaranteeHolder(val method: ContractHolder,
-                                             val guard: ContractHolder) extends IntegrationHolder
-
-  @datatype class DataInvariantHolder(val D_Inv_Method_Name: ISZ[String],
-                                      val D_Inv_Guard_Method_Name: ISZ[String],
-                                      //val D_Inv_Mem_FQ_MethodName: ISZ[String], // TODO
-                                      val resource: FileResource)
-
-  @datatype class InitializeEntryPointHolder(val IEP_Guar: ContractHolder)
-
-  @datatype class ComputeEntryPointHolder(val CEP_Pre: Option[ContractHolder],
-                                          val CEP_Post: Option[ContractHolder])
 
   @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexClauseInfo] = {
     symbolTable.componentMap.get(componentPath) match {
@@ -63,19 +35,6 @@ object GumboXGen {
     }
   }
 
-  @record class InvariantRewriter() extends org.sireum.hamr.ir.MTransformer {
-    override def pre_langastExpIdent(o: AST.Exp.Ident): org.sireum.hamr.ir.MTransformer.PreResult[AST.Exp] = {
-      o.attr.resOpt match {
-        case Some(v: AST.ResolvedInfo.Var) =>
-          val value = AST.Exp.Ident(id = AST.Id(value = "value", attr = AST.Attr(posOpt = o.posOpt)), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
-          val select = AST.Exp.Select(receiverOpt = Some(value), id = o.id, targs = ISZ(), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
-          return org.sireum.hamr.ir.MTransformer.PreResult(F, MSome(select))
-        case _ =>
-          return org.sireum.hamr.ir.MTransformer.PreResult(T, MNone())
-      }
-    }
-  }
-
   def rewriteInvariant(exp: AST.Exp): AST.Exp = {
     InvariantRewriter().transform_langastExp(exp) match {
       case MSome(e) => return e
@@ -83,15 +42,15 @@ object GumboXGen {
     }
   }
 
-  @pure def createInvariantObjectName(aadlType: AadlType): ISZ[String] = {
-    val o = ops.ISZOps(aadlType.nameProvider.qualifiedReferencedTypeNameI)
-    return o.dropRight(1) :+ s"${o.last}_GumboX"
-  }
-
   @pure def createInvariantMethodName(aadlType: AadlType): (ISZ[String], ISZ[String]) = {
     return ((
       createInvariantObjectName(aadlType) :+ s"D_Inv_${aadlType.nameProvider.typeName}",
       createInvariantObjectName(aadlType) :+ s"D_Inv_Guard_${aadlType.nameProvider.typeName}"))
+  }
+
+  @pure def createInvariantObjectName(aadlType: AadlType): ISZ[String] = {
+    val o = ops.ISZOps(aadlType.nameProvider.qualifiedReferencedTypeNameI)
+    return o.dropRight(1) :+ s"${o.last}_GumboX"
   }
 
   @pure def createIntegrationMethodName(isGuarantee: B, aadlPort: AadlPort, componentNames: NameProvider): (ISZ[String], ISZ[String]) = {
@@ -107,12 +66,12 @@ object GumboXGen {
     return s"${GumboGen.convertToMethodName(id)}_Invariant"
   }
 
-  @pure def createComponentGumboXObjectName(componentNames: NameProvider): ISZ[String] = {
-    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX"
-  }
-
   @pure def getInitialize_IEP_Guar_Methodname(componentNames: NameProvider): ISZ[String] = {
     return createComponentGumboXObjectName(componentNames) :+ s"initialize_IEP_Guar"
+  }
+
+  @pure def createComponentGumboXObjectName(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX"
   }
 
   @pure def getInitializeGuaranteeMethodName(id: String, componentNames: NameProvider): ISZ[String] = {
@@ -195,6 +154,46 @@ object GumboXGen {
     }
     return ret
   }
+
+  @sig trait IntegrationHolder {
+    def method: ContractHolder
+
+    def guard: ContractHolder
+  }
+
+  @datatype class ContractHolder(val methodName: ISZ[String],
+                                 val params: ISZ[GGParam],
+                                 val imports: ISZ[String],
+                                 val content: ST)
+
+  @datatype class IntegrationAssumeHolder(val method: ContractHolder,
+                                          val guard: ContractHolder) extends IntegrationHolder
+
+  @datatype class IntegrationGuaranteeHolder(val method: ContractHolder,
+                                             val guard: ContractHolder) extends IntegrationHolder
+
+  @datatype class DataInvariantHolder(val D_Inv_Method_Name: ISZ[String],
+                                      val D_Inv_Guard_Method_Name: ISZ[String],
+                                      //val D_Inv_Mem_FQ_MethodName: ISZ[String], // TODO
+                                      val resource: FileResource)
+
+  @datatype class InitializeEntryPointHolder(val IEP_Guar: ContractHolder)
+
+  @datatype class ComputeEntryPointHolder(val CEP_Pre: Option[ContractHolder],
+                                          val CEP_Post: Option[ContractHolder])
+
+  @record class InvariantRewriter() extends org.sireum.hamr.ir.MTransformer {
+    override def pre_langastExpIdent(o: AST.Exp.Ident): org.sireum.hamr.ir.MTransformer.PreResult[AST.Exp] = {
+      o.attr.resOpt match {
+        case Some(v: AST.ResolvedInfo.Var) =>
+          val value = AST.Exp.Ident(id = AST.Id(value = "value", attr = AST.Attr(posOpt = o.posOpt)), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
+          val select = AST.Exp.Select(receiverOpt = Some(value), id = o.id, targs = ISZ(), attr = AST.ResolvedAttr(posOpt = o.posOpt, resOpt = None(), typedOpt = None()))
+          return org.sireum.hamr.ir.MTransformer.PreResult(F, MSome(select))
+        case _ =>
+          return org.sireum.hamr.ir.MTransformer.PreResult(T, MNone())
+      }
+    }
+  }
 }
 
 
@@ -225,76 +224,6 @@ object GumboXGen {
     processInitializeEntrypoint(component, componentNames, gclSubclauseInfo, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
 
     processComputeEntrypoints(component, componentNames, gclSubclauseInfo, basePackageName, symbolTable, aadlTypes, projectDirectories, reporter)
-  }
-
-  def processDatatypes(basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
-    assert(dataInvariants.isEmpty, "Unexpected: processDatatypes should only be called once per project")
-
-    for (aadlType <- aadlTypes.typeMap.values) {
-      val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
-      if (ais.nonEmpty) {
-        assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
-        val ai = ais(0)
-
-        resetImports()
-
-        var ret: ISZ[ST] = ISZ()
-
-        var methodNames: ISZ[String] = ISZ()
-        for (i <- ai.annex.invariants) {
-          val methodName = convertInvariantToMethodName(i.id, aadlType)
-
-          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
-
-          val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
-          methodNames = methodNames :+ methodName
-          ret = ret :+
-            st"""/** invariant ${i.id}
-                |  ${descriptor}
-                |  */
-                |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, ai.gclSymbolTable))}"""
-        }
-
-        val objectName = GumboXGen.createInvariantObjectName(aadlType)
-        val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
-
-        val simple = ops.ISZOps(d_inv_method_name).last
-        ret = ret :+
-          st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
-              |  */
-              |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-              |  (${(methodNames, "(value) &\n")}(value))"""
-
-        ret = ret :+
-          st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
-              |  */
-              |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
-              |  value.nonEmpty -->: $simple(value.get)"""
-
-        val content =
-          st"""// #Sireum
-              |
-              |package ${aadlType.nameProvider.qualifiedPackageName}
-              |
-              |import org.sireum._
-              |import ${basePackageName}._
-              |${StubTemplate.addImports(imports)}
-              |
-              |${StringTemplate.doNotEditComment()}
-              |object ${ops.ISZOps(objectName).last} {
-              |  ${(ret, "\n\n")}
-              |}"""
-
-        val path = s"${directories.dataDir}/${aadlType.nameProvider.outputDirectory}/${ops.ISZOps(objectName).last}.scala"
-        dataInvariants = dataInvariants + aadlType.name ~>
-          DataInvariantHolder(
-            D_Inv_Method_Name = d_inv_method_name,
-            D_Inv_Guard_Method_Name = d_inv_guard_method_name,
-            resource = ResourceUtil.createResource(path, content, T)
-          )
-      }
-    }
   }
 
   def processIntegerationConstraints(component: AadlThreadOrDevice, componentNames: NameProvider,
@@ -378,8 +307,15 @@ object GumboXGen {
     var IEP_Guard: ISZ[ST] = ISZ()
     var IEP_Guard_Blocks: ISZ[ST] = ISZ()
     var IEP_Guar_Params: Set[GGParam] = Set.empty[GGParam] ++
-      GumboXGenUtil.outPortsToParams(component) ++
-      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, F, aadlTypes)
+      GumboXGenUtil.outPortsToParams(component, componentNames) ++
+      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, F, aadlTypes)
+
+    val stateVars: ISZ[GclStateVar] = {
+      gclSubclauseInfo match {
+        case Some((a, b)) => a.state
+        case _ => ISZ()
+      }
+    }
 
     gclSubclauseInfo match {
       case Some((GclSubclause(_, _, _, Some(initializes), _, _), gclSymbolTable)) =>
@@ -397,7 +333,7 @@ object GumboXGen {
           val methodName = GumboXGen.getInitializeGuaranteeMethodName(spec.id, componentNames)
           val simpleMethodName = ops.ISZOps(methodName).last
 
-          val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
+          val gg = GumboXGenUtil.rewriteToExpX(rspec, component, componentNames, aadlTypes, stateVars)
           IEP_Guar_Params = IEP_Guar_Params ++ gg.params.elements
           val sortedParams = GumboXGenUtil.sortParam(gg.params.elements)
 
@@ -447,14 +383,20 @@ object GumboXGen {
     integrationClauses.get(component.path) match {
       case Some(clauses) =>
         for (pair <- clauses if GumboXGenUtil.isOutPort(symbolTable.featureMap.get(pair._1).get)) {
+          val port = symbolTable.featureMap.get(pair._1).get.asInstanceOf[AadlPort]
+          val isEvent = !GumboXGenUtil.isDataPort(port)
+
+          val methodToUse: ISZ[String] =
+            if (isEvent) pair._2.guard.methodName
+            else pair._2.method.methodName
+
           val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-          val originName = ops.ISZOps(pair._1).last
-          val paramName = s"api_${originName}"
-          val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
-          val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
-          val methodToUse: ISZ[String] = if (isOptional) pair._2.guard.methodName else pair._2.method.methodName
-          I_Guar_Guar_Params = I_Guar_Guar_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
-          I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}($paramName)"
+          val param = GGPortParam(
+            port = port,
+            componentNames = componentNames,
+            aadlType = aadlType)
+          I_Guar_Guar_Params = I_Guar_Guar_Params + param
+          I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}(${param.name})"
         }
       case _ =>
     }
@@ -524,13 +466,20 @@ object GumboXGen {
     var CEP_T_Guar: Option[ContractHolder] = None()
 
     var CEP_Pre_Params: Set[GGParam] = Set.empty[GGParam] ++
-      GumboXGenUtil.inPortsToParams(component) ++
-      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, T, aadlTypes)
+      GumboXGenUtil.inPortsToParams(component, componentNames) ++
+      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, T, aadlTypes)
 
     var CEP_Post_Params: Set[GGParam] = Set.empty[GGParam] ++
-      GumboXGenUtil.outPortsToParams(component) ++
-      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, T, aadlTypes) ++
-      GumboXGenUtil.stateVarsToParams(gclSubclauseInfo, F, aadlTypes)
+      GumboXGenUtil.outPortsToParams(component, componentNames) ++
+      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, T, aadlTypes) ++
+      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, F, aadlTypes)
+
+    val stateVars: ISZ[GclStateVar] = {
+      gclSubclauseInfo match {
+        case Some((a, b)) => a.state
+        case _ => ISZ()
+      }
+    }
 
     gclSubclauseInfo match {
       case Some((GclSubclause(_, _, _, _, _, Some(gclCompute)), gclSymbolTable)) => {
@@ -551,7 +500,7 @@ object GumboXGen {
 
             spec match {
               case g: GclAssume =>
-                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, componentNames, aadlTypes, stateVars)
                 val methodName = st"compute_spec_${g.id}_assume"
 
                 CEP_T_Assm_Params = CEP_T_Assm_Params ++ gg.params.elements
@@ -574,7 +523,7 @@ object GumboXGen {
                 topLevelAssumes = topLevelAssumes :+ method
 
               case g: GclGuarantee =>
-                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, aadlTypes)
+                val gg = GumboXGenUtil.rewriteToExpX(rspec, component, componentNames, aadlTypes, stateVars)
                 val methodName = st"compute_spec_${g.id}_guarantee"
 
                 CEP_T_Guar_Params = CEP_T_Guar_Params ++ gg.params.elements
@@ -647,12 +596,12 @@ object GumboXGen {
             val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
 
-            val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, component, aadlTypes)
+            val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, component, componentNames, aadlTypes, stateVars)
 
             val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
-            val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, component, aadlTypes)
+            val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, component, componentNames, aadlTypes, stateVars)
             val methodName = st"compute_case_${generalCase.id}"
 
             val combinedAssmGuarParam = ggAssm.params ++ ggGuar.params.elements
@@ -716,12 +665,13 @@ object GumboXGen {
         case Some(clauses) =>
           for (pair <- clauses if GumboXGenUtil.isInPort(symbolTable.featureMap.get(pair._1).get)) {
             val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val originName = ops.ISZOps(pair._1).last
-            val paramName = s"api_${originName}"
-            val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
-            val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
-            I_Assm_Guard_Params = I_Assm_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
-            I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}($paramName)"
+            val port = symbolTable.featureMap.get(pair._1).get.asInstanceOf[AadlPort]
+            val param = GGPortParam(
+              port = port,
+              componentNames = componentNames,
+              aadlType = aadlType)
+            I_Assm_Guard_Params = I_Assm_Guard_Params + param
+            I_Assm_Guard = I_Assm_Guard :+ st"${ops.ISZOps(pair._2.guard.methodName).last}(${param.name})"
           }
         case _ =>
       }
@@ -801,14 +751,17 @@ object GumboXGen {
       integrationClauses.get(component.path) match {
         case Some(clauses) =>
           for (pair <- clauses if GumboXGenUtil.isOutPort(symbolTable.featureMap.get(pair._1).get)) {
-            val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
-            val originName = ops.ISZOps(pair._1).last
-            val paramName = s"api_${originName}"
             val isOptional = !GumboXGenUtil.isDataPort(symbolTable.featureMap.get(pair._1).get)
             val methodToUse: ISZ[String] = if (isOptional) pair._2.guard.methodName else pair._2.method.methodName
-            val kind = GumboXGenUtil.getPortKind(GumboXGenUtil.getPort(originName, component))
-            I_Guar_Guard_Params = I_Guar_Guard_Params + GGParam(paramName, originName, aadlType, isOptional, kind, None(), None())
-            I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}($paramName)"
+
+            val port = symbolTable.featureMap.get(pair._1).get.asInstanceOf[AadlPort]
+            val (aadlType, _) = GumboXGen.getPortInfo(symbolTable.featureMap.get(pair._1).get)
+            val param = GGPortParam(
+              port = port,
+              componentNames = componentNames,
+              aadlType = aadlType)
+            I_Guar_Guard_Params = I_Guar_Guard_Params + param
+            I_Guar_Guard = I_Guar_Guard :+ st"${ops.ISZOps(methodToUse).last}(${param.name})"
           }
         case _ =>
       }
@@ -894,6 +847,84 @@ object GumboXGen {
     }
     computeEntryPointHolder = computeEntryPointHolder + component.path ~>
       ComputeEntryPointHolder(CEP_Pre, CEP_Post)
+  }
+
+  def processDatatypes(basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
+    assert(dataInvariants.isEmpty, "Unexpected: processDatatypes should only be called once per project")
+
+    for (aadlType <- aadlTypes.typeMap.values) {
+      val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
+      if (ais.nonEmpty) {
+        assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
+        val ai = ais(0)
+
+        resetImports()
+
+        var ret: ISZ[ST] = ISZ()
+
+        var methodNames: ISZ[String] = ISZ()
+        for (i <- ai.annex.invariants) {
+          val methodName = convertInvariantToMethodName(i.id, aadlType)
+
+          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
+
+          val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
+          methodNames = methodNames :+ methodName
+          ret = ret :+
+            st"""/** invariant ${i.id}
+                |  ${descriptor}
+                |  */
+                |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+                |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, ai.gclSymbolTable))}"""
+        }
+
+        val objectName = GumboXGen.createInvariantObjectName(aadlType)
+        val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
+
+        val simple = ops.ISZOps(d_inv_method_name).last
+        ret = ret :+
+          st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+              |  */
+              |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+              |  (${(methodNames, "(value) &\n")}(value))"""
+
+        ret = ret :+
+          st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+              |  */
+              |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
+              |  value.nonEmpty -->: $simple(value.get)"""
+
+        val content =
+          st"""// #Sireum
+              |
+              |package ${aadlType.nameProvider.qualifiedPackageName}
+              |
+              |import org.sireum._
+              |import ${basePackageName}._
+              |${StubTemplate.addImports(imports)}
+              |
+              |${StringTemplate.doNotEditComment()}
+              |object ${ops.ISZOps(objectName).last} {
+              |  ${(ret, "\n\n")}
+              |}"""
+
+        val path = s"${directories.dataDir}/${aadlType.nameProvider.outputDirectory}/${ops.ISZOps(objectName).last}.scala"
+        dataInvariants = dataInvariants + aadlType.name ~>
+          DataInvariantHolder(
+            D_Inv_Method_Name = d_inv_method_name,
+            D_Inv_Guard_Method_Name = d_inv_guard_method_name,
+            resource = ResourceUtil.createResource(path, content, T)
+          )
+      }
+    }
+  }
+
+  def resetImports(): Unit = {
+    imports = ISZ()
+  }
+
+  def getRExp(e: AST.Exp, basePackageName: String, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable): AST.Exp = {
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
   }
 
   def finalise(component: AadlThreadOrDevice, componentNames: NameProvider, projectDirectories: ProjectDirectories): ObjectContributions = {
@@ -995,15 +1026,16 @@ object GumboXGen {
                 preMethodName: Option[String], preParams: ISZ[GGParam],
                 postMethodName: Option[String], postParams: ISZ[GGParam]): Unit = {
 
-      assert (isInitialize -->: stateVars.isEmpty)
+      assert(isInitialize -->: stateVars.isEmpty)
 
       val testCBMethodName = s"${testMethodName}CB$suffix"
       val testCBMethodNameJson = s"${testMethodName}CB${suffix}J"
       val testCBMethodNameVector = s"${testMethodName}CB${suffix}V"
       val dscRunnerSimpleName = s"${_dscRunnerSimpleName}$suffix"
-      //val dscContainerType = s"${_dscContainerType}$suffix"
 
-      val inPortParams: ISZ[GGParam] = if (isInitialize) ISZ() else GumboXGenUtil.inPortsToParams(component)
+      val inPortParams: ISZ[GGParam] =
+        if (isInitialize) ISZ()
+        else GumboXGenUtil.inPortsToParams(component, componentNames)
 
       var preStateParams: Set[GGParam] = Set.empty[GGParam]
 
@@ -1011,9 +1043,13 @@ object GumboXGen {
       var setInLocal: ISZ[ST] = ISZ()
 
       for (stateVar <- stateVars) {
-        val aadlType = aadlTypes.typeMap.get(stateVar.classifier).get
-        val isOptional: B = F // state vars cannot be optional
-        val stateParam = GGParam(s"In_${stateVar.name}", stateVar.name, aadlType, isOptional, SymbolKind.StateVarPre, None(), None())
+        val stateParam =
+          GGStateVarParam(
+            stateVar = stateVar,
+            isPreState = T,
+            aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
+
+            componentNames = componentNames)
 
         preStateParams = preStateParams + stateParam
 
@@ -1028,11 +1064,13 @@ object GumboXGen {
       val step1: Option[ST] = {
         if (!isInitialize && captureStateVars)
           (if (saveInLocalAsVar.nonEmpty)
-            Some(st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
-                     |${(saveInLocalAsVar, "\n")}""")
+            Some(
+              st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
+                  |${(saveInLocalAsVar, "\n")}""")
           else
-            Some(st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
-                     |//   ${component.identifier} does not have incoming ports or state variables"""))
+            Some(
+              st"""// [SaveInLocal]: retrieve and save the current (input) values of GUMBO-declared local state variables as retrieved from the component state
+                  |//   ${component.identifier} does not have incoming ports or state variables"""))
         else None()
       }
 
@@ -1059,7 +1097,7 @@ object GumboXGen {
       }
 
       var step3: Option[ST] = None()
-      if(!isInitialize) {
+      if (!isInitialize) {
         val putInPorts: ST = {
           if (inPortParams.nonEmpty) {
             var putters: ISZ[ST] = ISZ()
@@ -1116,7 +1154,7 @@ object GumboXGen {
       val step4: ST =
         st"""if (verbose) {
             |  println(st${tq}Pre State Values:
-            |              ${(for(p <- stateAndInPorts) yield s"|  ${p.name} = $${${p.name}.string}", "\n")}${tq}.render)
+            |              ${(for (p <- stateAndInPorts) yield s"|  ${p.name} = $${${p.name}.string}", "\n")}${tq}.render)
             |}
             |
             |// [InvokeEntryPoint]: invoke the entry point test method
@@ -1138,9 +1176,11 @@ object GumboXGen {
       annexInfo match {
         case Some((annex, _)) =>
           for (stateVar <- annex.state) {
-            val typ = aadlTypes.typeMap.get(stateVar.classifier).get
-            val isOptional: B = F // state var cannot be optional
-            val postSVGG = GGParam(stateVar.name, stateVar.name, typ, isOptional, SymbolKind.StateVar, None(), None())
+            val postSVGG = GGStateVarParam(
+              stateVar = stateVar,
+              isPreState = F,
+              aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
+              componentNames = componentNames)
             postOracleParams = postOracleParams + postSVGG
             step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"
             step5PostValuePrinters = step5PostValuePrinters :+ st"|  ${postSVGG.name} = $${${postSVGG.name}.string}"
@@ -1183,17 +1223,18 @@ object GumboXGen {
       val symContainerExtractors: ISZ[ST] = for (param <- combinedParams) yield st"o.${param.name}"
       val vectorExtractor: Option[ST] =
         if (symContainerExtractors.nonEmpty)
-          Some(st"""def $testCBMethodNameJson(json: String): GumboXResult.Type = {
-                   |  ${DSCTemplate.jsonMethod(F, componentNames, dscContainerType)}(json) match {
-                   |    case Either.Left(o) => return $testCBMethodNameVector(o)
-                   |    case Either.Right(msg) => halt(msg.string)
-                   |  }
-                   |}
-                   |
-                   |def $testCBMethodNameVector(o: $dscContainerType): GumboXResult.Type = {
-                   |  return $testCBMethodName(${(symContainerExtractors, ",")})
-                   |}
-                   |""")
+          Some(
+            st"""def $testCBMethodNameJson(json: String): GumboXResult.Type = {
+                |  ${DSCTemplate.jsonMethod(F, componentNames, dscContainerType)}(json) match {
+                |    case Either.Left(o) => return $testCBMethodNameVector(o)
+                |    case Either.Right(msg) => halt(msg.string)
+                |  }
+                |}
+                |
+                |def $testCBMethodNameVector(o: $dscContainerType): GumboXResult.Type = {
+                |  return $testCBMethodName(${(symContainerExtractors, ",")})
+                |}
+                |""")
         else None()
 
       val sortedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
@@ -1225,26 +1266,10 @@ object GumboXGen {
 
         for (param <- combinedParams) {
 
-          val (rangenName, slangName): (String, String) = param.aadlType match {
-            case i: BaseType => (i.slangType.name, i.slangType.name)
-            case i: EnumType =>
-              val qname: ISZ[String] = i.nameProvider.basePackageName +: (i.nameProvider.qualifiedTypeNameI :+ "Type")
-              val r = Resolver.typeName(ISZ(i.nameProvider.basePackageName), qname).render
-              (r, i.nameProvider.qualifiedReferencedTypeName)
-            case i =>
-              val qname: ISZ[String] =
-                if (i == TypeUtil.EmptyType) i.nameProvider.qualifiedReferencedTypeNameI
-                else i.nameProvider.basePackageName +: i.nameProvider.qualifiedReferencedTypeNameI
-              val r = Resolver.typeName(ISZ(i.nameProvider.basePackageName), qname).render
-              (r, i.nameProvider.qualifiedReferencedTypeName)
-          }
-
-          @strictpure def wrapO(s: String, opt: B): String = if (opt) s"Option[$s]" else s
-
           @strictpure def wrapS(s: String, opt: B): String = if (opt) s"Option$s" else s
 
           localRandLibs = localRandLibs :+ st"val ranLib${param.originName}: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
-          symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(rangenName, param.isOptional)}()"
+          symDecls = symDecls :+ st"val ${param.name} = ranLib${param.originName}.next${wrapS(param.ranGenName, param.isOptional)}()"
           symActuals = symActuals :+ st"${param.name}"
           symActualsPretty = symActualsPretty :+ st"|  ${param.name} = $${o.${param.name}.string}"
         }
@@ -1424,14 +1449,6 @@ object GumboXGen {
     }
 
     return emptyObjectContributions(resources = resources)
-  }
-
-  def resetImports(): Unit = {
-    imports = ISZ()
-  }
-
-  def getRExp(e: AST.Exp, basePackageName: String, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
   }
 
   def getR2Exp(e: AST.Exp.Ref, basePackageName: String, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable): AST.Exp = {
