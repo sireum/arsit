@@ -5,10 +5,11 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
 import org.sireum.hamr.arsit.plugin.{BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin}
-import org.sireum.hamr.arsit.templates.{EntryPointTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
+import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
@@ -121,8 +122,11 @@ import org.sireum.message.Reporter
       case _ => None()
     }
 
+    val containers = GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes)
+
     val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
-    resources = resources :+ GumboXGenUtil.genContainers(component, componentNames, containersPath, annexInfo, aadlTypes)
+    resources = resources :+
+      ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
 
     val preInitMethodName = s"pre_${EntryPoints.initialise.name}"
     val postInitMethodName = s"post_${EntryPoints.initialise.name}"
@@ -130,19 +134,33 @@ import org.sireum.message.Reporter
     val initBody =
       st"""${epCompanionName}.${preInitMethodName}()
           |
-          |${entryPointTemplate.defaultInitialiseBody}
+          |// implement the following method in 'component':  def ${EntryPoints.initialise.string}(api: ${componentNames.apiInitialization}): Unit = {}
+          |component.${EntryPoints.initialise.string}(${ApiTemplate.apiInitializationId})
           |
-          |${epCompanionName}.${postInitMethodName}()"""
+          |${epCompanionName}.${postInitMethodName}()
+          |
+          |Art.sendOutput(eventOutPortIds, dataOutPortIds)"""
 
 
     val preComputeMethodName = s"pre_${EntryPoints.compute.name}"
     val postComputeMethodName = s"post_${EntryPoints.compute.name}"
-    val computeBody =
-      st"""${epCompanionName}.${preComputeMethodName}()
-          |
-          |${entryPointTemplate.defaultComputeBody}
-          |
-          |${epCompanionName}.${postComputeMethodName}()"""
+
+    // TODO:
+    val computeBody: ST = {
+      val s = StringUtil.split_PreserveEmptySegments(entryPointTemplate.defaultComputeBody.render, c => c == '\n')
+      var newLines: ISZ[String] = ISZ()
+      for(l <- s) {
+        val o = ops.StringOps(l)
+        if (o.contains("Art.receiveInput")) {
+          newLines = newLines :+ l :+ s"\n${epCompanionName}.${preComputeMethodName}()"
+        } else if (o.contains("Art.sendOutput")) {
+          newLines = newLines :+ s"${epCompanionName}.${postComputeMethodName}()\n\n$l"
+        } else {
+          newLines = newLines :+ l
+        }
+      }
+      st"${(newLines, "\n")}"
+    }
 
     val gEntryPoint = entryPointTemplate.generateCustomST(
       blocks = ISZ(),
@@ -155,7 +173,7 @@ import org.sireum.message.Reporter
       finaliseBody = None(),
       recoverBody = None()
     )
-
+/*
     val epCompanion =
       st"""@ext object ${epCompanionName} {
           |  def ${preInitMethodName}(): Unit = $$
@@ -164,9 +182,42 @@ import org.sireum.message.Reporter
           |  def ${preComputeMethodName}(): Unit = $$
           |  def ${postComputeMethodName}(): Unit = $$
           |}"""
+*/
+    val preContainer: String = "preStateContainer_wL"
+    val postContainer: String = "postStateContainer_wL"
+    val optInit: ST =
+      if (this.gumboXGen.initializeEntryPointHolder.contains(component.path)) {
+        val simpleCepPreContainer = GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)
+        st"""val result: B = ${(simpleCepPreContainer, ".")}($postContainer)
+            |println(s"${component.identifier}.initialise: Post-condition: $${if (result) "" else "un"}satisfied")"""
+      } else {
+        st"// checking the post-state values of ${component.identifier}'s initialise entrypoint is not required"
+      }
+
+    val optPreCompute: ST =
+      this.gumboXGen.computeEntryPointHolder.get(component.path) match {
+        case Some(holder) if holder.CEP_Pre.nonEmpty =>
+          val simpleCepPreContainer = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
+          st"""val result: B = ${simpleCepPreContainer}(${preContainer}.get)
+              |println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")"""
+        case _ =>
+          st"// checking the pre-state values of ${component.identifier}'s compute entrypoint is not required"
+      }
+
+    val optPostCompute: ST =
+      this.gumboXGen.computeEntryPointHolder.get(component.path) match {
+        case Some(holder) if holder.CEP_Post.nonEmpty =>
+          val simpleCepPostContainer = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
+          st"""val result: B = ${simpleCepPostContainer}(${preContainer}.get, $postContainer)
+              |println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")"""
+        case _ =>
+          st"// checking the post-state values of ${component.identifier}'s compute entrypoint is not required"
+      }
 
     val epCompanionExt =
-      st"""package ${componentNames.packageName}
+      st"""// #Sireum
+          |
+          |package ${componentNames.packageName}
           |
           |import org.sireum._
           |import art._
@@ -174,28 +225,63 @@ import org.sireum.message.Reporter
           |
           |${StringTemplate.doNotEditComment()}
           |
-          |object ${epCompanionName}_Ext {
+          |object ${epCompanionName} {
+          |
+          |  ${containers.lastDataPortVars}
+          |  var $preContainer: Option[${GumboXGenUtil.genContainerName(componentNames.componentSingletonType, T, T)}] = None()
+          |
           |  def ${preInitMethodName}(): Unit = {
           |    // assume/require contracts cannot refer to incoming ports or
           |    // state variables so nothing to do here
           |  }
           |
           |  def ${postInitMethodName}(): Unit = {
+          |    // block the component while its post-state values are retrieved
+          |    val postStateContainer_wL =
+          |      ${containers.capturePostState_wL()}
           |
+          |    // the rest of this could be done in a separate thread
+          |
+          |    val json = ${containers.postStateContainerJsonFrom_wL}(postStateContainer_wL, T)
+          |    println(s"${component.identifier}.initialise: Post-State values: $$json")
+          |
+          |    $optInit
           |  }
           |
-          |  def ${preComputeMethodName}(): Unit = {}
+          |  def ${preComputeMethodName}(): Unit = {
+          |    // block the component while its pre-state values are retrieved
+          |    $preContainer = Some(
+          |      ${containers.capturePreState_wL()})
           |
-          |  def ${postComputeMethodName}(): Unit = {}
+          |    // the rest of this could be done in a separate thread
+          |
+          |    val json = ${containers.preStateContainerJsonFrom_wL}(preStateContainer_wL.get, T)
+          |    println(s"${component.identifier}.timeTriggered: Pre-State values: $$json")
+          |
+          |    $optPreCompute
+          |  }
+          |
+          |  def ${postComputeMethodName}(): Unit = {
+          |    // block the component while its post-state values are retrieved
+          |    val postStateContainer_wL =
+          |      ${containers.capturePostState_wL()}
+          |
+          |    // the rest of this could be done in a separate thread
+          |
+          |    val json = ${containers.postStateContainerJsonFrom_wL}(postStateContainer_wL, T)
+          |    println(s"${component.identifier}.timeTriggered: Post-State values: $$json")
+          |
+          |    $optPostCompute
+          |  }
           |}"""
 
-    val path = s"${projectDirectories.bridgeDir}/${componentNames.packagePath}/${epCompanionName}_Ext.scala"
+    val path = s"${projectDirectories.bridgeDir}/${componentNames.packagePath}/${epCompanionName}.scala"
     val epCompanionExtR =
       ResourceUtil.createResource(path, epCompanionExt, T)
 
     return EntryPointProviderPlugin.EntryPointContributions(
       imports = ISZ(),
-      bridgeCompanionBlocks = ISZ(epCompanion.render),
+      bridgeCompanionBlocks = ISZ(),
       entryPoint = gEntryPoint,
       resources = resources :+ epCompanionExtR
     )

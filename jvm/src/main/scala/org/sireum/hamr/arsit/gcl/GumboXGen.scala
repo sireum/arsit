@@ -82,6 +82,10 @@ object GumboXGen {
     return createComponentGumboXObjectName(componentNames) :+ s"inititialize_IEP_Post"
   }
 
+  @pure def getInitialize_IEP_Post_Container_MethodName(componentNames: NameProvider): ISZ[String] = {
+    return createComponentGumboXObjectName(componentNames) :+ s"inititialize_IEP_Post_Container"
+  }
+
   @pure def getCompute_CEP_T_Assm_MethodName(componentNames: NameProvider): ISZ[String] = {
     return createComponentGumboXObjectName(componentNames) :+ s"compute_CEP_T_Assm"
   }
@@ -98,8 +102,16 @@ object GumboXGen {
     return createComponentGumboXObjectName(componentNames) :+ s"compute_CEP_Pre"
   }
 
+  @pure def getCompute_CEP_Pre_Container_MethodName(componentNames: NameProvider): ISZ[String] = {
+    return createComponentGumboXObjectName(componentNames) :+ s"compute_CEP_Pre_Container"
+  }
+
   @pure def getCompute_CEP_Post_MethodName(componentNames: NameProvider): ISZ[String] = {
     return createComponentGumboXObjectName(componentNames) :+ s"compute_CEP_Post"
+  }
+
+  @pure def getCompute_CEP_Post_Container_MethodName(componentNames: NameProvider): ISZ[String] = {
+    return createComponentGumboXObjectName(componentNames) :+ s"compute_CEP_Post_Container"
   }
 
   @pure def createTestHarnessGumboXClassName(componentNames: NameProvider): ISZ[String] = {
@@ -448,7 +460,18 @@ object GumboXGen {
             |    ${(for (p <- sorted_IEP_Post_Params) yield p.getParamDef, ",\n")}): B =
             |  (${(segments, " & \n\n")})"""
 
-      val ret = st"${(IEP_Guard_Blocks :+ iep_post, "\n\n")}"
+      val simple_IEP_Post_container = ops.ISZOps(GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)).last
+      val postContainerName = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, F, T)
+
+      val iep_post_container =
+        st"""/** IEP-Post: Initialize Entrypoint Post-Condition via container
+            |  *
+            |  * @param post Container holding the value of incoming ports and the pre-state values of state variables
+            |  */
+            |@strictpure def ${simple_IEP_Post_container} (post: ${postContainerName}): B =
+            |  $simple_IEP_Post (
+            |    ${(for (p <- sorted_IEP_Post_Params) yield st"${p.name} = post.${p.name}", ",\n")})"""
+      val ret = st"${(IEP_Guard_Blocks :+ iep_post :+ iep_post_container, "\n\n")}"
 
       initializeEntryPointHolder = initializeEntryPointHolder + component.path ~>
         InitializeEntryPointHolder(ContractHolder(iepPostMethodName, sorted_IEP_Post_Params, imports, ret))
@@ -731,11 +754,23 @@ object GumboXGen {
               |    ${(for (p <- sorted_Cep_Pre_Params) yield p.getParamDef, ",\n")}): B =
               |  (${(segments, " & \n\n")})"""
 
+        val simpleCepPreContainer = ops.ISZOps(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames)).last
+        val preContainerName_wL = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, T, T)
+
+        val cep_pre_container =
+          st"""/** CEP-Pre: Compute Entrypoint Pre-Condition for ${component.identifier} via container
+              |  *
+              |  * @param pre Container holding the value of incoming ports and the pre-state values of state variables
+              |  */
+              |@strictpure def ${simpleCepPreContainer}(pre: ${preContainerName_wL}): B =
+              |  ${simpleCepPre}(
+              |    ${(for (e <- sorted_Cep_Pre_Params) yield st"${e.name} = pre.${e.name}", ",\n")})"""
+
         var bbbs: ISZ[ST] = ISZ()
         if (CEP_T_Assm.nonEmpty) {
           bbbs = bbbs :+ CEP_T_Assm.get.content
         }
-        bbbs = bbbs :+ cep_pre
+        bbbs = bbbs :+ cep_pre :+ cep_pre_container
 
         val ret = st"${(bbbs, "\n\n")}"
 
@@ -840,7 +875,28 @@ object GumboXGen {
               |    ${(for (p <- sorted_Cep_Post_Params) yield p.getParamDef, ",\n")}): B =
               |  (${(segments, " & \n\n")})"""
 
-        val ret = st"${(CEP_Post_blocks :+ cep_post, "\n\n")}"
+        val simpleCepPostContainer = ops.ISZOps(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames)).last
+        val preContainerName = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, T, T)
+        val postContainerName = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, F, T)
+
+        val args: ISZ[ST] = for (p <- sorted_Cep_Post_Params) yield
+          if (p.kind == SymbolKind.StateVarPre) st"${p.name} = pre.${p.name}"
+          else st"${p.name} = post.${p.name}"
+
+
+        val cep_post_container =
+          st"""/** CEP-Post: Compute Entrypoint Post-Condition for ${component.identifier} via containers
+              |  *
+              |  * @param pre Container holding the values of incoming ports and the pre-state values of state variables
+              |  * @param post Container holding the values of outgoing ports and the post-state values of state variables
+              |  */
+              |@strictpure def ${simpleCepPostContainer}(
+              |    pre: ${preContainerName},
+              |    post: ${postContainerName}): B =
+              |  $simpleCepPost(
+              |    ${(args, ",\n")})"""
+
+        val ret = st"${(CEP_Post_blocks :+ cep_post :+ cep_post_container, "\n\n")}"
 
         CEP_Post = Some(ContractHolder(cepPostMethodName, sorted_Cep_Post_Params, imports, ret))
       }
@@ -1343,14 +1399,14 @@ object GumboXGen {
           None(), ISZ(), postInitMethodName, postInitParams)
       }
 
-      val containerType = GumboXGenUtil.genContainerName(componentNames, T, F)
+      val containerType = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, T, F)
       process("testCompute", dscTestRunnerSimpleName, containerType, "",
         "compute",
         F, T, stateVars,
         preComputeMethodName, preComputeParams, postComputeMethodName, postComputeParams)
 
       if (stateVars.nonEmpty) {
-        val container_wL_Type = GumboXGenUtil.genContainerName(componentNames, T, T)
+        val container_wL_Type = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, T, T)
         process("testCompute", dscTestRunnerSimpleName, container_wL_Type, "wL",
           "compute",
           F, F, stateVars,

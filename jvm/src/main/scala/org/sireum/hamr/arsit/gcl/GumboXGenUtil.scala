@@ -29,56 +29,117 @@ object GumboXGenUtil {
     }
   }
 
-  @pure def genContainers(component: AadlThreadOrDevice,
-                          componentNames: NameProvider,
-                          containerPath: String,
-                          gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)],
-                          aadlTypes: AadlTypes): FileResource = {
-    var containers: ISZ[ST] = ISZ()
+  @datatype class Container(val componentSingletonType: String,
+                            val packageName: String,
+                            val packageNameI: ISZ[String],
+                            val basePackage: String,
 
-    val inPorts = inPortsToParams(component, componentNames)
-    val inStateVars = stateVarsToParams(componentNames, gclSubclauseInfo, T, aadlTypes)
+                            val inPorts: ISZ[GGParam],
+                            val inStateVars: ISZ[GGParam],
+                            val outPorts: ISZ[GGParam],
+                            val outStateVars: ISZ[GGParam]) {
 
-    val preContainerName = genContainerName(componentNames, T, F)
-    containers = containers :+ genContainer(preContainerName, inPorts, ISZ())
+    val preStateContainerName: String = genContainerName(componentSingletonType, T, F)
+    val preStateContainerName_wL: String = genContainerName(componentSingletonType, T, T)
+    val postStateContainerName: String = genContainerName(componentSingletonType, F, F)
+    val postStateContainerName_wL: String = genContainerName(componentSingletonType, F, T)
 
-    if (inStateVars.nonEmpty) {
-      val prewLContainerName = genContainerName(componentNames, T, T)
-      containers = containers :+ genContainer(prewLContainerName, inPorts, inStateVars)
+    @pure def jsonFrom(name: String) : ST = {
+      return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
     }
 
-    val outPorts = outPortsToParams(component, componentNames)
-    val outStateVars = stateVarsToParams(componentNames, gclSubclauseInfo, F, aadlTypes)
+    val preStateContainerJsonFrom: ST = jsonFrom(preStateContainerName)
+    val preStateContainerJsonFrom_wL: ST = jsonFrom(preStateContainerName_wL)
+    val postStateContainerJsonFrom: ST = jsonFrom(postStateContainerName)
+    val postStateContainerJsonFrom_wL: ST = jsonFrom(postStateContainerName_wL)
 
-    val postContainerName = genContainerName(componentNames, F, F)
-    containers = containers :+ genContainer(postContainerName, outPorts, ISZ())
+    def capturePreStateH(containerName: String, params: ISZ[GGParam]): ST = {
 
-    if (outStateVars.nonEmpty) {
-      val postwLContainerName = genContainerName(componentNames, F, T)
-      containers = containers :+ genContainer(postwLContainerName, outPorts, outStateVars)
+      var entries: ISZ[ST] = ISZ()
+      for (param <- sortParam(params)) {
+        entries = entries :+ st"${param.name} = ${param.preFetch}"
+      }
+      return if (entries.isEmpty) st"$containerName()"
+      else st"""${containerName}(
+               |  ${(entries, ", \n")})"""
     }
 
-    val containerST = DSCTemplate.genTestVectorContainerClass(
-      packageName = componentNames.packageName,
-      imports = ISZ(s"${componentNames.basePackage}._"),
-      containers = containers)
+    def capturePreState(): ST = {
+      return capturePreStateH(preStateContainerName, inPorts)
+    }
 
-    return ResourceUtil.createResourceH(containerPath, containerST, T, T)
+    def capturePreState_wL(): ST = {
+      return capturePreStateH(preStateContainerName_wL, inPorts ++ inStateVars)
+    }
+
+    def capturePostStateH(containerName: String, params: ISZ[GGParam]) : ST = {
+      var entries : ISZ[ST] = ISZ()
+      for (outPort <- sortParam(params)) {
+        entries = entries :+ st"${outPort.name} = ${outPort.postFetch}"
+      }
+      return if(entries.isEmpty) st"$containerName()"
+      else
+        st"""${containerName}(
+            |  ${(entries, ",\n")})"""
+    }
+
+    def capturePostState(): ST = {
+      return capturePostStateH(postStateContainerName, outPorts)
+    }
+
+    def capturePostState_wL(): ST = {
+      return capturePostStateH(postStateContainerName_wL, outPorts ++ outStateVars)
+    }
+
+    def lastDataPortVars: Option[ST] = {
+      var entries: ISZ[ST] = ISZ()
+      for (outPort <- outPorts if outPort.kind == SymbolKind.ApiVarOutData) {
+        entries = entries :+ st"var last_${outPort.name}: Option[${outPort.aadlType.nameProvider.qualifiedReferencedTypeName}] = None()"
+        entries = entries :+ outPort.asInstanceOf[GGPortParam].dataPortFetch
+      }
+      return (if (entries.nonEmpty) Some(st"${(entries, "\n")}")
+      else None())
+    }
+
+    @pure def genContainer(containerName: String,
+                           params: ISZ[GGParam]): ST = {
+
+      @strictpure def wrapOption(s: String, opt: B): String = if (opt) s"Option[$s]" else s
+
+      val fieldDecls: ISZ[ST] = for (p <- sortParam(params)) yield
+        st"val ${p.name}: ${wrapOption(getSlangTypeName(p.aadlType), p.isOptional)}"
+
+      return DSCTemplate.genTestVectorContainer(containerName, fieldDecls)
+    }
+
+    def genContainers(): ST = {
+      val containers: ISZ[ST] = ISZ(
+        genContainer(preStateContainerName, inPorts),
+        genContainer(preStateContainerName_wL, inPorts ++ inStateVars),
+        genContainer(postStateContainerName, outPorts),
+        genContainer(postStateContainerName_wL, outPorts ++ outStateVars))
+
+      return DSCTemplate.genTestVectorContainerClass(
+        packageName = packageName,
+        imports = ISZ(s"$basePackage._"),
+        containers = containers)
+    }
   }
 
-  @strictpure def genContainerName(componentNames: NameProvider, isPre: B, hasLocals: B): String =
-    s"${componentNames.componentSingletonType}_${if (isPre) "Pre" else "Post"}State${if (hasLocals) "_wL" else "_"}Container"
+  @strictpure def genContainerName(singletonType: String, isPre: B, withL: B): String =
+    s"${singletonType}_${if (isPre) "Pre" else "Post"}State${if (withL) "_wL" else "_"}Container"
 
-  @pure def genContainer(containerName: String,
-                         ports: ISZ[GGParam],
-                         stateVars: ISZ[GGParam]): ST = {
-
-    @strictpure def wrapOption(s: String, opt: B): String = if (opt) s"Option[$s]" else s
-
-    val fieldDecls: ISZ[ST] = for (p <- sortParam(ports ++ stateVars)) yield
-      st"val ${p.name}: ${wrapOption(getSlangTypeName(p.aadlType), p.isOptional)}"
-
-    return DSCTemplate.genTestVectorContainer(containerName, fieldDecls)
+  def generateContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): Container = {
+    val inPorts = inPortsToParams(component, componentNames)
+    val inStateVars = stateVarsToParams(componentNames, annexInfo, T, aadlTypes)
+    val outPorts = outPortsToParams(component, componentNames)
+    val outStateVars = stateVarsToParams(componentNames, annexInfo, F, aadlTypes)
+    return Container(
+      componentSingletonType = componentNames.componentSingletonType,
+      packageName = componentNames.packageName,
+      packageNameI = componentNames.packageNameI,
+      basePackage = componentNames.basePackage,
+      inPorts = inPorts, inStateVars = inStateVars, outPorts = outPorts, outStateVars = outStateVars)
   }
 
   @pure def getSlangTypeName(a: AadlType): String = {
@@ -242,7 +303,8 @@ object GumboXGenUtil {
 
     def slangType: ST
 
-    def fetch: ST
+    def preFetch: ST
+    def postFetch: ST
 
     def isOptional: B
 
@@ -272,7 +334,9 @@ object GumboXGenUtil {
 
     val slangType: ST = st"${aadlType.nameProvider.qualifiedReferencedTypeName}"
 
-    val fetch: ST = st"${componentNames.componentSingletonTypeQualifiedName}.${name}"
+    val preFetch: ST = st"${componentNames.componentSingletonTypeQualifiedName}.${originName}"
+
+    val postFetch: ST = preFetch
 
     val kind: SymbolKind.Type = if (isPreState) SymbolKind.StateVarPre else SymbolKind.StateVar
   }
@@ -309,19 +373,77 @@ object GumboXGenUtil {
 
     val isOptional: B = isEvent
 
-    val archPortId: ST = st"Arch.${componentNames.componentSingletonType}.operational_api.${originName}_Id"
+    val archPortId: ST = st"${componentNames.archInstanceName}.operational_api.${originName}_Id"
+
+    val payloadType: String = aadlType.nameProvider.qualifiedPayloadName
 
     val slangType: ST =
       if (isEvent) st"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
       else st"${aadlType.nameProvider.qualifiedReferencedTypeName}"
 
-    @pure def fetch: ST = {
-      val p = st"ArtNative.observeOutPortValue(Art.observeOutPortValue($archPortId).asInstanceOf[$slangType])"
+    @pure def observeInPortValue: ST = {
+      return st"Art.observeInPortValue($archPortId)"
+    }
+
+    @pure def observeOutPortVariable: ST = {
+      return st"Art.observeOutPortVariable($archPortId)"
+    }
+
+    @pure def preFetch: ST = {
       if (!isEvent) {
-        return st"$p.get"
+        // incoming data port so we'll assume it was initialized in the init phase
+        return st"$observeInPortValue.get.asInstanceOf[$payloadType].value"
+      } else if (isData) {
+        // incoming event data port so need to unpack the payload if non-empty
+        return (
+          st"""// tipe indicates the following is not in slang :(
+              |//$observeInPortValue match {
+              |//  case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) => Some(value)
+              |//  case _ => None()
+              |//}
+              |// so instead ..
+              |if (${observeInPortValue}.nonEmpty)
+              |  Some(${observeInPortValue}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
+              |else None()""")
       } else {
-        return p
+        // incoming event port so no need to unpack
+        return st"$observeInPortValue.asInstanceOf[$slangType]"
       }
+    }
+
+    @pure def postFetch: ST = {
+      if (!isEvent) {
+        // outgoing data port that may not have received a value on this dispatch
+        return (
+          st"""get_$name""")
+      } else if (isData) {
+        // outgoing event data port so need to unpack the payload if non-empty
+        return (
+          st"""// tipe indicates the following is not in slang :(
+              |//$observeOutPortVariable match {
+              |//  case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) => Some(value)
+              |//  case _ => None()
+              |//}
+              |// so instead ...
+              |if (${observeOutPortVariable}.nonEmpty)
+              |  Some(${observeOutPortVariable}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
+              |else None()""")
+      } else {
+        // outgoing event port so no need to unpack
+        return st"$observeOutPortVariable.asInstanceOf[$slangType]"
+      }
+    }
+
+    @pure def dataPortFetch: ST = {
+      return (
+        st"""def get_${name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = {
+          |  $observeOutPortVariable match {
+          |    case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) =>
+          |      last_$name = Some(value)
+          |      return value
+          |    case _ => return last_$name.get
+          |  }
+          |}""")
     }
   }
 
