@@ -44,6 +44,11 @@ object GumboXGenUtil {
     val postStateContainerName: String = genContainerName(componentSingletonType, F, F)
     val postStateContainerName_wL: String = genContainerName(componentSingletonType, F, T)
 
+    val fqPreStateContainerName: String = s"$packageName.$preStateContainerName"
+    val fqPreStateContainerName_wL: String = s"$packageName.$preStateContainerName_wL"
+    val fqPostStateContainerName: String = s"$packageName.$postStateContainerName"
+    val fqPostStateContainerName_wL: String = s"$packageName.$postStateContainerName_wL"
+
     @pure def jsonFrom(name: String) : ST = {
       return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
     }

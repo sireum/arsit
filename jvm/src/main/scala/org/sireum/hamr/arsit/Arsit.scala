@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.ArsitConfigurationProvider
+import org.sireum.hamr.arsit.plugin.{AppProviderPlugin, ArsitConfigurationProvider}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
@@ -51,6 +51,11 @@ object Arsit {
 
     var fileResources: ISZ[FileResource] = nixPhase.resources
     var addAuxResources: ISZ[Resource] = nixPhase.auxResources
+
+    // TODO: complete the app provider plugin concept, right now they are just expected to return resources
+    for (p <- plugins if p.isInstanceOf[AppProviderPlugin] && p.asInstanceOf[AppProviderPlugin].canHandleAppProviderPlugin()) {
+      fileResources = fileResources ++ p.asInstanceOf[AppProviderPlugin].handleAppProviderPlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)
+    }
 
     val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationProvider.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins).toZ
     val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationProvider.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins).toZ

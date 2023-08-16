@@ -78,6 +78,16 @@ object ArsitPlugin {
 
 @msig trait ArsitPlugin extends Plugin
 
+@msig trait AppProviderPlugin extends ArsitPlugin {
+  @pure def canHandleAppProviderPlugin(): B
+  @pure def handleAppProviderPlugin(projectDirectories: ProjectDirectories,
+                                    arsitOptions: ArsitOptions,
+                                    symbolTable: SymbolTable,
+                                    aadlTypes: AadlTypes,
+
+                                    reporter: Reporter): ISZ[FileResource]
+}
+
 @msig trait BehaviorProviderPlugin extends ArsitPlugin {
 
   @pure def canHandleBehaviorProvider(component: AadlThreadOrDevice,
