@@ -30,7 +30,7 @@ import org.sireum.message.Reporter
   var gumboXGen: GumboXGen = GumboXGen()
 
   var entrypointKinds: ISZ[ST] = ISZ()
-  var entryPointHandlers: ISZ[ST]= ISZ()
+  var entryPointHandlers: ISZ[ST] = ISZ()
 
   @pure def canHandle(component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
@@ -91,7 +91,9 @@ import org.sireum.message.Reporter
    * AppProviderPlugin
    ******************************************************************************************/
 
-  override def canHandleAppProviderPlugin(): B = { return T }
+  override def canHandleAppProviderPlugin(): B = {
+    return T
+  }
 
   override def handleAppProviderPlugin(projectDirectories: ProjectDirectories,
                                        arsitOptions: ArsitOptions,
@@ -100,11 +102,11 @@ import org.sireum.message.Reporter
                                        reporter: Reporter): ISZ[FileResource] = {
     val runtimePath = s"${projectDirectories.architectureDir}/${arsitOptions.packageName}/runtimemonitor"
 
-    var resources: ISZ[FileResource]= ISZ()
+    var resources: ISZ[FileResource] = ISZ()
 
     val runtimepackage = s"${arsitOptions.packageName}.runtimemonitor"
 
-    val captureKind =
+    val observationKind =
       st"""// #Sireum
           |
           |package $runtimepackage
@@ -114,11 +116,11 @@ import org.sireum.message.Reporter
           |
           |${StringTemplate.doNotEditComment()}
           |
-          |@enum object CaptureKind {
+          |@enum object ObservationKind {
           |  ${(entrypointKinds, "\n")}
           |}
           |"""
-    resources = resources :+ ResourceUtil.createResourceH(s"${runtimePath}/CaptureKind.scala", captureKind, T, T)
+    resources = resources :+ ResourceUtil.createResourceH(s"${runtimePath}/ObservationKind.scala", observationKind, T, T)
 
     val process =
       st"""// #Sireum
@@ -131,15 +133,15 @@ import org.sireum.message.Reporter
           |${StringTemplate.doNotEditComment()}
           |
           |object GumboXDispatcher {
-          |  def dispatch(captureKind: CaptureKind.Type, preContainer: Option[art.DataContent], postContainer: Option[art.DataContent]): B = {
-          |    captureKind match {
+          |  def dispatch(observationKind: ObservationKind.Type, preContainer: Option[art.DataContent], postContainer: Option[art.DataContent]): B = {
+          |    observationKind match {
           |      ${(this.entryPointHandlers, "\n")}
           |      case _ => halt("Infeasible")
           |    }
           |  }
           |}"""
 
-    resources = resources :+ ResourceUtil.createResourceH(s"${runtimePath}/GumboXDispathcer.scala", process, T, F)
+    resources = resources :+ ResourceUtil.createResourceH(s"${runtimePath}/GumboXDispatcher.scala", process, T, F)
 
     return resources
   }
@@ -209,7 +211,7 @@ import org.sireum.message.Reporter
     val computeBody: ST = {
       val s = StringUtil.split_PreserveEmptySegments(entryPointTemplate.defaultComputeBody.render, c => c == '\n')
       var newLines: ISZ[String] = ISZ()
-      for(l <- s) {
+      for (l <- s) {
         val o = ops.StringOps(l)
         if (o.contains("Art.receiveInput")) {
           newLines = newLines :+ l :+ s"\n${epCompanionName}.${preComputeMethodName}()"
@@ -233,29 +235,18 @@ import org.sireum.message.Reporter
       finaliseBody = None(),
       recoverBody = None()
     )
-/*
-    val epCompanion =
-      st"""@ext object ${epCompanionName} {
-          |  def ${preInitMethodName}(): Unit = $$
-          |  def ${postInitMethodName}(): Unit = $$
-          |
-          |  def ${preComputeMethodName}(): Unit = $$
-          |  def ${postComputeMethodName}(): Unit = $$
-          |}"""
-*/
+    /*
+        val epCompanion =
+          st"""@ext object ${epCompanionName} {
+              |  def ${preInitMethodName}(): Unit = $$
+              |  def ${postInitMethodName}(): Unit = $$
+              |
+              |  def ${preComputeMethodName}(): Unit = $$
+              |  def ${postComputeMethodName}(): Unit = $$
+              |}"""
+    */
     val preContainer: String = "preStateContainer_wL"
     val postContainer: String = "postStateContainer_wL"
-
-    /*
-    val optInit: ST =
-      if (this.gumboXGen.initializeEntryPointHolder.contains(component.path)) {
-        val simpleCepPreContainer = GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)
-        st"""val result: B = ${(simpleCepPreContainer, ".")}($postContainer)
-            |println(s"${component.identifier}.initialise: Post-condition: $${if (result) "" else "un"}satisfied")"""
-      } else {
-        st"// checking the post-state values of ${component.identifier}'s initialise entrypoint is not required"
-      }
-*/
 
     val optInit: ST =
       if (this.gumboXGen.initializeEntryPointHolder.contains(component.path)) {
@@ -268,17 +259,6 @@ import org.sireum.message.Reporter
             |return T"""
       }
 
-    /*
-    val optPreCompute: ST =
-      this.gumboXGen.computeEntryPointHolder.get(component.path) match {
-        case Some(holder) if holder.CEP_Pre.nonEmpty =>
-          val simpleCepPreContainer = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
-          st"""val result: B = ${simpleCepPreContainer}(${preContainer}.get)
-              |println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")"""
-        case _ =>
-          st"// checking the pre-state values of ${component.identifier}'s compute entrypoint is not required"
-      }
-*/
     val optPreCompute: ST =
       this.gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
@@ -291,17 +271,6 @@ import org.sireum.message.Reporter
               |return T"""
       }
 
-/*
-    val optPostCompute: ST =
-      this.gumboXGen.computeEntryPointHolder.get(component.path) match {
-        case Some(holder) if holder.CEP_Post.nonEmpty =>
-          val simpleCepPostContainer = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
-          st"""val result: B = ${simpleCepPostContainer}(${preContainer}.get, $postContainer)
-              |println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")"""
-        case _ =>
-          st"// checking the post-state values of ${component.identifier}'s compute entrypoint is not required"
-      }
-*/
     val optPostCompute: ST =
       this.gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Post.nonEmpty =>
@@ -317,9 +286,9 @@ import org.sireum.message.Reporter
 
     val runtimePackage = s"${componentNames.basePackage}.runtimemonitor"
 
-    val postInitKind = st"${runtimePackage}.CaptureKind.${componentNames.identifier}_postInit"
-    val preComputeKind = st"${runtimePackage}.CaptureKind.${componentNames.identifier}_preCompute"
-    val postComputeKind = st"${runtimePackage}.CaptureKind.${componentNames.identifier}_postCompute"
+    val postInitKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_postInit"
+    val preComputeKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_preCompute"
+    val postComputeKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_postCompute"
 
     entrypointKinds = entrypointKinds :+
       st""""${componentNames.identifier}_postInit"""" :+
@@ -361,51 +330,28 @@ import org.sireum.message.Reporter
           |  def ${postInitMethodName}(): Unit = {
           |    // block the component while its post-state values are retrieved
           |    val $postContainer =
-          |      ${containers.capturePostState_wL()}
+          |      ${containers.observePostState_wL()}
           |
-          |    ${componentNames.basePackage}.runtimemonitor.RuntimeMonitor.update1(${componentNames.archInstanceName}.id, $postInitKind, $postContainer)
-          |
-          |    // the rest of this could be done in a separate thread
-          |
-          |    //val json = ${containers.postStateContainerJsonFrom_wL}(postStateContainer_wL, T)
-          |    //println(s"${component.identifier}.initialise: Post-State values: $$json")
-          |
-          |    /*
-          |    $optInit
-          |    */
+          |    // the rest can now be performed via a different thread
+          |    ${runtimePackage}.RuntimeMonitor.update1(${componentNames.archInstanceName}.id, $postInitKind, $postContainer)
           |  }
           |
           |  def ${preComputeMethodName}(): Unit = {
           |    // block the component while its pre-state values are retrieved
           |    $preContainer = Some(
-          |      ${containers.capturePreState_wL()})
+          |      ${containers.observePreState_wL()})
           |
-          |    ${componentNames.basePackage}.runtimemonitor.RuntimeMonitor.update1(${componentNames.archInstanceName}.id, $preComputeKind, ${preContainer}.get)
-          |
-          |    // the rest of this could be done in a separate thread
-          |    /*
-          |    val json = ${containers.preStateContainerJsonFrom_wL}(preStateContainer_wL.get, T)
-          |    println(s"${component.identifier}.timeTriggered: Pre-State values: $$json")
-          |
-          |    $optPreCompute
-          |    */
+          |    // the rest can now be performed via a different thread
+          |    ${runtimePackage}.RuntimeMonitor.update1(${componentNames.archInstanceName}.id, $preComputeKind, ${preContainer}.get)
           |  }
           |
           |  def ${postComputeMethodName}(): Unit = {
           |    // block the component while its post-state values are retrieved
           |    val $postContainer =
-          |      ${containers.capturePostState_wL()}
+          |      ${containers.observePostState_wL()}
           |
-          |    ${componentNames.basePackage}.runtimemonitor.RuntimeMonitor.update2(${componentNames.archInstanceName}.id, $postComputeKind, ${preContainer}.get, $postContainer)
-          |
-          |    /*
-          |    // the rest of this could be done in a separate thread
-          |
-          |    val json = ${containers.postStateContainerJsonFrom_wL}(postStateContainer_wL, T)
-          |    println(s"${component.identifier}.timeTriggered: Post-State values: $$json")
-          |
-          |    $optPostCompute
-          |    */
+          |    // the rest can now be performed via a different thread
+          |    ${runtimePackage}.RuntimeMonitor.update2(${componentNames.archInstanceName}.id, $postComputeKind, ${preContainer}.get, $postContainer)
           |  }
           |}"""
 

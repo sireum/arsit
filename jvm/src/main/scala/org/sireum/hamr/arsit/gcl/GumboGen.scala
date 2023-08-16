@@ -260,7 +260,7 @@ object GumboGen {
 
     val _imports: Option[ST] =
       if (gg.imports.isEmpty) None()
-      else Some(st"${(for(i <- gg.imports) yield s"import $i", "\n")}")
+      else Some(st"${(for (i <- gg.imports) yield s"import $i", "\n")}")
 
     return (
       st"""// #Sireum

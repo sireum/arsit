@@ -19,7 +19,7 @@ object DSCTemplate {
                                   imports: ISZ[String],
                                   containers: ISZ[ST]): ST = {
 
-    val _imports: ISZ[ST] = for(i <- imports) yield st"import ${i}"
+    val _imports: ISZ[ST] = for (i <- imports) yield st"import ${i}"
 
     val ret: ST =
       st"""// #Sireum
@@ -42,7 +42,7 @@ object DSCTemplate {
                        dscContainerType: String,
                        nextCalls: ISZ[ST],
                        actuals: ISZ[ST]): ST = {
-    val ret  =
+    val ret =
       st"""def $methodName(): Option[$dscContainerType] = {
           |  try {
           |    ${(nextCalls, "\n")}
@@ -56,10 +56,12 @@ object DSCTemplate {
           |}"""
     return ret
   }
+
   def genTestVectorContainer(containerName: String,
                              fieldDeclarations: ISZ[ST]): ST = {
-    val ret = st"""@datatype class $containerName (
-                  |  ${(fieldDeclarations, ",\n")}) extends art.DataContent"""
+    val ret =
+      st"""@datatype class $containerName (
+          |  ${(fieldDeclarations, ",\n")}) extends art.DataContent"""
     return ret
   }
 
@@ -78,16 +80,17 @@ object DSCTemplate {
 
     val replay: Option[ST] =
       if (testVectorPrettyPrints.nonEmpty)
-        Some(st"""if (verbose) {
-                 |  val tq = $tqq
-                 |  println(st${tq}Replay Unit Test:
-                 |              |  test("Replay ${unitTestPrefix}_$$i") {
-                 |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
-                 |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
-                 |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
-                 |              |  }$tq.render)
-                 |}
-                 |""")
+        Some(
+          st"""if (verbose) {
+              |  val tq = $tqq
+              |  println(st${tq}Replay Unit Test:
+              |              |  test("Replay ${unitTestPrefix}_$$i") {
+              |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
+              |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
+              |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
+              |              |  }$tq.render)
+              |}
+              |""")
       else None()
 
     val ret =

@@ -2,11 +2,9 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
-import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir
 import org.sireum.hamr.ir.{Direction, GclStateVar, GclSubclause}
 import org.sireum.lang.ast.Typed
@@ -49,7 +47,7 @@ object GumboXGenUtil {
     val fqPostStateContainerName: String = s"$packageName.$postStateContainerName"
     val fqPostStateContainerName_wL: String = s"$packageName.$postStateContainerName_wL"
 
-    @pure def jsonFrom(name: String) : ST = {
+    @pure def jsonFrom(name: String): ST = {
       return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
     }
 
@@ -58,42 +56,43 @@ object GumboXGenUtil {
     val postStateContainerJsonFrom: ST = jsonFrom(postStateContainerName)
     val postStateContainerJsonFrom_wL: ST = jsonFrom(postStateContainerName_wL)
 
-    def capturePreStateH(containerName: String, params: ISZ[GGParam]): ST = {
+    def observePreStateH(containerName: String, params: ISZ[GGParam]): ST = {
 
       var entries: ISZ[ST] = ISZ()
       for (param <- sortParam(params)) {
         entries = entries :+ st"${param.name} = ${param.preFetch}"
       }
       return if (entries.isEmpty) st"$containerName()"
-      else st"""${containerName}(
-               |  ${(entries, ", \n")})"""
+      else
+        st"""${containerName}(
+            |  ${(entries, ", \n")})"""
     }
 
-    def capturePreState(): ST = {
-      return capturePreStateH(preStateContainerName, inPorts)
+    def observePreState(): ST = {
+      return observePreStateH(preStateContainerName, inPorts)
     }
 
-    def capturePreState_wL(): ST = {
-      return capturePreStateH(preStateContainerName_wL, inPorts ++ inStateVars)
+    def observePreState_wL(): ST = {
+      return observePreStateH(preStateContainerName_wL, inPorts ++ inStateVars)
     }
 
-    def capturePostStateH(containerName: String, params: ISZ[GGParam]) : ST = {
-      var entries : ISZ[ST] = ISZ()
+    def observePostStateH(containerName: String, params: ISZ[GGParam]): ST = {
+      var entries: ISZ[ST] = ISZ()
       for (outPort <- sortParam(params)) {
         entries = entries :+ st"${outPort.name} = ${outPort.postFetch}"
       }
-      return if(entries.isEmpty) st"$containerName()"
+      return if (entries.isEmpty) st"$containerName()"
       else
         st"""${containerName}(
             |  ${(entries, ",\n")})"""
     }
 
-    def capturePostState(): ST = {
-      return capturePostStateH(postStateContainerName, outPorts)
+    def observePostState(): ST = {
+      return observePostStateH(postStateContainerName, outPorts)
     }
 
-    def capturePostState_wL(): ST = {
-      return capturePostStateH(postStateContainerName_wL, outPorts ++ outStateVars)
+    def observePostState_wL(): ST = {
+      return observePostStateH(postStateContainerName_wL, outPorts ++ outStateVars)
     }
 
     def lastDataPortVars: Option[ST] = {
@@ -309,6 +308,7 @@ object GumboXGenUtil {
     def slangType: ST
 
     def preFetch: ST
+
     def postFetch: ST
 
     def isOptional: B
@@ -401,15 +401,10 @@ object GumboXGenUtil {
       } else if (isData) {
         // incoming event data port so need to unpack the payload if non-empty
         return (
-          st"""// tipe indicates the following is not in slang :(
-              |//$observeInPortValue match {
-              |//  case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) => Some(value)
-              |//  case _ => None()
-              |//}
-              |// so instead ..
-              |if (${observeInPortValue}.nonEmpty)
-              |  Some(${observeInPortValue}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
-              |else None()""")
+          st"""
+              |  if (${observeInPortValue}.nonEmpty)
+              |    Some(${observeInPortValue}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
+              |  else None()""")
       } else {
         // incoming event port so no need to unpack
         return st"$observeInPortValue.asInstanceOf[$slangType]"
@@ -424,15 +419,10 @@ object GumboXGenUtil {
       } else if (isData) {
         // outgoing event data port so need to unpack the payload if non-empty
         return (
-          st"""// tipe indicates the following is not in slang :(
-              |//$observeOutPortVariable match {
-              |//  case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) => Some(value)
-              |//  case _ => None()
-              |//}
-              |// so instead ...
-              |if (${observeOutPortVariable}.nonEmpty)
-              |  Some(${observeOutPortVariable}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
-              |else None()""")
+          st"""
+              |  if (${observeOutPortVariable}.nonEmpty)
+              |    Some(${observeOutPortVariable}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
+              |  else None()""")
       } else {
         // outgoing event port so no need to unpack
         return st"$observeOutPortVariable.asInstanceOf[$slangType]"
@@ -442,13 +432,13 @@ object GumboXGenUtil {
     @pure def dataPortFetch: ST = {
       return (
         st"""def get_${name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = {
-          |  $observeOutPortVariable match {
-          |    case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) =>
-          |      last_$name = Some(value)
-          |      return value
-          |    case _ => return last_$name.get
-          |  }
-          |}""")
+            |  $observeOutPortVariable match {
+            |    case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) =>
+            |      last_$name = Some(value)
+            |      return value
+            |    case _ => return last_$name.get
+            |  }
+            |}""")
     }
   }
 
