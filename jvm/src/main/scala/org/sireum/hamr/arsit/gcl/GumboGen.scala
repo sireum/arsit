@@ -294,7 +294,7 @@ object GumboGen {
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.initializes.nonEmpty) {
-        val oldModifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${m}")
+        val rModifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${gclSymbolTable.rexprs.get(m).get}")
 
         var modifies: ISZ[ST] = ISZ()
         var requires: ISZ[ST] = ISZ()
@@ -310,18 +310,18 @@ object GumboGen {
         })
 
         val optModifies: Option[ST] =
-          if (oldModifies.nonEmpty) {
+          if (rModifies.nonEmpty) {
             markers = markers :+ InitializesModifiesMarker
 
             modifies = modifies :+
               st"""${InitializesModifiesMarker.beginMarker}
-                  |${(oldModifies, ",\n")}
+                  |${(rModifies, ",\n")}
                   |${InitializesModifiesMarker.endMarker}"""
 
             Some(
               st"""Modifies(
                   |  ${InitializesModifiesMarker.beginMarker}
-                  |  ${(oldModifies, ",\n")}
+                  |  ${(rModifies, ",\n")}
                   |  ${InitializesModifiesMarker.endMarker}
                   |),""")
           } else {
@@ -615,7 +615,7 @@ object GumboGen {
       return m
     }
 
-    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${e}"))
+    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${gclSymbolTable.rexprs.get(e).get}"))
 
     var generalHolder: ISZ[GclHolder] = ISZ()
 
@@ -700,7 +700,7 @@ object GumboGen {
           case Some(handler) => {
             if (generalModifies.nonEmpty || handler.modifies.nonEmpty) {
               val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
-              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${m}")
+              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${gclSymbolTable.rexprs.get(m).get}")
 
               rmodifies = rmodifies :+
                 st"""${modMarker.beginMarker}
