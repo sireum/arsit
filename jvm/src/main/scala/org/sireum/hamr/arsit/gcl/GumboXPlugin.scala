@@ -4,7 +4,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
-import org.sireum.hamr.arsit.plugin.{AppProviderPlugin, BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin}
+import org.sireum.hamr.arsit.plugin.{BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StringTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
@@ -19,7 +19,7 @@ import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin
-  extends EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with AppProviderPlugin {
+  extends EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin {
 
   val name: String = "GumboX Plugin"
 
@@ -87,19 +87,33 @@ import org.sireum.message.Reporter
     handledComponents = handledComponents + component.path
   }
 
-  /******************************************************************************************
-   * AppProviderPlugin
-   ******************************************************************************************/
-
-  override def canHandleAppProviderPlugin(): B = {
-    return T
+  var containerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
+  def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
+    return containerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
   }
 
-  override def handleAppProviderPlugin(projectDirectories: ProjectDirectories,
-                                       arsitOptions: ArsitOptions,
-                                       symbolTable: SymbolTable,
-                                       aadlTypes: AadlTypes,
-                                       reporter: Reporter): ISZ[FileResource] = {
+
+  /******************************************************************************************
+   * PlatformProviderPlugin
+   ******************************************************************************************/
+
+  val enableRuntimeMonitoring: String = "enableRuntimeMonitoring"
+
+  def runtimeMonitoringEnabled(arsitOptions: ArsitOptions): B = {
+    return ops.ISZOps(arsitOptions.experimentalOptions).contains(enableRuntimeMonitoring)
+  }
+
+  override def canHandlePlatformProviderPlugin(arsitOptions: ArsitOptions,
+                                               symbolTable: SymbolTable,
+                                               aadlTypes: AadlTypes): B = {
+    return runtimeMonitoringEnabled(arsitOptions)
+  }
+
+  override def handlePlatformProviderPlugin(projectDirectories: ProjectDirectories,
+                                            arsitOptions: ArsitOptions,
+                                            symbolTable: SymbolTable,
+                                            aadlTypes: AadlTypes,
+                                            reporter: Reporter): ISZ[PlatformProviderPlugin.PlatformContributions] = {
     val runtimePath = s"${projectDirectories.architectureDir}/${arsitOptions.packageName}/runtimemonitor"
 
     var resources: ISZ[FileResource] = ISZ()
@@ -143,7 +157,9 @@ import org.sireum.message.Reporter
 
     resources = resources :+ ResourceUtil.createResourceH(s"${runtimePath}/GumboXDispatcher.scala", process, T, F)
 
-    return resources
+    val blocks = ISZ(st"${runtimepackage}.RuntimeMonitor.init()")
+
+    return ISZ(PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = blocks, resources = resources))
   }
 
   /******************************************************************************************
@@ -156,7 +172,7 @@ import org.sireum.message.Reporter
                                            arsitOptions: ArsitOptions,
                                            symbolTable: SymbolTable,
                                            aadlTypes: AadlTypes): B = {
-    return canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
+    return runtimeMonitoringEnabled(arsitOptions) && canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def handleEntryPointProvider(component: AadlThreadOrDevice,
@@ -184,11 +200,7 @@ import org.sireum.message.Reporter
       case _ => None()
     }
 
-    val containers = GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes)
-
-    val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
-    resources = resources :+
-      ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
+    val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
 
     val preInitMethodName = s"pre_${EntryPoints.initialise.name}"
     val postInitMethodName = s"post_${EntryPoints.initialise.name}"
@@ -235,16 +247,7 @@ import org.sireum.message.Reporter
       finaliseBody = None(),
       recoverBody = None()
     )
-    /*
-        val epCompanion =
-          st"""@ext object ${epCompanionName} {
-              |  def ${preInitMethodName}(): Unit = $$
-              |  def ${postInitMethodName}(): Unit = $$
-              |
-              |  def ${preComputeMethodName}(): Unit = $$
-              |  def ${postComputeMethodName}(): Unit = $$
-              |}"""
-    */
+
     val preContainer: String = "preStateContainer_wL"
     val postContainer: String = "postStateContainer_wL"
 
@@ -422,7 +425,11 @@ import org.sireum.message.Reporter
 
     val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
 
-    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources))
+    val containers = getContainer(component,componentNames, annexInfo, aadlTypes)
+    val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
+    val containersR = ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
+
+    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources :+ containersR))
   }
 
 }

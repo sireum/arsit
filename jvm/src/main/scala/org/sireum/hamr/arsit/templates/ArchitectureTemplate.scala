@@ -67,7 +67,12 @@ object ArchitectureTemplate {
           |          case Cli.RunChoice.Static => Schedulers.getStaticScheduler(None())
           |          case Cli.RunChoice.Legacy => Schedulers.getLegacyScheduler()
           |        }
+          |
+          |        Platform.setup()
+          |
           |        art.Art.run(Arch.ad, scheduler)
+          |
+          |        Platform.tearDown()
           |      case Some(o: Cli.HelpOption) =>
           |      case _ => return 1
           |    }

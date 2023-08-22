@@ -78,14 +78,37 @@ object ArsitPlugin {
 
 @msig trait ArsitPlugin extends Plugin
 
-@msig trait AppProviderPlugin extends ArsitPlugin {
-  @pure def canHandleAppProviderPlugin(): B
-  @pure def handleAppProviderPlugin(projectDirectories: ProjectDirectories,
-                                    arsitOptions: ArsitOptions,
-                                    symbolTable: SymbolTable,
-                                    aadlTypes: AadlTypes,
+object PlatformProviderPlugin {
 
-                                    reporter: Reporter): ISZ[FileResource]
+  @sig trait PlatformContributions {
+
+    def imports: ISZ[ST]
+
+    def blocks: ISZ[ST]
+
+    def resources: ISZ[FileResource]
+  }
+
+  @datatype class PlatformSetupContributions(val imports: ISZ[ST],
+                                             val blocks: ISZ[ST],
+                                             val resources: ISZ[FileResource]) extends PlatformContributions
+
+  @datatype class PlatformTearDownContributions(val imports: ISZ[ST],
+                                                val blocks: ISZ[ST],
+                                                val resources: ISZ[FileResource]) extends PlatformContributions
+}
+
+@msig trait PlatformProviderPlugin extends ArsitPlugin {
+  @pure def canHandlePlatformProviderPlugin(arsitOptions: ArsitOptions,
+                                            symbolTable: SymbolTable,
+                                            aadlTypes: AadlTypes): B
+
+  @pure def handlePlatformProviderPlugin(projectDirectories: ProjectDirectories,
+                                         arsitOptions: ArsitOptions,
+                                         symbolTable: SymbolTable,
+                                         aadlTypes: AadlTypes,
+
+                                         reporter: Reporter): ISZ[PlatformProviderPlugin.PlatformContributions]
 }
 
 @msig trait BehaviorProviderPlugin extends ArsitPlugin {
@@ -247,9 +270,9 @@ object BehaviorEntryPointProviderPlugin {
 }
 
 object BridgeCodeProviderPlugin {
-  @datatype class BridgeCodeContributions (val entryPointTemplate: EntryPointTemplate,
-                                           val e : EntryPointProviderPlugin.EntryPointContributions => ST,
-                                           val resources: ISZ[FileResource])
+  @datatype class BridgeCodeContributions(val entryPointTemplate: EntryPointTemplate,
+                                          val e: EntryPointProviderPlugin.EntryPointContributions => ST,
+                                          val resources: ISZ[FileResource])
 }
 
 @msig trait BridgeCodeProviderPlugin extends ArsitPlugin {

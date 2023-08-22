@@ -386,8 +386,8 @@ object GumboXGenUtil {
       if (isEvent) st"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
       else st"${aadlType.nameProvider.qualifiedReferencedTypeName}"
 
-    @pure def observeInPortValue: ST = {
-      return st"Art.observeInPortValue($archPortId)"
+    @pure def observeInPortVariable: ST = {
+      return st"Art.observeInPortVariable($archPortId)"
     }
 
     @pure def observeOutPortVariable: ST = {
@@ -397,17 +397,17 @@ object GumboXGenUtil {
     @pure def preFetch: ST = {
       if (!isEvent) {
         // incoming data port so we'll assume it was initialized in the init phase
-        return st"$observeInPortValue.get.asInstanceOf[$payloadType].value"
+        return st"$observeInPortVariable.get.asInstanceOf[$payloadType].value"
       } else if (isData) {
         // incoming event data port so need to unpack the payload if non-empty
         return (
           st"""
-              |  if (${observeInPortValue}.nonEmpty)
-              |    Some(${observeInPortValue}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
+              |  if (${observeInPortVariable}.nonEmpty)
+              |    Some(${observeInPortVariable}.get.asInstanceOf[${aadlType.nameProvider.qualifiedPayloadName}].value)
               |  else None()""")
       } else {
         // incoming event port so no need to unpack
-        return st"$observeInPortValue.asInstanceOf[$slangType]"
+        return st"$observeInPortVariable.asInstanceOf[$slangType]"
       }
     }
 

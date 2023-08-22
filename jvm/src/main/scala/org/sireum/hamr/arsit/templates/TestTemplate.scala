@@ -112,7 +112,7 @@ object TestTemplate {
 
       st"""// setter for in ${p.feature.category}
           |def ${putMethodName}(${putParamName}): Unit = {
-          |  ArtNative.insertInPortValue(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
+          |  ArtNative.insertInInfrastructurePort(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
           |}
           |"""
     })
@@ -201,7 +201,7 @@ object TestTemplate {
           |
           |// payload getter for out ${p.feature.category}
           |def ${payloadGetterName}: Option[${payloadType}] = {
-          |  return ArtNative.observeOutPortValue(${names.archInstanceName}.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
+          |  return ArtNative.observeOutInfrastructurePort(${names.archInstanceName}.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
           |}
           |"""
     })

@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{AppProviderPlugin, ArsitConfigurationProvider}
+import org.sireum.hamr.arsit.plugin.{ArsitConfigurationProvider, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
@@ -52,10 +52,19 @@ object Arsit {
     var fileResources: ISZ[FileResource] = nixPhase.resources
     var addAuxResources: ISZ[Resource] = nixPhase.auxResources
 
-    // TODO: complete the app provider plugin concept, right now they are just expected to return resources
-    for (p <- plugins if p.isInstanceOf[AppProviderPlugin] && p.asInstanceOf[AppProviderPlugin].canHandleAppProviderPlugin()) {
-      fileResources = fileResources ++ p.asInstanceOf[AppProviderPlugin].handleAppProviderPlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)
+    var plaformContributions: ISZ[(String, PlatformProviderPlugin.PlatformContributions)] = ISZ()
+    for (p <- plugins if p.isInstanceOf[PlatformProviderPlugin] && p.asInstanceOf[PlatformProviderPlugin].canHandlePlatformProviderPlugin(arsitOptions, symbolTable, aadlTypes)) {
+      plaformContributions = plaformContributions ++
+        (for (pc <- p.asInstanceOf[PlatformProviderPlugin].handlePlatformProviderPlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)) yield (p.name, pc))
     }
+    for(pc <- plaformContributions) {
+      fileResources = fileResources ++ pc._2.resources
+    }
+    fileResources = fileResources :+ ResourceUtil.createResourceWithMarkers(
+      path = Util.pathAppend(projectDirectories.architectureDir, ISZ(arsitOptions.packageName, "Platform.scala")),
+      content =  PlatformTemplate.createPlatform(arsitOptions.packageName, plaformContributions),
+      markers = PlatformTemplate.markers,
+      overwrite = F)
 
     val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationProvider.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins).toZ
     val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationProvider.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins).toZ
@@ -69,16 +78,17 @@ object Arsit {
       fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art") :+
         ResourceUtil.createResourceH(
           path = s"$outDir/Aux_Types.scala",
-          content = st"""// #Sireum
-                        |
-                        |package ${arsitOptions.packageName}
-                        |
-                        |import org.sireum._
-                        |
-                        |${StringTemplate.safeToEditComment()}
-                        |
-                        |// Any datatype definitions placed in this file will be processed by sergen and SlangCheck
-                        |""",
+          content =
+            st"""// #Sireum
+                |
+                |package ${arsitOptions.packageName}
+                |
+                |import org.sireum._
+                |
+                |${StringTemplate.safeToEditComment()}
+                |
+                |// Any datatype definitions placed in this file will be processed by sergen and SlangCheck
+                |""",
           overwrite = F, isDatatype = T)
 
       val datatypeResources: ISZ[FileResource] = fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)
