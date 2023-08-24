@@ -32,6 +32,18 @@ import org.sireum.message.Reporter
   var entrypointKinds: ISZ[ST] = ISZ()
   var entryPointHandlers: ISZ[ST] = ISZ()
 
+  var genTestCases: ISZ[ST] = ISZ()
+  var testSuiteCases: ISZ[ST] = ISZ()
+  var testSuiteCaseIds: ISZ[ST] = ISZ()
+
+  var containerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
+
+  def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
+    return containerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
+  }
+
+  var modelInfo: ISZ[ST] = ISZ()
+
   @pure def canHandle(component: AadlThreadOrDevice,
                       resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                       symbolTable: SymbolTable,
@@ -87,12 +99,6 @@ import org.sireum.message.Reporter
     handledComponents = handledComponents + component.path
   }
 
-  var containerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
-  def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
-    return containerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
-  }
-
-
   /******************************************************************************************
    * PlatformProviderPlugin
    ******************************************************************************************/
@@ -147,10 +153,45 @@ import org.sireum.message.Reporter
           |${StringTemplate.doNotEditComment()}
           |
           |object GumboXDispatcher {
-          |  def dispatch(observationKind: ObservationKind.Type, preContainer: Option[art.DataContent], postContainer: Option[art.DataContent]): B = {
+          |  def checkContract(observationKind: ObservationKind.Type, preContainer: Option[art.DataContent], postContainer: Option[art.DataContent]): B = {
           |    observationKind match {
           |      ${(entryPointHandlers, "\n")}
           |      case _ => halt("Infeasible")
+          |    }
+          |  }
+          |
+          |  def genTestSuite(testCases: ISZ[(Z, ISZ[ST])]): Unit = {
+          |    val tq = ${DSCTemplate.tqq}
+          |
+          |    val testRoot = Os.path(".") / "src" / "test" / "bridge"
+          |
+          |    ${(testSuiteCaseIds, "\n")}
+          |
+          |    def genUniqueSuiteName(path: Os.Path, prefix: String): String = {
+          |      var i = 0
+          |      while(true) {
+          |        val cand = path / s"$${prefix}_$${i}.scala"
+          |        if (!cand.exists) {
+          |          return s"$${prefix}_$${i}"
+          |        }
+          |        i = i + 1
+          |      }
+          |      halt("Infeasible")
+          |    }
+          |
+          |    for (p <- testCases) {
+          |      art.Art.BridgeId.fromZ(p._1) match {
+          |        ${(testSuiteCases, "\n")}
+          |        case x => halt(s"Infeasible bridge id: $$x")
+          |      }
+          |    }
+          |  }
+          |
+          |  def genTestCase(observationKind: ObservationKind.Type, preContainer: Option[String], postContainer: Option[String], testCaseName: Option[String]): ST = {
+          |    val tq = ${DSCTemplate.tqq}
+          |    observationKind match {
+          |      ${(genTestCases, "\n")}
+          |      case _ => return st"// TODO $${observationKind}"
           |    }
           |  }
           |}"""
@@ -259,7 +300,7 @@ import org.sireum.message.Reporter
           |
           |  def dispatch(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: Option[art.DataContent]): Unit = {
           |    model.addRow(Row(bridge, observationKind,
-          |      GumboXDispatcher.dispatch(observationKind, pre, post),
+          |      GumboXDispatcher.checkContract(observationKind, pre, post),
           |      if (pre.nonEmpty) Some(JSON.from_artDataContent(pre.get, T)) else None(),
           |      if (post.nonEmpty) Some(JSON.from_artDataContent(post.get, T)) else None()))
           |  }
@@ -337,11 +378,15 @@ import org.sireum.message.Reporter
     var companionBlocks: ISZ[ST] = ISZ()
     var companionExtBlocks: ISZ[ST] = ISZ()
     var resources: ISZ[FileResource] = ISZ()
+    var hasStateVariables: B = F
 
     val annexInfo: Option[(GclSubclause, GclSymbolTable)] = resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
-      case ISZ(GclAnnexClauseInfo(annex_, gclSymbolTable_)) => Some((annex_, gclSymbolTable_))
+      case ISZ(GclAnnexClauseInfo(annex_, gclSymbolTable_)) =>
+        hasStateVariables = annex_.state.nonEmpty
+        Some((annex_, gclSymbolTable_))
       case _ => None()
     }
+
 
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
 
@@ -397,7 +442,7 @@ import org.sireum.message.Reporter
     val optInit: ST =
       if (this.gumboXGen.initializeEntryPointHolder.contains(component.path)) {
         val simpleCepPreContainer = GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)
-        st"""val result: B = ${(simpleCepPreContainer, ".")}(postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_wL}])
+        st"""val result: B = ${(simpleCepPreContainer, ".")}(postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
             |println(s"${component.identifier}.initialise: Post-condition: $${if (result) "" else "un"}satisfied")
             |return result"""
       } else {
@@ -409,7 +454,7 @@ import org.sireum.message.Reporter
       this.gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
           val simpleCepPreContainer = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
-          st"""val result: B = ${simpleCepPreContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_wL}])
+          st"""val result: B = ${simpleCepPreContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}])
               |println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")
               |return result"""
         case _ =>
@@ -421,7 +466,7 @@ import org.sireum.message.Reporter
       this.gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Post.nonEmpty =>
           val simpleCepPostContainer = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
-          st"""val result: B = ${simpleCepPostContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_wL}], postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_wL}])
+          st"""val result: B = ${simpleCepPostContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}], postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
               |println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")
               |return result"""
         case _ =>
@@ -451,6 +496,85 @@ import org.sireum.message.Reporter
           |"""
 
     entryPointHandlers = entryPointHandlers :+ cases
+
+    var postComputeCases: ISZ[ST] = ISZ()
+
+    this.gumboXGen.computeEntryPointHolder.get(component.path) match {
+      case Some(holder) =>
+        if (holder.CEP_Pre.nonEmpty) {
+          val simple_CEP_Pre_container = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
+          postComputeCases = postComputeCases :+
+            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Check Pre-condition: $$i" }") {
+                 ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
+                 ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                 ||  assert(${simple_CEP_Pre_container}(preContainer))
+                 ||}"""
+        }
+
+        if (holder.CEP_Post.nonEmpty) {
+          val simple_CEP_Post_container = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
+          postComputeCases = postComputeCases :+
+            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Check Post-condition: $$i" }") {
+                 ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
+                 ||  val postJson: String = st$${tq}$${postContainer.get}$${tq}.render
+                 ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                 ||  val postContainer = ${componentNames.basePackage}.${containers.postStateContainerJsonTo_PS}(postJson).left
+                 ||  assert(${simple_CEP_Post_container}(preContainer, postContainer))
+                 ||}"""
+        }
+
+        val methodToCall: String = if (hasStateVariables) "testComputeCB_wLV" else "testComputeCBV"
+          postComputeCases = postComputeCases :+
+            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Run $methodToCall: $$i" }") {
+                 ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
+                 ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                 ||  println($methodToCall(preContainer))
+                 ||}"""
+
+      case _ =>
+    }
+
+    val testCases =
+      st"""case $postComputeKind =>
+          |  return (st${DSCTemplate.tq}// Begin test cases for ${postComputeKind}
+          |              |
+          |              ${(postComputeCases, "\n|\n")}
+          |              |// End test cases for ${postComputeKind}${DSCTemplate.tq})"""
+
+    genTestCases = genTestCases :+ testCases
+
+    val cid = st"${componentNames.componentSingletonType}_id"
+    testSuiteCaseIds = testSuiteCaseIds :+ st"val ${cid} = ${componentNames.archInstanceName}.id"
+
+    val testSuiteCase: ST = {
+      st"""case ${cid} =>
+          |  val prefix = "${componentNames.componentSingletonType}_RM_TestSuite"
+          |  val path = testRoot /+ ISZ(${(for(pn <- componentNames.packageNameI) yield st""""$pn"""", ",")})
+          |  val suiteName = genUniqueSuiteName(path, prefix)
+          |
+          |  val testSuite =
+          |    st${DSCTemplate.tq}package ${componentNames.packageName}
+          |        |
+          |        |import org.sireum._
+          |        |import ${componentNames.packageName}._
+          |        |
+          |        |class $${suiteName} extends ${ops.ISZOps(GumboXGen.createScalaTestGumboXClassName(componentNames)).last} {
+          |        |  val verbose: B = false
+          |        |
+          |        |  var i = 0 // ensures generated test case names are unique
+          |        |  def incrementI: Int = {
+          |        |    i += 1
+          |        |    return i
+          |        |  }
+          |        |
+          |        |  $${(p._2, "\nincrementI\n\n")}
+          |        |}${DSCTemplate.tq}
+          |  val filename = path / s"$${suiteName}.scala"
+          |  filename.writeOver(testSuite.render)
+          |  println(s"Wrote: $${filename.toUri}")"""
+    }
+
+    testSuiteCases = testSuiteCases :+ testSuiteCase
 
     val epCompanionExt =
       st"""// #Sireum

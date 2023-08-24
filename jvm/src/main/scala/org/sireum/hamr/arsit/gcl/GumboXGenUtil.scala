@@ -37,24 +37,36 @@ object GumboXGenUtil {
                             val outPorts: ISZ[GGParam],
                             val outStateVars: ISZ[GGParam]) {
 
-    val preStateContainerName: String = genContainerName(componentSingletonType, T, F)
-    val preStateContainerName_wL: String = genContainerName(componentSingletonType, T, T)
-    val postStateContainerName: String = genContainerName(componentSingletonType, F, F)
-    val postStateContainerName_wL: String = genContainerName(componentSingletonType, F, T)
+    val preStateContainerSigName: String = genContainerSigName(componentSingletonType, T)
+    val preStateContainerName_P: String = genContainerName(componentSingletonType, T, F)
+    val preStateContainerName_PS: String = genContainerName(componentSingletonType, T, T)
 
-    val fqPreStateContainerName: String = s"$packageName.$preStateContainerName"
-    val fqPreStateContainerName_wL: String = s"$packageName.$preStateContainerName_wL"
-    val fqPostStateContainerName: String = s"$packageName.$postStateContainerName"
-    val fqPostStateContainerName_wL: String = s"$packageName.$postStateContainerName_wL"
+    val postStateContainerSigName: String = genContainerSigName(componentSingletonType, F)
+    val postStateContainerName_P: String = genContainerName(componentSingletonType, F, F)
+    val postStateContainerName_PS: String = genContainerName(componentSingletonType, F, T)
+
+    val fqPreStateContainerName_P: String = s"$packageName.$preStateContainerName_P"
+    val fqPreStateContainerName_PS: String = s"$packageName.$preStateContainerName_PS"
+    val fqPostStateContainerName_P: String = s"$packageName.$postStateContainerName_P"
+    val fqPostStateContainerName_PS: String = s"$packageName.$postStateContainerName_PS"
 
     @pure def jsonFrom(name: String): ST = {
       return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
     }
 
-    val preStateContainerJsonFrom: ST = jsonFrom(preStateContainerName)
-    val preStateContainerJsonFrom_wL: ST = jsonFrom(preStateContainerName_wL)
-    val postStateContainerJsonFrom: ST = jsonFrom(postStateContainerName)
-    val postStateContainerJsonFrom_wL: ST = jsonFrom(postStateContainerName_wL)
+    @pure def jsonTo(name: String): ST = {
+      return st"JSON.to${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
+    }
+
+    val preStateContainerJsonFrom_P: ST = jsonFrom(preStateContainerName_P)
+    val preStateContainerJsonFrom_PS: ST = jsonFrom(preStateContainerName_PS)
+    val postStateContainerJsonFrom_P: ST = jsonFrom(postStateContainerName_P)
+    val postStateContainerJsonFrom_PS: ST = jsonFrom(postStateContainerName_PS)
+
+    val preStateContainerJsonTo_P: ST = jsonTo(preStateContainerName_P)
+    val preStateContainerJsonTo_PS: ST = jsonTo(preStateContainerName_PS)
+    val postStateContainerJsonTo_P: ST = jsonTo(postStateContainerName_P)
+    val postStateContainerJsonTo_PS: ST = jsonTo(postStateContainerName_PS)
 
     def observePreStateH(containerName: String, params: ISZ[GGParam]): ST = {
 
@@ -69,11 +81,11 @@ object GumboXGenUtil {
     }
 
     def observePreState(): ST = {
-      return observePreStateH(preStateContainerName, inPorts)
+      return observePreStateH(preStateContainerName_P, inPorts)
     }
 
     def observePreState_wL(): ST = {
-      return observePreStateH(preStateContainerName_wL, inPorts ++ inStateVars)
+      return observePreStateH(preStateContainerName_PS, inPorts ++ inStateVars)
     }
 
     def observePostStateH(containerName: String, params: ISZ[GGParam]): ST = {
@@ -88,11 +100,11 @@ object GumboXGenUtil {
     }
 
     def observePostState(): ST = {
-      return observePostStateH(postStateContainerName, outPorts)
+      return observePostStateH(postStateContainerName_P, outPorts)
     }
 
     def observePostState_wL(): ST = {
-      return observePostStateH(postStateContainerName_wL, outPorts ++ outStateVars)
+      return observePostStateH(postStateContainerName_PS, outPorts ++ outStateVars)
     }
 
     def lastDataPortVars: Option[ST] = {
@@ -105,23 +117,44 @@ object GumboXGenUtil {
       else None())
     }
 
+    @pure def genSig(sigName: String,
+                     params: ISZ[GGParam]): ST = {
+
+      @strictpure def wrapOption(s: String, opt: B): String = if (opt) s"Option[$s]" else s
+
+      val fieldDecls: ISZ[ST] = for (p <- sortParam(params)) yield
+        st"def ${p.name}: ${wrapOption(getSlangTypeName(p.aadlType), p.isOptional)}"
+
+      return (st"""@sig trait $sigName extends art.DataContent {
+                  |  ${(fieldDecls, "\n")}
+                  |}""")
+    }
+
     @pure def genContainer(containerName: String,
-                           params: ISZ[GGParam]): ST = {
+                           params: ISZ[GGParam],
+                           sigName: String,
+                           isPre: B,
+                           includesStateVars: B): ST = {
 
       @strictpure def wrapOption(s: String, opt: B): String = if (opt) s"Option[$s]" else s
 
       val fieldDecls: ISZ[ST] = for (p <- sortParam(params)) yield
         st"val ${p.name}: ${wrapOption(getSlangTypeName(p.aadlType), p.isOptional)}"
 
-      return DSCTemplate.genTestVectorContainer(containerName, fieldDecls)
+      return (st"""// container for ${if (isPre) "incoming" else "outgoing"} ports${if (includesStateVars) " and state variables" else ""}
+                  |@datatype class $containerName (
+                  |  ${(fieldDecls, ",\n")}) extends $sigName""")
     }
 
     def genContainers(): ST = {
       val containers: ISZ[ST] = ISZ(
-        genContainer(preStateContainerName, inPorts),
-        genContainer(preStateContainerName_wL, inPorts ++ inStateVars),
-        genContainer(postStateContainerName, outPorts),
-        genContainer(postStateContainerName_wL, outPorts ++ outStateVars))
+        genSig(preStateContainerSigName, inPorts),
+        genContainer(preStateContainerName_P, inPorts, preStateContainerSigName, T, F),
+        genContainer(preStateContainerName_PS, inPorts ++ inStateVars, preStateContainerSigName, T, T),
+
+        genSig(postStateContainerSigName, outPorts),
+        genContainer(postStateContainerName_P, outPorts, postStateContainerSigName, F, F),
+        genContainer(postStateContainerName_PS, outPorts ++ outStateVars, postStateContainerSigName, F, T))
 
       return DSCTemplate.genTestVectorContainerClass(
         packageName = packageName,
@@ -130,8 +163,11 @@ object GumboXGenUtil {
     }
   }
 
+  @strictpure def genContainerSigName(singletonType: String, isPre: B): String =
+    s"${singletonType}_${if (isPre) "Pre" else "Post"}State_Container"
+
   @strictpure def genContainerName(singletonType: String, isPre: B, withL: B): String =
-    s"${singletonType}_${if (isPre) "Pre" else "Post"}State${if (withL) "_wL" else "_"}Container"
+    s"${genContainerSigName(singletonType, isPre)}_${if (withL) "PS" else "P"}"
 
   def generateContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): Container = {
     val inPorts = inPortsToParams(component, componentNames)
