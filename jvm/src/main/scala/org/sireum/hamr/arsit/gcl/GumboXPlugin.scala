@@ -187,8 +187,12 @@ import org.sireum.message.Reporter
           |    }
           |  }
           |
-          |  def genTestCase(observationKind: ObservationKind.Type, preContainer: Option[String], postContainer: Option[String], testCaseName: Option[String]): ST = {
+          |  def genTestCase(observationKind: ObservationKind.Type, preContainer: Option[String], postContainer: Option[String], testNameSuffix: Option[String]): ST = {
           |    val tq = ${DSCTemplate.tqq}
+          |    val suffix: String =
+          |      if (testNameSuffix.nonEmpty) testNameSuffix.get
+          |      else ""
+          |
           |    observationKind match {
           |      ${(genTestCases, "\n")}
           |      case _ => return st"// TODO $${observationKind}"
@@ -477,44 +481,66 @@ import org.sireum.message.Reporter
 
     val runtimePackage = s"${componentNames.basePackage}.runtimemonitor"
 
-    val postInitKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_postInit"
-    val preComputeKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_preCompute"
-    val postComputeKind = st"${runtimePackage}.ObservationKind.${componentNames.identifier}_postCompute"
+    val postInitKind = st"${componentNames.identifier}_postInit"
+    val preComputeKind = st"${componentNames.identifier}_preCompute"
+    val postComputeKind = st"${componentNames.identifier}_postCompute"
+
+    val postInitKindFQ = st"${runtimePackage}.ObservationKind.${postInitKind}"
+    val preComputeKindFQ = st"${runtimePackage}.ObservationKind.${preComputeKind}"
+    val postComputeKindFQ = st"${runtimePackage}.ObservationKind.${postComputeKind}"
 
     entrypointKinds = entrypointKinds :+
       st""""${componentNames.identifier}_postInit"""" :+
       st""""${componentNames.identifier}_preCompute"""" :+
       st""""${componentNames.identifier}_postCompute""""
 
-    val cases =
-      st"""case $postInitKind =>
+    val entryPointCases =
+      st"""case $postInitKindFQ =>
           |  $optInit
-          |case $preComputeKind =>
+          |case $preComputeKindFQ =>
           |  $optPreCompute
-          |case $postComputeKind =>
+          |case $postComputeKindFQ =>
           |  $optPostCompute
           |"""
 
-    entryPointHandlers = entryPointHandlers :+ cases
+    entryPointHandlers = entryPointHandlers :+ entryPointCases
 
+    var postInitCases: ISZ[ST] = ISZ()
+    var preComputeCases: ISZ[ST] = ISZ()
     var postComputeCases: ISZ[ST] = ISZ()
+
+    this.gumboXGen.initializeEntryPointHolder.get(component.path) match {
+      case Some(holder) =>
+        val simple_IEP_Post_container = st"${(GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames), ".")}"
+        postInitCases = postInitCases :+
+          st"""|test(s"${postInitKind}: Check Post-condition$$suffix") {
+               ||  val postJson: String = st$${tq}$${postContainer.get}$${tq}.render
+               ||  val postContainer = ${componentNames.basePackage}.${containers.postStateContainerJsonTo_PS}(postJson).left
+               ||  assert(${simple_IEP_Post_container}(postContainer))
+               ||}"""
+      case _ =>
+    }
 
     this.gumboXGen.computeEntryPointHolder.get(component.path) match {
       case Some(holder) =>
         if (holder.CEP_Pre.nonEmpty) {
           val simple_CEP_Pre_container = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
-          postComputeCases = postComputeCases :+
-            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Check Pre-condition: $$i" }") {
-                 ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
-                 ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
-                 ||  assert(${simple_CEP_Pre_container}(preContainer))
-                 ||}"""
+          def gen(kind: ST): ST = {
+            return(st"""|test(s"$kind: Check Pre-condition$$suffix") {
+                        ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
+                        ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                        ||  assert(${simple_CEP_Pre_container}(preContainer))
+                        ||}""")
+          }
+
+          preComputeCases = preComputeCases :+ gen(preComputeKind)
+          postComputeCases = postComputeCases :+ gen(postComputeKind)
         }
 
         if (holder.CEP_Post.nonEmpty) {
           val simple_CEP_Post_container = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
           postComputeCases = postComputeCases :+
-            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Check Post-condition: $$i" }") {
+            st"""|test(s"${postComputeKind}: Check Post-condition$$suffix") {
                  ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
                  ||  val postJson: String = st$${tq}$${postContainer.get}$${tq}.render
                  ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
@@ -523,33 +549,53 @@ import org.sireum.message.Reporter
                  ||}"""
         }
 
-        val methodToCall: String = if (hasStateVariables) "testComputeCB_wLV" else "testComputeCBV"
-          postComputeCases = postComputeCases :+
-            st"""|test(s"$${if (testCaseName.nonEmpty) testCaseName.get else "Run $methodToCall: $$i" }") {
-                 ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
-                 ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
-                 ||  println($methodToCall(preContainer))
-                 ||}"""
+        // FIXME: add sporadic cb testing support
+        if (component.isPeriodic()) {
+          val methodToCall: String = if (hasStateVariables) "testComputeCB_wLV" else "testComputeCBV"
+          def gen2(kind: ST): ST = {
+            return(st"""|test(s"$kind: Run $methodToCall$$suffix") {
+                        ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
+                        ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                        ||  println($methodToCall(preContainer))
+                        ||}""")
+          }
+
+          preComputeCases = preComputeCases :+ gen2(preComputeKind)
+          postComputeCases = postComputeCases :+ gen2(postComputeKind)
+        }
 
       case _ =>
     }
 
-    val testCases =
-      st"""case $postComputeKind =>
-          |  return (st${DSCTemplate.tq}// Begin test cases for ${postComputeKind}
-          |              |
-          |              ${(postComputeCases, "\n|\n")}
-          |              |// End test cases for ${postComputeKind}${DSCTemplate.tq})"""
+    def trans(kindFQ: ST, kind: ST, cases: ISZ[ST]): Option[ST] = {
+      return (
+        if (cases.nonEmpty)
+          Some(
+            st"""case $kindFQ =>
+                |  return (st${DSCTemplate.tq}// Begin test cases for ${kind}
+                |              |
+                |              ${(cases, "\n|\n")}
+                |              |// End test cases for ${kind}${DSCTemplate.tq})""")
+        else None()
+        )
+    }
 
-    genTestCases = genTestCases :+ testCases
+    genTestCases = genTestCases :+
+      st"""${trans(postInitKindFQ, postInitKind, postInitCases)}
+          |${trans(preComputeKindFQ, preComputeKind, preComputeCases)}
+          |${trans(postComputeKindFQ, postComputeKind, postComputeCases)}"""
 
     val cid = st"${componentNames.componentSingletonType}_id"
     testSuiteCaseIds = testSuiteCaseIds :+ st"val ${cid} = ${componentNames.archInstanceName}.id"
 
+    val baseName: String =
+      if (component.isPeriodic()) ops.ISZOps(GumboXGen.createScalaTestGumboXClassName(componentNames)).last
+      else componentNames.testScalaTestName
+
     val testSuiteCase: ST = {
       st"""case ${cid} =>
           |  val prefix = "${componentNames.componentSingletonType}_RM_TestSuite"
-          |  val path = testRoot /+ ISZ(${(for(pn <- componentNames.packageNameI) yield st""""$pn"""", ",")})
+          |  val path = testRoot /+ ISZ(${(for (pn <- componentNames.packageNameI) yield st""""$pn"""", ",")})
           |  val suiteName = genUniqueSuiteName(path, prefix)
           |
           |  val testSuite =
@@ -558,8 +604,8 @@ import org.sireum.message.Reporter
           |        |import org.sireum._
           |        |import ${componentNames.packageName}._
           |        |
-          |        |class $${suiteName} extends ${ops.ISZOps(GumboXGen.createScalaTestGumboXClassName(componentNames)).last} {
-          |        |  val verbose: B = false
+          |        |class $${suiteName} extends ${baseName} {
+          |        |  val verbose: B = true
           |        |
           |        |  var i = 0 // ensures generated test case names are unique
           |        |  def incrementI: Int = {
@@ -603,7 +649,7 @@ import org.sireum.message.Reporter
           |      ${containers.observePostState_wL()}
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePostState(${componentNames.archInstanceName}.id, $postInitKind, $postContainer)
+          |    ${runtimePackage}.RuntimeMonitor.observePostState(${componentNames.archInstanceName}.id, $postInitKindFQ, $postContainer)
           |  }
           |
           |  def ${preComputeMethodName}(): Unit = {
@@ -612,7 +658,7 @@ import org.sireum.message.Reporter
           |      ${containers.observePreState_wL()})
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePreState(${componentNames.archInstanceName}.id, $preComputeKind, ${preContainer}.asInstanceOf[Option[art.DataContent]])
+          |    ${runtimePackage}.RuntimeMonitor.observePreState(${componentNames.archInstanceName}.id, $preComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]])
           |  }
           |
           |  def ${postComputeMethodName}(): Unit = {
@@ -621,7 +667,7 @@ import org.sireum.message.Reporter
           |      ${containers.observePostState_wL()}
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePrePostState(${componentNames.archInstanceName}.id, $postComputeKind, ${preContainer}.asInstanceOf[Option[art.DataContent]], $postContainer)
+          |    ${runtimePackage}.RuntimeMonitor.observePrePostState(${componentNames.archInstanceName}.id, $postComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]], $postContainer)
           |  }
           |}"""
 
@@ -691,7 +737,7 @@ import org.sireum.message.Reporter
 
     val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
 
-    val containers = getContainer(component,componentNames, annexInfo, aadlTypes)
+    val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
     val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
     val containersR = ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
 
