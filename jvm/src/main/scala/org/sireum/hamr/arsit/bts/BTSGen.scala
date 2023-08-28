@@ -104,7 +104,7 @@ import org.sireum.ops._
 
     methods = methods ++ transitionMethods.values
 
-    methods = methods :+ BlessST.tranpilerWorkaroundContains()
+    methods = methods :+ BlessST.transpilerWorkaroundContains()
 
     var extensions: ISZ[ST] = ISZ()
 

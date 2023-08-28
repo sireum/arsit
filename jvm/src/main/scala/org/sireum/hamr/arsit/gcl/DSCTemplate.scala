@@ -3,7 +3,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.gcl.GumboXGenUtil.GGParam
-import org.sireum.hamr.arsit.templates.StringTemplate
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
 object DSCTemplate {
@@ -29,7 +29,7 @@ object DSCTemplate {
           |import org.sireum._
           |${(_imports, "\n")}
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |// containers for the pre and post state values of ports and state variables
           |
@@ -197,7 +197,7 @@ object DSCTemplate {
           |import org.sireum.Random.Gen64
           |import org.sireum.Random.Impl.Xoshiro256
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |// Distribute SlangCheck test runners
           |
@@ -260,7 +260,7 @@ object DSCTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |
           |object $recordUnsatPreObjectName {
           |

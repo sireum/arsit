@@ -3,9 +3,10 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.Port
-import org.sireum.hamr.arsit.templates.{ApiTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.ApiTemplate
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlThreadOrDevice, SymbolTable}
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil
 import org.sireum.message.Reporter
@@ -52,7 +53,7 @@ import org.sireum.message.Reporter
           |import ${nameProvider.basePackage}._
           |${addImports(imports ++ arg.imports.map((m: String) => st"$m"))}
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@datatype class ${nameProvider.bridge}(
           |  val id: Art.BridgeId,

@@ -6,11 +6,12 @@ import org.sireum.hamr.arsit.ProjectDirectories
 import org.sireum.hamr.arsit.gcl.GumboXGen._
 import org.sireum.hamr.arsit.gcl.GumboXGenUtil._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
-import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate, TestTemplate}
+import org.sireum.hamr.arsit.templates.{StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
@@ -884,9 +885,9 @@ object GumboXGen {
         val postContainerName = GumboXGenUtil.genContainerName(componentNames.componentSingletonType, F, T)
 
         val args: ISZ[ST] = for (p <- sorted_Cep_Post_Params) yield
-          if (p.kind == SymbolKind.StateVarPre) st"${p.name} = pre.${p.name}"
+          if (p.kind == SymbolKind.StateVarPre || (p.isInstanceOf[GGPortParam] && p.asInstanceOf[GGPortParam].isIn))
+            st"${p.name} = pre.${p.name}"
           else st"${p.name} = post.${p.name}"
-
 
         val cep_post_container =
           st"""/** CEP-Post: Compute Entrypoint Post-Condition for ${component.identifier} via containers
@@ -963,7 +964,7 @@ object GumboXGen {
               |import ${basePackageName}._
               |${StubTemplate.addImports(imports)}
               |
-              |${StringTemplate.doNotEditComment()}
+              |${CommentTemplate.doNotEditComment_scala}
               |object ${ops.ISZOps(objectName).last} {
               |  ${(ret, "\n\n")}
               |}"""
@@ -1035,7 +1036,7 @@ object GumboXGen {
             |import ${componentNames.basePackage}._
             |${StubTemplate.addImports(imports.elements)}
             |
-            |${StringTemplate.doNotEditComment()}
+            |${CommentTemplate.doNotEditComment_scala}
             |object ${simpleName} {
             |  ${(blocks, "\n\n")}
             |}
@@ -1439,7 +1440,7 @@ object GumboXGen {
             |import ${componentNames.basePackage}.GumboXUtil.GumboXResult
             |${StubTemplate.addImports(imports)}
             |
-            |${StringTemplate.doNotEditComment()}
+            |${CommentTemplate.doNotEditComment_scala}
             |@msig trait ${simpleTestHarnessName} extends ${componentNames.testApisName} {
             |  def verbose: B
             |
@@ -1487,7 +1488,7 @@ object GumboXGen {
             |import org.sireum.Random.Gen64
             |import org.sireum.Random.Impl.Xoshiro256
             |
-            |${StringTemplate.doNotEditComment()}
+            |${CommentTemplate.doNotEditComment_scala}
             |class ${simpleTestCasesName} extends ${simpleTestHarnessSlang2ScalaTestName} {
             |
             |  // set failOnUnsatPreconditions to T if the unit tests should fail when either

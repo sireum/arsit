@@ -3,7 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
+import org.sireum.hamr.codegen.common.templates.{CommentTemplate, StackFrameTemplate}
 
 object SchedulerTemplate {
   def schedulers(packageName: String,
@@ -23,7 +23,7 @@ object SchedulerTemplate {
           |import art.scheduling.static.Schedule.{DSchedule, DScheduleSpec, Slot}
           |import art.scheduling.static.StaticScheduler
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@datatype class ProcessorTimingProperties(val clockPeriod: Option[Z],
           |                                          val framePeriod: Option[Z],
@@ -98,7 +98,7 @@ object SchedulerTemplate {
           |import art.Art
           |import art.scheduling.static.Schedule.DScheduleSpec
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ScheduleProvider {
           |
@@ -118,7 +118,7 @@ object SchedulerTemplate {
     val ret: ST =
       st"""#include <all.h>
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_c}
           |
           |Unit art_scheduling_legacy_LegacyInterface_computePhase(STACK_FRAME IS_058E6F bridges) {
           |  printf("Infeasible.  You should not get here in C");
@@ -143,7 +143,7 @@ object SchedulerTemplate {
       st"""#include <all.h>
           |#include <signal.h>
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_c}
           |
           |// Transpiled signature of the Slang variable ${slangSymbol}
           |// in ${slangPath}.  This weak function declaration allows
@@ -235,7 +235,7 @@ object SchedulerTemplate {
     val ret: ST =
       st"""#include <all.h>
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_c}
           |
           |// Transpiled signature of the Slang variable ${slangSymbol}
           |// in ${slangPath}.  This weak function declaration allows
@@ -302,7 +302,7 @@ object SchedulerTemplate {
           |#include <sys/time.h>
           |#include <time.h>
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |/** Returns current system time in milliseconds
           |  * NOTE: this requires returning 64bit ints

@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.PlatformProviderPlugin
 import org.sireum.hamr.codegen.common.containers.Marker
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 
 object PlatformTemplate {
   val setupMarker: Marker = Marker("// BEGIN PLATFORM SETUP", "// END PLATFORM SETUP")
@@ -47,7 +48,7 @@ object PlatformTemplate {
           |import org.sireum._
           |$importOpt
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |
           |object Platform {
           |

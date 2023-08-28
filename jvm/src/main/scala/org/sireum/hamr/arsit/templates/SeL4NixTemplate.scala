@@ -5,7 +5,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit.Port
 import org.sireum.hamr.codegen.common.CommonUtil
-import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
+import org.sireum.hamr.codegen.common.templates.{CommentTemplate, StackFrameTemplate}
 import org.sireum.hamr.codegen.common.types.{TypeKind, TypeNameProvider, TypeResolver, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 
@@ -92,7 +92,7 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""// #Sireum
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |package ${packageName}
           |
@@ -224,7 +224,7 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""// #Sireum
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |package ${packageName}.${instanceName}
           |
@@ -618,7 +618,7 @@ object SeL4NixTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |
           |object ${TRANSPILER_TOUCHER_OBJECT_NAME} {
           |  def ${TRANSPILER_TOUCHER_METHOD_NAME}(): Unit = {
@@ -637,7 +637,7 @@ object SeL4NixTemplate {
       st"""#ifndef EXT_H
           |#define EXT_H
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_c}
           |
           |#include <all.h>
           |
@@ -650,7 +650,7 @@ object SeL4NixTemplate {
     val ret: ST =
       st"""#include <ext.h>
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_c}
           |
           |// add c extension code here
           |

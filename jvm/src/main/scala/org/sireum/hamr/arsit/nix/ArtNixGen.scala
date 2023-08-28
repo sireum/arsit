@@ -255,9 +255,9 @@ import org.sireum.hamr.ir.Direction
     val stMain = ArtNixTemplate.main(basePackage, mainSends)
     addResource(dirs.slangNixDir, ISZ(basePackage, "LegacyDemo.scala"), stMain, T)
 
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform.scala"), ArtNixTemplate.platform(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "Platform_Ext.scala"), ArtNixTemplate.PlatformExt(basePackage), T)
-    addResource(dirs.slangNixDir, ISZ(basePackage, "PlatformNix.scala"), ArtNixTemplate.PlatformNix(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, s"${ArtNixTemplate.PlatformComm}.scala"), ArtNixTemplate.platformComm(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, s"${ArtNixTemplate.PlatformComm}_Ext.scala"), ArtNixTemplate.PlatformCommExt(basePackage), T)
+    addResource(dirs.slangNixDir, ISZ(basePackage, s"${ArtNixTemplate.PlatformComm}Nix.scala"), ArtNixTemplate.PlatformCommNix(basePackage), T)
     addResource(dirs.slangNixDir, ISZ(basePackage, "Process.scala"), ArtNixTemplate.Process(basePackage), T)
     addResource(dirs.slangNixDir, ISZ(basePackage, "Process_Ext.scala"), ArtNixTemplate.ProcessExt(basePackage), T)
 
@@ -322,7 +322,7 @@ import org.sireum.hamr.ir.Direction
       outputDir = Os.path(dirs.cNixDir),
       binDir = dirs.slangBinDir,
       apps = (appNames :+ "LegacyDemo").map(s => s"${basePackage}.${s}"),
-      forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.Platform=${basePackage}.PlatformNix"),
+      forwards = ISZ(s"art.ArtNative=${basePackage}.ArtNix", s"${basePackage}.${ArtNixTemplate.PlatformComm}=${basePackage}.${ArtNixTemplate.PlatformComm}Nix"),
       numBits = arsitOptions.bitWidth,
       maxArraySize = arsitOptions.maxArraySize,
       maxStringSize = arsitOptions.maxStringSize,

@@ -4,13 +4,14 @@ package org.sireum.hamr.arsit.plugin
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin._
-import org.sireum.hamr.arsit.templates.{StringTemplate, StubTemplate}
+import org.sireum.hamr.arsit.templates.StubTemplate
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.toolName
 import org.sireum.hamr.codegen.common.containers.Marker
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes, TypeUtil}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir.Direction
@@ -165,7 +166,7 @@ object BehaviorEntryPointProviders {
                reporter: Reporter): ObjectContributions = {
 
     var ret = BehaviorEntryPointProviderPlugin.emptyObjectContributions
-    for (p <- plugins if !reporter.hasError && p.isInstanceOf[BehaviorEntryPointProviderPlugin]) {
+    for (p <- plugins if !reporter.hasError && p.isInstanceOf[BehaviorEntryPointProviderPlugin] && p.asInstanceOf[BehaviorEntryPointProviderPlugin].canFinaliseBehaviorEntryPointProvider(component, annexClauseInfos, arsitOptions, symbolTable, aadlTypes)) {
       p.asInstanceOf[BehaviorEntryPointProviderPlugin].finaliseBehaviorEntryPointProvider(
         component, nameProvider, annexClauseInfos,
         symbolTable, aadlTypes, projectDirs, arsitOptions, reporter) match {
@@ -330,7 +331,7 @@ object BehaviorEntryPointElementProvider {
           |${StubTemplate.addImports(entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.imports))}
           |
           |${wrapST(entries.flatMap((f: BehaviorEntryPointObjectContributions) => f.preObjectBlocks), "\n\n")}
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |object ${names.componentSingletonType} {
           |
           |  $body

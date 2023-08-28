@@ -253,6 +253,16 @@ object BehaviorEntryPointProviderPlugin {
                                        arsitOptions: ArsitOptions,
                                        reporter: Reporter): BehaviorEntryPointContributions
 
+
+  @pure def canFinaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,
+                                                  resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+
+                                                  arsitOptions: ArsitOptions,
+                                                  symbolTable: SymbolTable,
+                                                  aadlTypes: AadlTypes): B = {
+    return F
+  }
+
   // Called prior to codegen writing out the behavior code for the component.
   // This allows plugins the ability, for e.g., to write out blocks they've been
   // collecting to an external resource.

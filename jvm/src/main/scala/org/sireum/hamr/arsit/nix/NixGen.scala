@@ -5,13 +5,13 @@ package org.sireum.hamr.arsit.nix
 import org.sireum._
 import org.sireum.hamr.arsit.Util.nameProvider
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.{SeL4NixTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.SeL4NixTemplate
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform}
 import org.sireum.hamr.codegen.common._
 import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.templates.StackFrameTemplate
+import org.sireum.hamr.codegen.common.templates.{CommentTemplate, StackFrameTemplate}
 import org.sireum.hamr.codegen.common.templates.StackFrameTemplate.{SF, SF_LAST}
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -476,7 +476,7 @@ object NixGen {
               |#include <${userHeaderFile.name}>
               |#include <${NixGen.EXT_H}>
               |
-              |${StringTemplate.safeToEditComment()}
+              |${CommentTemplate.safeToEditComment_c}
               |
               |static char* component_id = "${names.instanceName}";
               |
@@ -494,8 +494,8 @@ object NixGen {
       // api helper methods (cakeml ffi's link against the c helper apis)
       if (arsitOptions.excludeImpl || threadOrDevice.isCakeMLComponent()) {
 
-        var headerMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment()}")
-        var implMethods: ISZ[ST] = ISZ(st"${StringTemplate.doNotEditComment()}")
+        var headerMethods: ISZ[ST] = ISZ(st"${CommentTemplate.doNotEditComment_c}")
+        var implMethods: ISZ[ST] = ISZ(st"${CommentTemplate.doNotEditComment_c}")
 
         for (p <- ports) {
           val typeNames = p._portType.nameProvider

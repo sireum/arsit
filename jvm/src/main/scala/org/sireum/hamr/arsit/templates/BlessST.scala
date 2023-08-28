@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.ir._
 
 object BlessST {
@@ -25,7 +26,7 @@ object BlessST {
                 ): ST = {
     assert(imports.isEmpty)
     val ret: ST =
-      st"""${doNotEditComment()}
+      st"""${CommentTemplate.doNotEditComment_scala}
           |
           |@enum object ${completeStateEnumName} {
           |  ${(states, "\n")}
@@ -163,12 +164,8 @@ object BlessST {
     return st"dispatchedPorts : ISZ[art.Art.PortId]"
   }
 
-  @pure def doNotEditComment(): ST = {
-    return st"// This file was auto-generated.  Do not edit"
-  }
 
-
-  @pure def tranpilerWorkaroundContains(): ST = {
+  @pure def transpilerWorkaroundContains(): ST = {
     val ret: ST =
       st"""def contains(ids: ISZ[art.Art.PortId], id: art.Art.PortId): B = {
           |  for (i <- ids) {
@@ -270,7 +267,7 @@ object BlessST {
           |
           |import org.sireum._
           |
-          |${doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@ext object ${vizObjectName} {
           |  def createStateMachines(): Unit = $$
@@ -303,7 +300,7 @@ object BlessST {
           |import javax.swing.SwingUtilities
           |import org.sireum.{IS, Z}
           |
-          |${doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ${vizObjectName}_Ext {
           |

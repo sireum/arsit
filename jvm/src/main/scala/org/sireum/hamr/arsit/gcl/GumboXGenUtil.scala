@@ -185,6 +185,7 @@ object GumboXGenUtil {
   @pure def getSlangTypeName(a: AadlType): String = {
     a match {
       case i: BaseType => return i.slangType.name
+      case i: BitType => return s"ISZ[B]"
       case i: EnumType => return i.nameProvider.qualifiedReferencedTypeName
       case i => return i.nameProvider.qualifiedReferencedTypeName
     }

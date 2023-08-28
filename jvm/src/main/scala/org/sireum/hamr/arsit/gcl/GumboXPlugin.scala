@@ -5,13 +5,14 @@ package org.sireum.hamr.arsit.gcl
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
 import org.sireum.hamr.arsit.plugin.{BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin, PlatformProviderPlugin}
-import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate, StringTemplate}
+import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
@@ -49,6 +50,10 @@ import org.sireum.message.Reporter
                       symbolTable: SymbolTable,
                       aadlTypes: AadlTypes): B = {
 
+    if (aadlTypes.rawConnections) {
+      return F
+    }
+
     @pure def hasDatatypeInvariants: B = {
       for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
         return T
@@ -69,9 +74,12 @@ import org.sireum.message.Reporter
         case _ => F
       }
 
-    return !handledComponents.contains(component.path) && (hasDatatypeInvariants || componentHasGumboSubclauseInfo)
+    return (hasDatatypeInvariants || componentHasGumboSubclauseInfo)
   }
 
+  /** Common method for entrypoint and behavior provider plugin -- i.e. only needs to be called once
+    * per component
+    */
   def handle(component: AadlThreadOrDevice,
              componentNames: NameProvider,
 
@@ -134,7 +142,7 @@ import org.sireum.message.Reporter
           |import org.sireum._
           |import ${arsitOptions.packageName}._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@enum object ObservationKind {
           |  ${(entrypointKinds, "\n")}
@@ -150,7 +158,7 @@ import org.sireum.message.Reporter
           |import org.sireum._
           |import ${arsitOptions.packageName}._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object GumboXDispatcher {
           |  def checkContract(observationKind: ObservationKind.Type, preContainer: Option[art.DataContent], postContainer: Option[art.DataContent]): B = {
@@ -360,7 +368,9 @@ import org.sireum.message.Reporter
                                            arsitOptions: ArsitOptions,
                                            symbolTable: SymbolTable,
                                            aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) && canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
+    return runtimeMonitoringEnabled(arsitOptions) &&
+      !handledComponents.contains(component.path) &&
+      canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def handleEntryPointProvider(component: AadlThreadOrDevice,
@@ -631,7 +641,7 @@ import org.sireum.message.Reporter
           |import art._
           |import ${componentNames.basePackage}._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ${epCompanionName} {
           |
@@ -693,7 +703,8 @@ import org.sireum.message.Reporter
                                                    arsitOptions: ArsitOptions,
                                                    symbolTable: SymbolTable,
                                                    aadlTypes: AadlTypes): B = {
-    return canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
+    return !handledComponents.contains(component.path) &&
+      canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def handleBehaviorEntryPointProvider(entryPoint: EntryPoints.Type,
@@ -716,6 +727,14 @@ import org.sireum.message.Reporter
     handle(component, componentNames, resolvedAnnexSubclauses, symbolTable, aadlTypes, projectDirectories, reporter)
 
     return BehaviorEntryPointProviderPlugin.emptyPartialContributions
+  }
+
+  override def canFinaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,
+                                                     resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                                     arsitOptions: ArsitOptions,
+                                                     symbolTable: SymbolTable,
+                                                     aadlTypes: AadlTypes): B = {
+    return canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def finaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,

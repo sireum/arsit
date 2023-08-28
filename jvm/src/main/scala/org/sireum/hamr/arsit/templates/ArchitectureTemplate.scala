@@ -5,14 +5,10 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.arsit._
 import org.sireum.hamr.codegen.common.symbols.Dispatch_Protocol
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.ir.{Direction, FeatureCategory}
 
 object ArchitectureTemplate {
-
-  @pure def doNotEditComment(from: Option[String]): ST = {
-    val _from: String = if (from.nonEmpty) s" from ${from.get}" else ""
-    return st"// This file was auto-generated${_from}.  Do not edit"
-  }
 
   @pure def dispatchProtocol(dp: Dispatch_Protocol.Type, period: Z): ST = {
     val ret: ST = dp match {
@@ -40,7 +36,7 @@ object ArchitectureTemplate {
           |import org.sireum._
           |import art.scheduling.Scheduler
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |
           |object Demo extends App {
           |
@@ -267,7 +263,7 @@ object ArchitectureTemplate {
           |import art.Art.PortId._
           |${(_imports, "\n")}
           |
-          |${doNotEditComment(None())}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object $architectureName {
           |  ${(bridges, "\n")}

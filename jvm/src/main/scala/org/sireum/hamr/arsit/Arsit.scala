@@ -8,6 +8,7 @@ import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, Re
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.SymbolTable
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, ArrayType}
 import org.sireum.hamr.codegen.common.util.{ExperimentalOptions, ResourceUtil}
 import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
@@ -85,7 +86,7 @@ object Arsit {
                 |
                 |import org.sireum._
                 |
-                |${StringTemplate.safeToEditComment()}
+                |${CommentTemplate.safeToEditComment_scala}
                 |
                 |// Any datatype definitions placed in this file will be processed by sergen and SlangCheck
                 |""",

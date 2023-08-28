@@ -5,6 +5,7 @@ import org.sireum._
 import org.sireum.hamr.arsit.{Port, ProjectDirectories, Util}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.containers.FileResource
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir.FeatureCategory
@@ -23,7 +24,7 @@ object TestTemplate {
           |import org.sireum._
           |import ${basePackage}._
           |
-          |${StringTemplate.safeToEditComment()}
+          |${CommentTemplate.safeToEditComment_scala}
           |class ${names.testName} extends ${names.testScalaTestName} {
           |
           |  test("Example Unit Test for Initialise Entry Point"){
@@ -237,7 +238,7 @@ object TestTemplate {
           |import art.{Art, ArtNative, Empty}
           |import ${basePackage}._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |@msig trait ${names.testApisName} {
           |
           |  def BeforeEntrypoint(): Unit = {
@@ -280,7 +281,7 @@ object TestTemplate {
           |import org.scalatest.funsuite.AnyFunSuite
           |import org.sireum.$$internal.MutableMarker
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |abstract class ${className2Use} extends
           |  AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with
           |  ${extendsName2Use} {

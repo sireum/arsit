@@ -3,8 +3,8 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.arsit.templates.StringTemplate.doNotEditComment
 import org.sireum.hamr.codegen.common.containers.FileResource
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.TypeNameProvider
 
 object TypeTemplate {
@@ -55,7 +55,7 @@ object TypeTemplate {
           |import org.sireum.U32._
           |import org.sireum.U64._
           |
-          |${doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object Base_Types {
           |
@@ -265,7 +265,7 @@ object TypeTemplate {
                   canOverwrite: B): ST = {
     val overwrite: ST = if (canOverwrite) {
       st"""
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |"""
     } else {
       st""

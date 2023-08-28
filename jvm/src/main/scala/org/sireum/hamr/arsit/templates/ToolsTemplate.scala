@@ -4,6 +4,7 @@ package org.sireum.hamr.arsit.templates
 import org.sireum._
 import org.sireum.hamr.codegen.common.containers
 import org.sireum.hamr.codegen.common.containers.{FileResource, SireumToolsSergenOption, SireumToolsSergenSerializerMode, SireumToolsSlangcheckGeneratorOption}
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.util.PathUtil
 
 object ToolsTemplate {
@@ -43,7 +44,7 @@ object ToolsTemplate {
     val ret: ST =
       st"""$header
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |// create SlangCheck generators for the Slang types used in the project
           |
@@ -68,7 +69,7 @@ object ToolsTemplate {
     val ret: ST =
       st"""$header
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |// create serializers/deserializers for the Slang types used in the project
           |

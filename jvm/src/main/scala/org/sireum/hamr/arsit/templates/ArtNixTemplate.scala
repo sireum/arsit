@@ -4,10 +4,10 @@ package org.sireum.hamr.arsit.nix
 
 import org.sireum._
 import org.sireum.hamr.arsit._
-import org.sireum.hamr.arsit.templates.StringTemplate
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitPlatform}
 import org.sireum.hamr.codegen.common.CommonUtil
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice}
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.{AadlTypes, TypeNameProvider}
 
 object ArtNixTemplate {
@@ -69,7 +69,7 @@ object ArtNixTemplate {
   }
 
   @pure def mainSend(portId: String): ST = {
-    return st"""Platform.sendAsync(IPCPorts.${portId}, IPCPorts.${s"$portId"}, empty)"""
+    return st"""${PlatformComm}.sendAsync(IPCPorts.${portId}, IPCPorts.${s"$portId"}, empty)"""
   }
 
   @pure def app(packageName: String,
@@ -106,7 +106,7 @@ object ArtNixTemplate {
           |val appPortId: Art.PortId = IPCPorts.${IPCPort_Id}
           |val appPortIdOpt: Option[Art.PortId] = Some(appPortId)""")
 
-    var inits: ISZ[ST] = ISZ(st"Platform.initialise(seed, appPortIdOpt)")
+    var inits: ISZ[ST] = ISZ(st"${PlatformComm}.initialise(seed, appPortIdOpt)")
 
     globals = globals :+ st"""
                              |// incoming ports"""
@@ -114,7 +114,7 @@ object ArtNixTemplate {
       globals = globals :+ st"val ${localPortId(p)}: Art.PortId = Arch.${bridge}.${p.name}.id"
 
       globals = globals :+ st"val ${localPortIdOpt(p)}: Option[Art.PortId] = Some(${localPortId(p)})"
-      inits = inits :+ st"Platform.initialise(seed, ${localPortIdOpt(p)})"
+      inits = inits :+ st"${PlatformComm}.initialise(seed, ${localPortIdOpt(p)})"
     }
 
     var computeBody: ST = st""
@@ -132,7 +132,7 @@ object ArtNixTemplate {
             }
             st"""{
                 |  val out = IPCPorts.emptyReceiveAsyncOut
-                |  Platform.receiveAsync(${localPortIdOpt(p)}, out)
+                |  ${PlatformComm}.receiveAsync(${localPortIdOpt(p)}, out)
                 |  out.value2 match {
                 |    case Some(v: ${p.getPortTypeNames.qualifiedPayloadName}) => ArtNix.updateData(${localPortId(p)}, v)${if (!isPeriodic) s"; dispatch = ${dispatch}" else ""}
                 |    case Some(v) => halt(s"Unexpected payload on port ${p.name}.  Expecting something of type ${p.getPortTypeNames.qualifiedPayloadName} but received $${v}")
@@ -165,7 +165,7 @@ object ArtNixTemplate {
       st"""var terminated = F
           |while (!terminated) {
           |  val out = IPCPorts.emptyReceiveAsyncOut
-          |  Platform.receiveAsync(appPortIdOpt, out)
+          |  ${PlatformComm}.receiveAsync(appPortIdOpt, out)
           |  if (out.value2.isEmpty) {
           |    compute()
           |  } else {
@@ -185,7 +185,7 @@ object ArtNixTemplate {
           |import art.Art.PortId._
           |import art.scheduling.nop.NopScheduler
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ${objectName} extends App {
           |
@@ -220,11 +220,11 @@ object ArtNixTemplate {
           |
           |    initialiseArchitecture(seed)
           |
-          |    Platform.receive(appPortIdOpt, IPCPorts.emptyReceiveOut) // pause after setting up component
+          |    ${PlatformComm}.receive(appPortIdOpt, IPCPorts.emptyReceiveOut) // pause after setting up component
           |
           |    initialise()
           |
-          |    Platform.receive(appPortIdOpt, IPCPorts.emptyReceiveOut) // pause after component init
+          |    ${PlatformComm}.receive(appPortIdOpt, IPCPorts.emptyReceiveOut) // pause after component init
           |
           |    println("${objectName} starting ...")
           |
@@ -241,7 +241,7 @@ object ArtNixTemplate {
           |
           |  def exit(): Unit = {
           |    finalise()
-          |    Platform.finalise()
+          |    ${PlatformComm}.finalise()
           |  }
           |
           |  override def atExit(): Unit = {
@@ -263,7 +263,7 @@ object ArtNixTemplate {
           |import art._
           |import art.Art.PortId._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object IPCPorts {
           |  ${(ports, "\n")}
@@ -292,7 +292,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ArtNix {
           |
@@ -360,7 +360,7 @@ object ArtNixTemplate {
           |        case Some(d) =>
           |          outgoing(p) = noData
           |          for(e <- connection(p)){
-          |            Platform.sendAsync(e._1, e._2, d)
+          |            ${PlatformComm}.sendAsync(e._1, e._2, d)
           |          }
           |        case _ =>
           |      }
@@ -371,7 +371,7 @@ object ArtNixTemplate {
           |        case Some(d) =>
           |          outgoing(p) = noData
           |          for(e <- connection(p)){
-          |            Platform.sendAsync(e._1, e._2, d)
+          |            ${PlatformComm}.sendAsync(e._1, e._2, d)
           |          }
           |        case _ =>
           |      }
@@ -426,7 +426,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object LegacyDemo extends App {
           |  def main(args: ISZ[String]): Z = {
@@ -438,13 +438,13 @@ object ArtNixTemplate {
           |      1
           |    }
           |
-          |    Platform.initialise(seed, None())
+          |    ${PlatformComm}.initialise(seed, None())
           |
           |    val empty = art.Empty()
           |
           |    ${(sends, "\n")}
           |
-          |    Platform.finalise()
+          |    ${PlatformComm}.finalise()
           |    return 0
           |  }
           |}
@@ -461,7 +461,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@ext object SharedMemory {
           |  def create(id: Z): Z = $$
@@ -482,7 +482,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object SharedMemory_Ext {
           |  def create(id: Z): Z = halt("stub")
@@ -496,7 +496,9 @@ object ArtNixTemplate {
     return ret
   }
 
-  @pure def platform(packageName: String): ST = {
+  val PlatformComm: String = "PlatformComm"
+
+  @pure def platformComm(packageName: String): ST = {
     val ret: ST =
       st"""// #Sireum
           |
@@ -505,9 +507,9 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
-          |@ext object Platform {
+          |@ext object $PlatformComm {
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = $$
           |  def receive(portOpt: Option[Art.PortId],  out: MBox2[Art.PortId, DataContent]): Unit = $$
           |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = $$
@@ -519,16 +521,16 @@ object ArtNixTemplate {
     return ret
   }
 
-  @pure def PlatformExt(packageName: String): ST = {
+  @pure def PlatformCommExt(packageName: String): ST = {
     val ret: ST =
       st"""package $packageName
           |
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
-          |object Platform_Ext {
+          |object ${PlatformComm}_Ext {
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = halt("stub")
           |  def receive(portOpt: Option[Art.PortId], out: MBox2[Art.PortId, DataContent]) = halt("stub")
           |  def send(app: Art.PortId, port: Art.PortId, data: DataContent): Unit = halt("stub")
@@ -540,7 +542,7 @@ object ArtNixTemplate {
     return ret
   }
 
-  @pure def PlatformNix(packageName: String): ST = {
+  @pure def PlatformCommNix(packageName: String): ST = {
 
     val init: ST =
       st"""val id = seed + port.toZ
@@ -577,15 +579,15 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
-          |object PlatformNix {
+          |object ${PlatformComm}Nix {
           |
           |  var seed: Z = 0
           |  var ids: IS[Art.PortId, Z] = IS()
           |
           |  def initialise(seed: Z, portOpt: Option[Art.PortId]): Unit = {
-          |    PlatformNix.seed = seed
+          |    ${PlatformComm}Nix.seed = seed
           |    portOpt match {
           |      case Some(port) =>
           |        $init
@@ -626,7 +628,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art.Art
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |@ext object Process {
           |  def sleep(n: Z): Unit = $$
@@ -644,7 +646,7 @@ object ArtNixTemplate {
           |import org.sireum._
           |import art.Art
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object Process_Ext {
           |  def sleep(millis: Z): Unit = halt("stub")
@@ -678,7 +680,7 @@ object ArtNixTemplate {
           |
           |import org.sireum._
           |
-          |${StringTemplate.doNotEditComment()}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |val home = Os.slashDir
           |
@@ -765,7 +767,7 @@ object ArtNixTemplate {
     val ret: ST =
       st"""#!/usr/bin/env bash
           |#
-          |# This file is autogenerated.  Do not edit
+          |${CommentTemplate.doNotEditComment_bash}
           |#
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
@@ -789,7 +791,7 @@ object ArtNixTemplate {
     val ret: ST =
       st"""#!/usr/bin/env bash
           |#
-          |# This file is autogenerated.  Do not edit
+          |${CommentTemplate.doNotEditComment_bash}
           |#
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
@@ -941,7 +943,7 @@ object ArtNixTemplate {
     val ret: ST =
       st"""#!/usr/bin/env bash
           |#
-          |# This file is autogenerated.  Do not edit
+          |${CommentTemplate.doNotEditComment_bash}
           |#
           |set -e
           |export SCRIPT_HOME=$$( cd "$$( dirname "$$0" )" &> /dev/null && pwd )
@@ -962,7 +964,7 @@ object ArtNixTemplate {
     val ret: ST =
       st"""#!/usr/bin/env bash
           |#
-          |# This file is autogenerated.  Do not edit
+          |${CommentTemplate.doNotEditComment_bash}
           |#
           |APPS="Demo ${(apps, " ")}"
           |for APP in $${APPS}; do

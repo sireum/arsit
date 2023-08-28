@@ -3,6 +3,7 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types._
 
 @sig trait IDatatypeTemplate {
@@ -15,8 +16,8 @@ import org.sireum.hamr.codegen.common.types._
 
   @pure def defaultPreBlocks: ISZ[ST] = {
     val ret: ISZ[ST] = ISZ(
-      if (willBeOverwritten) st"${StringTemplate.doNotEditComment()}"
-      else st"${StringTemplate.safeToEditComment()}")
+      if (willBeOverwritten) st"${CommentTemplate.doNotEditComment_scala}"
+      else st"${CommentTemplate.safeToEditComment_scala}")
 
     return if (typ.isInstanceOf[TODOType]) ret :+ st"// This is a type skeleton as HAMR doesn't know how to translate ${typ.name}"
     else ret
