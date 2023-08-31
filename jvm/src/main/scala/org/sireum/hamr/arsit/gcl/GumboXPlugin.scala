@@ -21,18 +21,18 @@ import org.sireum.message.Reporter
 
   val name: String = "GumboX Plugin"
 
+  val gumboXGen: GumboXGen = GumboXGen()
+
   var processedDatatypeInvariants: B = F
 
   var handledComponents: Set[IdPath] = Set.empty
 
-  var gumboXGen: GumboXGen = GumboXGen()
-
-  var containerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
+  var prePostContainerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
 
   val runtimeMonitoringContainer: GumboXRuntimeMonitoring.RM_Container = GumboXRuntimeMonitoring.RM_Container(ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ())
 
   def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
-    return containerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
+    return prePostContainerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
   }
 
   @pure def canHandle(component: AadlThreadOrDevice,

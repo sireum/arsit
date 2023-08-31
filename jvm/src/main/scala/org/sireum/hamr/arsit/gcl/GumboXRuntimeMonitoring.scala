@@ -48,8 +48,6 @@ object GumboXRuntimeMonitoring {
 
     val epCompanionName: String = s"${componentNames.componentSingletonType}_EntryPoint_Companion"
 
-    var companionBlocks: ISZ[ST] = ISZ()
-    var companionExtBlocks: ISZ[ST] = ISZ()
     var resources: ISZ[FileResource] = ISZ()
 
     val componentMI = GumboXRuntimeMonitoring.getComponentModelInfo(component, componentNames, annexInfo, aadlTypes)
@@ -153,9 +151,6 @@ object GumboXRuntimeMonitoring {
     val optPreCompute: ST =
       gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
-
-
-          //val stateVars: ISZ[ST] = for (sv <- containers.outStateVars) yield st"""updates = updates + "${sv.originName}" ~> preContainer.${sv.name}.string"""
           var inPorts: ISZ[ST] = ISZ()
           for (o <- containers.inPorts) {
             val p = o.asInstanceOf[GGPortParam]
@@ -523,6 +518,8 @@ object GumboXRuntimeMonitoring {
           |import org.sireum._
           |import art.Art.BridgeId
           |
+          |${CommentTemplate.doNotEditComment_scala}
+          |
           |@ext object RuntimeMonitor {
           |
           |  def init(modelInfo: ModelInfo): Unit = $$
@@ -543,57 +540,171 @@ object GumboXRuntimeMonitoring {
           |import org.sireum._
           |import art.Art._
           |
+          |${CommentTemplate.safeToEditComment_scala}
+          |
+          |trait RuntimeMonitorListener {
+          |  def init(modelInfo: ModelInfo): Unit
+          |
+          |  def observePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit
+          |
+          |  def observePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit
+          |
+          |  def observePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit
+          |}
+          |
           |object RuntimeMonitor_Ext {
           |
-          |  var gui: GUI = _
+          |  val registeredListeners: ISZ[RuntimeMonitorListener] = ISZ(
+          |    // add/remove listeners here
+          |    new DefaultRuntimeMonitor()
+          |  )
           |
           |  def init(modelInfo: ModelInfo): Unit = {
-          |    gui = new GUI()
-          |    gui.init(modelInfo)
+          |    for (l <- registeredListeners) {
+          |      l.init(modelInfo)
+          |    }
           |  }
           |
           |  def observePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = {
-          |    gui.observePreState(bridgeId, observationKind, pre)
+          |    for (l <- registeredListeners) {
+          |      l.observePreState(bridgeId, observationKind, pre)
+          |    }
           |  }
           |
           |  def observePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
-          |    gui.observePostState(bridgeId, observationKind, post)
+          |    for (l <- registeredListeners) {
+          |      l.observePostState(bridgeId, observationKind, post)
+          |    }
           |  }
           |
           |  def observePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = {
-          |    gui.observePrePostState(bridgeId, observationKind, pre, post)
+          |    for (l <- registeredListeners) {
+          |      l.observePrePostState(bridgeId, observationKind, pre, post)
+          |    }
           |  }
           |}"""
     val rmpathExt = s"${runtimePath}/RuntimeMonitor_Ext.scala"
-    resources = resources :+ ResourceUtil.createResource(rmpathExt, runtimeMonitorExt, T)
+    resources = resources :+ ResourceUtil.createResource(rmpathExt, runtimeMonitorExt, F)
 
     val gui: ST =
-      st"""package $runtimePackage
+      st"""package ${runtimePackage}
           |
-          |import org.sireum._
           |import art.Art.BridgeId
+          |import org.sireum._
           |import ${basePackageName}.JSON
           |
-          |import java.awt.{BorderLayout, Dimension}
+          |import java.awt.datatransfer.StringSelection
+          |import java.awt.{BorderLayout, Dimension, Toolkit}
           |import javax.swing._
           |import javax.swing.table.AbstractTableModel
           |
-          |class GUI extends JFrame {
+          |${CommentTemplate.safeToEditComment_scala}
+          |
+          |class DefaultRuntimeMonitor extends JFrame with RuntimeMonitorListener {
+          |
+          |  val testDir = Os.path(".") / "src" / "test" / "bridge" / "$basePackageName"
           |
           |  var jtable: JTable = _
           |  var model: TableModel = _
           |
-          |  def init(): Unit = {
+          |  def init(modelInfo: ModelInfo): Unit = {
           |    this.setTitle("Visualizer")
           |
           |    model = new TableModel()
           |    jtable = new JTable()
           |    jtable.setModel(model)
           |
-          |    add(jtable.getTableHeader(), BorderLayout.PAGE_START)
-          |    add(jtable, BorderLayout.CENTER)
+          |    val js = new JScrollPane(jtable)
+          |    js.setVisible(true)
+          |    add(js, BorderLayout.PAGE_START)
           |
-          |    setPreferredSize(new Dimension(500, 300))
+          |    val btnGenTestSuite = new JButton("Generate TestSuite")
+          |    btnGenTestSuite.addActionListener(e => {
+          |      if (jtable.getSelectedRows.nonEmpty) {
+          |        var testCases: Map[Z, ISZ[ST]] = Map.empty
+          |
+          |        for (row <- jtable.getSelectedRows) {
+          |          val data = model.getRow(row)
+          |          val id = data.bridgeId.toZ
+          |          testCases = testCases + id ~>
+          |            (testCases.getOrElse(id, ISZ[ST]()) :+
+          |              GumboXDispatcher.genTestCase(data.observationKind, data.pre, data.post, Some(": $$i")))
+          |        }
+          |        GumboXDispatcher.genTestSuite(testCases.entries)
+          |      }
+          |    })
+          |
+          |    val btnGenTestCase = new JButton("Generate Test Case")
+          |
+          |    btnGenTestCase.addActionListener(e => {
+          |      if (jtable.getSelectedRow >= 0) {
+          |        val data = model.getRow(jtable.getSelectedRow)
+          |
+          |        if (data.observationKind.string.native.contains("post")) {
+          |          val testCase = GumboXDispatcher.genTestCase(data.observationKind, data.pre, data.post, None())
+          |
+          |          val clip = Toolkit.getDefaultToolkit.getSystemClipboard
+          |          val strse1 = new StringSelection(testCase.render.native)
+          |          clip.setContents(strse1, strse1)
+          |
+          |          val txt = st${DSCTemplate.tq}<html><pre>$${testCase.render}</pre></html>${DSCTemplate.tq}
+          |          val lbl = new JLabel(txt.render.native)
+          |
+          |          val viz = new JFrame()
+          |          viz.add(lbl)
+          |
+          |          viz.pack()
+          |          viz.setVisible(true)
+          |        }
+          |      }
+          |    })
+          |
+          |    val btnVisualize = new JButton("Visualize")
+          |
+          |    btnVisualize.addActionListener(e => {
+          |      if (jtable.getSelectedRow >= 0) {
+          |        val data = model.getRow(jtable.getSelectedRow)
+          |
+          |        val preOpt: Option[ST] = if (data.pre.nonEmpty) Some(st"Pre: $${JSON.to_artDataContent(data.pre.get).left}") else None()
+          |        val postOpt: Option[ST] = if (data.post.nonEmpty) Some(st"Post: $${JSON.to_artDataContent(data.post.get).left}") else None()
+          |
+          |        val txt =
+          |          st${DSCTemplate.tq}<html>
+          |              |  <pre>
+          |              |    Component: $${data.bridgeId}
+          |              |    Observation Kind: $${data.observationKind}
+          |              |    <hr>
+          |              |    $${preOpt}
+          |              |    $${postOpt}
+          |              |  </pre>
+          |              |</html>${DSCTemplate.tq}
+          |
+          |        val lbl = new JLabel(txt.render.native)
+          |
+          |        val viz = new JFrame()
+          |        viz.add(lbl)
+          |
+          |        viz.pack()
+          |        viz.setVisible(true)
+          |      }
+          |    })
+          |
+          |    val jpbutton = new JPanel()
+          |
+          |    jpbutton.setLayout(new BoxLayout(jpbutton, BoxLayout.LINE_AXIS))
+          |    jpbutton.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10))
+          |    jpbutton.add(Box.createHorizontalGlue())
+          |
+          |    jpbutton.add(btnGenTestSuite)
+          |    jpbutton.add(Box.createRigidArea(new Dimension(10, 0)))
+          |
+          |    jpbutton.add(btnGenTestCase)
+          |    jpbutton.add(Box.createRigidArea(new Dimension(10, 0)))
+          |
+          |    jpbutton.add(btnVisualize)
+          |
+          |    add(jpbutton, BorderLayout.PAGE_END)
+          |
           |    pack()
           |    setResizable(true)
           |    setLocationRelativeTo(null)
@@ -633,6 +744,10 @@ object GumboXRuntimeMonitoring {
           |    fireTableRowsInserted(data.size.toInt - 1, data.size.toInt - 1)
           |  }
           |
+          |  def getRow(row: Int): Row = {
+          |    return data(row)
+          |  }
+          |
           |  override def getRowCount: Int = {
           |    return data.size.toInt
           |  }
@@ -653,10 +768,9 @@ object GumboXRuntimeMonitoring {
           |      case _ => halt("Infeasible")
           |    }
           |  }
-          |}
-          |"""
-    val guipath = s"${runtimePath}/GUI.scala"
-    resources = resources :+ ResourceUtil.createResource(guipath, gui, T)
+          |}"""
+    val guipath = s"${runtimePath}/DefaultRuntimeMonitor.scala"
+    resources = resources :+ ResourceUtil.createResource(guipath, gui, F)
 
     return PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = platformSetupBlocks, resources = resources)
   }
@@ -668,6 +782,8 @@ object GumboXRuntimeMonitoring {
           |
           |import org.sireum._
           |import ${basePackage}._
+          |
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object ModelInfo {
           |  ${(for (i <- componentInfos) yield i._2, "\n\n")}
