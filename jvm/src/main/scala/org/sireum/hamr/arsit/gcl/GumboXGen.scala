@@ -1285,7 +1285,7 @@ object GumboXGen {
 
       val containerSigName = GumboXGenUtil.genContainerSigName(componentNames.componentSingletonType, T)
       val jsonName: ST =
-        if(!captureStateVars) DSCTemplate.jsonMethod(F, componentNames, dscContainerType)
+        if (!captureStateVars) DSCTemplate.jsonMethod(F, componentNames, dscContainerType)
         else DSCTemplate.jsonMethod(F, componentNames, containerSigName)
       val containerType: String =
         if (!captureStateVars) dscContainerType
@@ -1293,18 +1293,19 @@ object GumboXGen {
 
       val vectorExtractor: Option[ST] =
         if (!isInitialize)
-          Some(st"""def $testCBMethodNameJson(json: String): GumboXResult.Type = {
-              |  ${jsonName}(json) match {
-              |    case Either.Left(o) => return $testCBMethodNameVector(o)
-              |    case Either.Right(msg) => halt(msg.string)
-              |  }
-              |}
-              |
-              |def $testCBMethodNameVector(o: $containerType): GumboXResult.Type = {
-              |  return $testCBMethodName(${(symContainerExtractors, ", ")})
-              |}
-              |""")
-         else None()
+          Some(
+            st"""def $testCBMethodNameJson(json: String): GumboXResult.Type = {
+                |  ${jsonName}(json) match {
+                |    case Either.Left(o) => return $testCBMethodNameVector(o)
+                |    case Either.Right(msg) => halt(msg.string)
+                |  }
+                |}
+                |
+                |def $testCBMethodNameVector(o: $containerType): GumboXResult.Type = {
+                |  return $testCBMethodName(${(symContainerExtractors, ", ")})
+                |}
+                |""")
+        else None()
 
 
       val sortedParams = sortParam(inPortParams ++ (if (captureStateVars) ISZ[GGParam]() else preStateParams.elements))
