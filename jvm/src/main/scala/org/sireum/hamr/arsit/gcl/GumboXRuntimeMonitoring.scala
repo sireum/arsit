@@ -7,7 +7,7 @@ import org.sireum.hamr.arsit.plugin.{EntryPointProviderPlugin, PlatformProviderP
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
 import org.sireum.hamr.codegen.common.StringUtil
-import org.sireum.hamr.codegen.common.containers.FileResource
+import org.sireum.hamr.codegen.common.containers.{FileResource, Marker}
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.AadlTypes
@@ -534,6 +534,8 @@ object GumboXRuntimeMonitoring {
     val rmpath = s"${runtimePath}/RuntimeMonitor.scala"
     resources = resources :+ ResourceUtil.createResource(rmpath, runtimeMonitor, T)
 
+    val drmMarker = Marker("// BEGIN DEFAULT RM MARKER", "// END DEFAULT RM MARKER")
+
     val runtimeMonitorExt: ST =
       st"""package $runtimePackage
           |
@@ -555,8 +557,18 @@ object GumboXRuntimeMonitoring {
           |object RuntimeMonitor_Ext {
           |
           |  val registeredListeners: ISZ[RuntimeMonitorListener] = ISZ(
-          |    // add/remove listeners here
+          |
+          |    ${drmMarker.beginMarker}
+          |
+          |    // if you don't want to use the default runtime monitor then surround this marker block
+          |    // with a block comment /** .. **/ to prevent codegen from emitting an error if it's rerun
+          |
           |    new DefaultRuntimeMonitor()
+          |
+          |    ${drmMarker.endMarker}
+          |
+          |    // add/remove listeners here
+          |
           |  )
           |
           |  def init(modelInfo: ModelInfo): Unit = {
@@ -583,8 +595,9 @@ object GumboXRuntimeMonitoring {
           |    }
           |  }
           |}"""
+
     val rmpathExt = s"${runtimePath}/RuntimeMonitor_Ext.scala"
-    resources = resources :+ ResourceUtil.createResource(rmpathExt, runtimeMonitorExt, F)
+    resources = resources :+ ResourceUtil.createResourceWithMarkers(rmpathExt, runtimeMonitorExt, ISZ(drmMarker), F)
 
     val gui: ST =
       st"""package ${runtimePackage}
