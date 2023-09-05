@@ -38,12 +38,13 @@ object DSCTemplate {
     return ret
   }
 
-  def getTestVectorGen(methodName: String,
-                       dscContainerType: String,
-                       nextCalls: ISZ[ST],
-                       actuals: ISZ[ST]): ST = {
+  def genNextProfileMethod(methodName: String,
+                           profileType: String,
+                           dscContainerType: String,
+                           nextCalls: ISZ[ST],
+                           actuals: ISZ[ST]): ST = {
     val ret =
-      st"""def $methodName(): Option[$dscContainerType] = {
+      st"""def $methodName(profile: $profileType): Option[$dscContainerType] = {
           |  try {
           |    ${(nextCalls, "\n")}
           |
@@ -66,17 +67,20 @@ object DSCTemplate {
   }
 
 
-  def genScalaTests(unitTestPrefix: String,
-                    testCBMethodNameVector: String,
-                    testCBMethodNameJson: String,
+  def genProfileRunner(profileTestMethodName: String,
+                       profileType: String,
 
-                    nameProvider: NameProvider,
-                    dscContainerType: String,
+                       unitTestPrefix: String,
+                       testCBMethodNameVector: String,
 
-                    testVectorMethodName: String,
-                    testVectorPrettyPrints: ISZ[ST],
-                    testComputeMethodCall: String): ST = {
+                       nameProvider: NameProvider,
+                       dscContainerType: String,
 
+                       nextProfileMethodName: String,
+                       testVectorPrettyPrints: ISZ[ST],
+                       testComputeMethodCall: String): ST = {
+
+    val testName = st"""Profile \"$${profile.name}\": ${unitTestPrefix}_$$i"""
 
     val replay: Option[ST] =
       if (testVectorPrettyPrints.nonEmpty)
@@ -84,7 +88,7 @@ object DSCTemplate {
           st"""if (verbose) {
               |  val tq = $tqq
               |  println(st${tq}Replay Unit Test:
-              |              |  test("Replay ${unitTestPrefix}_$$i") {
+              |              |  test("$testName") {
               |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
               |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
               |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
@@ -94,14 +98,14 @@ object DSCTemplate {
       else None()
 
     val ret =
-      st"""{
-          |  for (i <- 0 to GumboXUtil.numTests) {
-          |    this.registerTest(s"${unitTestPrefix}_$$i") {
+      st"""def ${profileTestMethodName}(profile: $profileType): Unit = {
+          |  for (i <- 0 to profile.numTests) {
+          |    this.registerTest(s"$testName") {
           |      var retry: B = T
           |
           |      var j: Z = 0
           |      while (j < GumboXUtil.numTestVectorGenRetries && retry) {
-          |        $testVectorMethodName() match {
+          |        $nextProfileMethodName(profile) match {
           |          case Some(o) =>
           |
           |            if (verbose && j > 0) {
@@ -142,8 +146,10 @@ object DSCTemplate {
 
   def genInitializeScalaTests(unitTestPrefix: String, testInitializeMethodName: String): ST = {
     val ret =
-      st"""{
-          |  for (i <- 0 to GumboXUtil.numTests) {
+      st"""def numInitialiseTests: Z = 100
+          |
+          |{
+          |  for (i <- 0 to numInitialiseTests) {
           |    this.registerTest(s"${unitTestPrefix}_$$i") {
           |      $testInitializeMethodName() match {
           |        case GumboXResult.Pre_Condition_Unsat =>
@@ -166,10 +172,10 @@ object DSCTemplate {
     return st"${componentNames.basePackage}.JSON.${if (from) "from" else "to"}${sergenName}"
   }
 
-  def nextMethod(ranLibDecls: ISZ[ST],
-                 dscContainerType: String,
-                 ranLibInvocations: ISZ[ST],
-                 params: ISZ[GGParam]): ST = {
+  def genNextDSCMethod(ranLibDecls: ISZ[ST],
+                       dscContainerType: String,
+                       ranLibInvocations: ISZ[ST],
+                       params: ISZ[GGParam]): ST = {
     val ret =
       st"""${(ranLibDecls, "\n")}
           |

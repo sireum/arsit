@@ -232,12 +232,16 @@ import org.sireum.message.Reporter
 
     val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
 
-    val testHarness = gumboXGen.createTestHarness(component, componentNames, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
-
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
     val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
     val containersR = ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
 
-    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources :+ containersR))
+
+    val testHarness = gumboXGen.createTestHarness(component, componentNames, containers, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
+
+    val profilePath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Profiles.scala"
+    val profilesR = ResourceUtil.createResource(profilePath, containers.genProfiles(), T)
+
+    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources :+ containersR :+ profilesR))
   }
 }

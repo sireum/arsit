@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.GGPortParam
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGPortParam, SymbolKind, outPortsToParams}
 import org.sireum.hamr.arsit.plugin.{EntryPointProviderPlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
@@ -151,6 +151,7 @@ object GumboXRuntimeMonitoring {
     val optPreCompute: ST =
       gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
+          val stateVars: ISZ[ST] = for (sv <- containers.inStateVars) yield st"""updates = updates + "${sv.name}" ~> preContainer.${sv.name}.string"""
           var inPorts: ISZ[ST] = ISZ()
           for (o <- containers.inPorts) {
             val p = o.asInstanceOf[GGPortParam]
@@ -168,7 +169,7 @@ object GumboXRuntimeMonitoring {
             st"""case $preComputeKindFQ =>
                 |  var updates: Map[String, String] = Map.empty
                 |  val preContainer = container.asInstanceOf[${containers.fqPreStateContainerName_PS}]
-                |  ${(inPorts, "\n")}
+                |  ${(stateVars ++ inPorts, "\n")}
                 |  return updates"""
 
 
@@ -558,6 +559,9 @@ object GumboXRuntimeMonitoring {
           |
           |  val registeredListeners: ISZ[RuntimeMonitorListener] = ISZ(
           |
+          |    // add/remove listeners here
+          |
+          |
           |    ${drmMarker.beginMarker}
           |
           |    // if you don't want to use the default runtime monitor then surround this marker block
@@ -566,9 +570,6 @@ object GumboXRuntimeMonitoring {
           |    new DefaultRuntimeMonitor()
           |
           |    ${drmMarker.endMarker}
-          |
-          |    // add/remove listeners here
-          |
           |  )
           |
           |  def init(modelInfo: ModelInfo): Unit = {
@@ -856,16 +857,17 @@ object GumboXRuntimeMonitoring {
 
   def getComponentModelInfo(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): (String, ST) = {
 
-    val stateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, F, aadlTypes)
+    val inStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, T, aadlTypes)
+    val outStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, F, aadlTypes)
     val inPorts = GumboXGenUtil.inPortsToParams(component, componentNames)
     val outPorts = GumboXGenUtil.outPortsToParams(component, componentNames)
 
     var stateElements = ISZ[ST]()
-    for (sv <- stateVars) {
+    for (sv <- inStateVars ++ outStateVars) {
       stateElements = stateElements :+
         st"""StateVariable(
-            |  name = "${sv.originName}",
-            |  direction = StateDirection.Out,
+            |  name = "${sv.name}",
+            |  direction = StateDirection.${if (sv.kind == SymbolKind.StateVarPre) "In" else "Out"},
             |  slangType = "${sv.aadlType.nameProvider.qualifiedReferencedTypeName}")"""
     }
     for (f <- component.features if f.isInstanceOf[AadlPort]) {

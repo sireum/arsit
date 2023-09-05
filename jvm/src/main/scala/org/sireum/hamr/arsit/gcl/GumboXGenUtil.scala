@@ -3,6 +3,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.codegen.common.symbols._
+import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.ir
@@ -27,6 +28,18 @@ object GumboXGenUtil {
     }
   }
 
+  val portsSuffix: String = "P"
+  val portStateVarSuffix: String = s"${portsSuffix}S"
+
+  @strictpure def genContainerSigName(singletonType: String, isPre: B): String =
+    s"${singletonType}_${if (isPre) "Pre" else "Post"}State_Container"
+
+  @strictpure def genContainerName(singletonType: String, isPre: B, withL: B): String =
+    s"${genContainerSigName(singletonType, isPre)}_${if (withL) portStateVarSuffix else portsSuffix}"
+
+  @strictpure def genProfileName(singletonType: String, includeStateVars: B): String =
+    s"${singletonType}_Profile_${if (includeStateVars) portStateVarSuffix else portsSuffix}"
+
   @datatype class Container(val componentSingletonType: String,
                             val packageName: String,
                             val packageNameI: ISZ[String],
@@ -36,6 +49,14 @@ object GumboXGenUtil {
                             val inStateVars: ISZ[GGParam],
                             val outPorts: ISZ[GGParam],
                             val outStateVars: ISZ[GGParam]) {
+
+    @pure def jsonFrom(name: String): ST = {
+      return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
+    }
+
+    @pure def jsonTo(name: String): ST = {
+      return st"JSON.to${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
+    }
 
     val preStateContainerSigName: String = genContainerSigName(componentSingletonType, T)
     val preStateContainerName_P: String = genContainerName(componentSingletonType, T, F)
@@ -50,13 +71,6 @@ object GumboXGenUtil {
     val fqPostStateContainerName_P: String = s"$packageName.$postStateContainerName_P"
     val fqPostStateContainerName_PS: String = s"$packageName.$postStateContainerName_PS"
 
-    @pure def jsonFrom(name: String): ST = {
-      return st"JSON.from${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
-    }
-
-    @pure def jsonTo(name: String): ST = {
-      return st"JSON.to${Resolver.typeName(ISZ(basePackage), packageNameI :+ name)}"
-    }
 
     val preStateContainerJsonFrom_P: ST = jsonFrom(preStateContainerName_P)
     val preStateContainerJsonFrom_PS: ST = jsonFrom(preStateContainerName_PS)
@@ -67,6 +81,9 @@ object GumboXGenUtil {
     val preStateContainerJsonTo_PS: ST = jsonTo(preStateContainerName_PS)
     val postStateContainerJsonTo_P: ST = jsonTo(postStateContainerName_P)
     val postStateContainerJsonTo_PS: ST = jsonTo(postStateContainerName_PS)
+
+    val profileName_P: String = genProfileName(componentSingletonType, F)
+    val profileName_PS: String = genProfileName(componentSingletonType, T)
 
     def observePreStateH(containerName: String, params: ISZ[GGParam]): ST = {
 
@@ -161,13 +178,75 @@ object GumboXGenUtil {
         imports = ISZ(s"$basePackage._"),
         containers = containers)
     }
+
+    def genProfile(params: ISZ[GGParam],
+                   includeStateVars: B): ST = {
+      val profileName = genProfileName(componentSingletonType, includeStateVars)
+
+      var fieldDecls: ISZ[ST] = ISZ()
+      for (p <- sortParam(params) if !p.isInstanceOf[GGStateVarParam] || includeStateVars) {
+        fieldDecls = fieldDecls :+ st"var ${p.name}: RandomLib"
+      }
+
+      return (
+        st"""@record class $profileName(
+            |  val name: String,
+            |  val numTests: Z, // number of tests to generate
+            |  ${(fieldDecls, ",\n")})""")
+    }
+
+    def genProfiles(): ST = {
+      val params = inStateVars ++ inPorts
+      return (
+      st"""// #Sireum
+          |
+          |package ${packageName}
+          |
+          |import org.sireum._
+          |import ${basePackage}.RandomLib
+          |
+          |${CommentTemplate.doNotEditComment_scala}
+          |
+          |// Profile with generators for incoming ports
+          |${genProfile(params, F)}
+          |
+          |// Profile with generators for state variables and incoming ports
+          |${genProfile(params, T)}
+          |""")
+    }
+
+    def defaultProfileMethodName(includeStateVars: B): String = {
+      return s"getDefaultProfile_${if(includeStateVars) portStateVarSuffix else portsSuffix}"
+    }
+    def genGetDefaultProfile(includeStateVars: B): ST = {
+      val profileName = genProfileName(componentSingletonType, includeStateVars)
+      val typ: String = if (includeStateVars) "Port and State Variable" else "Port"
+      var entries: ISZ[ST] = ISZ(
+        st"""name = "Default $typ Profile"""",
+        st"numTests = 100")
+      val params: ISZ[GGParam] = inPorts ++ (if (includeStateVars) inStateVars else ISZ[GGParam]())
+      for (p <- sortParam(params) if !p.isInstanceOf[GGStateVarParam] || includeStateVars) {
+        entries = entries :+ st"${p.name} = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
+      }
+      return (
+        st"""def ${defaultProfileMethodName(includeStateVars)}: $profileName = {
+            |  return ${profileName} (
+            |    ${(entries, ", \n")})
+            |}""")
+    }
+
+    def genGetProfilesMethodName(includeStateVars: B): ST = {
+      return st"getProfiles_${if(includeStateVars) portStateVarSuffix else portsSuffix}"
+    }
+    def genGetProfilesMethodSig(includeStateVars: B): ST = {
+      val profileName = genProfileName(componentSingletonType, includeStateVars)
+      val mname = genGetProfilesMethodName(includeStateVars)
+      return (st"""def $mname: ISZ[$profileName]""")
+    }
+    def genGetProfilesMethodDefault(includeStateVars: B): ST = {
+      return st"override ${genGetProfilesMethodSig(includeStateVars)} = ISZ(${defaultProfileMethodName(includeStateVars)})"
+    }
   }
-
-  @strictpure def genContainerSigName(singletonType: String, isPre: B): String =
-    s"${singletonType}_${if (isPre) "Pre" else "Post"}State_Container"
-
-  @strictpure def genContainerName(singletonType: String, isPre: B, withL: B): String =
-    s"${genContainerSigName(singletonType, isPre)}_${if (withL) "PS" else "P"}"
 
   def generateContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): Container = {
     val inPorts = inPortsToParams(component, componentNames)
