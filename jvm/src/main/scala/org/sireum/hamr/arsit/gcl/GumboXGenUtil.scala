@@ -244,7 +244,15 @@ object GumboXGenUtil {
       return (st"""def $mname: ISZ[$profileName]""")
     }
     def genGetProfilesMethodDefault(includeStateVars: B): ST = {
-      return st"override ${genGetProfilesMethodSig(includeStateVars)} = ISZ(${defaultProfileMethodName(includeStateVars)})"
+      var comment: ST = st"// profiles that will be used to generate the incoming port values"
+      if(includeStateVars) {
+        comment =
+          st"""$comment
+              |// and the pre-state values of the state variables"""
+      }
+      return (
+      st"""$comment
+          |override ${genGetProfilesMethodSig(includeStateVars)} = ISZ(${defaultProfileMethodName(includeStateVars)})""")
     }
   }
 

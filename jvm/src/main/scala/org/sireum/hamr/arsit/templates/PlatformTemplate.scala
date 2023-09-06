@@ -7,8 +7,8 @@ import org.sireum.hamr.codegen.common.containers.Marker
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
 
 object PlatformTemplate {
-  val setupMarker: Marker = Marker("// BEGIN PLATFORM SETUP", "// END PLATFORM SETUP")
-  val teardownMarker: Marker = Marker("// BEGIN PLATFORM TEARDOWN", "// END PLATFORM TEARDOWN")
+  val setupMarker: Marker = Marker.createMarker("PLATFORM SETUP")
+  val teardownMarker: Marker = Marker.createMarker("PLATFORM TEARDOWN")
 
   val markers: ISZ[Marker] = ISZ(setupMarker, teardownMarker)
 

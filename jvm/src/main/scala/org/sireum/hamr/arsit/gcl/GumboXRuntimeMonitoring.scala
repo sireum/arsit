@@ -535,7 +535,7 @@ object GumboXRuntimeMonitoring {
     val rmpath = s"${runtimePath}/RuntimeMonitor.scala"
     resources = resources :+ ResourceUtil.createResource(rmpath, runtimeMonitor, T)
 
-    val drmMarker = Marker("// BEGIN DEFAULT RM MARKER", "// END DEFAULT RM MARKER")
+    val drmMarker = Marker.createMarker("RUNTIME MONITORING")
 
     val runtimeMonitorExt: ST =
       st"""package $runtimePackage
