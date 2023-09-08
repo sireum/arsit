@@ -506,7 +506,7 @@ object GumboXRuntimeMonitoring {
 
     resources = resources :+ ResourceUtil.createResource(s"${runtimePath}/GumboXDispatcher.scala", process, T)
 
-    val modelInfo = GumboXRuntimeMonitoring.genModelInfo(rmContainer.componentModelInfos, basePackageName)
+    val modelInfo = GumboXRuntimeMonitoring.genModelInfo(rmContainer.componentModelInfos, runtimePackage, basePackageName)
     resources = resources :+ ResourceUtil.createResource(s"${runtimePath}/ModelInfo.scala", modelInfo, T)
 
     val platformSetupBlocks = ISZ(st"${runtimePackage}.RuntimeMonitor.init(${runtimePackage}.ModelInfo.modelInfo)")
@@ -789,10 +789,10 @@ object GumboXRuntimeMonitoring {
     return PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = platformSetupBlocks, resources = resources)
   }
 
-  def genModelInfo(componentInfos: ISZ[(String, ST)], basePackage: String): ST = {
+  def genModelInfo(componentInfos: ISZ[(String, ST)], runtimePackage: String, basePackage: String): ST = {
     val ret =
       st"""// #Sireum
-          |package tc.runtimemonitor
+          |package ${runtimePackage}
           |
           |import org.sireum._
           |import ${basePackage}._
