@@ -280,7 +280,7 @@ object GumboXRuntimeMonitoring {
 
         // FIXME: add sporadic cb testing support
         if (component.isPeriodic()) {
-          val methodToCall: String = if (hasStateVariables) "testComputeCB_wLV" else "testComputeCBV"
+          val methodToCall: String = if (hasStateVariables) "testComputeCBwLV" else "testComputeCBV"
 
           def gen2(kind: ST): ST = {
             return (st"""|test(s"$kind: Run $methodToCall$$suffix") {

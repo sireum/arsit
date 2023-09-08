@@ -88,7 +88,7 @@ object DSCTemplate {
           st"""if (verbose) {
               |  val tq = $tqq
               |  println(st${tq}Replay Unit Test:
-              |              |  test("$testName") {
+              |              |  test("Replay: $testName") {
               |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
               |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
               |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
