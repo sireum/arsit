@@ -13,6 +13,26 @@ import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
 
 object GumboXGenUtil {
+  def genGumboXUtil(basePackage: String): ST = {
+    val utilContent: ST =
+      st"""// #Sireum
+          |package $basePackage
+          |
+          |import org.sireum._
+          |
+          |${CommentTemplate.doNotEditComment_scala}
+          |
+          |object GumboXUtil {
+          |
+          |  @enum object GumboXResult {
+          |    "Pre_Condition_Unsat"
+          |    "Post_Condition_Pass"
+          |    "Post_Condition_Fail"
+          |  }
+          |}"""
+    return utilContent
+  }
+
 
   @pure def getRangenMethodName(a: AadlType): String = {
     a match {
@@ -192,6 +212,7 @@ object GumboXGenUtil {
         st"""@record class $profileName(
             |  val name: String,
             |  val numTests: Z, // number of tests to generate
+            |  var numTestVectorGenRetries: Z, // number of test vector generation retries
             |  ${(fieldDecls, ",\n")})""")
     }
 
@@ -223,7 +244,9 @@ object GumboXGenUtil {
       val typ: String = if (includeStateVars) "Port and State Variable" else "Port"
       var entries: ISZ[ST] = ISZ(
         st"""name = "Default $typ Profile"""",
-        st"numTests = 100")
+        st"numTests = 100",
+        st"numTestVectorGenRetries = 100")
+
       val params: ISZ[GGParam] = inPorts ++ (if (includeStateVars) inStateVars else ISZ[GGParam]())
       for (p <- sortParam(params) if !p.isInstanceOf[GGStateVarParam] || includeStateVars) {
         entries = entries :+ st"${p.name} = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"

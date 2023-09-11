@@ -98,7 +98,7 @@ import org.sireum.message.Reporter
   }
 
   /******************************************************************************************
-   * PlatformProviderPlugin
+   * PlatformProviderPlugin - only called once by codegen
    ******************************************************************************************/
 
   val enableRuntimeMonitoring: String = "enableRuntimeMonitoring"
@@ -118,10 +118,18 @@ import org.sireum.message.Reporter
                                             symbolTable: SymbolTable,
                                             aadlTypes: AadlTypes,
                                             reporter: Reporter): ISZ[PlatformProviderPlugin.PlatformContributions] = {
-    return ISZ(GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
+    // PlatformProviderPlugin is only called once by codegen so it's a good place
+    // to write out resources that should only be generated once
+    val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
+    val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
+    val gumboxResource = ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T)
+
+    val pc = GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
       rmContainer = runtimeMonitoringContainer,
       basePackageName = arsitOptions.packageName,
-      projectDirectories = projectDirectories))
+      projectDirectories = projectDirectories)
+
+    return ISZ(pc(resources = pc.resources :+ gumboxResource))
   }
 
   /******************************************************************************************
@@ -235,7 +243,6 @@ import org.sireum.message.Reporter
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
     val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
     val containersR = ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
-
 
     val testHarness = gumboXGen.createTestHarness(component, componentNames, containers, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
 

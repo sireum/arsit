@@ -81,6 +81,7 @@ object DSCTemplate {
                        testComputeMethodCall: String): ST = {
 
     val testName = st"""Profile \"$${profile.name}\": ${unitTestPrefix}_$$i"""
+    val escapedTestName = st"""Profile \\\"$${profile.name}\\\": ${unitTestPrefix}_$$i"""
 
     val replay: Option[ST] =
       if (testVectorPrettyPrints.nonEmpty)
@@ -88,8 +89,8 @@ object DSCTemplate {
           st"""if (verbose) {
               |  val tq = $tqq
               |  println(st${tq}Replay Unit Test:
-              |              |  test("Replay: $testName") {
-              |              |    val json = st$${tq}$${${jsonMethod(T, nameProvider, dscContainerType)}(o, T)}$${tq}.render
+              |              |  test("Replay: $$escapedTestName") {
+              |              |    val json = st$${tq}$${json}$${tq}.render
               |              |    val testVector = ${jsonMethod(F, nameProvider, dscContainerType)}(json).left
               |              |    assert (${testCBMethodNameVector}(testVector) == ${nameProvider.basePackage}.GumboXUtil.GumboXResult.$$results)
               |              |  }$tq.render)
@@ -99,12 +100,15 @@ object DSCTemplate {
 
     val ret =
       st"""def ${profileTestMethodName}(profile: $profileType): Unit = {
-          |  for (i <- 0 to profile.numTests) {
-          |    this.registerTest(s"$testName") {
+          |  for (i <- 0 until profile.numTests) {
+          |    val testName = s"$testName"
+          |    val escapedTestName = s"$escapedTestName"
+          |
+          |    this.registerTest(testName) {
           |      var retry: B = T
           |
           |      var j: Z = 0
-          |      while (j < GumboXUtil.numTestVectorGenRetries && retry) {
+          |      while (j < profile.numTestVectorGenRetries && retry) {
           |        $nextProfileMethodName(profile) match {
           |          case Some(o) =>
           |
@@ -113,6 +117,9 @@ object DSCTemplate {
           |            }
           |
           |            val results = $testComputeMethodCall
+          |
+          |            val json = ${jsonMethod(T, nameProvider, dscContainerType)}(o, T)
+          |            updateReport("${profileTestMethodName}", results.name, testName, j, Some(json))
           |
           |            $replay
           |            results match {
@@ -127,6 +134,7 @@ object DSCTemplate {
           |                retry = F
           |            }
           |          case _ =>
+          |            updateReport("${profileTestMethodName}", "SlangCheck RTS", testName, j, None())
           |        }
           |        j = j + 1
           |      }
@@ -149,9 +157,13 @@ object DSCTemplate {
       st"""def numInitialiseTests: Z = 100
           |
           |{
-          |  for (i <- 0 to numInitialiseTests) {
-          |    this.registerTest(s"${unitTestPrefix}_$$i") {
-          |      $testInitializeMethodName() match {
+          |  for (i <- 0 until numInitialiseTests) {
+          |    val testName = s"${unitTestPrefix}_$$i"
+          |    this.registerTest(testName) {
+          |      val results = $testInitializeMethodName()
+          |      updateReport("testInitialiseCB", results.name, testName, 0, None())
+          |
+          |      results match {
           |        case GumboXResult.Pre_Condition_Unsat =>
           |          halt("Infeasible as initialize entry points cannot contain assume clauses and cannot access incoming ports or state variables")
           |        case GumboXResult.Post_Condition_Fail =>

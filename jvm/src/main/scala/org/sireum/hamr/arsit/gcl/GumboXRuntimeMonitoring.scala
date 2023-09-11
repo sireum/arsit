@@ -414,7 +414,7 @@ object GumboXRuntimeMonitoring {
 
   def handlePlatformProviderPlugin(rmContainer: RM_Container,
                                    basePackageName: String,
-                                   projectDirectories: ProjectDirectories): PlatformProviderPlugin.PlatformContributions = {
+                                   projectDirectories: ProjectDirectories): PlatformProviderPlugin.PlatformSetupContributions = {
     val runtimePath = s"${projectDirectories.architectureDir}/${basePackageName}/runtimemonitor"
 
     var resources: ISZ[FileResource] = ISZ()

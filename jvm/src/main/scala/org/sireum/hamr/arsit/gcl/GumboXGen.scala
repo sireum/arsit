@@ -1503,27 +1503,6 @@ object GumboXGen {
       resources = resources :+ ResourceUtil.createResource(testHarnessPath, testHarnessContent, T)
 
       resources = resources :+ TestTemplate.slang2ScalaTestWrapper(projectDirectories, componentNames, Some((simpleTestHarnessSlang2ScalaTestName, simpleTestHarnessName)))
-
-      val utilPath = s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/GumboXUtil.scala"
-      val utilContent: ST =
-        st"""// #Sireum
-            |package ${componentNames.basePackage}
-            |
-            |import org.sireum._
-            |
-            |${CommentTemplate.doNotEditComment_scala}
-            |
-            |object GumboXUtil {
-            |
-            |  var numTestVectorGenRetries: Z = 100
-            |
-            |  @enum object GumboXResult {
-            |    "Pre_Condition_Unsat"
-            |    "Post_Condition_Pass"
-            |    "Post_Condition_Fail"
-            |  }
-            |}"""
-      resources = resources :+ ResourceUtil.createResource(utilPath, utilContent, T)
     }
 
     if (scalaTests.nonEmpty) {
@@ -1541,10 +1520,76 @@ object GumboXGen {
             |import ${componentNames.basePackage}.RandomLib
             |import org.sireum.Random.Gen64
             |import org.sireum.Random.Impl.Xoshiro256
+            |import org.scalatest.BeforeAndAfterAll
             |
             |${CommentTemplate.doNotEditComment_scala}
             |
-            |trait ${simpleGeneratorName} extends ${simpleTestHarnessSlang2ScalaTestName} {
+            |object $simpleGeneratorName {
+            |
+            |  // CB entrypoint id ~> (testName ~> (retry num ~> preStateContainer)))
+            |  var report: HashSMap[String, HashSMap[String, Map[Z, Option[String]]]] = _
+            |
+            |  def resetReport(): Unit = report = HashSMap.empty
+            |
+            |  def updateReport(entryPoint: String, result: String, testName: String, retry: Z, jsonContainer: Option[String]): Unit = {
+            |    val key = s"$$entryPoint : $$result"
+            |    val cbEntries: HashSMap[String, Map[Z, Option[String]]] =
+            |      if (report.contains(key)) report.get(key).get
+            |      else HashSMap.empty
+            |    val testNameEntries: Map[Z, Option[String]] =
+            |      if (cbEntries.contains(testName)) cbEntries.get(testName).get
+            |      else Map.empty
+            |    assert (!testNameEntries.contains(retry))
+            |
+            |    report = report + key ~> (cbEntries + (testName ~> (testNameEntries + (retry ~> jsonContainer))))
+            |  }
+            |
+            |  def emitReport(): Unit = {
+            |    println("Test Results")
+            |    for(e <- report.entries) {
+            |      println(s"  $${e._1} = $${e._2.size}")
+            |      val attempts = e._2.values.elements.foldLeft(z"0")((o, m) => o + m.size)
+            |      println(s"    Total Attempts = $$attempts")
+            |    }
+            |  }
+            |
+            |  def deserializeReport(p: Os.Path): HashSMap[String, HashSMap[String, Map[Z, Option[String]]]] = {
+            |    halt("Not yet")
+            |  }
+            |
+            |  def serializeReport(dir: Os.Path): Unit = {
+            |    val filename = dir / s"${simpleGeneratorName}_$${System.currentTimeMillis()}.json"
+            |    //filename.write(JSON.from_artDataContent(GumboXUtil.Report(report), T))
+            |    var map1: HashSMap[String, String] = HashSMap.empty
+            |    for(e <- report.entries) {
+            |      var map2: HashSMap[String, String] = HashSMap.empty
+            |      for (t <- e._2.entries) {
+            |        var map3: Map[Z, String] = Map.empty
+            |        for (r <- t._2.entries) {
+            |          val s: String =
+            |            if (r._2.isEmpty) ""
+            |            else r._2.get
+            |          map3 = map3 + (r._1 ~> s)
+            |        }
+            |        map2 = map2 + (t._1 ~>
+            |          org.sireum.Json.Printer.printMap(T, map3, org.sireum.Json.Printer.printZ _, org.sireum.Json.Printer.printString _).render)
+            |      }
+            |      map1 = map1 + (e._1 ~>
+            |        org.sireum.Json.Printer.printHashSMap(T, map2, org.sireum.Json.Printer.printString _, org.sireum.Json.Printer.printString _).render)
+            |    }
+            |    val sreport = org.sireum.Json.Printer.printHashSMap(T, map1, org.sireum.Json.Printer.printString _, org.sireum.Json.Printer.printString _).render
+            |    filename.write(sreport)
+            |    println(s"Wrote: $${filename.toUri}")
+            |  }
+            |}
+            |
+            |import ${simpleGeneratorName}._
+            |
+            |trait ${simpleGeneratorName} extends ${simpleTestHarnessSlang2ScalaTestName}
+            |  with BeforeAndAfterAll {
+            |
+            |  // return a directory path if you want to serialize the report
+            |  def serializeReportPath: Option[Os.Path] = None()
             |
             |  def failOnUnsatPreconditions: B = F
             |
@@ -1553,6 +1598,16 @@ object GumboXGen {
             |  ${(generatorProfileEntries, "\n\n")}
             |
             |  ${(nextProfileMethods, "\n\n")}
+            |
+            |  override def beforeAll(): Unit = resetReport()
+            |
+            |  override def afterAll(): Unit = {
+            |    emitReport()
+            |    serializeReportPath match {
+            |      case Some (p) => serializeReport(p)
+            |      case _ =>
+            |    }
+            |  }
             |
             |  ${(scalaTests, "\n\n")}
             |}"""
