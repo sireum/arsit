@@ -152,13 +152,13 @@ object DSCTemplate {
     return ret
   }
 
-  def genInitializeScalaTests(unitTestPrefix: String, testInitializeMethodName: String): ST = {
+  def genInitializeScalaTests(profileTestName: String, profileType: String,
+                              unitTestPrefix: String, testInitializeMethodName: String): ST = {
+    val testName = st"""Profile \"$${profile.name}\": ${unitTestPrefix}_$$i"""
     val ret =
-      st"""def numInitialiseTests: Z = 100
-          |
-          |{
-          |  for (i <- 0 until numInitialiseTests) {
-          |    val testName = s"${unitTestPrefix}_$$i"
+      st"""def $profileTestName(profile: $profileType): Unit = {
+          |  for (i <- 0 until profile.numTests) {
+          |    val testName = s"$testName"
           |    this.registerTest(testName) {
           |      val results = $testInitializeMethodName()
           |      updateReport("testInitialiseCB", results.name, testName, 0, None())

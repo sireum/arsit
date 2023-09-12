@@ -1337,7 +1337,18 @@ object GumboXGen {
       // initialize entrypoints shouldn't access in ports or state variables so
       // running DSC would be pointless
       if (isInitialize) {
-        scalaTests = scalaTests :+ DSCTemplate.genInitializeScalaTests(testCBMethodName, testCBMethodName)
+        generatorProfileEntries = generatorProfileEntries :+ container.genGetInitialiseProfilesMethodSig
+        generatorProfileEntries = generatorProfileEntries :+ container.genGetDefaultInitialiseProfile
+        runnerProfileEntries = runnerProfileEntries :+ container.genGetInitialiseProfilesMethodDefault
+
+        val profileRunnerName = s"${testCBMethodName}_Profile"
+        scalaTests = scalaTests :+
+          st"""for (profile <- ${container.genGetInitialiseProfilesMethodName}) {
+              |  ${profileRunnerName}(profile)
+              |}"""
+        scalaTests = scalaTests :+ DSCTemplate.genInitializeScalaTests(
+          profileRunnerName, GumboXGenUtil.genInitProfileName(componentNames.componentSingletonType),
+          testCBMethodName, testCBMethodName)
       } else {
         var dscLocalRandLibs: ISZ[ST] = ISZ(st"var seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)")
 
