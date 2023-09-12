@@ -294,7 +294,7 @@ object GumboXGenUtil {
 
       val params: ISZ[GGParam] = inPorts ++ (if (includeStateVars) inStateVars else ISZ[GGParam]())
       for (p <- sortParam(params) if !p.isInstanceOf[GGStateVarParam] || includeStateVars) {
-        entries = entries :+ st"${p.name} = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))"
+        entries = entries :+ st"${p.name} = freshRandomLib"
       }
       return (
         st"""def ${defaultProfileMethodName(includeStateVars)}: $profileName = {

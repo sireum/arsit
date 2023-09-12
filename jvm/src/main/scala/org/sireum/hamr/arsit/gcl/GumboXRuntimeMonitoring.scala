@@ -258,6 +258,10 @@ object GumboXRuntimeMonitoring {
             return (st"""|test(s"$kind: Check Pre-condition$$suffix") {
                          ||  val preJson: String = st$${tq}$${preContainer.get}$${tq}.render
                          ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
+                         ||  if (verbose) {
+                         ||    println("Pre-State Values:")
+                         ||    println(s"  $$$$preContainer")
+                         ||  }
                          ||  assert(${simple_CEP_Pre_container}(preContainer))
                          ||}""")
           }
@@ -274,12 +278,21 @@ object GumboXRuntimeMonitoring {
                  ||  val postJson: String = st$${tq}$${postContainer.get}$${tq}.render
                  ||  val preContainer = ${componentNames.basePackage}.${containers.preStateContainerJsonTo_PS}(preJson).left
                  ||  val postContainer = ${componentNames.basePackage}.${containers.postStateContainerJsonTo_PS}(postJson).left
+                 ||  if (verbose) {
+                 ||    println("Pre-State Values:")
+                 ||    println(s"  $$$$preContainer")
+                 ||    println("Post-State Values:")
+                 ||    println(s"  $$$$postContainer");
+                 ||  }
                  ||  assert(${simple_CEP_Post_container}(preContainer, postContainer))
                  ||}"""
         }
 
         // FIXME: add sporadic cb testing support
-        if (component.isPeriodic()) {
+        // TODO: disabling this for sept 2023 demo as it's unclear why calling the cb test harness
+        //       is useful given that we can't assert anything about what it returns since runtime monitoring
+        //       didn't actually call it itself
+        if (F && component.isPeriodic()) {
           val methodToCall: String = if (hasStateVariables) "testComputeCBwLV" else "testComputeCBV"
 
           def gen2(kind: ST): ST = {

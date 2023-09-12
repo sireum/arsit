@@ -1606,6 +1606,8 @@ object GumboXGen {
             |
             |  def seedGen: Gen64 = Random.Gen64Impl(Xoshiro256.create)
             |
+            |  def freshRandomLib: RandomLib = RandomLib(Random.Gen64Impl(Xoshiro256.createSeed(seedGen.genU64())))
+            |
             |  ${(generatorProfileEntries, "\n\n")}
             |
             |  ${(nextProfileMethods, "\n\n")}
