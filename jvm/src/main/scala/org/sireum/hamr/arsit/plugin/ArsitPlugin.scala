@@ -348,4 +348,13 @@ object EntryPointProviderPlugin {
                              reporter: Reporter): DatatypeContribution
 }
 
+@msig trait ArsitFinalizePlugin extends ArsitPlugin {
+  @pure def canHandleArsitFinalizePlugin (): B
+
+  def handleArsitFinalizePlugin(projectDirectories: ProjectDirectories,
+                                arsitOptions: ArsitOptions,
+                                symbolTable: SymbolTable,
+                                aadlTypes: AadlTypes,
+                                reporter: Reporter): ISZ[FileResource]
+}
 

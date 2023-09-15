@@ -4,11 +4,12 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
-import org.sireum.hamr.arsit.plugin.{BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin, PlatformProviderPlugin}
+import org.sireum.hamr.arsit.plugin.{ArsitFinalizePlugin, BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates.EntryPointTemplate
 import org.sireum.hamr.arsit.util.ArsitOptions
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
+import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.types.AadlTypes
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
@@ -17,7 +18,7 @@ import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin
-  extends EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin {
+  extends EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
 
   val name: String = "GumboX Plugin"
 
@@ -118,18 +119,11 @@ import org.sireum.message.Reporter
                                             symbolTable: SymbolTable,
                                             aadlTypes: AadlTypes,
                                             reporter: Reporter): ISZ[PlatformProviderPlugin.PlatformContributions] = {
-    // PlatformProviderPlugin is only called once by codegen so it's a good place
-    // to write out resources that should only be generated once
-    val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
-    val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
-    val gumboxResource = ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T)
 
-    val pc = GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
+    return ISZ(GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
       rmContainer = runtimeMonitoringContainer,
       basePackageName = arsitOptions.packageName,
-      projectDirectories = projectDirectories)
-
-    return ISZ(pc(resources = pc.resources :+ gumboxResource))
+      projectDirectories = projectDirectories))
   }
 
   /******************************************************************************************
@@ -250,5 +244,15 @@ import org.sireum.message.Reporter
     val profilesR = ResourceUtil.createResource(profilePath, containers.genProfiles(), T)
 
     return Some(gumbox(resources = gumbox.resources ++ testHarness.resources :+ containersR :+ profilesR))
+  }
+
+  override def canHandleArsitFinalizePlugin(): B = {
+    return handledComponents.nonEmpty
+  }
+
+  override def handleArsitFinalizePlugin(projectDirectories: ProjectDirectories, arsitOptions: ArsitOptions, symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): ISZ[FileResource] = {
+    val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
+    val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
+    return ISZ(ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T))
   }
 }

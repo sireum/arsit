@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{ArsitConfigurationProvider, PlatformProviderPlugin}
+import org.sireum.hamr.arsit.plugin.{ArsitConfigurationProvider, ArsitFinalizePlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
@@ -105,6 +105,10 @@ object Arsit {
 
     fileResources = fileResources ++ createBuildArtifacts(
       CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, fileResources, ReporterUtil.reporter)
+
+    for (p <- plugins if p.isInstanceOf[ArsitFinalizePlugin] && p.asInstanceOf[ArsitFinalizePlugin].canHandleArsitFinalizePlugin()) {
+      fileResources = fileResources ++ p.asInstanceOf[ArsitFinalizePlugin].handleArsitFinalizePlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)
+    }
 
     return ArsitResult(
       fileResources,
