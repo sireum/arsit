@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{DatatypeContribution, DatatypeProviderPlugin}
+import org.sireum.hamr.arsit.plugin.DatatypeProviderPlugin
 import org.sireum.hamr.arsit.templates.{DatatypeTemplate, EnumTemplate, IDatatypeTemplate}
 import org.sireum.hamr.codegen.common.containers.IResource
 import org.sireum.hamr.codegen.common.symbols.{AnnexClauseInfo, GclAnnexClauseInfo, SymbolTable}
@@ -26,7 +26,7 @@ import org.sireum.message.Reporter
                                    symbolTable: SymbolTable,
                                    aadlTypes: AadlTypes,
 
-                                   reporter: Reporter): DatatypeContribution = {
+                                   reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution = {
 
     val subclauses = resolvedAnnexSubclauses.filter((f: AnnexClauseInfo) => f.isInstanceOf[GclAnnexClauseInfo])
     if (subclauses.size != 1) {
@@ -54,7 +54,7 @@ import org.sireum.message.Reporter
           custPostBlocks = useDefault
         )
 
-        return DatatypeContribution(
+        return DatatypeProviderPlugin.DatatypeContribution(
           datatype = IResource(
             dstPath = s"${dataDirectory}/${suggestFilename}",
             content = content,

@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{ArsitConfigurationProvider, ArsitFinalizePlugin, PlatformProviderPlugin}
+import org.sireum.hamr.arsit.plugin.{ArsitConfigurationPlugin, ArsitFinalizePlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
@@ -67,9 +67,9 @@ object Arsit {
       markers = PlatformTemplate.markers,
       overwrite = F)
 
-    val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationProvider.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins).toZ
-    val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationProvider.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins).toZ
-    val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationProvider.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins).toZ
+    val maxPortId: Z = nixPhase.maxPort + ArsitConfigurationPlugin.getAdditionalPortIds(ExperimentalOptions.addPortIds(arsitOptions.experimentalOptions), plugins, ReporterUtil.reporter)
+    val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationPlugin.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins, ReporterUtil.reporter)
+    val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationPlugin.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins, ReporterUtil.reporter)
 
     if (!arsitOptions.noEmbedArt) { // sergen requires art.DataContent so only generate the script when art is being embedded
 

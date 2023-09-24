@@ -7,8 +7,9 @@ import org.sireum.hamr.arsit.gcl.{GumboDatatypeProviderPlugin, GumboPlugin, Gumb
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{BehaviorEntryPointContributions, ObjectContributions}
 import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
 import org.sireum.hamr.arsit.util.ArsitOptions
-import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
-import org.sireum.hamr.codegen.common.containers.{Marker, FileResource}
+import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories, plugin}
+import org.sireum.hamr.codegen.common.CommonUtil.toolName
+import org.sireum.hamr.codegen.common.containers.{FileResource, Marker}
 import org.sireum.hamr.codegen.common.plugin.Plugin
 import org.sireum.hamr.codegen.common.symbols.{AadlPort, AadlThreadOrDevice, AnnexClauseInfo, SymbolTable}
 import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
@@ -20,7 +21,9 @@ object ArsitPlugin {
   @strictpure def defaultPlugins: MSZ[Plugin] = MSZ(
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
-    DefaultDatatypeProviderPlugin())
+    DefaultDatatypeProviderPlugin(),
+    DefaultArsitConfigurationPlugin()
+  )
 
   @strictpure def blessPlugins: MSZ[Plugin] = MSZ[Plugin](BlessBehaviorProviderPlugin())
 
@@ -326,8 +329,10 @@ object EntryPointProviderPlugin {
                                reporter: Reporter): EntryPointProviderPlugin.EntryPointContributions
 }
 
-@datatype class DatatypeContribution(val datatype: FileResource,
-                                     val resources: ISZ[FileResource])
+object DatatypeProviderPlugin {
+  @datatype class DatatypeContribution(val datatype: FileResource,
+                                       val resources: ISZ[FileResource])
+}
 
 @msig trait DatatypeProviderPlugin extends ArsitPlugin {
   @pure def canHandleDatatypeProvider(aadlType: AadlType,
@@ -345,8 +350,65 @@ object EntryPointProviderPlugin {
                              symbolTable: SymbolTable,
                              aadlTypes: AadlTypes,
 
-                             reporter: Reporter): DatatypeContribution
+                             reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution
 }
+
+
+object ArsitConfigurationPlugin {
+
+  @pure def getAdditionalPortIds(cliOpt: Z, plugins: MSZ[Plugin], reporter: Reporter): Z = {
+    var maxId: Z = cliOpt
+    var contributor: String = ""
+    for (p <- plugins if p.isInstanceOf[ArsitConfigurationPlugin] &&
+      p.asInstanceOf[plugin.ArsitConfigurationPlugin].addPortIds > maxId) {
+      maxId = p.asInstanceOf[plugin.ArsitConfigurationPlugin].addPortIds
+      contributor = p.name
+    }
+    if (maxId > cliOpt) {
+      reporter.info(None(), toolName, s"Plugin $contributor contributed the max port id increment value of $maxId")
+    }
+    return maxId
+  }
+
+  @pure def getAdditionalComponentIds(cliOpt: Z, plugins: MSZ[Plugin], reporter: Reporter): Z = {
+    var maxId: Z = cliOpt
+    var contributor: String = ""
+    for (p <- plugins if p.isInstanceOf[ArsitConfigurationPlugin] &&
+      p.asInstanceOf[ArsitConfigurationPlugin].addComponentIds > maxId) {
+      maxId = p.asInstanceOf[ArsitConfigurationPlugin].addComponentIds
+      contributor = p.name
+    }
+    if (maxId > cliOpt) {
+      reporter.info(None(), toolName, s"Plugin $contributor contributed the max component id increment value of $maxId")
+    }
+    return maxId
+  }
+
+  @pure def getAdditionalConnectionIds(cliOpt: Z, plugins: MSZ[Plugin], reporter: Reporter): Z = {
+    var maxId: Z = cliOpt
+    var contributor: String = ""
+    for (p <- plugins if p.isInstanceOf[plugin.ArsitConfigurationPlugin] &&
+      p.asInstanceOf[ArsitConfigurationPlugin].addConnectionIds > maxId) {
+      maxId = p.asInstanceOf[plugin.ArsitConfigurationPlugin].addConnectionIds
+      contributor = p.name
+    }
+    if (maxId > cliOpt) {
+      reporter.info(None(), toolName, s"Plugin $contributor contributed the max connection id increment value of $maxId")
+    }
+    return maxId
+  }
+}
+
+@msig trait ArsitConfigurationPlugin extends ArsitPlugin {
+
+  @strictpure def addPortIds: Z = z"0"
+
+  @strictpure def addComponentIds: Z = z"0"
+
+  @strictpure def addConnectionIds: Z = z"0"
+}
+
+
 
 @msig trait ArsitFinalizePlugin extends ArsitPlugin {
   @pure def canHandleArsitFinalizePlugin (): B

@@ -37,14 +37,14 @@ object DefaultDatatypeProviderPlugin {
                                    resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
                                    symbolTable: SymbolTable,
                                    aadlTypes: AadlTypes,
-                                   reporter: Reporter): DatatypeContribution = {
+                                   reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution = {
 
     aadlType match {
       case at: ArrayType if at.dimensions.size > 1 =>
         reporter.error(None(), CommonUtil.toolName, s"Codegen currently only supports single dimension arrays, but ${aadlType.name} specifies a ${at.dimensions.size} dimensional array")
       case _ =>
     }
-    return DatatypeContribution(
+    return DatatypeProviderPlugin.DatatypeContribution(
       datatype = IResource(
         dstPath = s"$dataDirectory/$suggestFilename", // TODO: need fileSep
         content = datatypeTemplate.generateDefault(),
