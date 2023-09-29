@@ -3,9 +3,9 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.Util.nameProvider
+import org.sireum.hamr.arsit.Util.{nameProvider, toolName}
 import org.sireum.hamr.arsit.nix.NixGen
-import org.sireum.hamr.arsit.plugin.{DatatypeProviderPlugin, DefaultDatatypeProviderPlugin}
+import org.sireum.hamr.arsit.plugin.DatatypeProviderPlugin
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.ReporterUtil.reporter
 import org.sireum.hamr.arsit.util.{ArsitOptions, SchedulerUtil}
@@ -41,7 +41,18 @@ import org.sireum.ops.ISZOps
     if (!types.rawConnections) {
       // TODO allow for customizations of base types
       for (aadlType <- types.typeMap.values if !aadlType.isInstanceOf[BaseType]) {
-        val defaultTemplate = DefaultDatatypeProviderPlugin.genDefaultTemplate(aadlType)
+        val defaultTemplate: IDatatypeTemplate = {
+          if (aadlType.isInstanceOf[BaseType]) {
+            halt(s"Support for customizing base type ${aadlType.name} hasn't been implemented yet")
+          }
+
+          aadlType match {
+            case e: EnumType => EnumTemplate(e, e.values, T)
+            case e: RecordType => DatatypeTemplate(e, T)
+            case e: ArrayType => DatatypeTemplate(e, T)
+            case e: TODOType => DatatypeTemplate(e, F)
+          }
+        }
 
         val aadlComponent = symbolTable.componentMap.get(ISZ(aadlType.name)).get
         val resolvedAnnexSubclauses: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
@@ -49,16 +60,75 @@ import org.sireum.ops.ISZOps
           case _ => ISZ()
         }
 
-        var firstServed = F
-        for (p <- plugins if !firstServed && p.isInstanceOf[DatatypeProviderPlugin] &&
-          p.asInstanceOf[DatatypeProviderPlugin].canHandleDatatypeProvider(aadlType, resolvedAnnexSubclauses)) {
-          firstServed = T
+        var fulls: ISZ[(String, DatatypeProviderPlugin.FullDatatypeContribution)] = ISZ()
+        var partials: ISZ[(String, DatatypeProviderPlugin.PartialDatatypeContribution)] = ISZ()
+        for (p <- plugins if p.isInstanceOf[DatatypeProviderPlugin] &&
+          p.asInstanceOf[DatatypeProviderPlugin].canHandleDatatypeProvider(
+            aadlType,
+            resolvedAnnexSubclauses,
+            types,
+            symbolTable)) {
 
-          val dpContributions =
-            p.asInstanceOf[DatatypeProviderPlugin].handleDatatypeProvider(aadlType, defaultTemplate, aadlType.nameProvider.filePath, directories.dataDir,
-              resolvedAnnexSubclauses, symbolTable, types, reporter)
+          p.asInstanceOf[DatatypeProviderPlugin].handleDatatypeProvider(
+            arsitOptions.packageName,
+            aadlType,
+            defaultTemplate,
+            resolvedAnnexSubclauses,
+            aadlType.nameProvider.filePath,
+            directories, types, symbolTable, reporter) match {
+            case f: DatatypeProviderPlugin.FullDatatypeContribution =>
+              fulls = fulls :+ (p.name, f)
+            case pc: DatatypeProviderPlugin.PartialDatatypeContribution =>
+              partials = partials :+ (p.name, pc)
+          }
+        }
 
-          resources = (resources :+ dpContributions.datatype) ++ dpContributions.resources
+        if (fulls.nonEmpty) {
+          if (fulls.size != 1) {
+            reporter.error(aadlType.container.get.identifier.pos, toolName,
+              st"Only one FullDatatypeContribution can be made but the following plugins all made such contributions: ${(for (f <- fulls) yield f._1, ", ")})".render)
+          } else if (partials.nonEmpty) {
+            reporter.error(aadlType.container.get.identifier.pos, toolName,
+              st"Cannot mix full and partial datatype contributions. ${fulls(0)._1} is providing a FullDatatypeContribution whereas the following plugins are providing partial ones: ${(for (p <- partials) yield p._1)}".render)
+          } else {
+            resources = (resources :+ fulls(0)._2.datatype) ++ fulls(0)._2.resources
+          }
+        } else {
+          var pcs = DatatypeProviderPlugin.emptyPartialDatatypeContributions
+          for (p <- partials) {
+            pcs = pcs(
+              slangSwitches = pcs.slangSwitches ++ p._2.slangSwitches,
+              imports = pcs.imports ++ p._2.imports,
+              datatypeSingletonBlocks = pcs.datatypeSingletonBlocks ++ p._2.datatypeSingletonBlocks,
+              datatypeBlocks = pcs.datatypeBlocks ++ p._2.datatypeBlocks,
+              payloadSingletonBlocks = pcs.payloadSingletonBlocks ++ p._2.payloadSingletonBlocks,
+              preBlocks = pcs.preBlocks ++ p._2.preBlocks,
+              postBlocks = pcs.postBlocks ++ p._2.postBlocks,
+              resources = pcs.resources ++ p._2.resources)
+          }
+          val content: ST = defaultTemplate match {
+            case e: EnumTemplate =>
+              // TODO would partial providers ever contribute to enums?
+              e.generateDefault()
+            case d: DatatypeTemplate =>
+              d.generateDefault(
+                additionalSwitches = pcs.slangSwitches,
+                additionalImports = pcs.imports,
+                additionalDatatypeCompanionBlocks = pcs.datatypeSingletonBlocks,
+                additionParams = ISZ(), // hmm not sure if partial providers would add params
+                additionalDatatypeBlocks = pcs.datatypeBlocks,
+                additionalPayloadSingletonBlocks = pcs.payloadSingletonBlocks,
+                additionalPreBlocks = pcs.preBlocks,
+                addtionalPostBlocks = pcs.postBlocks)
+          }
+          // To ponder: why would a datatype plugin provider only supply partial
+          // contributions for TODOTypes?  Those are specifically the cases where an
+          // external plugin should be stepping in and supplying the full implementation
+          val shouldOverwrite = !aadlType.isInstanceOf[TODOType]
+
+          resources = (resources :+ ResourceUtil.createResourceH(
+            path = s"${directories.dataDir}/${aadlType.nameProvider.filePath}",
+            content = content, overwrite = shouldOverwrite, isDatatype = T)) ++ pcs.resources
         }
       }
     }

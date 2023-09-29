@@ -21,7 +21,6 @@ object ArsitPlugin {
   @strictpure def defaultPlugins: MSZ[Plugin] = MSZ(
     SingletonBridgeCodeProviderPlugin(),
     SingletonEntryPointProviderPlugin(),
-    DefaultDatatypeProviderPlugin(),
     DefaultArsitConfigurationPlugin()
   )
 
@@ -330,26 +329,39 @@ object EntryPointProviderPlugin {
 }
 
 object DatatypeProviderPlugin {
-  @datatype class DatatypeContribution(val datatype: FileResource,
-                                       val resources: ISZ[FileResource])
+  @datatype trait DatatypeContribution
+
+  @datatype class FullDatatypeContribution(val datatype: FileResource,
+                                           val resources: ISZ[FileResource]) extends DatatypeContribution
+
+  @datatype class PartialDatatypeContribution(val slangSwitches: ISZ[ST],
+                                              val imports: ISZ[ST],
+                                              val datatypeSingletonBlocks: ISZ[ST],
+                                              val datatypeBlocks: ISZ[ST],
+                                              val payloadSingletonBlocks: ISZ[ST],
+                                              val preBlocks: ISZ[ST],
+                                              val postBlocks: ISZ[ST],
+                                              val resources: ISZ[FileResource]) extends DatatypeContribution
+
+  @strictpure def emptyPartialDatatypeContributions: PartialDatatypeContribution =
+    PartialDatatypeContribution(ISZ(),ISZ(),ISZ(),ISZ(),ISZ(),ISZ(),ISZ(),ISZ())
 }
 
 @msig trait DatatypeProviderPlugin extends ArsitPlugin {
   @pure def canHandleDatatypeProvider(aadlType: AadlType,
-                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo]): B
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                      aadlTypes: AadlTypes,
+                                      symbolTable: SymbolTable): B
 
-  def handleDatatypeProvider(aadlType: AadlType,
-
+  def handleDatatypeProvider(basePackageName: String,
+                             aadlType: AadlType,
                              datatypeTemplate: IDatatypeTemplate,
-
-                             suggestFilename: String,
-                             dataDirectory: String,
-
                              resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
 
-                             symbolTable: SymbolTable,
+                             suggestedFilename: String,
+                             projectDirectories: ProjectDirectories,
                              aadlTypes: AadlTypes,
-
+                             symbolTable: SymbolTable,
                              reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution
 }
 

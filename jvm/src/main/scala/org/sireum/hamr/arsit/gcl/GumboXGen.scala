@@ -6,6 +6,7 @@ import org.sireum.hamr.arsit.ProjectDirectories
 import org.sireum.hamr.arsit.gcl.GumboXGen._
 import org.sireum.hamr.arsit.gcl.GumboXGenUtil._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
+import org.sireum.hamr.arsit.plugin.DatatypeProviderPlugin
 import org.sireum.hamr.arsit.templates.{StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
@@ -44,14 +45,9 @@ object GumboXGen {
   }
 
   @pure def createInvariantMethodName(aadlType: AadlType): (ISZ[String], ISZ[String]) = {
-    return ((
-      createInvariantObjectName(aadlType) :+ s"D_Inv_${aadlType.nameProvider.typeName}",
-      createInvariantObjectName(aadlType) :+ s"D_Inv_Guard_${aadlType.nameProvider.typeName}"))
-  }
-
-  @pure def createInvariantObjectName(aadlType: AadlType): ISZ[String] = {
-    val o = ops.ISZOps(aadlType.nameProvider.qualifiedReferencedTypeNameI)
-    return o.dropRight(1) :+ s"${o.last}_GumboX"
+    return (
+      aadlType.nameProvider.qualifiedReferencedTypeNameI :+ s"D_Inv_${aadlType.nameProvider.typeName}",
+      aadlType.nameProvider.qualifiedReferencedTypeNameI :+ s"D_Inv_Guard_${aadlType.nameProvider.typeName}")
   }
 
   @pure def createIntegrationMethodName(isGuarantee: B, aadlPort: AadlPort, componentNames: NameProvider): (ISZ[String], ISZ[String]) = {
@@ -194,9 +190,7 @@ object GumboXGen {
                                              val guard: ContractHolder) extends IntegrationHolder
 
   @datatype class DataInvariantHolder(val D_Inv_Method_Name: ISZ[String],
-                                      val D_Inv_Guard_Method_Name: ISZ[String],
-                                      //val D_Inv_Mem_FQ_MethodName: ISZ[String], // TODO
-                                      val resource: FileResource)
+                                      val D_Inv_Guard_Method_Name: ISZ[String])
 
   @datatype class InitializeEntryPointHolder(val IEP_Guar: ContractHolder)
 
@@ -914,74 +908,64 @@ object GumboXGen {
       ComputeEntryPointHolder(CEP_Pre, CEP_Post)
   }
 
-  def processDatatypes(basePackageName: String, symbolTable: SymbolTable, aadlTypes: AadlTypes, directories: ProjectDirectories, reporter: Reporter): Unit = {
-    assert(dataInvariants.isEmpty, "Unexpected: processDatatypes should only be called once per project")
+  def processDatatype(aadlType: AadlType,
+                      gclAnnexSubclauseInfo: GclAnnexClauseInfo,
+                      basePackageName: String,
+                      symbolTable: SymbolTable,
+                      aadlTypes: AadlTypes,
+                      directories: ProjectDirectories,
+                      reporter: Reporter): DatatypeProviderPlugin.PartialDatatypeContribution = {
+      resetImports()
 
-    for (aadlType <- aadlTypes.typeMap.values) {
-      val ais = getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
-      if (ais.nonEmpty) {
-        assert(ais.size <= 1, "Can't attach more than 1 subclause to a data component")
-        val ai = ais(0)
+      var datatypeSingletonBlocks = ISZ[ST]()
 
-        resetImports()
+      var methodNames: ISZ[String] = ISZ()
+      for (i <- gclAnnexSubclauseInfo.annex.invariants) {
+        val methodName = convertInvariantToMethodName(i.id, aadlType)
 
-        var ret: ISZ[ST] = ISZ()
+        imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
 
-        var methodNames: ISZ[String] = ISZ()
-        for (i <- ai.annex.invariants) {
-          val methodName = convertInvariantToMethodName(i.id, aadlType)
-
-          imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(i.exp)
-
-          val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
-          methodNames = methodNames :+ methodName
-          ret = ret :+
-            st"""/** invariant ${i.id}
-                |  ${descriptor}
-                |  */
-                |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-                |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, ai.gclSymbolTable))}"""
-        }
-
-        val objectName = GumboXGen.createInvariantObjectName(aadlType)
-        val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
-
-        val simple = ops.ISZOps(d_inv_method_name).last
-        ret = ret :+
-          st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+        val descriptor = GumboXGen.processDescriptor(i.descriptor, "*   ")
+        methodNames = methodNames :+ methodName
+        datatypeSingletonBlocks = datatypeSingletonBlocks :+
+          st"""/** invariant ${i.id}
+              |  ${descriptor}
               |  */
-              |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
-              |  (${(methodNames, "(value) &\n")}(value))"""
-
-        ret = ret :+
-          st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
-              |  */
-              |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
-              |  value.nonEmpty -->: $simple(value.get)"""
-
-        val content =
-          st"""// #Sireum
-              |
-              |package ${aadlType.nameProvider.qualifiedPackageName}
-              |
-              |import org.sireum._
-              |import ${basePackageName}._
-              |${StubTemplate.addImports(imports)}
-              |
-              |${CommentTemplate.doNotEditComment_scala}
-              |object ${ops.ISZOps(objectName).last} {
-              |  ${(ret, "\n\n")}
-              |}"""
-
-        val path = s"${directories.dataDir}/${aadlType.nameProvider.outputDirectory}/${ops.ISZOps(objectName).last}.scala"
-        dataInvariants = dataInvariants + aadlType.name ~>
-          DataInvariantHolder(
-            D_Inv_Method_Name = d_inv_method_name,
-            D_Inv_Guard_Method_Name = d_inv_guard_method_name,
-            resource = ResourceUtil.createResource(path, content, T)
-          )
+              |@strictpure def ${methodName}(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+              |  ${rewriteInvariant(getRExp(i.exp, basePackageName, aadlTypes, gclAnnexSubclauseInfo.gclSymbolTable))}"""
       }
-    }
+
+      val (d_inv_method_name, d_inv_guard_method_name) = createInvariantMethodName(aadlType)
+
+      val simple = ops.ISZOps(d_inv_method_name).last
+      datatypeSingletonBlocks = datatypeSingletonBlocks :+
+        st"""/** D-Inv Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+            |  */
+            |@strictpure def $simple(value: ${aadlType.nameProvider.qualifiedReferencedTypeName}): B =
+            |  (${(methodNames, "(value) &\n")}(value))"""
+
+      datatypeSingletonBlocks = datatypeSingletonBlocks :+
+        st"""/** D-Inv-Guard Data Invariant for ${aadlType.nameProvider.qualifiedReferencedTypeName}
+            |  */
+            |@strictpure def ${ops.ISZOps(d_inv_guard_method_name).last}(value: Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]): B =
+            |  value.nonEmpty -->: $simple(value.get)"""
+
+      dataInvariants = dataInvariants + aadlType.name ~>
+        DataInvariantHolder(
+          D_Inv_Method_Name = d_inv_method_name,
+          D_Inv_Guard_Method_Name = d_inv_guard_method_name)
+
+      return DatatypeProviderPlugin.PartialDatatypeContribution(
+        slangSwitches = ISZ(),
+        imports = for(i <- imports) yield st"$i",
+        datatypeSingletonBlocks = datatypeSingletonBlocks,
+        datatypeBlocks = ISZ(),
+        payloadSingletonBlocks = ISZ(),
+        preBlocks = ISZ(),
+        postBlocks = ISZ(),
+        resources = ISZ()
+      )
+
   }
 
   def resetImports(): Unit = {
@@ -993,8 +977,7 @@ object GumboXGen {
   }
 
   def finalise(component: AadlThreadOrDevice, componentNames: NameProvider, projectDirectories: ProjectDirectories): ObjectContributions = {
-    var resources = dataInvariants.values.map((i: DataInvariantHolder) => i.resource)
-
+    var resources: ISZ[FileResource] = ISZ()
     var blocks: ISZ[ST] = ISZ()
     var imports: Set[String] = Set.empty
     integrationClauses.get(component.path) match {
@@ -1288,7 +1271,7 @@ object GumboXGen {
       val steps: ISZ[ST] = ISZ[Option[ST]](step1, step2, step3, Some(step4), Some(step5), Some(step6)).filter(f => f.nonEmpty).map(m => m.get)
       val symContainerExtractors: ISZ[ST] = for (param <- combinedParams) yield st"o.${param.name}"
 
-     val containerSigName = container.preStateContainerSigName
+      val containerSigName = container.preStateContainerSigName
       val containerType: String =
         if (captureStateVars) container.preStateContainerName_P
         else container.preStateContainerName_PS
@@ -1479,7 +1462,7 @@ object GumboXGen {
           testMethodName = "testCompute",
           _dscRunnerSimpleName = dscTestRunnerSimpleName,
           suffix = "wL",
-          entrypoint ="compute",
+          entrypoint = "compute",
           isInitialize = F,
           captureStateVars = F,
           stateVars = stateVars,

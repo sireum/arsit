@@ -4,27 +4,25 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.ObjectContributions
-import org.sireum.hamr.arsit.plugin.{ArsitFinalizePlugin, BehaviorEntryPointProviderPlugin, EntryPointProviderPlugin, PlatformProviderPlugin}
-import org.sireum.hamr.arsit.templates.EntryPointTemplate
-import org.sireum.hamr.arsit.util.ArsitOptions
+import org.sireum.hamr.arsit.plugin._
+import org.sireum.hamr.arsit.templates.{EntryPointTemplate, IDatatypeTemplate}
+import org.sireum.hamr.arsit.util.{ArsitOptions, ReporterUtil}
 import org.sireum.hamr.arsit.{EntryPoints, Port, ProjectDirectories}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.symbols._
-import org.sireum.hamr.codegen.common.types.AadlTypes
+import org.sireum.hamr.codegen.common.types.{AadlType, AadlTypes}
 import org.sireum.hamr.codegen.common.util.NameUtil.NameProvider
 import org.sireum.hamr.codegen.common.util.ResourceUtil
 import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin
-  extends EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
+  extends DatatypeProviderPlugin with EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
 
   val name: String = "GumboX Plugin"
 
   val gumboXGen: GumboXGen = GumboXGen()
-
-  var processedDatatypeInvariants: B = F
 
   var handledComponents: Set[IdPath] = Set.empty
 
@@ -45,13 +43,6 @@ import org.sireum.message.Reporter
       return F
     }
 
-    @pure def hasDatatypeInvariants: B = {
-      for (aadlType <- aadlTypes.typeMap.values if GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty) {
-        return T
-      }
-      return F
-    }
-
     val componentHasGumboSubclauseInfo: B =
       resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
         // GCL's symbol resolver ensures there's at most one GCL clause per component
@@ -65,7 +56,7 @@ import org.sireum.message.Reporter
         case _ => F
       }
 
-    return (hasDatatypeInvariants || componentHasGumboSubclauseInfo)
+    return componentHasGumboSubclauseInfo
   }
 
   /** Common method for entrypoint and behavior provider plugin -- i.e. only needs to be called once
@@ -80,10 +71,6 @@ import org.sireum.message.Reporter
              aadlTypes: AadlTypes,
              projectDirectories: ProjectDirectories,
              reporter: Reporter): Unit = {
-    if (!processedDatatypeInvariants) {
-      gumboXGen.processDatatypes(componentNames.basePackage, symbolTable, aadlTypes, projectDirectories, reporter)
-      processedDatatypeInvariants = T
-    }
 
     val gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)] =
       resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
@@ -97,6 +84,32 @@ import org.sireum.message.Reporter
 
     handledComponents = handledComponents + component.path
   }
+
+  /******************************************************************************************
+   * DatatypeProvider
+   ******************************************************************************************/
+
+  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], aadlTypes: AadlTypes, symbolTable: SymbolTable): B =
+    GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+
+  override def handleDatatypeProvider(basePackageName: String,
+                                      aadlType: AadlType,
+                                      datatypeTemplate: IDatatypeTemplate,
+                                      resolvedAnnexSubclauses: ISZ[AnnexClauseInfo],
+                                      suggestedFilename: String,
+                                      projectDirectories: ProjectDirectories,
+                                      aadlTypes: AadlTypes,
+                                      symbolTable: SymbolTable,
+                                      reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution = {
+    val ais = GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
+    if (ais.size != 1) {
+      reporter.error(aadlType.container.get.identifier.pos, name, s"Data components can have at most 1 GUMBO subclause but ${aadlType.nameProvider.typeName} has ${ais.size}")
+      return DatatypeProviderPlugin.emptyPartialDatatypeContributions
+    } else {
+      return gumboXGen.processDatatype(aadlType, ais(0), basePackageName, symbolTable, aadlTypes, projectDirectories, ReporterUtil.reporter)
+    }
+  }
+
 
   /******************************************************************************************
    * PlatformProviderPlugin - only called once by codegen

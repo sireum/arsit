@@ -9,8 +9,6 @@ import org.sireum.hamr.codegen.common.types._
 @sig trait IDatatypeTemplate {
   def typ: AadlType
 
-  def generateDefault(): ST
-
   def willBeOverwritten: B
 
 
@@ -202,16 +200,23 @@ import org.sireum.hamr.codegen.common.types._
       postBlocks = choose(custPostBlocks, ISZ()))
   }
 
-  @pure def generateDefault(): ST = {
+  @pure def generateDefault(additionalSwitches: ISZ[ST],
+                            additionalImports: ISZ[ST],
+                            additionalDatatypeCompanionBlocks: ISZ[ST],
+                            additionParams: ISZ[ST],
+                            additionalDatatypeBlocks: ISZ[ST],
+                            additionalPayloadSingletonBlocks: ISZ[ST],
+                            additionalPreBlocks: ISZ[ST],
+                            addtionalPostBlocks: ISZ[ST]): ST = {
     return generate(
-      slangSwitches = ISZ(st"#Sireum"),
-      imports = ISZ(),
-      datatypeCompanionBlocks = defaultDatatypeCompanionBlocks,
-      params = params,
-      datatypeBlocks = defaultDatatypeBlocks,
-      payloadSingletonBlocks = ISZ(examplePayload),
-      preBlocks = defaultPreBlocks,
-      postBlocks = ISZ())
+      slangSwitches = ISZ(st"#Sireum") ++ additionalSwitches,
+      imports = additionalImports,
+      datatypeCompanionBlocks = defaultDatatypeCompanionBlocks ++ additionalDatatypeCompanionBlocks,
+      params = params ++ additionParams,
+      datatypeBlocks = defaultDatatypeBlocks ++ additionalDatatypeBlocks,
+      payloadSingletonBlocks = examplePayload +: additionalPayloadSingletonBlocks,
+      preBlocks = defaultPreBlocks ++ additionalPreBlocks,
+      postBlocks = addtionalPostBlocks)
   }
 
   @pure def generate(slangSwitches: ISZ[ST],
