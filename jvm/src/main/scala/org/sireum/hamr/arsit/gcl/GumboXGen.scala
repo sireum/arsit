@@ -25,7 +25,7 @@ object GumboXGen {
   @pure def getGclAnnexInfos(componentPath: IdPath, symbolTable: SymbolTable): ISZ[GclAnnexClauseInfo] = {
     symbolTable.componentMap.get(componentPath) match {
       case Some(aadlComponent) =>
-        symbolTable.annexClauseInfos.get(aadlComponent) match {
+        symbolTable.annexClauseInfos.get(aadlComponent.path) match {
           case Some(annexInfos) =>
             return annexInfos.filter(f => f.isInstanceOf[GclAnnexClauseInfo]).map(m => m.asInstanceOf[GclAnnexClauseInfo])
           case _ => return ISZ()

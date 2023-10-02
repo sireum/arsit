@@ -55,7 +55,7 @@ import org.sireum.ops.ISZOps
         }
 
         val aadlComponent = symbolTable.componentMap.get(ISZ(aadlType.name)).get
-        val resolvedAnnexSubclauses: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent) match {
+        val resolvedAnnexSubclauses: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(aadlComponent.path) match {
           case Some(annexInfos) => annexInfos
           case _ => ISZ()
         }

@@ -80,6 +80,18 @@ object ArsitPlugin {
 
 @msig trait ArsitPlugin extends Plugin
 
+@msig trait ArsitInitializePlugin extends ArsitPlugin {
+  @pure def canHandleArsitInitializePlugin (arsitOptions: ArsitOptions,
+                                            aadlTypes: AadlTypes,
+                                            symbolTable: SymbolTable): B
+
+  def handleArsitInitializePlugin(projectDirectories: ProjectDirectories,
+                                  arsitOptions: ArsitOptions,
+                                  aadlTypes: AadlTypes,
+                                  symbolTable: SymbolTable,
+                                  reporter: Reporter): ISZ[FileResource]
+}
+
 object PlatformProviderPlugin {
 
   @sig trait PlatformContributions {

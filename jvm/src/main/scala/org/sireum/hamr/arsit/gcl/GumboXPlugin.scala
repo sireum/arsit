@@ -18,7 +18,7 @@ import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin
-  extends DatatypeProviderPlugin with EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
+  extends ArsitInitializePlugin with DatatypeProviderPlugin with EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
 
   val name: String = "GumboX Plugin"
 
@@ -29,6 +29,11 @@ import org.sireum.message.Reporter
   var prePostContainerMap: Map[IdPath, GumboXGenUtil.Container] = Map.empty
 
   val runtimeMonitoringContainer: GumboXRuntimeMonitoring.RM_Container = GumboXRuntimeMonitoring.RM_Container(ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ(), ISZ())
+
+  var datatypesWithInvariants: Set[IdPath] = Set.empty
+  var componentsWithGclSubclauses: Set[IdPath] = Set.empty
+
+  def modelHasGcl: B = datatypesWithInvariants.nonEmpty || componentsWithGclSubclauses.nonEmpty
 
   def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
     return prePostContainerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
@@ -43,6 +48,23 @@ import org.sireum.message.Reporter
       return F
     }
 
+    /*
+    val apiCallsRequireDatatypeInvariants: B = {
+      def search: B = {
+        for (p <- component.getPorts()) {
+          p match {
+            case i: AadlFeatureData if datatypesWithInvariants.contains(i.aadlType.nameProvider.classifier) =>
+              return T
+            case _ =>
+          }
+        }
+        return F
+      }
+      search
+    }
+    */
+    val datatypeInvariantsExist: B = datatypesWithInvariants.nonEmpty
+
     val componentHasGumboSubclauseInfo: B =
       resolvedAnnexSubclauses.filter(p => p.isInstanceOf[GclAnnexClauseInfo]) match {
         // GCL's symbol resolver ensures there's at most one GCL clause per component
@@ -56,7 +78,8 @@ import org.sireum.message.Reporter
         case _ => F
       }
 
-    return componentHasGumboSubclauseInfo
+    //return apiCallsRequireDatatypeInvariants || componentHasGumboSubclauseInfo
+    return datatypeInvariantsExist || componentHasGumboSubclauseInfo
   }
 
   /** Common method for entrypoint and behavior provider plugin -- i.e. only needs to be called once
@@ -86,11 +109,40 @@ import org.sireum.message.Reporter
   }
 
   /******************************************************************************************
-   * DatatypeProvider
+   * ArsitInitializePlugin
    ******************************************************************************************/
 
-  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], aadlTypes: AadlTypes, symbolTable: SymbolTable): B =
-    GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable).nonEmpty
+  @strictpure def canHandleArsitInitializePlugin(arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable): B =
+    !aadlTypes.rawConnections
+
+  override def handleArsitInitializePlugin(projectDirectories: ProjectDirectories, arsitOptions: ArsitOptions, aadlTypes: AadlTypes, symbolTable: SymbolTable, reporter: Reporter): ISZ[FileResource] = {
+    for (aadlType <- aadlTypes.typeMap.entries if symbolTable.annexClauseInfos.contains(ISZ(aadlType._1));
+         annex <- symbolTable.annexClauseInfos.get(ISZ(aadlType._1)).get) {
+      if (annex.isInstanceOf[GclAnnexClauseInfo]) {
+        datatypesWithInvariants = datatypesWithInvariants + aadlType._2.nameProvider.classifier
+      }
+    }
+
+    for (thread <- symbolTable.getThreads() if symbolTable.annexClauseInfos.contains(thread.path);
+      annex <- symbolTable.annexClauseInfos.get(thread.path).get) {
+      if (annex.isInstanceOf[GclAnnexClauseInfo]) {
+        componentsWithGclSubclauses = componentsWithGclSubclauses + thread.path
+      }
+    }
+    return ISZ()
+  }
+
+
+  /******************************************************************************************
+   * DatatypeProvider
+   *
+   * Adds executable version of a datatype's GCL invariants to the datatype's
+   * companion object
+   ******************************************************************************************/
+
+  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], aadlTypes: AadlTypes, symbolTable: SymbolTable): B = {
+    datatypesWithInvariants.contains(aadlType.nameProvider.classifier)
+  }
 
   override def handleDatatypeProvider(basePackageName: String,
                                       aadlType: AadlType,
@@ -101,18 +153,17 @@ import org.sireum.message.Reporter
                                       aadlTypes: AadlTypes,
                                       symbolTable: SymbolTable,
                                       reporter: Reporter): DatatypeProviderPlugin.DatatypeContribution = {
-    val ais = GumboXGen.getGclAnnexInfos(ISZ(aadlType.name), symbolTable)
-    if (ais.size != 1) {
-      reporter.error(aadlType.container.get.identifier.pos, name, s"Data components can have at most 1 GUMBO subclause but ${aadlType.nameProvider.typeName} has ${ais.size}")
-      return DatatypeProviderPlugin.emptyPartialDatatypeContributions
-    } else {
-      return gumboXGen.processDatatype(aadlType, ais(0), basePackageName, symbolTable, aadlTypes, projectDirectories, ReporterUtil.reporter)
+    for (a <- resolvedAnnexSubclauses if a.isInstanceOf[GclAnnexClauseInfo]) {
+      return gumboXGen.processDatatype(aadlType, a.asInstanceOf[GclAnnexClauseInfo], basePackageName, symbolTable, aadlTypes, projectDirectories, ReporterUtil.reporter)
     }
+    halt(s"Infeasible: why did ${name} offer to handle ${aadlType.name} if it doesn't have a GclSubclause attached to it?")
   }
 
 
   /******************************************************************************************
    * PlatformProviderPlugin - only called once by codegen
+   *
+   * Adds GumboX runtime monitoring artifacts
    ******************************************************************************************/
 
   val enableRuntimeMonitoring: String = "enableRuntimeMonitoring"
@@ -124,7 +175,7 @@ import org.sireum.message.Reporter
   override def canHandlePlatformProviderPlugin(arsitOptions: ArsitOptions,
                                                symbolTable: SymbolTable,
                                                aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions)
+    return runtimeMonitoringEnabled(arsitOptions) && modelHasGcl
   }
 
   override def handlePlatformProviderPlugin(projectDirectories: ProjectDirectories,
@@ -141,6 +192,8 @@ import org.sireum.message.Reporter
 
   /******************************************************************************************
    * EntryPoint provider
+   *
+   * Adds runtime monitoring hooks into the component's initialize and compute methods
    ******************************************************************************************/
 
   override def canHandleEntryPointProvider(component: AadlThreadOrDevice,

@@ -109,7 +109,7 @@ import org.sireum.hamr.ir._
       return
     }
 
-    val resolvedAnnexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m) match {
+    val resolvedAnnexClauseInfos: ISZ[AnnexClauseInfo] = symbolTable.annexClauseInfos.get(m.path) match {
       case Some(infos) => infos
       case _ => ISZ()
     }

@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit
 
 import org.sireum._
-import org.sireum.hamr.arsit.plugin.{ArsitConfigurationPlugin, ArsitFinalizePlugin, PlatformProviderPlugin}
+import org.sireum.hamr.arsit.plugin.{ArsitConfigurationPlugin, ArsitFinalizePlugin, ArsitInitializePlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates._
 import org.sireum.hamr.arsit.util.{ArsitLibrary, ArsitOptions, ArsitPlatform, ReporterUtil}
 import org.sireum.hamr.codegen.common.containers.{FileResource, IResource, Resource}
@@ -44,13 +44,19 @@ object Arsit {
 
     val projectDirectories = ProjectDirectories(arsitOptions)
 
+    var fileResources: ISZ[FileResource] = ISZ()
+
+    for (p <- plugins if p.isInstanceOf[ArsitInitializePlugin] && p.asInstanceOf[ArsitInitializePlugin].canHandleArsitInitializePlugin(arsitOptions, aadlTypes, symbolTable)) {
+      fileResources = fileResources ++ p.asInstanceOf[ArsitInitializePlugin].handleArsitInitializePlugin(projectDirectories, arsitOptions, aadlTypes, symbolTable, ReporterUtil.reporter)
+    }
+
     val nixPhase =
       nix.NixGenDispatch.generate(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
         StubGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes,
           ArchitectureGenerator(projectDirectories, symbolTable.rootSystem, arsitOptions, symbolTable, aadlTypes).generate(plugins)
         ).generate(plugins))
 
-    var fileResources: ISZ[FileResource] = nixPhase.resources
+    fileResources = fileResources ++ nixPhase.resources
     var addAuxResources: ISZ[Resource] = nixPhase.auxResources
 
     var plaformContributions: ISZ[(String, PlatformProviderPlugin.PlatformContributions)] = ISZ()
