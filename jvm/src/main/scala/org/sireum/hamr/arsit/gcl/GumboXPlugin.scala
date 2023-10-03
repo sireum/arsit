@@ -33,7 +33,9 @@ import org.sireum.message.Reporter
   var datatypesWithInvariants: Set[IdPath] = Set.empty
   var componentsWithGclSubclauses: Set[IdPath] = Set.empty
 
-  def modelHasGcl: B = datatypesWithInvariants.nonEmpty || componentsWithGclSubclauses.nonEmpty
+  @pure def modelHasGcl: B = {
+    return datatypesWithInvariants.nonEmpty || componentsWithGclSubclauses.nonEmpty
+  }
 
   def getContainer(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): GumboXGenUtil.Container = {
     return prePostContainerMap.getOrElse(component.path, GumboXGenUtil.generateContainer(component, componentNames, annexInfo, aadlTypes))
@@ -140,8 +142,8 @@ import org.sireum.message.Reporter
    * companion object
    ******************************************************************************************/
 
-  @strictpure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], aadlTypes: AadlTypes, symbolTable: SymbolTable): B = {
-    datatypesWithInvariants.contains(aadlType.nameProvider.classifier)
+  @pure def canHandleDatatypeProvider(aadlType: AadlType, resolvedAnnexSubclauses: ISZ[AnnexClauseInfo], aadlTypes: AadlTypes, symbolTable: SymbolTable): B = {
+    return datatypesWithInvariants.contains(aadlType.nameProvider.classifier)
   }
 
   override def handleDatatypeProvider(basePackageName: String,
