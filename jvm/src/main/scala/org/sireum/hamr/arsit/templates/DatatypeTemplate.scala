@@ -227,9 +227,11 @@ import org.sireum.hamr.codegen.common.types._
                      payloadSingletonBlocks: ISZ[ST],
                      preBlocks: ISZ[ST],
                      postBlocks: ISZ[ST]): ST = {
+    val uniqueImports: ISZ[String] = (Set.empty[String] ++ (for(i <- imports) yield s"import ${i.render}")).elements
+
     val importsOpt: Option[ST] =
       if (imports.isEmpty) None()
-      else Some(st"${(imports.map((m: ST) => st"import ${m}"), "\n")}")
+      else Some(st"${(uniqueImports, "\n")}")
 
     val datatypeBlocksOpt: Option[ST] =
       if (datatypeBlocks.isEmpty) None()
