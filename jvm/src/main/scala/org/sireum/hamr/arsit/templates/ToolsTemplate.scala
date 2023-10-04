@@ -46,11 +46,11 @@ object ToolsTemplate {
           |
           |${CommentTemplate.doNotEditComment_scala}
           |
-          |// create SlangCheck generators for the Slang types used in the project
+          |// create SlangCheck artifacts for the Slang types used in the project
           |
           |${toISString(Os.path(slangBinDir), resources)}
           |
-          |proc"$$sireum tools slangcheck generator -p $basePackage -o $${Os.slashDir.up}/src/main/data/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
+          |proc"$$sireum proyek slangcheck -p $basePackage -o $${Os.slashDir.up}/src/main/data/${basePackage} $${Os.slashDir.up} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
     val o = SireumToolsSlangcheckGeneratorOption(
