@@ -328,7 +328,9 @@ object GumboXRuntimeMonitoring {
           |${trans(preComputeKindFQ, preComputeKind, preComputeCases)}
           |${trans(postComputeKindFQ, postComputeKind, postComputeCases)}"""
 
-    val cid = st"${componentNames.componentSingletonType}_id"
+    // cid will be used in the pattern matching so must be upper-case, otherwise Scala will
+    // treat it as a variable/capture
+    val cid = ops.StringOps(s"${componentNames.componentSingletonType}_id").firstToUpper
     rmContainer.testSuiteCaseIds = rmContainer.testSuiteCaseIds :+ st"val ${cid} = ${componentNames.archInstanceName}.id"
 
     val baseName: String =

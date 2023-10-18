@@ -60,6 +60,8 @@ object TestTemplate {
     var concreteCheckBlocks: ISZ[ST] = ISZ()
     var concreteCheckScalaDoc: ISZ[ST] = ISZ()
 
+    var testApiSingletonBlocks: ISZ[ST] = ISZ()
+
     val setters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map((p: Port) => {
       val putMethodName = s"put_${p.name}"
 
@@ -102,20 +104,25 @@ object TestTemplate {
                 st"""${putMethodName}(${p.name})"""
             }
 
-            (s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}",
-              s"${p.getPortTypeNames.qualifiedPayloadName}(value)",
-              p.name,
-              concreteParamType)
+            (s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}", // putParamName
+              s"${p.getPortTypeNames.qualifiedPayloadName}(value)", // putArgName
+              p.name, // concreteParamName
+              concreteParamType) // concreteParamType
           }
         }
 
       concretePutParams = concretePutParams :+ st"${concreteParamName} : ${concreteParamType}"
 
+      testApiSingletonBlocks = testApiSingletonBlocks :+
+        st"""// setter for in ${p.feature.category}
+            |def ${putMethodName}(${putParamName}): Unit = {
+            |  ArtNative.insertInInfrastructurePort(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
+            |}"""
+
       st"""// setter for in ${p.feature.category}
-          |def ${putMethodName}(${putParamName}): Unit = {
-          |  ArtNative.insertInInfrastructurePort(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
-          |}
-          |"""
+           |def ${putMethodName}(${putParamName}): Unit = {
+           |  ${names.testApisName}.${putMethodName}(value)
+           |}"""
     })
 
     val concretePutter: Option[ST] =
@@ -262,6 +269,10 @@ object TestTemplate {
           |  ${concretePutter}
           |  ${concreteChecker}
           |  ${(setters ++ getters, "\n")}
+          |}
+          |
+          |object ${names.testApisName} {
+          |  ${(testApiSingletonBlocks, "\n\n")}
           |}
           |"""
 
