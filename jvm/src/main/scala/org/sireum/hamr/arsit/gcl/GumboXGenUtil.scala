@@ -625,7 +625,12 @@ object GumboXGenUtil {
 
     @pure def dataPortFetch: ST = {
       return (
-        st"""def get_${name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = {
+        st"""/** get the value of outgoing data port $name.  If a 'fresh' value wasn't sent
+            |  * during the last dispatch then return last_$name.get.
+            |  * Note: this requires outgoing data ports to be initialized during the
+            |  * initialization phase or prior to system testing.
+            |  */
+            |def get_${name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = {
             |  $observeOutPortVariable match {
             |    case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) =>
             |      last_$name = Some(value)

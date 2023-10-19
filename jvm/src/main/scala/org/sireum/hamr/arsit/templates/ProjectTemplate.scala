@@ -147,7 +147,7 @@ object ProjectTemplate {
           |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
           |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
           |  resources = ISZ(),
-          |  testSources = for (m <- ISZ("bridge", "util")) yield (Os.path("test") / m).string,
+          |  testSources = for (m <- ISZ("bridge", "system", "util")) yield (Os.path("test") / m).string,
           |  testResources = ISZ(),
           |  publishInfoOpt = None()
           |)
@@ -290,6 +290,7 @@ object ProjectTemplate {
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/seL4Nix",
           |
           |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
+          |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/system",
           |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/util",
           |
           |  libraryDependencies += "org.scalatest" %% "scalatest" % scalaTestVersion % "test",
@@ -456,6 +457,7 @@ object ProjectTemplate {
           |    final override def millSourcePath = super.millSourcePath / os.up / os.up / "src" / "test"
           |
           |    override def sources = T.sources( millSourcePath / "bridge",
+          |                                      millSourcePath / "system",
           |                                      millSourcePath / "util" )
           |
           |    override def ivyDeps = Agg(ivy"org.scalatest::scalatest::$${scalaTestVersion}")

@@ -11,7 +11,15 @@ object SchedulerTemplate {
                  processorTimingProperties: ISZ[ST],
                  threadTimingProperties: ISZ[ST],
                  framePeriod: Z): ST = {
-    val slots = bridges.map((b: String) => s"Slot(Arch.${b}.id, maxExecutionTime)")
+    var slots: ISZ[ST] = ISZ()
+    var domainToBridgeMap: ISZ[ST] = ISZ()
+    var threadNickNames: ISZ[ST] = ISZ()
+    for(i <- 0 until bridges.size) {
+      slots = slots :+ st"Schedule.Slot($i, maxExecutionTime)"
+      domainToBridgeMap = domainToBridgeMap :+ st"/* domain $i */ Arch.${bridges(i)}.id"
+      threadNickNames = threadNickNames :+ st"Arch.${bridges(i)}.name ~> Arch.${bridges(i)}.id"
+    }
+
     val ret =
       st"""// #Sireum
           |package ${packageName}
@@ -20,8 +28,8 @@ object SchedulerTemplate {
           |import art.Art
           |import art.scheduling.legacy.Legacy
           |import art.scheduling.roundrobin.RoundRobin
-          |import art.scheduling.static.Schedule.{DSchedule, DScheduleSpec, Slot}
-          |import art.scheduling.static.StaticScheduler
+          |import art.scheduling.static.Schedule._
+          |import art.scheduling.static._
           |
           |${CommentTemplate.doNotEditComment_scala}
           |
@@ -39,6 +47,11 @@ object SchedulerTemplate {
           |
           |  ${(threadTimingProperties, "\n\n")}
           |
+          |
+          |  /**********************************************************************
+          |   * Round Robin Scheduler
+          |   *********************************************************************/
+          |
           |  // roundRobinSchedule represents the component dispatch order
           |  val roundRobinSchedule: ISZ[Art.BridgeId] = {
           |    // convert IS[Art.BridgeId, art.Bridge] to an IS[Z, Art.BridgeId] to allow bridges to be dispatched
@@ -50,6 +63,18 @@ object SchedulerTemplate {
           |    ret
           |  }
           |
+          |  def getRoundRobinScheduler(schedule: Option[ISZ[Art.BridgeId]]): RoundRobin = {
+          |    if(roundRobinSchedule.isEmpty) {} // line needed for transpiler; do not remove
+          |    schedule match {
+          |      case Some(s) => return RoundRobin(s)
+          |      case _ => return RoundRobin(ScheduleProviderI.getRoundRobinOrder())
+          |    }
+          |  }
+          |
+          |  /**********************************************************************
+          |   * Static Scheduler
+          |   *********************************************************************/
+          |
           |  val framePeriod: Z = ${framePeriod}
           |  val numComponents: Z = Arch.ad.components.size
           |  val maxExecutionTime: Z = numComponents / framePeriod
@@ -59,22 +84,41 @@ object SchedulerTemplate {
           |    ${(slots, ",\n")}
           |  )))
           |
+          |  val domainToBridgeIdMap: ISZ[Art.BridgeId] = ISZ(
+          |    ${(domainToBridgeMap, ",\n")}
+          |  )
           |
-          |  def getRoundRobinScheduler(schedule: Option[ISZ[Art.BridgeId]]): RoundRobin = {
-          |    if(roundRobinSchedule.isEmpty) {} // line needed for transpiler; do not remove
-          |    schedule match {
-          |      case Some(s) => return RoundRobin(s)
-          |      case _ => return RoundRobin(ScheduleProviderI.getRoundRobinOrder())
+          |  val threadNickNames: Map[String, Art.BridgeId] = Map(
+          |    ISZ(
+          |      ${(threadNickNames, ",\n")})
+          |  )
+          |
+          |  def getStaticSchedulerH(userProvided: MOption[(DScheduleSpec, ISZ[Art.BridgeId], Map[String, Art.BridgeId], CommandProvider)]): StaticScheduler = {
+          |    if(staticSchedule.schedule.slots.isEmpty && domainToBridgeIdMap.isEmpty && threadNickNames.isEmpty) {} // line needed for transpiler; do not remove
+          |    userProvided match {
+          |      case MSome((schedule_, domainToBridgeIdMap_, threadNickNames_, commandProvider)) =>
+          |        return getStaticScheduler(schedule_, domainToBridgeIdMap_, threadNickNames_, commandProvider)
+          |      case _ =>
+          |        return getStaticScheduler(
+          |          ScheduleProviderI.getStaticSchedule(),
+          |          // TODO: get the following from extension so they can be customized via C
+          |          domainToBridgeIdMap,
+          |          threadNickNames,
+          |          DefaultCommandProvider())
           |    }
           |  }
           |
-          |  def getStaticScheduler(schedule: Option[DScheduleSpec]): StaticScheduler = {
-          |    if(staticSchedule.schedule.slots.isEmpty) {} // line needed for transpiler; do not remove
-          |    schedule match {
-          |      case Some(s) => return StaticScheduler(Arch.ad.components, s)
-          |      case _ => return StaticScheduler(Arch.ad.components, ScheduleProviderI.getStaticSchedule())
-          |    }
+          |  def getStaticScheduler(schedule: DScheduleSpec,
+          |                         domainToBridgeIdMap: ISZ[Art.BridgeId],
+          |                         threadNickNames: Map[String, Art.BridgeId],
+          |                         commandProvider: CommandProvider): StaticScheduler = {
+          |    return StaticScheduler(schedule, domainToBridgeIdMap, threadNickNames, commandProvider)
           |  }
+          |
+          |
+          |  /**********************************************************************
+          |   * Static Scheduler
+          |   *********************************************************************/
           |
           |  def getLegacyScheduler(): Legacy = {
           |    return Legacy(Arch.ad.components)
@@ -85,6 +129,7 @@ object SchedulerTemplate {
           |// at the C level after transpiling
           |@ext(name = "ScheduleProvider") object ScheduleProviderI {
           |  def getRoundRobinOrder(): ISZ[Art.BridgeId] = $$
+          |
           |  def getStaticSchedule(): DScheduleSpec = $$
           |}"""
     return ret

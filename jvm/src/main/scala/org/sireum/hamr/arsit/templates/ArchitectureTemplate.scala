@@ -60,7 +60,7 @@ object ArchitectureTemplate {
           |        val scheduler: Scheduler = o.scheduler match {
           |          case Cli.RunChoice.Default => defaultScheduler()
           |          case Cli.RunChoice.RoundRobin => Schedulers.getRoundRobinScheduler(None())
-          |          case Cli.RunChoice.Static => Schedulers.getStaticScheduler(None())
+          |          case Cli.RunChoice.Static => Schedulers.getStaticSchedulerH(MNone())
           |          case Cli.RunChoice.Legacy => Schedulers.getLegacyScheduler()
           |        }
           |

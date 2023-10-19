@@ -18,7 +18,11 @@ import org.sireum.hamr.ir.GclSubclause
 import org.sireum.message.Reporter
 
 @record class GumboXPlugin
-  extends ArsitInitializePlugin with DatatypeProviderPlugin with EntryPointProviderPlugin with BehaviorEntryPointProviderPlugin with PlatformProviderPlugin with ArsitFinalizePlugin {
+  extends ArsitInitializePlugin with DatatypeProviderPlugin
+    with EntryPointProviderPlugin
+    with BehaviorEntryPointProviderPlugin
+    with PlatformProviderPlugin
+    with ArsitFinalizePlugin {
 
   val name: String = "GumboX Plugin"
 
@@ -50,21 +54,6 @@ import org.sireum.message.Reporter
       return F
     }
 
-    /*
-    val apiCallsRequireDatatypeInvariants: B = {
-      def search: B = {
-        for (p <- component.getPorts()) {
-          p match {
-            case i: AadlFeatureData if datatypesWithInvariants.contains(i.aadlType.nameProvider.classifier) =>
-              return T
-            case _ =>
-          }
-        }
-        return F
-      }
-      search
-    }
-    */
     val datatypeInvariantsExist: B = datatypesWithInvariants.nonEmpty
 
     val componentHasGumboSubclauseInfo: B =
@@ -80,7 +69,6 @@ import org.sireum.message.Reporter
         case _ => F
       }
 
-    //return apiCallsRequireDatatypeInvariants || componentHasGumboSubclauseInfo
     return datatypeInvariantsExist || componentHasGumboSubclauseInfo
   }
 
@@ -177,7 +165,7 @@ import org.sireum.message.Reporter
   override def canHandlePlatformProviderPlugin(arsitOptions: ArsitOptions,
                                                symbolTable: SymbolTable,
                                                aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) && modelHasGcl
+    return runtimeMonitoringEnabled(arsitOptions) // && modelHasGcl
   }
 
   override def handlePlatformProviderPlugin(projectDirectories: ProjectDirectories,
@@ -186,10 +174,10 @@ import org.sireum.message.Reporter
                                             aadlTypes: AadlTypes,
                                             reporter: Reporter): ISZ[PlatformProviderPlugin.PlatformContributions] = {
 
-    return ISZ(GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
+    return GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
       rmContainer = runtimeMonitoringContainer,
       basePackageName = arsitOptions.packageName,
-      projectDirectories = projectDirectories))
+      projectDirectories = projectDirectories)
   }
 
   /******************************************************************************************
@@ -204,9 +192,9 @@ import org.sireum.message.Reporter
                                            arsitOptions: ArsitOptions,
                                            symbolTable: SymbolTable,
                                            aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) &&
-      !handledComponents.contains(component.path) &&
-      canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
+    return runtimeMonitoringEnabled(arsitOptions) //&&
+      //!handledComponents.contains(component.path) &&
+      //canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def handleEntryPointProvider(component: AadlThreadOrDevice,
@@ -282,7 +270,8 @@ import org.sireum.message.Reporter
                                                      arsitOptions: ArsitOptions,
                                                      symbolTable: SymbolTable,
                                                      aadlTypes: AadlTypes): B = {
-    return canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
+    return runtimeMonitoringEnabled(arsitOptions) ||
+      canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 
   override def finaliseBehaviorEntryPointProvider(component: AadlThreadOrDevice,
@@ -300,18 +289,24 @@ import org.sireum.message.Reporter
       case _ => None()
     }
 
+    var resources = ISZ[FileResource]()
+
     val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
 
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
     val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Containers.scala"
-    val containersR = ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
+    resources = resources :+ ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
 
-    val testHarness = gumboXGen.createTestHarness(component, componentNames, containers, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
+    if (canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)) {
+      val testHarness = gumboXGen.createTestHarness(component, componentNames, containers, annexInfo, arsitOptions.runSlangCheck, symbolTable, aadlTypes, projectDirectories)
 
-    val profilePath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Profiles.scala"
-    val profilesR = ResourceUtil.createResource(profilePath, containers.genProfiles(), T)
+      val profilePath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}__Profiles.scala"
+      val profilesR = ResourceUtil.createResource(profilePath, containers.genProfiles(), T)
 
-    return Some(gumbox(resources = gumbox.resources ++ testHarness.resources :+ containersR :+ profilesR))
+      resources = (resources ++ testHarness.resources) :+ profilesR
+    }
+
+    return Some(gumbox(resources = gumbox.resources ++ resources))
   }
 
   override def canHandleArsitFinalizePlugin(): B = {

@@ -47,6 +47,7 @@ object GumboXRuntimeMonitoring {
                               ): EntryPointProviderPlugin.EntryPointContributions = {
 
     val epCompanionName: String = s"${componentNames.componentSingletonType}_EntryPoint_Companion"
+    val bridgeDirectory: String = s"${projectDirectories.bridgeDir}/${componentNames.packagePath}"
 
     var resources: ISZ[FileResource] = ISZ()
 
@@ -70,6 +71,38 @@ object GumboXRuntimeMonitoring {
     val preComputeMethodName = s"pre_${EntryPoints.compute.name}"
     val postComputeMethodName = s"post_${EntryPoints.compute.name}"
 
+    val injectionServiceName: String = s"${componentNames.componentSingletonType}_Injection_Service"
+    val injectionProviderName: String = s"${componentNames.componentSingletonType}_Injection_Provider"
+    val injectionService: FileResource = {
+      val content = st"""// #Sireum
+                         |package ${componentNames.packageName}
+                         |
+                         |import org.sireum._
+                         |
+                         |${CommentTemplate.doNotEditComment_scala}
+                         |
+                         |@msig trait ${injectionProviderName} {
+                         |  def pre_receiveInput(): Unit
+                         |}
+                         |
+                         |object ${injectionServiceName} {
+                         |
+                         |  var providers: MSZ[${injectionProviderName}] = MSZ()
+                         |
+                         |  def register(provider: ${injectionProviderName}): Unit = {
+                         |    providers = providers :+ provider
+                         |  }
+                         |
+                         |  def pre_receiveInput(): Unit = {
+                         |    for (provider <- providers) {
+                         |      provider.pre_receiveInput()
+                         |    }
+                         |  }
+                         |}"""
+      ResourceUtil.createResource(s"${bridgeDirectory}/${injectionServiceName}.scala", content, T)
+    }
+    resources = resources :+ injectionService
+
     // TODO:
     val computeBody: ST = {
       val s = StringUtil.split_PreserveEmptySegments(entryPointTemplate.defaultComputeBody.render, c => c == '\n')
@@ -77,7 +110,7 @@ object GumboXRuntimeMonitoring {
       for (l <- s) {
         val o = ops.StringOps(l)
         if (o.contains("Art.receiveInput")) {
-          newLines = newLines :+ l :+ s"\n${epCompanionName}.${preComputeMethodName}()"
+          newLines = newLines :+ s"${injectionServiceName}.pre_receiveInput()\n" :+ l :+ s"\n${epCompanionName}.${preComputeMethodName}()"
         } else if (o.contains("Art.sendOutput")) {
           newLines = newLines :+ s"${epCompanionName}.${postComputeMethodName}()\n\n$l"
         } else {
@@ -394,7 +427,7 @@ object GumboXRuntimeMonitoring {
           |      ${containers.observePostState_wL()}
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePostState(${componentNames.archInstanceName}.id, $postInitKindFQ, $postContainer)
+          |    ${runtimePackage}.RuntimeMonitor.observeInitialisePostState(${componentNames.archInstanceName}.id, $postInitKindFQ, $postContainer)
           |  }
           |
           |  def ${preComputeMethodName}(): Unit = {
@@ -403,7 +436,7 @@ object GumboXRuntimeMonitoring {
           |      ${containers.observePreState_wL()})
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePreState(${componentNames.archInstanceName}.id, $preComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]])
+          |    ${runtimePackage}.RuntimeMonitor.observeComputePreState(${componentNames.archInstanceName}.id, $preComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]])
           |  }
           |
           |  def ${postComputeMethodName}(): Unit = {
@@ -412,11 +445,11 @@ object GumboXRuntimeMonitoring {
           |      ${containers.observePostState_wL()}
           |
           |    // the rest can now be performed via a different thread
-          |    ${runtimePackage}.RuntimeMonitor.observePrePostState(${componentNames.archInstanceName}.id, $postComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]], $postContainer)
+          |    ${runtimePackage}.RuntimeMonitor.observeComputePrePostState(${componentNames.archInstanceName}.id, $postComputeKindFQ, ${preContainer}.asInstanceOf[Option[art.DataContent]], $postContainer)
           |  }
           |}"""
 
-    val path = s"${projectDirectories.bridgeDir}/${componentNames.packagePath}/${epCompanionName}.scala"
+    val path = s"${bridgeDirectory}/${epCompanionName}.scala"
     resources = resources :+ ResourceUtil.createResource(path, epCompanionExt, T)
 
     return EntryPointProviderPlugin.EntryPointContributions(
@@ -429,7 +462,7 @@ object GumboXRuntimeMonitoring {
 
   def handlePlatformProviderPlugin(rmContainer: RM_Container,
                                    basePackageName: String,
-                                   projectDirectories: ProjectDirectories): PlatformProviderPlugin.PlatformSetupContributions = {
+                                   projectDirectories: ProjectDirectories): ISZ[PlatformProviderPlugin.PlatformContributions] = {
     val runtimePath = s"${projectDirectories.architectureDir}/${basePackageName}/runtimemonitor"
 
     var resources: ISZ[FileResource] = ISZ()
@@ -525,6 +558,7 @@ object GumboXRuntimeMonitoring {
     resources = resources :+ ResourceUtil.createResource(s"${runtimePath}/ModelInfo.scala", modelInfo, T)
 
     val platformSetupBlocks = ISZ(st"${runtimePackage}.RuntimeMonitor.init(${runtimePackage}.ModelInfo.modelInfo)")
+    val platformTeardownBlocks = ISZ(st"${runtimePackage}.RuntimeMonitor.finalise()")
 
     val runtimeMonitor: ST =
       st"""// #Sireum
@@ -536,15 +570,42 @@ object GumboXRuntimeMonitoring {
           |
           |${CommentTemplate.doNotEditComment_scala}
           |
+          |@msig trait RuntimeMonitorListener {
+          |  def init(modelInfo: ModelInfo): Unit
+          |
+          |  def finalise(): Unit
+          |
+          |  /**
+          |    * Called before the initialise entrypoint calls sendOutput
+          |    */
+          |  def observeInitialisePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit
+          |
+          |  /**
+          |    * Called after the compute entrypoint calls receiveInput and before it
+          |    * invokes the behavior code
+          |    */
+          |  def observeComputePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit
+          |
+          |  /**
+          |    * Called after the compute entrypoint calls receiveInput and before it
+          |    * invokes the behavior code
+          |    */
+          |  def observeComputePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit
+          |}
+          |
           |@ext object RuntimeMonitor {
+          |
+          |  def registerListener(listener: RuntimeMonitorListener): Unit = $$
           |
           |  def init(modelInfo: ModelInfo): Unit = $$
           |
-          |  def observePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = $$
+          |  def finalise(): Unit = $$
           |
-          |  def observePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = $$
+          |  def observeInitialisePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = $$
           |
-          |  def observePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = $$
+          |  def observeComputePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = $$
+          |
+          |  def observeComputePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = $$
           |}
           |"""
     val rmpath = s"${runtimePath}/RuntimeMonitor.scala"
@@ -560,19 +621,9 @@ object GumboXRuntimeMonitoring {
           |
           |${CommentTemplate.safeToEditComment_scala}
           |
-          |trait RuntimeMonitorListener {
-          |  def init(modelInfo: ModelInfo): Unit
-          |
-          |  def observePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit
-          |
-          |  def observePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit
-          |
-          |  def observePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit
-          |}
-          |
           |object RuntimeMonitor_Ext {
           |
-          |  val registeredListeners: ISZ[RuntimeMonitorListener] = ISZ(
+          |  val baseListeners: ISZ[RuntimeMonitorListener] = ISZ(
           |
           |    // add/remove listeners here
           |
@@ -587,27 +638,58 @@ object GumboXRuntimeMonitoring {
           |    ${drmMarker.endMarker}
           |  )
           |
+          |  var externalListeners: ISZ[RuntimeMonitorListener] = ISZ()
+          |
+          |  def registerListener(listener: RuntimeMonitorListener): Unit = {
+          |    externalListeners = externalListeners :+ listener
+          |  }
+          |
           |  def init(modelInfo: ModelInfo): Unit = {
-          |    for (l <- registeredListeners) {
+          |    for (l <- baseListeners) {
+          |      l.init(modelInfo)
+          |    }
+          |    for (l <- externalListeners) {
           |      l.init(modelInfo)
           |    }
           |  }
           |
-          |  def observePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = {
-          |    for (l <- registeredListeners) {
-          |      l.observePreState(bridgeId, observationKind, pre)
+          |  def finalise(): Unit = {
+          |    for (l <- baseListeners) {
+          |      l.finalise()
+          |    }
+          |
+          |    for (l <- externalListeners) {
+          |      l.finalise()
           |    }
           |  }
           |
-          |  def observePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
-          |    for (l <- registeredListeners) {
-          |      l.observePostState(bridgeId, observationKind, post)
+          |  def observeInitialisePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
+          |    for (l <- baseListeners) {
+          |      l.observeInitialisePostState(bridgeId, observationKind, post)
+          |    }
+          |
+          |    for (l <- externalListeners) {
+          |      l.observeInitialisePostState(bridgeId, observationKind, post)
           |    }
           |  }
           |
-          |  def observePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = {
-          |    for (l <- registeredListeners) {
-          |      l.observePrePostState(bridgeId, observationKind, pre, post)
+          |  def observeComputePreState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = {
+          |    for (l <- baseListeners) {
+          |      l.observeComputePreState(bridgeId, observationKind, pre)
+          |    }
+          |
+          |    for (l <- externalListeners) {
+          |      l.observeComputePreState(bridgeId, observationKind, pre)
+          |    }
+          |  }
+          |
+          |  def observeComputePrePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = {
+          |    for (l <- baseListeners) {
+          |      l.observeComputePrePostState(bridgeId, observationKind, pre, post)
+          |    }
+          |
+          |    for (l <- externalListeners) {
+          |      l.observeComputePrePostState(bridgeId, observationKind, pre, post)
           |    }
           |  }
           |}"""
@@ -621,13 +703,15 @@ object GumboXRuntimeMonitoring {
           |import art.Art.BridgeId
           |import org.sireum._
           |import ${basePackageName}.JSON
+          |import org.sireum.$$internal.MutableMarker
           |
           |import java.awt.datatransfer.StringSelection
+          |import java.awt.event.WindowEvent
           |import java.awt.{BorderLayout, Dimension, Toolkit}
           |import javax.swing._
           |import javax.swing.table.AbstractTableModel
           |
-          |${CommentTemplate.safeToEditComment_scala}
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |class DefaultRuntimeMonitor extends JFrame with RuntimeMonitorListener {
           |
@@ -741,15 +825,19 @@ object GumboXRuntimeMonitoring {
           |    setVisible(true)
           |  }
           |
-          |  def observePreState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = {
-          |    SwingUtilities.invokeLater(() => dispatch(bridge, observationKind, pre, None()))
+          |  def finalise(): Unit = {
+          |    this.dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING))
           |  }
           |
-          |  def observePostState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
+          |  def observeInitialisePostState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
           |    SwingUtilities.invokeLater(() => dispatch(bridge, observationKind, None(), Some(post)))
           |  }
           |
-          |  def observePrePostState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = {
+          |  def observeComputePreState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent]): Unit = {
+          |    SwingUtilities.invokeLater(() => dispatch(bridge, observationKind, pre, None()))
+          |  }
+          |
+          |  def observeComputePrePostState(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[art.DataContent], post: art.DataContent): Unit = {
           |    SwingUtilities.invokeLater(() => dispatch(bridge, observationKind, pre, Some(post)))
           |  }
           |
@@ -759,6 +847,18 @@ object GumboXRuntimeMonitoring {
           |      if (pre.nonEmpty) Some(JSON.from_artDataContent(pre.get, T)) else None(),
           |      if (post.nonEmpty) Some(JSON.from_artDataContent(post.get, T)) else None()))
           |  }
+          |
+          |  override def string: String = toString()
+          |
+          |  override def $$clonable: Boolean = false
+          |
+          |  override def $$clonable_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$owned: Boolean = false
+          |
+          |  override def $$owned_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$clone: MutableMarker = this
           |}
           |
           |case class Row(bridgeId: BridgeId, observationKind: ObservationKind.Type, result: Boolean, pre: Option[String], post: Option[String])
@@ -799,9 +899,11 @@ object GumboXRuntimeMonitoring {
           |  }
           |}"""
     val guipath = s"${runtimePath}/DefaultRuntimeMonitor.scala"
-    resources = resources :+ ResourceUtil.createResource(guipath, gui, F)
+    resources = resources :+ ResourceUtil.createResource(guipath, gui, T)
 
-    return PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = platformSetupBlocks, resources = resources)
+    return ISZ(
+      PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = platformSetupBlocks, resources = resources),
+      PlatformProviderPlugin.PlatformTearDownContributions(imports =ISZ(), blocks = platformTeardownBlocks, resources = ISZ()))
   }
 
   def genModelInfo(componentInfos: ISZ[(String, ST)], runtimePackage: String, basePackage: String): ST = {
