@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGPortParam, SymbolKind, outPortsToParams}
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGPortParam, GGStateVarParam, SymbolKind, inPortsToParams, outPortsToParams}
 import org.sireum.hamr.arsit.plugin.{EntryPointProviderPlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
@@ -452,12 +452,206 @@ object GumboXRuntimeMonitoring {
     val path = s"${bridgeDirectory}/${epCompanionName}.scala"
     resources = resources :+ ResourceUtil.createResource(path, epCompanionExt, T)
 
+    val systemTestAPI = genSystemTestApi(componentNames, containers, projectDirectories)
+
     return EntryPointProviderPlugin.EntryPointContributions(
       imports = ISZ(),
       bridgeCompanionBlocks = ISZ(),
       entryPoint = gEntryPoint,
-      resources = resources
+      resources = resources :+ systemTestAPI
     )
+  }
+
+  def genSystemTestSuite(basePackage: String,
+                         projectDirectories: ProjectDirectories): ISZ[FileResource] = {
+    var resources = ISZ[FileResource]()
+
+    val utilpath = s"${projectDirectories.testUtilDir}/${basePackage}"
+
+    val systemTestSuiteListener =
+      st"""// #Sireum
+          |package ${basePackage}
+          |
+          |import org.sireum._
+          |import art.{Art, DataContent}
+          |import ${basePackage}.runtimemonitor.{ModelInfo, ObservationKind, RuntimeMonitorListener}
+          |
+          |@msig trait SystemTestRuntimeMonitorListener extends RuntimeMonitorListener {
+          |
+          |  def init(modelInfo: ModelInfo): Unit = {}
+          |
+          |  def finalise(): Unit = {}
+          |
+          |  def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {}
+          |
+          |  def observeComputePreState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent]): Unit = {}
+          |
+          |  def observeComputePrePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent], post: DataContent): Unit = {}
+          |}
+          |"""
+    val systemTestSuiteListenerPath = s"${utilpath}/SystemTestRuntimeMonitorListener.scala"
+    resources = resources :+ ResourceUtil.createResource(systemTestSuiteListenerPath, systemTestSuiteListener, T)
+
+    val systemTestSuite =
+      st"""package ${basePackage}
+        |
+        |import org.sireum._
+        |import org.scalatest.funsuite.AnyFunSuite
+        |import org.scalatest.{BeforeAndAfterEach, OneInstancePerTest}
+        |import org.sireum.$$internal.MutableMarker
+        |import ${basePackage}.SystemTestSuite._
+        |import ${basePackage}.runtimemonitor._
+        |import art._
+        |import art.scheduling._
+        |
+        |object SystemTestSuite {
+        |  // for now just keep the last post state for a bridge
+        |  var runtimeMonitorStream: Map[Art.BridgeId, (ObservationKind.Type, DataContent)] = _
+        |}
+        |
+        |abstract class SystemTestSuite extends AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with SystemTestRuntimeMonitorListener {
+        |
+        |  def scheduler: Scheduler
+        |
+        |  override def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {
+        |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
+        |  }
+        |
+        |  override def observeComputePrePostState(bridgeId: Art.BridgeId,
+        |                                          observationKind: ObservationKind.Type,
+        |                                          pre: Option[art.DataContent],
+        |                                          post: DataContent): Unit = {
+        |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
+        |  }
+        |
+        |  override protected def beforeEach(): Unit = {
+        |    runtimeMonitorStream = Map.empty
+        |
+        |    RuntimeMonitor.registerListener(this)
+        |
+        |    Platform.setup()
+        |    Art.initSystemTest(Arch.ad, scheduler)
+        |  }
+        |
+        |  override protected def afterEach(): Unit = {
+        |    Art.finalizeSystemTest()
+        |    Platform.tearDown()
+        |  }
+        |
+        |  def must_match[A](expected: A, actual: A): Unit = {
+        |    assert(expected == actual, s"Expected: $$expected, Actual: $$actual")
+        |  }
+        |
+        |  override def string: String = toString()
+        |
+        |  override def $$clonable: Boolean = false
+        |
+        |  override def $$clonable_=(b: Boolean): MutableMarker = this
+        |
+        |  override def $$owned: Boolean = false
+        |
+        |  override def $$owned_=(b: Boolean): MutableMarker = this
+        |
+        |  override def $$clone: MutableMarker = this
+        |}"""
+    val systemTestSuitePath = s"$utilpath/SystemTestSuite.scala"
+    resources = resources :+ ResourceUtil.createResource(systemTestSuitePath, systemTestSuite, T)
+
+    return resources
+  }
+
+  def genSystemTestApi(componentNames: NameProvider,
+                       containers: GumboXGenUtil.Container,
+                       projectDirectories: ProjectDirectories): FileResource = {
+
+    val inParams = GumboXGenUtil.sortParam(containers.inPorts ++ containers.inStateVars)
+    var putMethodParams: ISZ[ST] = ISZ()
+    var putMethodBlocks: ISZ[ST] = ISZ()
+    var putMethods: ISZ[ST] = ISZ()
+    for(p <- inParams) {
+      putMethods = putMethods :+ p.setter
+      putMethodParams = putMethodParams :+ p.getParamDef
+      putMethodBlocks = putMethodBlocks :+
+        st"put_${if(p.isInstanceOf[GGStateVarParam]) p.name else p.originName}(${p.name})"
+    }
+
+    val concretePut =
+      st"""/** helper method to set the values of all inputs to xxx
+          |  ${(GumboXGenUtil.paramsToComment(inParams), "\n")}
+          |  */
+          |def put_concrete_inputs(${(putMethodParams, ",\n")}): Unit = {
+          |  ${(putMethodBlocks, "\n")}
+          |}
+          |
+          |${(putMethods, "\n\n")}"""
+
+    var check_parameters: ISZ[ST] = ISZ()
+    var checks: ISZ[ST] = ISZ()
+    var getters: ISZ[ST] = ISZ()
+    for(p <- GumboXGenUtil.sortParam(containers.outPorts ++ containers.outStateVars)) {
+      p match {
+        case port: GGPortParam =>
+          getters = getters :+
+            st"""def get_${p.name}(): ${p.slangType} = {
+                |  return fetchContainer().${p.name}
+                |}"""
+          check_parameters = check_parameters :+ p.getParamDef
+          checks = checks :+
+            st"""val actual_${p.originName} = get_${p.name}()
+                |if (${p.name} != actual_${p.originName}) {
+                |  failureReasons = failureReasons :+ st"'${p.originName}' did not match expected.  Expected: $$${p.name}, Actual: $$actual_${p.originName}"
+                |}"""
+        case statevar: GGStateVarParam =>
+          // TODO: could get these from the container as well
+          check_parameters = check_parameters :+ p.getParamDef
+          checks = checks :+
+            st"""val actual_${statevar.originName} = ${statevar.getter}
+                |if (${p.name} != actual_${statevar.originName}) {
+                |  failureReasons = failureReasons :+ st"'${p.originName}' did not match expected.  Expected: $$${p.name}, Actual: $$actual_${p.originName}"
+                |}"""
+      }
+    }
+
+    val checkConcreteOutputs =
+      st"""def fetchContainer(): ${containers.fqPostStateContainerName_PS} = {
+          |  if (runtimeMonitorStream.contains(${componentNames.archInstanceName}.id)) {
+          |    val (_, postContainer_) = runtimeMonitorStream.get(${componentNames.archInstanceName}.id).get
+          |    return postContainer_.asInstanceOf[${containers.fqPostStateContainerName_PS}]
+          |  }
+          |  else {
+          |    assert(F, s"No post state recorded for $${${componentNames.archInstanceName}.name}")
+          |    halt(s"No post state recorded for $${${componentNames.archInstanceName}.name}")
+          |  }
+          |}
+          |
+          |def check_concrete_outputs(${(check_parameters, ",\n")}): Unit = {
+          |  var failureReasons: ISZ[ST] = ISZ()
+          |
+          |  ${(checks, "\n")}
+          |
+          |  assert(failureReasons.isEmpty, st"$${(failureReasons, "\\n")}".render)
+          |}
+          |
+          |${(getters, "\n\n")}"""
+
+    val objectName = s"${componentNames.componentSingletonType}_SystemTestAPI"
+    val testApi =
+      st"""// #Sireum
+          |
+          |package ${componentNames.packageName}
+          |
+          |import org.sireum._
+          |import art._
+          |import ${componentNames.basePackage}.SystemTestSuite.runtimeMonitorStream
+          |import ${componentNames.basePackage}._
+          |
+          |object $objectName {
+          |  ${concretePut}
+          |
+          |  ${checkConcreteOutputs}
+          |}"""
+    val objectPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${objectName}.scala"
+    return ResourceUtil.createResource(objectPath, testApi, T)
   }
 
   def handlePlatformProviderPlugin(rmContainer: RM_Container,
@@ -466,6 +660,9 @@ object GumboXRuntimeMonitoring {
     val runtimePath = s"${projectDirectories.architectureDir}/${basePackageName}/runtimemonitor"
 
     var resources: ISZ[FileResource] = ISZ()
+
+
+    resources = resources ++ GumboXRuntimeMonitoring.genSystemTestSuite(basePackageName, projectDirectories)
 
     val runtimePackage = s"${basePackageName}.runtimemonitor"
 

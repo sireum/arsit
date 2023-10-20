@@ -151,7 +151,8 @@ object GumboXGenUtil {
       var entries: ISZ[ST] = ISZ()
       for (outPort <- outPorts if outPort.kind == SymbolKind.ApiVarOutData) {
         entries = entries :+ st"var last_${outPort.name}: Option[${outPort.aadlType.nameProvider.qualifiedReferencedTypeName}] = None()"
-        entries = entries :+ outPort.asInstanceOf[GGPortParam].dataPortFetch
+        entries = entries :+ st""
+        entries = entries :+ outPort.asInstanceOf[GGPortParam].dataPortFetch("last")
       }
       return (if (entries.nonEmpty) Some(st"${(entries, "\n")}")
       else None())
@@ -511,6 +512,12 @@ object GumboXGenUtil {
 
     def kind: SymbolKind.Type
 
+    def setter: ST
+
+    def getter: ST
+
+    //def getterViaStream(streamName: String): ST
+
     def ranGenName: String = {
       return GumboXGenUtil.getRangenMethodName(aadlType)
     }
@@ -538,6 +545,22 @@ object GumboXGenUtil {
     val postFetch: ST = preFetch
 
     val kind: SymbolKind.Type = if (isPreState) SymbolKind.StateVarPre else SymbolKind.StateVar
+
+    def setter: ST = {
+      return (
+      st"""// setter for state variable
+          |def put_${name}(value: ${slangType}): Unit = {
+          |  ${componentNames.componentSingletonType}.${originName} = value
+          |}""")
+    }
+
+    def getter: ST = {
+      return (
+        st"""// getter for state variable
+            |def get_${name}(): ${slangType} = {
+            |  return ${componentNames.componentSingletonType}.$originName
+            |}""")
+    }
   }
 
   @datatype class GGPortParam(val port: AadlPort,
@@ -572,13 +595,22 @@ object GumboXGenUtil {
 
     val isOptional: B = isEvent
 
-    val archPortId: ST = st"${componentNames.archInstanceName}.operational_api.${originName}_Id"
+    @pure def payloadType: String = {
+      return aadlType.nameProvider.qualifiedPayloadName
+    }
 
-    val payloadType: String = aadlType.nameProvider.qualifiedPayloadName
+    @pure def archPortId: ST = {
+      return st"${componentNames.archInstanceName}.operational_api.${originName}_Id"
+    }
 
-    val slangType: ST =
-      if (isEvent) st"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
-      else st"${aadlType.nameProvider.qualifiedReferencedTypeName}"
+    @pure def slangType: ST = {
+      return (if (isEvent) st"Option[${aadlType.nameProvider.qualifiedReferencedTypeName}]"
+      else st"${aadlType.nameProvider.qualifiedReferencedTypeName}")
+    }
+
+    @pure def paramTypeString: String = {
+      return s"${if (isIn) "incoming" else "outgoing"} ${if (isEvent) "event " else ""}${if (isData) "data" else ""} port"
+    }
 
     @pure def observeInPortVariable: ST = {
       return st"Art.observeInPortVariable($archPortId)"
@@ -623,20 +655,45 @@ object GumboXGenUtil {
       }
     }
 
-    @pure def dataPortFetch: ST = {
+    @pure def dataPortFetch(prefix: String): ST = {
+      val msg = s"No value found on outgoing data port $originName.\\n                  Note: values placed during the initialization phase will persist across dispatches"
       return (
-        st"""/** get the value of outgoing data port $name.  If a 'fresh' value wasn't sent
-            |  * during the last dispatch then return last_$name.get.
+        st"""/** get the value of outgoing data port $originName.  If a 'fresh' value wasn't sent
+            |  * during the last dispatch then return ${prefix}_$name.get.
             |  * Note: this requires outgoing data ports to be initialized during the
             |  * initialization phase or prior to system testing.
             |  */
             |def get_${name}: ${aadlType.nameProvider.qualifiedReferencedTypeName} = {
             |  $observeOutPortVariable match {
             |    case Some(${aadlType.nameProvider.qualifiedPayloadName}(value)) =>
-            |      last_$name = Some(value)
+            |      ${prefix}_$name = Some(value)
             |      return value
-            |    case _ => return last_$name.get
+            |    case _ if ${prefix}_$name.isEmpty =>
+            |      assert(F, "$msg")
+            |      halt("$msg")
+            |    case _ => return ${prefix}_$name.get
             |  }
+            |}""")
+    }
+
+    @pure def setter: ST = {
+      return(
+      st"""// setter for $paramTypeString
+          |def put_${originName}(value: ${slangType}): Unit = {
+          |  Art.insertInInfrastructurePort(${archPortId}, ${payloadType}(value))
+          |}""")
+    }
+
+    @pure override def getter: ST = {
+      return (
+        st"""// getter for $paramTypeString
+            | def get_${originName}: ${paramTypeString} = {
+            |   val value: Option[$aadlType] =
+            |     Art.observeOutInfrastructurePort(${archPortId}).asInstanceOf[Option[$payloadType}]] match {
+            |       case Some(${payloadType}(payload)) => Some(payload)
+            |       case _ => None()
+            |     }
+            |   return ${if (!isEvent) ".get" else ""}
             |}""")
     }
   }
