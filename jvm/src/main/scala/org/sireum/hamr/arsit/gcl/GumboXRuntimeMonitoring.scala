@@ -468,96 +468,150 @@ object GumboXRuntimeMonitoring {
 
     val utilpath = s"${projectDirectories.testUtilDir}/${basePackage}"
 
-    val systemTestSuiteListener =
+    val systemTestSuiteSlang =
       st"""// #Sireum
-          |package ${basePackage}
+          |
+          |package $basePackage
           |
           |import org.sireum._
+          |import art.scheduling.Scheduler
           |import art.{Art, DataContent}
-          |import ${basePackage}.runtimemonitor.{ModelInfo, ObservationKind, RuntimeMonitorListener}
+          |import $basePackage.SystemTestSuiteSlang._
+          |import $basePackage.runtimemonitor.{ObservationKind, RuntimeMonitor, RuntimeMonitorListener}
           |
-          |@msig trait SystemTestRuntimeMonitorListener extends RuntimeMonitorListener {
+          |object SystemTestSuiteSlang {
+          |  // for now just keep the last post state for a bridge
+          |  var runtimeMonitorStream: Map[Art.BridgeId, (ObservationKind.Type, DataContent)] = Map.empty
+          |}
           |
-          |  def init(modelInfo: ModelInfo): Unit = {}
+          |@msig trait SystemTestSuiteSlang extends RuntimeMonitorListener{
           |
-          |  def finalise(): Unit = {}
+          |  def scheduler: Scheduler
           |
-          |  def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {}
+          |  override def finalise(): Unit = {}
           |
-          |  def observeComputePreState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent]): Unit = {}
+          |  override def init(modelInfo: $basePackage.runtimemonitor.ModelInfo): Unit = {}
           |
-          |  def observeComputePrePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent], post: DataContent): Unit = {}
+          |  override def observeComputePreState(bridgeId: art.Art.BridgeId, observationKind: $basePackage.runtimemonitor.ObservationKind.Type, pre: Option[art.DataContent]): Unit = {}
+          |
+          |  override def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {
+          |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
+          |  }
+          |
+          |  override def observeComputePrePostState(bridgeId: Art.BridgeId,
+          |                                          observationKind: ObservationKind.Type,
+          |                                          pre: Option[art.DataContent],
+          |                                          post: DataContent): Unit = {
+          |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
+          |  }
+          |
+          |  def beforeEachSlang(): Unit = {
+          |    runtimeMonitorStream = Map.empty
+          |
+          |    RuntimeMonitor.registerListener(this)
+          |
+          |    Platform.setup()
+          |    Art.initSystemTest(Arch.ad, scheduler)
+          |  }
+          |
+          |  def afterEachSlang(): Unit = {
+          |    Art.finalizeSystemTest()
+          |    Platform.tearDown()
+          |  }
+          |
+          |  def must_match[A](expected: A, actual: A): Unit = {
+          |    assert(expected == actual, s"Expected: $$expected, Actual: $$actual")
+          |  }
           |}
           |"""
-    val systemTestSuiteListenerPath = s"${utilpath}/SystemTestRuntimeMonitorListener.scala"
-    resources = resources :+ ResourceUtil.createResource(systemTestSuiteListenerPath, systemTestSuiteListener, T)
+    val systemTestSuiteSlangPath = s"${utilpath}/SystemTestSuiteSlang.scala"
+    resources = resources :+ ResourceUtil.createResource(systemTestSuiteSlangPath, systemTestSuiteSlang, T)
 
     val systemTestSuite =
-      st"""package ${basePackage}
-        |
-        |import org.sireum._
-        |import org.scalatest.funsuite.AnyFunSuite
-        |import org.scalatest.{BeforeAndAfterEach, OneInstancePerTest}
-        |import org.sireum.$$internal.MutableMarker
-        |import ${basePackage}.SystemTestSuite._
-        |import ${basePackage}.runtimemonitor._
-        |import art._
-        |import art.scheduling._
-        |
-        |object SystemTestSuite {
-        |  // for now just keep the last post state for a bridge
-        |  var runtimeMonitorStream: Map[Art.BridgeId, (ObservationKind.Type, DataContent)] = _
-        |}
-        |
-        |abstract class SystemTestSuite extends AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with SystemTestRuntimeMonitorListener {
-        |
-        |  def scheduler: Scheduler
-        |
-        |  override def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {
-        |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
-        |  }
-        |
-        |  override def observeComputePrePostState(bridgeId: Art.BridgeId,
-        |                                          observationKind: ObservationKind.Type,
-        |                                          pre: Option[art.DataContent],
-        |                                          post: DataContent): Unit = {
-        |    runtimeMonitorStream = runtimeMonitorStream + (bridgeId ~> (observationKind, post))
-        |  }
-        |
-        |  override protected def beforeEach(): Unit = {
-        |    runtimeMonitorStream = Map.empty
-        |
-        |    RuntimeMonitor.registerListener(this)
-        |
-        |    Platform.setup()
-        |    Art.initSystemTest(Arch.ad, scheduler)
-        |  }
-        |
-        |  override protected def afterEach(): Unit = {
-        |    Art.finalizeSystemTest()
-        |    Platform.tearDown()
-        |  }
-        |
-        |  def must_match[A](expected: A, actual: A): Unit = {
-        |    assert(expected == actual, s"Expected: $$expected, Actual: $$actual")
-        |  }
-        |
-        |  override def string: String = toString()
-        |
-        |  override def $$clonable: Boolean = false
-        |
-        |  override def $$clonable_=(b: Boolean): MutableMarker = this
-        |
-        |  override def $$owned: Boolean = false
-        |
-        |  override def $$owned_=(b: Boolean): MutableMarker = this
-        |
-        |  override def $$clone: MutableMarker = this
-        |}"""
+      st"""package $basePackage
+          |
+          |import org.sireum._
+          |import org.scalatest.funsuite.AnyFunSuite
+          |import org.scalatest.{BeforeAndAfterEach, OneInstancePerTest}
+          |import org.sireum.$$internal.MutableMarker
+          |
+          |// Do not edit this file as it will be overwritten if HAMR codegen is rerun
+          |
+          |abstract class SystemTestSuite extends AnyFunSuite with OneInstancePerTest with BeforeAndAfterEach with SystemTestSuiteSlang {
+          |
+          |  override protected def beforeEach(): Unit = {
+          |    beforeEachSlang()
+          |  }
+          |
+          |  override protected def afterEach(): Unit = {
+          |    afterEachSlang()
+          |  }
+          |
+          |  override def string: String = toString()
+          |
+          |  override def $$clonable: Boolean = false
+          |
+          |  override def $$clonable_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$owned: Boolean = false
+          |
+          |  override def $$owned_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$clone: MutableMarker = this
+          |}"""
     val systemTestSuitePath = s"$utilpath/SystemTestSuite.scala"
     resources = resources :+ ResourceUtil.createResource(systemTestSuitePath, systemTestSuite, T)
 
     return resources
+  }
+
+  def genSystemTest(basePackage: String,
+                    importRenamings: ISZ[ST],
+                    projectDirectories: ProjectDirectories): FileResource = {
+    val ret = st"""package $basePackage
+                  |
+                  |import org.sireum._
+                  |import art.Art
+                  |import art.scheduling.static._
+                  |
+                  |${CommentTemplate.safeToEditComment_scala}
+                  |
+                  |class SystemTests extends SystemTestSuite {
+                  |
+                  |  // note: this is overriding SystemTestSuite's 'def scheduler: Scheduler'
+                  |  //       abstract method
+                  |  var scheduler: StaticScheduler = Schedulers.getStaticSchedulerH(MNone())
+                  |
+                  |  def compute(isz: ISZ[Command]): Unit = {
+                  |    scheduler = scheduler(commandProvider = ISZCommandProvider(isz :+ Stop()))
+                  |
+                  |    Art.computePhase(scheduler)
+                  |  }
+                  |
+                  |  // Suggestion: add the following import renamings of the components' SystemTestAPIs,
+                  |  //             replacing nickname with shortened versions that are easier to reference
+                  |  ${(importRenamings, "\n")}
+                  |
+                  |  test("Example system test") {
+                  |    // run the initialization phase
+                  |    Art.initializePhase(scheduler)
+                  |
+                  |    // run components' compute entrypoints through one hyper-period
+                  |    compute(ISZ(Hstep(1)))
+                  |
+                  |    // use the component SystemTestAPIs' put methods to change the prestate values for components
+                  |    // TODO
+                  |
+                  |    // run another hyper-period
+                  |    compute(ISZ(Hstep(1)))
+                  |
+                  |    // use the component SystemTestAPIs' check or get methods to check the poststate values for components
+                  |    // TODO
+                  |  }
+                  |}
+                  |"""
+    val stsuitePath = s"${projectDirectories.testSystemDir}/${basePackage}/SystemTests.scala"
+    return ResourceUtil.createResource(stsuitePath, ret, F)
   }
 
   def genSystemTestApi(componentNames: NameProvider,
@@ -568,7 +622,9 @@ object GumboXRuntimeMonitoring {
     var putMethodParams: ISZ[ST] = ISZ()
     var putMethodBlocks: ISZ[ST] = ISZ()
     var putMethods: ISZ[ST] = ISZ()
+    var hasStateVars: B = F
     for(p <- inParams) {
+      hasStateVars = hasStateVars || p.isInstanceOf[GGStateVarParam]
       putMethods = putMethods :+ p.setter
       putMethodParams = putMethodParams :+ p.getParamDef
       putMethodBlocks = putMethodBlocks :+
@@ -576,7 +632,7 @@ object GumboXRuntimeMonitoring {
     }
 
     val concretePut =
-      st"""/** helper method to set the values of all inputs to xxx
+      st"""/** helper method to set the values of all incoming ports${if (hasStateVars) " and state variables" else ""}
           |  ${(GumboXGenUtil.paramsToComment(inParams), "\n")}
           |  */
           |def put_concrete_inputs(${(putMethodParams, ",\n")}): Unit = {
@@ -642,8 +698,10 @@ object GumboXRuntimeMonitoring {
           |
           |import org.sireum._
           |import art._
-          |import ${componentNames.basePackage}.SystemTestSuite.runtimeMonitorStream
+          |import ${componentNames.basePackage}.SystemTestSuiteSlang.runtimeMonitorStream
           |import ${componentNames.basePackage}._
+          |
+          |${CommentTemplate.doNotEditComment_scala}
           |
           |object $objectName {
           |  ${concretePut}
@@ -858,6 +916,8 @@ object GumboXRuntimeMonitoring {
           |    for (l <- externalListeners) {
           |      l.finalise()
           |    }
+          |    // deregister external listeners
+          |    externalListeners = ISZ()
           |  }
           |
           |  def observeInitialisePostState(bridgeId: BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {

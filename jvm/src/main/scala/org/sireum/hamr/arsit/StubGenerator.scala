@@ -135,7 +135,7 @@ import org.sireum.hamr.ir._
 
       bridgeContributions.entryPointTemplate,
 
-      symbolTable, aadlTypes, dirs, reporter)
+      arsitOptions, symbolTable, aadlTypes, dirs, reporter)
 
     val bridgeCodeST = bridgeContributions.e(entryPointContributions)
 

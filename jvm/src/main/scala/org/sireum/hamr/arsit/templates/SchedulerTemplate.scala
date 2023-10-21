@@ -112,12 +112,12 @@ object SchedulerTemplate {
           |                         domainToBridgeIdMap: ISZ[Art.BridgeId],
           |                         threadNickNames: Map[String, Art.BridgeId],
           |                         commandProvider: CommandProvider): StaticScheduler = {
-          |    return StaticScheduler(schedule, domainToBridgeIdMap, threadNickNames, commandProvider)
+          |    return StaticScheduler(schedule, Arch.ad.components, domainToBridgeIdMap, threadNickNames, commandProvider)
           |  }
           |
           |
           |  /**********************************************************************
-          |   * Static Scheduler
+          |   * Legacy Scheduler
           |   *********************************************************************/
           |
           |  def getLegacyScheduler(): Legacy = {
@@ -333,8 +333,10 @@ object SchedulerTemplate {
           |}
           |
           |void fillInSlot(IS_5AA467 slotSequence, int index, Z bridgeId, int length) {
-          |  slotSequence->value[index].bridgeId = bridgeId;
-          |  slotSequence->value[index].length = length;
+          |  // TODO: need to refactor to adjust to 2023.10 Slang changes
+          |  exit(1);
+          |  //slotSequence->value[index].bridgeId = bridgeId;
+          |  //slotSequence->value[index].length = length;
           |}
           |"""
     return ret

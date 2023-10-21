@@ -37,6 +37,8 @@ import org.sireum.message.Reporter
   var datatypesWithInvariants: Set[IdPath] = Set.empty
   var componentsWithGclSubclauses: Set[IdPath] = Set.empty
 
+  var systemTestSuiteRenamings: ISZ[ST] = ISZ()
+
   @pure def modelHasGcl: B = {
     return datatypesWithInvariants.nonEmpty || componentsWithGclSubclauses.nonEmpty
   }
@@ -205,6 +207,7 @@ import org.sireum.message.Reporter
 
                                         entryPointTemplate: EntryPointTemplate,
 
+                                        arsitOptions: ArsitOptions,
                                         symbolTable: SymbolTable,
                                         aadlTypes: AadlTypes,
                                         projectDirectories: ProjectDirectories,
@@ -222,6 +225,11 @@ import org.sireum.message.Reporter
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
 
     handle(component, componentNames, resolvedAnnexSubclauses, symbolTable, aadlTypes, projectDirectories, reporter)
+
+    if (runtimeMonitoringEnabled(arsitOptions)) {
+      systemTestSuiteRenamings = systemTestSuiteRenamings :+
+        st"// import ${componentNames.packageName}.{${componentNames.componentSingletonType}_SystemTestAPI => nickname}"
+    }
 
     return GumboXRuntimeMonitoring.handleEntryPointProvider(
       component, componentNames, entryPointTemplate, gumboXGen, containers, hasStateVariables, annexInfo, runtimeMonitoringContainer, aadlTypes, projectDirectories
@@ -310,12 +318,20 @@ import org.sireum.message.Reporter
   }
 
   override def canHandleArsitFinalizePlugin(): B = {
-    return handledComponents.nonEmpty
+    return handledComponents.nonEmpty || systemTestSuiteRenamings.nonEmpty
   }
 
   override def handleArsitFinalizePlugin(projectDirectories: ProjectDirectories, arsitOptions: ArsitOptions, symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): ISZ[FileResource] = {
-    val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
-    val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
-    return ISZ(ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T))
+    var resources: ISZ[FileResource] = ISZ()
+    if (handledComponents.nonEmpty) {
+      val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
+      val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
+      resources = resources :+ ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T)
+    }
+    if (systemTestSuiteRenamings.nonEmpty) {
+      resources = resources :+ GumboXRuntimeMonitoring.genSystemTest(
+        arsitOptions.packageName, systemTestSuiteRenamings, projectDirectories)
+    }
+    return resources
   }
 }

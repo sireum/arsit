@@ -60,8 +60,6 @@ object TestTemplate {
     var concreteCheckBlocks: ISZ[ST] = ISZ()
     var concreteCheckScalaDoc: ISZ[ST] = ISZ()
 
-    var testApiSingletonBlocks: ISZ[ST] = ISZ()
-
     val setters: ISZ[ST] = ports.filter((p: Port) => CommonUtil.isInFeature(p.feature)).map((p: Port) => {
       val putMethodName = s"put_${p.name}"
 
@@ -77,7 +75,7 @@ object TestTemplate {
               st"""for(i <- 0 until ${p.name}) {
                   |  ${putMethodName}()
                   |}"""
-            (s"", s"Empty()", p.name, "Z")
+            (s"", s"art.Empty()", p.name, "Z")
           }
           case _ => {
             val ptype = p.getPortTypeNames.qualifiedReferencedTypeName
@@ -104,25 +102,20 @@ object TestTemplate {
                 st"""${putMethodName}(${p.name})"""
             }
 
-            (s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}", // putParamName
-              s"${p.getPortTypeNames.qualifiedPayloadName}(value)", // putArgName
-              p.name, // concreteParamName
-              concreteParamType) // concreteParamType
+            (s"value : ${p.getPortTypeNames.qualifiedReferencedTypeName}",
+              s"${p.getPortTypeNames.qualifiedPayloadName}(value)",
+              p.name,
+              concreteParamType)
           }
         }
 
       concretePutParams = concretePutParams :+ st"${concreteParamName} : ${concreteParamType}"
 
-      testApiSingletonBlocks = testApiSingletonBlocks :+
-        st"""// setter for in ${p.feature.category}
-            |def ${putMethodName}(${putParamName}): Unit = {
-            |  ArtNative.insertInInfrastructurePort(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
-            |}"""
-
       st"""// setter for in ${p.feature.category}
-           |def ${putMethodName}(${putParamName}): Unit = {
-           |  ${names.testApisName}.${putMethodName}(value)
-           |}"""
+          |def ${putMethodName}(${putParamName}): Unit = {
+          |  Art.insertInInfrastructurePort(${names.archInstanceName}.operational_api.${p.name}_Id, ${putArgName})
+          |}
+          |"""
     })
 
     val concretePutter: Option[ST] =
@@ -152,9 +145,9 @@ object TestTemplate {
 
       val isEvent = p.feature.category == FeatureCategory.EventPort
       val typeName = p.getPortTypeNames.qualifiedReferencedTypeName
-      val payloadType: String = if (isEvent) "Empty" else p.getPortTypeNames.qualifiedPayloadName
-      val _match: String = if (isEvent) "Empty()" else s"${payloadType}(v)"
-      val value: String = if (isEvent) "Empty()" else "v"
+      val payloadType: String = if (isEvent) "art.Empty" else p.getPortTypeNames.qualifiedPayloadName
+      val _match: String = if (isEvent) "art.Empty()" else s"${payloadType}(v)"
+      val value: String = if (isEvent) "art.Empty()" else "v"
 
       val (checkParamType, concretePreamble, checkExplanation, checkScalaDoc): (String, ST, String, ST) =
         p.feature.category match {
@@ -209,7 +202,7 @@ object TestTemplate {
           |
           |// payload getter for out ${p.feature.category}
           |def ${payloadGetterName}: Option[${payloadType}] = {
-          |  return ArtNative.observeOutInfrastructurePort(${names.archInstanceName}.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
+          |  return Art.observeOutInfrastructurePort(${names.archInstanceName}.initialization_api.${addId(portName)}).asInstanceOf[Option[${payloadType}]]
           |}
           |"""
     })
@@ -242,7 +235,7 @@ object TestTemplate {
           |package ${names.packageName}
           |
           |import org.sireum._
-          |import art.{Art, ArtNative, Empty}
+          |import art.Art
           |import ${basePackage}._
           |
           |${CommentTemplate.doNotEditComment_scala}
@@ -269,10 +262,6 @@ object TestTemplate {
           |  ${concretePutter}
           |  ${concreteChecker}
           |  ${(setters ++ getters, "\n")}
-          |}
-          |
-          |object ${names.testApisName} {
-          |  ${(testApiSingletonBlocks, "\n\n")}
           |}
           |"""
 

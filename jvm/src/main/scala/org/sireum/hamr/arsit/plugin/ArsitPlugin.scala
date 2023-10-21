@@ -334,6 +334,7 @@ object EntryPointProviderPlugin {
 
                                entryPointTemplate: EntryPointTemplate,
 
+                               arsitOptions: ArsitOptions,
                                symbolTable: SymbolTable,
                                aadlTypes: AadlTypes,
                                projectDirectories: ProjectDirectories,

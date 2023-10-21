@@ -25,7 +25,7 @@ import org.sireum.message.Reporter
 
                                      entryPointTemplate: EntryPointTemplate,
 
-                                     symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories, reporter: Reporter): EntryPointProviderPlugin.EntryPointContributions = {
+                                     arsitOptions: ArsitOptions, symbolTable: SymbolTable, aadlTypes: AadlTypes, projectDirectories: ProjectDirectories, reporter: Reporter): EntryPointProviderPlugin.EntryPointContributions = {
 
     return EntryPointProviderPlugin.EntryPointContributions(
       imports = ISZ(),
