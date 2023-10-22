@@ -345,8 +345,9 @@ import org.sireum.hamr.ir.Direction
 
     customSequenceSizes = customSequenceSizes ++ ISZ(
       (s"IS[Z,(Z,art.ArtSlangMessage)]=$numPorts", "Needed for the backing store of Map[Z, ArgSlangMessage] in ArtNativeSlang"),
-      (s"IS[Z,art.Art.BridgeId]=$numComponents", "Needed for the example round robin schedule in Schedulers"),
-      (s"IS[Z,art.scheduling.static.Schedule.Slot]=$numComponents", "Needed for the example static schedule in Schedulers")
+      (s"IS[Z,art.Art.BridgeId]=$numComponents", "Needed for Schedulers.roundRobinSchedule"),
+      (s"IS[Z,art.scheduling.static.Schedule.Slot]=$numComponents", "Needed for Schedulers.staticSchedule"),
+      (s"IS[Z,(String,art.Art.BridgeId)]=$numComponents", "Needed for the backing store of Scheduler.threadNickNames")
     )
 
     val custSeqSizeComment =

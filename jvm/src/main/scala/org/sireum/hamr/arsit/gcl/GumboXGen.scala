@@ -323,7 +323,7 @@ object GumboXGen {
     var IEP_Guard_Blocks: ISZ[ST] = ISZ()
     var IEP_Guar_Params: Set[GGParam] = Set.empty[GGParam] ++
       GumboXGenUtil.outPortsToParams(component, componentNames) ++
-      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, F, aadlTypes)
+      GumboXGenUtil.stateVarsToParams(componentNames, gclSubclauseInfo, F, aadlTypes).asInstanceOf[ISZ[GGParam]]
 
     val stateVars: ISZ[GclStateVar] = {
       gclSubclauseInfo match {
@@ -1091,10 +1091,12 @@ object GumboXGen {
       var saveInLocalAsVar: ISZ[ST] = ISZ()
       var setInLocal: ISZ[ST] = ISZ()
 
-      for (stateVar <- stateVars) {
+      for (i <- 0 until stateVars.size) {
+        val stateVar = stateVars(i)
         val stateParam =
           GGStateVarParam(
             stateVar = stateVar,
+            id = i,
             isPreState = T,
             aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
 
@@ -1224,9 +1226,11 @@ object GumboXGen {
 
       annexInfo match {
         case Some((annex, _)) =>
-          for (stateVar <- annex.state) {
+          for (i <- 0 until annex.state.size) {
+            val stateVar = annex.state(i)
             val postSVGG = GGStateVarParam(
               stateVar = stateVar,
+              id = i,
               isPreState = F,
               aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
               componentNames = componentNames)

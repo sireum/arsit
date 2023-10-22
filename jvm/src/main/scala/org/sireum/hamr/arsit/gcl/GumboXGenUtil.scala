@@ -337,7 +337,10 @@ object GumboXGenUtil {
       packageName = componentNames.packageName,
       packageNameI = componentNames.packageNameI,
       basePackage = componentNames.basePackage,
-      inPorts = inPorts, inStateVars = inStateVars, outPorts = outPorts, outStateVars = outStateVars)
+      inPorts = inPorts,
+      inStateVars = inStateVars,
+      outPorts = outPorts,
+      outStateVars = outStateVars)
   }
 
   @pure def getSlangTypeName(a: AadlType): String = {
@@ -406,10 +409,12 @@ object GumboXGenUtil {
     gclSubclauseInfo match {
       case Some((GclSubclause(stateVars, _, _, _, _, _), _)) =>
 
-        for (stateVar <- stateVars) {
+        for (i <- 0 until stateVars.size) {
+          val stateVar = stateVars(i)
           ret = ret :+
             GGStateVarParam(
               stateVar = stateVar,
+              id = i,
               isPreState = isPre,
               aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
               componentNames = componentNames)
@@ -498,6 +503,8 @@ object GumboXGenUtil {
   @datatype trait GGParam {
     def name: String
 
+    def id: Z
+
     def originName: String
 
     def slangType: ST
@@ -528,6 +535,7 @@ object GumboXGenUtil {
   }
 
   @datatype class GGStateVarParam(val stateVar: GclStateVar,
+                                  val id: Z,
                                   val isPreState: B,
                                   val aadlType: AadlType,
 
@@ -727,6 +735,13 @@ object GumboXGenUtil {
       }
     }
 
+    def findStateVar(name: String, vars: ISZ[GclStateVar]): (Z, GclStateVar) = {
+      for (i <- 0 until vars.size if vars(i).name == name) {
+        return (i, vars(i))
+      }
+      halt(s"Infeasible: didn't find state var ${name}")
+    }
+
     override def pre_langastExpInput(o: AST.Exp.Input): ir.MTransformer.PreResult[AST.Exp] = {
       val ret: AST.Exp.Ident = o.exp match {
         case i: AST.Exp.Ident =>
@@ -739,12 +754,12 @@ object GumboXGenUtil {
 
           val (typ, _) = getAadlType(typed)
 
-          val stateVar = stateVars.filter(s => s.name == i.id.value)
-          assert(stateVar.size == 1)
+          val (index, stateVar) = findStateVar(i.id.value, stateVars)
 
           params = params +
             GGStateVarParam(
-              stateVar = stateVar(0),
+              stateVar = stateVar,
+              id = index,
               isPreState = T,
               aadlType = typ,
               componentNames = componentNames)
@@ -781,11 +796,13 @@ object GumboXGenUtil {
       o.attr.typedOpt match {
         case Some(typed: AST.Typed.Name) =>
           val (typ, _) = getAadlType(typed)
-          val stateVar = stateVars.filter(s => s.name == o.id.value)
-          assert(stateVar.size == 1)
+
+          val (index, stateVar) = findStateVar(o.id.value, stateVars)
+
           params = params +
             GGStateVarParam(
-              stateVar = stateVar(0),
+              stateVar = stateVar,
+              id = index,
               isPreState = F,
               aadlType = typ,
               componentNames = componentNames)

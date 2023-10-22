@@ -2,7 +2,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
-import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGPortParam, GGStateVarParam, SymbolKind, inPortsToParams, outPortsToParams}
+import org.sireum.hamr.arsit.gcl.GumboXGenUtil.{GGParam, GGPortParam, GGStateVarParam, SymbolKind, inPortsToParams, outPortsToParams}
 import org.sireum.hamr.arsit.plugin.{EntryPointProviderPlugin, PlatformProviderPlugin}
 import org.sireum.hamr.arsit.templates.{ApiTemplate, EntryPointTemplate}
 import org.sireum.hamr.arsit.{EntryPoints, ProjectDirectories}
@@ -17,7 +17,7 @@ import org.sireum.hamr.ir.GclSubclause
 
 object GumboXRuntimeMonitoring {
 
-  // a 'hand-me-down' container to allow the entry point plugin to communicate results
+  // a 'hand-me-down' container to allow the entry point plugin to communivisione results
   // to the platform provider plugin
   @record class RM_Container(var entrypointKinds: ISZ[ST],
                              var entryPointHandlers: ISZ[ST],
@@ -25,9 +25,9 @@ object GumboXRuntimeMonitoring {
                              var genTestCases: ISZ[ST],
                              var testSuiteCases: ISZ[ST],
                              var testSuiteCaseIds: ISZ[ST],
-                             var postInitCatUpdates: ISZ[ST],
-                             var preComputeCatUpdates: ISZ[ST],
-                             var postComputeCatUpdates: ISZ[ST])
+                             var postInitVisionUpdates: ISZ[ST],
+                             var preComputeVisionUpdates: ISZ[ST],
+                             var postComputeVisionUpdates: ISZ[ST])
 
   def handleEntryPointProvider(component: AadlThreadOrDevice,
                                componentNames: NameProvider,
@@ -146,31 +146,33 @@ object GumboXRuntimeMonitoring {
     val preComputeKindFQ = st"${runtimePackage}.ObservationKind.${preComputeKind}"
     val postComputeKindFQ = st"${runtimePackage}.ObservationKind.${postComputeKind}"
 
+    { // RUNTIME MONITOR -- get updates from post initialization
+      var outPorts: ISZ[ST] = ISZ()
+      for (o <- containers.outPorts) {
+        val p = o.asInstanceOf[GGPortParam]
+        if (p.isEvent) {
+          outPorts = outPorts :+
+            st"""if (postContainer.${p.name}.nonEmpty) {
+                |  updates = updates + s"$${bridge_id}_Out_${p.originName}" ~> postContainer.${p.name}.get.string
+                |}"""
+        } else {
+          outPorts = outPorts :+
+            st"""updates = updates + s"$${bridge_id}_Out_${p.originName}" ~> postContainer.${p.name}.string"""
+        }
+      }
+
+      val stateVars: ISZ[ST] = for (sv <- containers.outStateVars) yield st"""updates = updates + "${sv.originName}" ~> postContainer.${sv.name}.string"""
+
+      rmContainer.postInitVisionUpdates = rmContainer.postInitVisionUpdates :+
+        st"""case $postInitKindFQ =>
+            |  var updates: Map[String, String] = Map.empty
+            |  val postContainer = container.asInstanceOf[${containers.fqPostStateContainerName_PS}]
+            |  ${(stateVars ++ outPorts, "\n")}
+            |  return updates"""
+    }
+
     val optInit: ST =
       if (gumboXGen.initializeEntryPointHolder.contains(component.path)) {
-
-        val stateVars: ISZ[ST] = for (sv <- containers.outStateVars) yield st"""updates = updates + "${sv.originName}" ~> postContainer.${sv.name}.string"""
-        var outPorts: ISZ[ST] = ISZ()
-        for (o <- containers.outPorts) {
-          val p = o.asInstanceOf[GGPortParam]
-          if (p.isEvent) {
-            outPorts = outPorts :+
-              st"""if (postContainer.${p.name}.nonEmpty) {
-                  |  updates = updates + "${p.originName}" ~> postContainer.${p.name}.get.string
-                  |}"""
-          } else {
-            outPorts = outPorts :+
-              st"""updates = updates + "${p.originName}" ~> postContainer.${p.name}.string"""
-          }
-        }
-
-        rmContainer.postInitCatUpdates = rmContainer.postInitCatUpdates :+
-          st"""case $postInitKindFQ =>
-              |  var updates: Map[String, String] = Map.empty
-              |  val postContainer = container.asInstanceOf[${containers.fqPostStateContainerName_PS}]
-              |  ${(stateVars ++ outPorts, "\n")}
-              |  return updates"""
-
 
         val simpleCepPreContainer = GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)
         st"""val result: B = ${(simpleCepPreContainer, ".")}(postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
@@ -181,31 +183,35 @@ object GumboXRuntimeMonitoring {
             |return T"""
       }
 
+    { // RUNTIME MONITOR -- get update pre compute phase
+      var inPorts: ISZ[ST] = ISZ()
+      for (o <- containers.inPorts) {
+        val p = o.asInstanceOf[GGPortParam]
+        if (p.isEvent) {
+          inPorts = inPorts :+
+            st"""if (preContainer.${p.name}.nonEmpty) {
+                |  updates = updates + s"$${bridge_id}_In_${p.originName}" ~> preContainer.${p.name}.get.string
+                |}"""
+        } else {
+          inPorts = inPorts :+
+            st"""updates = updates + s"$${bridge_id}_In_${p.originName}" ~> preContainer.${p.name}.string"""
+        }
+      }
+
+      val stateVars: ISZ[ST] =
+        for (sv <- containers.inStateVars) yield st"""updates = updates + "${sv.name}" ~> preContainer.${sv.name}.string"""
+
+      rmContainer.preComputeVisionUpdates = rmContainer.preComputeVisionUpdates :+
+        st"""case $preComputeKindFQ =>
+            |  var updates: Map[String, String] = Map.empty
+            |  val preContainer = container.asInstanceOf[${containers.fqPreStateContainerName_PS}]
+            |  ${(stateVars ++ inPorts, "\n")}
+            |  return updates"""
+    }
+
     val optPreCompute: ST =
       gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
-          val stateVars: ISZ[ST] = for (sv <- containers.inStateVars) yield st"""updates = updates + "${sv.name}" ~> preContainer.${sv.name}.string"""
-          var inPorts: ISZ[ST] = ISZ()
-          for (o <- containers.inPorts) {
-            val p = o.asInstanceOf[GGPortParam]
-            if (p.isEvent) {
-              inPorts = inPorts :+
-                st"""if (preContainer.${p.name}.nonEmpty) {
-                    |  updates = updates + "${p.originName}" ~> preContainer.${p.name}.get.string
-                    |}"""
-            } else {
-              inPorts = inPorts :+
-                st"""updates = updates + "${p.originName}" ~> preContainer.${p.name}.string"""
-            }
-          }
-          rmContainer.preComputeCatUpdates = rmContainer.preComputeCatUpdates :+
-            st"""case $preComputeKindFQ =>
-                |  var updates: Map[String, String] = Map.empty
-                |  val preContainer = container.asInstanceOf[${containers.fqPreStateContainerName_PS}]
-                |  ${(stateVars ++ inPorts, "\n")}
-                |  return updates"""
-
-
           val simpleCepPreContainer = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
           st"""val result: B = ${simpleCepPreContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}])
               |println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")
@@ -215,32 +221,33 @@ object GumboXRuntimeMonitoring {
               |return T"""
       }
 
+    { // RUNTIME MONITOR -- get update post compute phase
+      var outPorts: ISZ[ST] = ISZ()
+      for (o <- containers.outPorts) {
+        val p = o.asInstanceOf[GGPortParam]
+        if (p.isEvent) {
+          outPorts = outPorts :+
+            st"""if (postContainer.${p.name}.nonEmpty) {
+                |  updates = updates + s"$${bridge_id}_Out_${p.originName}" ~> postContainer.${p.name}.get.string
+                |}"""
+        } else {
+          outPorts = outPorts :+
+            st"""updates = updates + s"$${bridge_id}_Out_${p.originName}" ~> postContainer.${p.name}.string"""
+        }
+      }
+
+      val stateVars: ISZ[ST] = for (sv <- containers.outStateVars) yield st"""updates = updates + "${sv.originName}" ~> postContainer.${sv.name}.string"""
+      rmContainer.postComputeVisionUpdates = rmContainer.postComputeVisionUpdates :+
+        st"""case $postComputeKindFQ =>
+            |  var updates: Map[String, String] = Map.empty
+            |  val postContainer = container.asInstanceOf[${containers.fqPostStateContainerName_PS}]
+            |  ${(stateVars ++ outPorts, "\n")}
+            |  return updates"""
+    }
+
     val optPostCompute: ST =
       gumboXGen.computeEntryPointHolder.get(component.path) match {
         case Some(holder) if holder.CEP_Post.nonEmpty =>
-
-          val stateVars: ISZ[ST] = for (sv <- containers.outStateVars) yield st"""updates = updates + "${sv.originName}" ~> postContainer.${sv.name}.string"""
-          var outPorts: ISZ[ST] = ISZ()
-          for (o <- containers.outPorts) {
-            val p = o.asInstanceOf[GGPortParam]
-            if (p.isEvent) {
-              outPorts = outPorts :+
-                st"""if (postContainer.${p.name}.nonEmpty) {
-                    |  updates = updates + "${p.originName}" ~> postContainer.${p.name}.get.string
-                    |}"""
-            } else {
-              outPorts = outPorts :+
-                st"""updates = updates + "${p.originName}" ~> postContainer.${p.name}.string"""
-            }
-          }
-          rmContainer.postComputeCatUpdates = rmContainer.postComputeCatUpdates :+
-            st"""case $postComputeKindFQ =>
-                |  var updates: Map[String, String] = Map.empty
-                |  val postContainer = container.asInstanceOf[${containers.fqPostStateContainerName_PS}]
-                |  ${(stateVars ++ outPorts, "\n")}
-                |  return updates"""
-
-
           val simpleCepPostContainer = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
           st"""val result: B = ${simpleCepPostContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}], postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
               |println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")
@@ -618,7 +625,7 @@ object GumboXRuntimeMonitoring {
                        containers: GumboXGenUtil.Container,
                        projectDirectories: ProjectDirectories): FileResource = {
 
-    val inParams = GumboXGenUtil.sortParam(containers.inPorts ++ containers.inStateVars)
+    val inParams = GumboXGenUtil.sortParam(containers.inPorts ++ containers.inStateVars.asInstanceOf[ISZ[GGParam]])
     var putMethodParams: ISZ[ST] = ISZ()
     var putMethodBlocks: ISZ[ST] = ISZ()
     var putMethods: ISZ[ST] = ISZ()
@@ -644,7 +651,7 @@ object GumboXRuntimeMonitoring {
     var check_parameters: ISZ[ST] = ISZ()
     var checks: ISZ[ST] = ISZ()
     var getters: ISZ[ST] = ISZ()
-    for(p <- GumboXGenUtil.sortParam(containers.outPorts ++ containers.outStateVars)) {
+    for(p <- GumboXGenUtil.sortParam(containers.outPorts ++ containers.outStateVars.asInstanceOf[ISZ[GGParam]])) {
       p match {
         case port: GGPortParam =>
           getters = getters :+
@@ -797,11 +804,11 @@ object GumboXRuntimeMonitoring {
           |    }
           |  }
           |
-          |  def getUpdates(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, container: art.DataContent): Map[String, String] = {
+          |  def getUpdates(bridge_id: art.Art.BridgeId, observationKind: ObservationKind.Type, container: art.DataContent): Map[String, String] = {
           |    observationKind match {
-          |      ${(rmContainer.postInitCatUpdates, "\n")}
-          |      ${(rmContainer.preComputeCatUpdates, "\n")}
-          |      ${(rmContainer.postComputeCatUpdates, "\n")}
+          |      ${(rmContainer.postInitVisionUpdates, "\n")}
+          |      ${(rmContainer.preComputeVisionUpdates, "\n")}
+          |      ${(rmContainer.postComputeVisionUpdates, "\n")}
           |      case _ => return Map.empty
           |    }
           |  }
@@ -885,10 +892,12 @@ object GumboXRuntimeMonitoring {
           |
           |    ${drmMarker.beginMarker}
           |
-          |    // if you don't want to use the default runtime monitor then surround this marker block
+          |    // if you don't want to use the following runtime monitors then surround this marker block
           |    // with a block comment /** .. **/ to prevent codegen from emitting an error if it's rerun
           |
-          |    new DefaultRuntimeMonitor()
+          |    new DefaultRuntimeMonitor(),
+          |
+          |    new HamrVisionRuntimeMonitor()
           |
           |    ${drmMarker.endMarker}
           |  )
@@ -1158,6 +1167,10 @@ object GumboXRuntimeMonitoring {
     val guipath = s"${runtimePath}/DefaultRuntimeMonitor.scala"
     resources = resources :+ ResourceUtil.createResource(guipath, gui, T)
 
+    val hamrVision = getHamrVision(basePackageName)
+    val hamrVisionPath = s"${runtimePath}/HamrVisionRuntimeMonitor.scala"
+    resources = resources :+ ResourceUtil.createResource(hamrVisionPath, hamrVision, T)
+
     return ISZ(
       PlatformProviderPlugin.PlatformSetupContributions(imports = ISZ(), blocks = platformSetupBlocks, resources = resources),
       PlatformProviderPlugin.PlatformTearDownContributions(imports =ISZ(), blocks = platformTeardownBlocks, resources = ISZ()))
@@ -1201,6 +1214,8 @@ object GumboXRuntimeMonitoring {
           |@sig trait StateElement {
           |  def name: String
           |
+          |  def id: Z
+          |
           |  def slangType: String
           |
           |  def direction: StateDirection.Type
@@ -1219,6 +1234,7 @@ object GumboXRuntimeMonitoring {
           |                     val slangType: String) extends StateElement
           |
           |@datatype class StateVariable(val name: String,
+          |                              val id: Z,
           |                              val direction: StateDirection.Type,
           |                              val slangType: String) extends StateElement
           |"""
@@ -1231,8 +1247,8 @@ object GumboXRuntimeMonitoring {
 
   def getComponentModelInfo(component: AadlThreadOrDevice, componentNames: NameProvider, annexInfo: Option[(GclSubclause, GclSymbolTable)], aadlTypes: AadlTypes): (String, ST) = {
 
-    val inStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, T, aadlTypes)
-    val outStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, F, aadlTypes)
+    val inStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, T, aadlTypes).asInstanceOf[ISZ[GGStateVarParam]]
+    val outStateVars = GumboXGenUtil.stateVarsToParams(componentNames, annexInfo, F, aadlTypes).asInstanceOf[ISZ[GGStateVarParam]]
     val inPorts = GumboXGenUtil.inPortsToParams(component, componentNames)
     val outPorts = GumboXGenUtil.outPortsToParams(component, componentNames)
 
@@ -1241,6 +1257,7 @@ object GumboXRuntimeMonitoring {
       stateElements = stateElements :+
         st"""StateVariable(
             |  name = "${sv.name}",
+            |  id = ${sv.id} // FIXME maxPorts + (bridgeId * 1000) + sv.id,
             |  direction = StateDirection.${if (sv.kind == SymbolKind.StateVarPre) "In" else "Out"},
             |  slangType = "${sv.aadlType.nameProvider.qualifiedReferencedTypeName}")"""
     }
@@ -1270,5 +1287,127 @@ object GumboXRuntimeMonitoring {
           |      ${(stateElements, ",\n")}))"""
 
     return (cmiName, ret)
+  }
+
+  def getHamrVision(basePackage: String): ST = {
+    val ret =
+      st"""package $basePackage.runtimemonitor
+          |
+          |import art.{Art, DataContent}
+          |import $basePackage._
+          |import org.sireum._
+          |import org.sireum.$$internal.MutableMarker
+          |
+          |import org.sireum.hamr.vision.treetable._
+          |import org.sireum.hamr.vision.value._
+          |import org.sireum.hamr.vision.treetable.{Row => hvRow}
+          |
+          |import java.awt.BorderLayout
+          |import java.util.concurrent.Executors
+          |import javax.swing.{JFrame, JScrollPane}
+          |import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
+          |
+          |${CommentTemplate.doNotEditComment_scala}
+          |
+          |class HamrVisionRuntimeMonitor extends RuntimeMonitorListener {
+          |
+          |  var visionTreeTable: JTreeTable = _
+          |  var visionTreeModel: DemoTreeTableModel = _
+          |
+          |  def modelInfoEntry(modelInfo: ModelInfo): ISZ[Entry] = {
+          |
+          |    var components: ISZ[Entry] = ISZ()
+          |
+          |    for (c <- modelInfo.components) {
+          |      var inputs: ISZ[Entry] = ISZ()
+          |      var outputs: ISZ[Entry] = ISZ()
+          |
+          |      for (state <- c.state) {
+          |        val kind: String = state match {
+          |          case i: Port =>
+          |            s"$${if (state.direction == StateDirection.In) "Incoming" else "Outgoing"} Port"
+          |          case i: StateVariable =>
+          |            s"$${if (state.direction == StateDirection.In) "Pre" else "Post"} State Variable"
+          |        }
+          |        val id = s"$${c.id}_$${state.direction}_$${state.name}"
+          |        state.direction match {
+          |          case StateDirection.In =>
+          |            inputs = inputs :+
+          |              hvRow(rowId = id.string, values = ISZ(StringValue(state.name), StringValue(kind), StringValue("")))
+          |          case StateDirection.Out =>
+          |            outputs = outputs :+
+          |              hvRow(rowId = id.string, values = ISZ(StringValue(state.name), StringValue(kind), StringValue("")))
+          |        }
+          |      }
+          |      components = components :+
+          |        Category(displayName = c.name, children = ISZ(
+          |          Category(displayName = "Inputs", children = inputs),
+          |          Category(displayName = "Outputs", children = outputs)))
+          |    }
+          |
+          |    return components
+          |  }
+          |
+          |  override def init(modelInfo: ModelInfo): Unit = {
+          |    val entries = modelInfoEntry(modelInfo)
+          |    val walk = new Walk()
+          |
+          |    visionTreeModel = new DemoTreeTableModel(walk.construct(entries))
+          |    visionTreeTable = new JTreeTable(visionTreeModel, walk.getMap)
+
+          |    val visionFrame = new JFrame()
+          |    val visionPane = new JScrollPane((visionTreeTable))
+          |    visionFrame.add(visionPane, BorderLayout.CENTER)
+          |    visionFrame.pack()
+          |    visionFrame.setSize(new java.awt.Dimension(800, 600))
+          |    visionFrame.setVisible(true)
+          |  }
+          |
+          |  def updateOutPorts(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, post: art.DataContent): Unit = {
+          |    val m: Map[String, String] = GumboXDispatcher.getUpdates(bridge, observationKind, post)
+          |    for (entry <- m.entries) {
+          |      visionTreeTable.update(entry._1, ISZ[Option[Value]](None(), None(), Some(StringValue(entry._2))))
+          |    }
+          |  }
+          |
+          |  def updateInPorts(bridge: art.Art.BridgeId, observationKind: ObservationKind.Type, pre: art.DataContent): Unit = {
+          |    val m: Map[String, String] = GumboXDispatcher.getUpdates(bridge, observationKind, pre)
+          |    for (entry <- m.entries) {
+          |      visionTreeTable.update(entry._1, ISZ[Option[Value]](None(), None(), Some(StringValue(entry._2))))
+          |    }
+          |  }
+          |
+          |  protected implicit val context: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
+          |
+          |  override def observeInitialisePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, post: DataContent): Unit = {
+          |    Future(updateOutPorts(bridgeId, observationKind, post))
+          |  }
+          |
+          |  override def observeComputePreState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent]): Unit = {
+          |    // TODO: really want to run updates in a separate, non-blocking thread. HamrVision should not block
+          |    //       the Slang program, nor any other running swing GUI -- I don't think SwingUtilities.invokeLater
+          |    //       guarantees the latter
+          |    Future(updateInPorts(bridgeId, observationKind, pre.get))
+          |  }
+          |
+          |  override def observeComputePrePostState(bridgeId: Art.BridgeId, observationKind: ObservationKind.Type, pre: Option[DataContent], post: DataContent): Unit = {
+          |    Future(updateOutPorts(bridgeId, observationKind, post))
+          |  }
+          |
+          |  override def string: String = toString
+          |
+          |  override def finalise(): Unit = {}
+          |
+          |  override def $$clonable: Boolean = F
+          |
+          |  override def $$clonable_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$owned: Boolean = F
+          |
+          |  override def $$owned_=(b: Boolean): MutableMarker = this
+          |
+          |  override def $$clone: MutableMarker = this
+          |}"""
+    return ret
   }
 }
