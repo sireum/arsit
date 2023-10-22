@@ -144,7 +144,8 @@ object ProjectTemplate {
           |  subPathOpt = None(),
           |  deps = ISZ(),
           |  targets = ISZ(Target.Jvm),
-          |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:"),
+          |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:",
+          |                "org.sireum.kekinian::hamr-vision:"),
           |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
           |  resources = ISZ(),
           |  testSources = for (m <- ISZ("bridge", "system", "util")) yield (Os.path("test") / m).string,
@@ -186,6 +187,7 @@ object ProjectTemplate {
         |org.sireum%inspector-gui%=${inspectorVersion}
         |org.sireum%inspector-services-jvm%=${inspectorVersion}
         |
+        |org.sireum.kekinian%%hamr-vision%=${kekinianVersion}
         |
         |# remove the following entries if you want to use the versions
         |# that ship with sireum (i.e. $$SIREUM_HOME/bin/sireum --version)
@@ -275,7 +277,8 @@ object ProjectTemplate {
           |  ThisBuild / evictionErrorLevel := Level.Warn,
           |  libraryDependencies ++= Seq(
           |    ${artJitpack}
-          |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources()
+          |    "org.sireum.kekinian" %% "library" % kekinianVersion withSources(),
+          |    "org.sireum.kekinian" %% "hamr-vision" % kekinianVersion withSources()
           |  )
           |)
           |
@@ -424,6 +427,7 @@ object ProjectTemplate {
           |  override def ivyDeps = Agg(
           |    ${artJitpack}
           |    ivy"org.sireum.kekinian::library::$${kekinianVersion}",
+          |    ivy"org.sireum.kekinian::hamr-vision::$${kekinianVersion}",
           |
           |    // Jetbrains UI Designer
           |    ivy"com.intellij:forms_rt:$${formsRtVersion}"

@@ -503,8 +503,6 @@ object GumboXGenUtil {
   @datatype trait GGParam {
     def name: String
 
-    def id: Z
-
     def originName: String
 
     def slangType: ST
