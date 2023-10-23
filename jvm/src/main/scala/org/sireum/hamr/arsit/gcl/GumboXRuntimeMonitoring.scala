@@ -666,9 +666,10 @@ object GumboXRuntimeMonitoring {
                 |}"""
         case statevar: GGStateVarParam =>
           // TODO: could get these from the container as well
+          getters = getters :+ statevar.getter
           check_parameters = check_parameters :+ p.getParamDef
           checks = checks :+
-            st"""val actual_${statevar.originName} = ${statevar.getter}
+            st"""val actual_${statevar.originName} = get_${p.name}()
                 |if (${p.name} != actual_${statevar.originName}) {
                 |  failureReasons = failureReasons :+ st"'${p.originName}' did not match expected.  Expected: $$${p.name}, Actual: $$actual_${p.originName}"
                 |}"""
@@ -1257,7 +1258,7 @@ object GumboXRuntimeMonitoring {
       stateElements = stateElements :+
         st"""StateVariable(
             |  name = "${sv.name}",
-            |  id = ${sv.id} // FIXME maxPorts + (bridgeId * 1000) + sv.id,
+            |  id = ${sv.id},
             |  direction = StateDirection.${if (sv.kind == SymbolKind.StateVarPre) "In" else "Out"},
             |  slangType = "${sv.aadlType.nameProvider.qualifiedReferencedTypeName}")"""
     }

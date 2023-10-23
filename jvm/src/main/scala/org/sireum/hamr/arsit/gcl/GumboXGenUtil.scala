@@ -222,33 +222,33 @@ object GumboXGenUtil {
 
     def genInitProfile(): ST = {
       return (
-      st"""@record class ${genInitProfileName(componentSingletonType)} (
-          |  val name: String,
-          |  val numTests: Z //number of tests to generate
-          |)""")
+        st"""@record class ${genInitProfileName(componentSingletonType)} (
+            |  val name: String,
+            |  val numTests: Z //number of tests to generate
+            |)""")
     }
 
     def genProfiles(): ST = {
       val params = inStateVars ++ inPorts
       return (
-      st"""// #Sireum
-          |
-          |package ${packageName}
-          |
-          |import org.sireum._
-          |import ${basePackage}.RandomLib
-          |
-          |${CommentTemplate.doNotEditComment_scala}
-          |
-          |// Profile for initialise entrypoint
-          |${genInitProfile()}
-          |
-          |// Profile with generators for incoming ports
-          |${genProfile(params, F)}
-          |
-          |// Profile with generators for state variables and incoming ports
-          |${genProfile(params, T)}
-          |""")
+        st"""// #Sireum
+            |
+            |package ${packageName}
+            |
+            |import org.sireum._
+            |import ${basePackage}.RandomLib
+            |
+            |${CommentTemplate.doNotEditComment_scala}
+            |
+            |// Profile for initialise entrypoint
+            |${genInitProfile()}
+            |
+            |// Profile with generators for incoming ports
+            |${genProfile(params, F)}
+            |
+            |// Profile with generators for state variables and incoming ports
+            |${genProfile(params, T)}
+            |""")
     }
 
     def genGetInitialiseProfilesMethodName: String = {
@@ -262,11 +262,11 @@ object GumboXGenUtil {
     def genGetDefaultInitialiseProfile: ST = {
       val profileName = genInitProfileName(componentSingletonType)
       return (
-      st"""def $defaultInitialiseProfileMethodName: $profileName = {
-          |  return $profileName (
-          |    name = "Default Initialise Profile",
-          |    numTests = 100)
-          |}""")
+        st"""def $defaultInitialiseProfileMethodName: $profileName = {
+            |  return $profileName (
+            |    name = "Default Initialise Profile",
+            |    numTests = 100)
+            |}""")
     }
 
     def genGetInitialiseProfilesMethodSig: ST = {
@@ -283,8 +283,9 @@ object GumboXGenUtil {
     }
 
     def defaultProfileMethodName(includeStateVars: B): String = {
-      return s"getDefaultProfile_${if(includeStateVars) portStateVarSuffix else portsSuffix}"
+      return s"getDefaultProfile_${if (includeStateVars) portStateVarSuffix else portsSuffix}"
     }
+
     def genGetDefaultProfile(includeStateVars: B): ST = {
       val profileName = genProfileName(componentSingletonType, includeStateVars)
       val typ: String = if (includeStateVars) "Port and State Variable" else "Port"
@@ -305,25 +306,27 @@ object GumboXGenUtil {
     }
 
     def genGetProfilesMethodName(includeStateVars: B): ST = {
-      return st"getProfiles_${if(includeStateVars) portStateVarSuffix else portsSuffix}"
+      return st"getProfiles_${if (includeStateVars) portStateVarSuffix else portsSuffix}"
     }
+
     def genGetProfilesMethodSig(includeStateVars: B): ST = {
       val profileName = genProfileName(componentSingletonType, includeStateVars)
       val mname = genGetProfilesMethodName(includeStateVars)
       return (st"""def $mname: MSZ[$profileName]""")
     }
+
     def genGetProfilesMethodDefault(includeStateVars: B): ST = {
       var comment: ST = st"// profiles that will be used to generate the incoming port values"
-      if(includeStateVars) {
+      if (includeStateVars) {
         comment =
           st"""$comment
               |// and the pre-state values of the state variables"""
       }
       return (
-      st"""$comment
-          |override ${genGetProfilesMethodSig(includeStateVars)} = {
-          |  return MSZ(${defaultProfileMethodName(includeStateVars)})
-          |}""")
+        st"""$comment
+            |override ${genGetProfilesMethodSig(includeStateVars)} = {
+            |  return MSZ(${defaultProfileMethodName(includeStateVars)})
+            |}""")
     }
   }
 
@@ -554,10 +557,10 @@ object GumboXGenUtil {
 
     def setter: ST = {
       return (
-      st"""// setter for state variable
-          |def put_${name}(value: ${slangType}): Unit = {
-          |  ${componentNames.componentSingletonType}.${originName} = value
-          |}""")
+        st"""// setter for state variable
+            |def put_${name}(value: ${slangType}): Unit = {
+            |  ${componentNames.componentSingletonType}.${originName} = value
+            |}""")
     }
 
     def getter: ST = {
@@ -683,11 +686,23 @@ object GumboXGenUtil {
     }
 
     @pure def setter: ST = {
-      return(
-      st"""// setter for $paramTypeString
-          |def put_${originName}(value: ${slangType}): Unit = {
-          |  Art.insertInInfrastructurePort(${archPortId}, ${payloadType}(value))
-          |}""")
+      val body: ST = if (isOptional) {
+        val payload: ST =
+          if (port.isInstanceOf[AadlEventDataPort]) st"${payloadType}(v)"
+          else st"v"
+        st"""value match {
+            |  case Some(v) => Art.insertInInfrastructurePort(${archPortId}, $payload)
+            |  case _ =>
+            |}"""
+      } else {
+        st"Art.insertInInfrastructurePort(${archPortId}, ${payloadType}(value))"
+      }
+
+      return (
+        st"""// setter for $paramTypeString
+            |def put_${originName}(value: ${slangType}): Unit = {
+            |  $body
+            |}""")
     }
 
     @pure override def getter: ST = {
