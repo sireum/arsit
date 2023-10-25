@@ -178,6 +178,7 @@ import org.sireum.message.Reporter
 
     return GumboXRuntimeMonitoring.handlePlatformProviderPlugin(
       rmContainer = runtimeMonitoringContainer,
+      hasGcl = modelHasGcl,
       basePackageName = arsitOptions.packageName,
       projectDirectories = projectDirectories)
   }
