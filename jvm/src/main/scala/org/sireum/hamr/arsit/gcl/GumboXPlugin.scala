@@ -158,16 +158,10 @@ import org.sireum.message.Reporter
    * Adds GumboX runtime monitoring artifacts
    ******************************************************************************************/
 
-  val enableRuntimeMonitoring: String = "enableRuntimeMonitoring"
-
-  def runtimeMonitoringEnabled(arsitOptions: ArsitOptions): B = {
-    return ops.ISZOps(arsitOptions.experimentalOptions).contains(enableRuntimeMonitoring)
-  }
-
   override def canHandlePlatformProviderPlugin(arsitOptions: ArsitOptions,
                                                symbolTable: SymbolTable,
                                                aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) // && modelHasGcl
+    return arsitOptions.runtimeMonitoring // && modelHasGcl
   }
 
   override def handlePlatformProviderPlugin(projectDirectories: ProjectDirectories,
@@ -195,7 +189,7 @@ import org.sireum.message.Reporter
                                            arsitOptions: ArsitOptions,
                                            symbolTable: SymbolTable,
                                            aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) //&&
+    return arsitOptions.runtimeMonitoring //&&
       //!handledComponents.contains(component.path) &&
       //canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
@@ -227,7 +221,7 @@ import org.sireum.message.Reporter
 
     handle(component, componentNames, resolvedAnnexSubclauses, symbolTable, aadlTypes, projectDirectories, reporter)
 
-    if (runtimeMonitoringEnabled(arsitOptions)) {
+    if (arsitOptions.runtimeMonitoring) {
       systemTestSuiteRenamings = systemTestSuiteRenamings :+
         st"// import ${componentNames.packageName}.{${componentNames.componentSingletonType}_SystemTestAPI => nickname}"
     }
@@ -279,7 +273,7 @@ import org.sireum.message.Reporter
                                                      arsitOptions: ArsitOptions,
                                                      symbolTable: SymbolTable,
                                                      aadlTypes: AadlTypes): B = {
-    return runtimeMonitoringEnabled(arsitOptions) ||
+    return arsitOptions.runtimeMonitoring ||
       canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)
   }
 

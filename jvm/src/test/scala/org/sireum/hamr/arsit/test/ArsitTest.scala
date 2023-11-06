@@ -323,6 +323,7 @@ object ArsitTest {
     noEmbedArt = F,
     bless = F,
     verbose = T,
+    runtimeMonitoring = F,
     devicesAsThreads = T,
     genSbtMill = T,
     ipc = IpcMechanism.SharedMemory,

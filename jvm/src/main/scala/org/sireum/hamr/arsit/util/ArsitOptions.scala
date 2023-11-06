@@ -21,6 +21,7 @@ import org.sireum._
                              noEmbedArt: B,
                              bless: B,
                              verbose: B,
+                             runtimeMonitoring: B,
                              devicesAsThreads: B,
                              genSbtMill: B,
                              ipc: IpcMechanism.Type,
