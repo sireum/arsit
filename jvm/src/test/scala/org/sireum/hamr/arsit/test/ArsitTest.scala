@@ -95,6 +95,7 @@ trait ArsitTest extends TestSuite {
       writeOutResources = F,
       ipc = CodeGenIpcMechanism.SharedMemory,
       verbose = T,
+      runtimeMonitoring = F,
       platform = p,
       slangOutputDir = None(),
       packageName = Some(ops.packageName),
