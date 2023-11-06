@@ -1382,10 +1382,7 @@ object GumboXRuntimeMonitoring {
           |
           |  override def init(modelInfo: ModelInfo): Unit = {
           |    val entries = modelInfoEntry(modelInfo)
-          |    val walk = new Walk()
-          |
-          |    visionTreeModel = new DemoTreeTableModel(walk.construct(entries))
-          |    visionTreeTable = new JTreeTable(visionTreeModel, walk.getMap)
+          |    visionTreeTable = new JTreeTable(entries, ISZ("State Element", "Description", "Value"))
 
           |    val visionFrame = new JFrame()
           |    val visionPane = new JScrollPane((visionTreeTable))
