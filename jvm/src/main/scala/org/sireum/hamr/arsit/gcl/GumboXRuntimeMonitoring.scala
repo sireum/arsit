@@ -176,7 +176,7 @@ object GumboXRuntimeMonitoring {
 
         val simpleCepPreContainer = GumboXGen.getInitialize_IEP_Post_Container_MethodName(componentNames)
         st"""val result: B = ${(simpleCepPreContainer, ".")}(postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
-            |println(s"${component.identifier}.initialise: Post-condition: $${if (result) "" else "un"}satisfied")
+            |//println(s"${component.identifier}.initialise: Post-condition: $${if (result) "" else "un"}satisfied")
             |return result"""
       } else {
         st"""// checking the post-state values of ${component.identifier}'s initialise entrypoint is not required
@@ -214,7 +214,7 @@ object GumboXRuntimeMonitoring {
         case Some(holder) if holder.CEP_Pre.nonEmpty =>
           val simpleCepPreContainer = st"${(GumboXGen.getCompute_CEP_Pre_Container_MethodName(componentNames), ".")}"
           st"""val result: B = ${simpleCepPreContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}])
-              |println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")
+              |//println(s"${component.identifier}.timeTriggered: Pre-condition: $${if (result) "" else "un"}satisfied")
               |return result"""
         case _ =>
           st"""// checking the pre-state values of ${component.identifier}'s compute entrypoint is not required
@@ -250,7 +250,7 @@ object GumboXRuntimeMonitoring {
         case Some(holder) if holder.CEP_Post.nonEmpty =>
           val simpleCepPostContainer = st"${(GumboXGen.getCompute_CEP_Post_Container_MethodName(componentNames), ".")}"
           st"""val result: B = ${simpleCepPostContainer}(preContainer.get.asInstanceOf[${containers.fqPreStateContainerName_PS}], postContainer.get.asInstanceOf[${containers.fqPostStateContainerName_PS}])
-              |println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")
+              |//println(s"${component.identifier}.timeTriggered: Post-condition: $${if (result) "" else "un"}satisfied")
               |return result"""
         case _ =>
           st"""// checking the post-state values of ${component.identifier}'s compute entrypoint is not required
