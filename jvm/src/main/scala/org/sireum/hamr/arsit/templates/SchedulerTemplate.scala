@@ -28,7 +28,7 @@ object SchedulerTemplate {
           |import art.Art
           |import art.scheduling.legacy.Legacy
           |import art.scheduling.roundrobin.RoundRobin
-          |import art.scheduling.static.Schedule._
+          |import art.scheduling.static.Schedule.{DSchedule, DScheduleSpec}
           |import art.scheduling.static._
           |
           |${CommentTemplate.doNotEditComment_scala}
@@ -42,6 +42,13 @@ object SchedulerTemplate {
           |                                       val computeExecutionTime: Option[(Z, Z)])
           |
           |object Schedulers {
+          |
+          |  val threadNickNames: Map[String, Art.BridgeId] = Map(
+          |    ISZ(
+          |      ${(threadNickNames, ",\n")})
+          |  )
+          |
+          |  val revThreadNickNames: Map[Art.BridgeId, String] = Map.empty[Art.BridgeId, String] ++ (for (e <- threadNickNames.entries) yield e._2 ~> e._1)
           |
           |  ${(processorTimingProperties, "\n\n")}
           |
@@ -57,14 +64,14 @@ object SchedulerTemplate {
           |    // convert IS[Art.BridgeId, art.Bridge] to an IS[Z, Art.BridgeId] to allow bridges to be dispatched
           |    // multiple times during a hyper-period
           |    var ret: ISZ[Art.BridgeId] = ISZ()
-          |    for(e <- Arch.ad.components) {
+          |    for (e <- Arch.ad.components) {
           |      ret = ret :+ e.id
           |    }
           |    ret
           |  }
           |
           |  def getRoundRobinScheduler(schedule: Option[ISZ[Art.BridgeId]]): RoundRobin = {
-          |    if(roundRobinSchedule.isEmpty) {} // line needed for transpiler; do not remove
+          |    if (roundRobinSchedule.isEmpty) {} // line needed for transpiler; do not remove
           |    schedule match {
           |      case Some(s) => return RoundRobin(s)
           |      case _ => return RoundRobin(ScheduleProviderI.getRoundRobinOrder())
@@ -79,22 +86,17 @@ object SchedulerTemplate {
           |  val numComponents: Z = Arch.ad.components.size
           |  val maxExecutionTime: Z = numComponents / framePeriod
           |
-          |  // staticSchedule represents the component dispatch order
-          |  val staticSchedule: DScheduleSpec = DScheduleSpec(0, 0, DSchedule(ISZ(
+          |  // defaultStaticSchedule represents the component dispatch order
+          |  val defaultStaticSchedule: DScheduleSpec = DScheduleSpec(0, 0, DSchedule(ISZ(
           |    ${(slots, ",\n")}
           |  )))
           |
-          |  val domainToBridgeIdMap: ISZ[Art.BridgeId] = ISZ(
+          |  val defaultDomainToBridgeIdMap: ISZ[Art.BridgeId] = ISZ(
           |    ${(domainToBridgeMap, ",\n")}
           |  )
           |
-          |  val threadNickNames: Map[String, Art.BridgeId] = Map(
-          |    ISZ(
-          |      ${(threadNickNames, ",\n")})
-          |  )
-          |
           |  def getStaticSchedulerH(userProvided: MOption[(DScheduleSpec, ISZ[Art.BridgeId], Map[String, Art.BridgeId], CommandProvider)]): StaticScheduler = {
-          |    if(staticSchedule.schedule.slots.isEmpty && domainToBridgeIdMap.isEmpty && threadNickNames.isEmpty) {} // line needed for transpiler; do not remove
+          |    if (defaultStaticSchedule.schedule.slots.isEmpty && defaultDomainToBridgeIdMap.isEmpty && threadNickNames.isEmpty) {} // line needed for transpiler; do not remove
           |    userProvided match {
           |      case MSome((schedule_, domainToBridgeIdMap_, threadNickNames_, commandProvider)) =>
           |        return getStaticScheduler(schedule_, domainToBridgeIdMap_, threadNickNames_, commandProvider)
@@ -102,7 +104,7 @@ object SchedulerTemplate {
           |        return getStaticScheduler(
           |          ScheduleProviderI.getStaticSchedule(),
           |          // TODO: get the following from extension so they can be customized via C
-          |          domainToBridgeIdMap,
+          |          defaultDomainToBridgeIdMap,
           |          threadNickNames,
           |          DefaultCommandProvider())
           |    }
@@ -112,7 +114,14 @@ object SchedulerTemplate {
           |                         domainToBridgeIdMap: ISZ[Art.BridgeId],
           |                         threadNickNames: Map[String, Art.BridgeId],
           |                         commandProvider: CommandProvider): StaticScheduler = {
-          |    return StaticScheduler(schedule, Arch.ad.components, domainToBridgeIdMap, threadNickNames, commandProvider)
+          |    return StaticScheduler(schedule, Arch.ad.components, domainToBridgeIdMap, threadNickNames,
+          |      if (commandProvider.isInstanceOf[InfoCommandProvider])
+          |        commandProvider.asInstanceOf[InfoCommandProvider].init(
+          |          threadNickNames,
+          |          schedule.schedule.slots.size,
+          |          domainToBridgeIdMap
+          |        )
+          |      else commandProvider)
           |  }
           |
           |
@@ -152,7 +161,7 @@ object SchedulerTemplate {
           |  }
           |
           |  def getStaticSchedule(): DScheduleSpec = {
-          |    return Schedulers.staticSchedule
+          |    return Schedulers.defaultStaticSchedule
           |  }
           |}
           |"""
