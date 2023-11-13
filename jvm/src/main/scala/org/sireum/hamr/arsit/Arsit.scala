@@ -79,12 +79,13 @@ object Arsit {
 
     if (!arsitOptions.noEmbedArt) { // sergen requires art.DataContent so only generate the script when art is being embedded
 
-      val outDir = s"${projectDirectories.dataDir}/${arsitOptions.packageName}"
+      val outDataDir = s"${projectDirectories.dataDir}/${arsitOptions.packageName}"
+      val outUtilDir = s"${projectDirectories.utilDir}/${arsitOptions.packageName}"
 
       // embed art
       fileResources = fileResources ++ copyArtFiles(maxPortId, maxComponentId, maxConnectionId, s"${projectDirectories.mainDir}/art") :+
         ResourceUtil.createResourceH(
-          path = s"$outDir/Aux_Types.scala",
+          path = s"$outDataDir/Aux_Types.scala",
           content =
             st"""// #Sireum
                 |
@@ -100,11 +101,11 @@ object Arsit {
 
       val datatypeResources: ISZ[FileResource] = fileResources.filter(f => f.isInstanceOf[IResource] && f.asInstanceOf[IResource].isDatatype)
 
-      val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, outDir, projectDirectories.slangBinDir, datatypeResources)
+      val (sergenCmd, sergenConfig) = ToolsTemplate.genSerGen(arsitOptions.packageName, outUtilDir, projectDirectories.slangBinDir, datatypeResources)
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("sergen.cmd")), sergenCmd, T)
       addAuxResources = addAuxResources :+ sergenConfig
 
-      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outDir, projectDirectories.slangBinDir)
+      val (slangCheckCmd, slangCheckConfig) = ToolsTemplate.slangCheck(datatypeResources, arsitOptions.packageName, outUtilDir, projectDirectories.slangBinDir)
       fileResources = fileResources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(projectDirectories.slangBinDir, ISZ("slangcheck.cmd")), slangCheckCmd, T)
       addAuxResources = addAuxResources :+ slangCheckConfig
     }

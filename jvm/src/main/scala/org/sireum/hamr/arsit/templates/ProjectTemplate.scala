@@ -146,7 +146,7 @@ object ProjectTemplate {
           |  targets = ISZ(Target.Jvm),
           |  ivyDeps = ISZ(${artIvy}"org.sireum.kekinian::library:",
           |                "org.sireum.kekinian::hamr-vision:"),
-          |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix")) yield (Os.path("main") / m).string,
+          |  sources = for(m <- ISZ(${artDir}"architecture", "bridge", "component", "data", "nix", "seL4Nix", "util")) yield (Os.path("main") / m).string,
           |  resources = ISZ(),
           |  testSources = for (m <- ISZ("bridge", "system", "util")) yield (Os.path("test") / m).string,
           |  testResources = ISZ(),

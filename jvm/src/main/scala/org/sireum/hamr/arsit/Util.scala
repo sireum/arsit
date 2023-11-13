@@ -229,6 +229,8 @@ object HAMR {
 
   val inspectorDir: String = Util.pathAppend(mainDir, ISZ("inspector"))
 
+  val utilDir: String = Util.pathAppend(mainDir, ISZ("util"))
+
   /* Testing dirs */
   val testDir: String = Util.pathAppend(slangSrcDir, ISZ("test"))
 

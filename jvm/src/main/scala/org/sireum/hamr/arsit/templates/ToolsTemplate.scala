@@ -50,7 +50,7 @@ object ToolsTemplate {
           |
           |${toISString(Os.path(slangBinDir), resources)}
           |
-          |proc"$$sireum proyek slangcheck -p $basePackage -o $${Os.slashDir.up}/src/main/data/${basePackage} $${Os.slashDir.up} $$toolargs".at(Os.slashDir).console.runCheck()
+          |proc"$$sireum proyek slangcheck -p $basePackage -o $${Os.slashDir.up}/src/main/util/${basePackage} $${Os.slashDir.up} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
     val o = SireumToolsSlangcheckGeneratorOption(
@@ -75,7 +75,7 @@ object ToolsTemplate {
           |
           |${toISString(Os.path(slangBinDir), resources)}
           |
-          |proc"$$sireum tools sergen -p ${basePackage} -m json,msgpack -o $${Os.slashDir.up}/src/main/data/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
+          |proc"$$sireum tools sergen -p ${basePackage} -m json,msgpack -o $${Os.slashDir.up}/src/main/util/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
     val o = SireumToolsSergenOption(

@@ -47,7 +47,7 @@ object GumboXRuntimeMonitoring {
                               ): EntryPointProviderPlugin.EntryPointContributions = {
 
     val epCompanionName: String = s"${componentNames.componentSingletonType}_EntryPoint_Companion"
-    val bridgeDirectory: String = s"${projectDirectories.bridgeDir}/${componentNames.packagePath}"
+    val bridgeDirectory: String = s"${projectDirectories.utilDir}/${componentNames.packagePath}"
 
     var resources: ISZ[FileResource] = ISZ()
 
@@ -138,9 +138,9 @@ object GumboXRuntimeMonitoring {
 
     val runtimePackage = s"${componentNames.basePackage}.runtimemonitor"
 
-    val postInitKind = st"${componentNames.identifier}_postInit"
-    val preComputeKind = st"${componentNames.identifier}_preCompute"
-    val postComputeKind = st"${componentNames.identifier}_postCompute"
+    val postInitKind = st"${componentNames.instanceName}_postInit"
+    val preComputeKind = st"${componentNames.instanceName}_preCompute"
+    val postComputeKind = st"${componentNames.instanceName}_postCompute"
 
     val postInitKindFQ = st"${runtimePackage}.ObservationKind.${postInitKind}"
     val preComputeKindFQ = st"${runtimePackage}.ObservationKind.${preComputeKind}"
@@ -259,9 +259,9 @@ object GumboXRuntimeMonitoring {
       }
 
     rmContainer.entrypointKinds = rmContainer.entrypointKinds :+
-      st""""${componentNames.identifier}_postInit"""" :+
-      st""""${componentNames.identifier}_preCompute"""" :+
-      st""""${componentNames.identifier}_postCompute""""
+      st""""${componentNames.instanceName}_postInit"""" :+
+      st""""${componentNames.instanceName}_preCompute"""" :+
+      st""""${componentNames.instanceName}_postCompute""""
 
     val entryPointCases =
       st"""case $postInitKindFQ =>
@@ -755,7 +755,7 @@ object GumboXRuntimeMonitoring {
                                    hasGcl: B,
                                    basePackageName: String,
                                    projectDirectories: ProjectDirectories): ISZ[PlatformProviderPlugin.PlatformContributions] = {
-    val runtimePath = s"${projectDirectories.architectureDir}/${basePackageName}/runtimemonitor"
+    val runtimePath = s"${projectDirectories.utilDir}/${basePackageName}/runtimemonitor"
 
     var resources: ISZ[FileResource] = ISZ()
 
@@ -1627,10 +1627,14 @@ object GumboXRuntimeMonitoring {
           |        case Some(nick) => nick
           |        case _ => c.name
           |      }
-          |      components = components :+
-          |        Category(displayName = componentName, children = ISZ(
-          |          Category(displayName = "Inputs", children = inputs),
-          |          Category(displayName = "Outputs", children = outputs)))
+          |      var children: ISZ[Entry] = ISZ()
+          |      if (inputs.nonEmpty) {
+          |        children = children :+ Category(displayName = "Inputs", children = inputs)
+          |      }
+          |      if (outputs.nonEmpty) {
+          |        children = children :+ Category(displayName = "Outputs", children = outputs)
+          |      }
+          |      components = components :+ Category(displayName = componentName, children = children)
           |    }
           |    return components
           |  }
