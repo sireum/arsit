@@ -281,7 +281,7 @@ object SchedulerTemplate {
     val slangMethodName = s"${packageName}.ScheduleProviderI.getStaticSchedule"
     val cMethodName = s"${packageName}_ScheduleProviderI_getStaticSchedule"
     val slangSymbol = s"${packageName}.Schedulers.staticSchedule"
-    val symbol = s"${packageName}_Schedulers_staticSchedule"
+    val symbol = s"${packageName}_Schedulers_defaultStaticSchedule"
     val slotSequences = bridges.map((m: String) => s"fillInSlot(&slotSequence, i++, ${m}(SF_LAST)->id, length);")
 
     val declNewStackFrame: ST = StackFrameTemplate.DeclNewStackFrame(T, filepath, "", cMethodName, 0)
