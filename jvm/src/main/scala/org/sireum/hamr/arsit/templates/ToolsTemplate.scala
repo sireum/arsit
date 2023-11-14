@@ -50,6 +50,8 @@ object ToolsTemplate {
           |
           |${toISString(Os.path(slangBinDir), resources)}
           |
+          |(Os.slashDir.up / "src" / "main" / "util" / "${basePackage}").mkdirAll()
+          |
           |proc"$$sireum proyek slangcheck -p $basePackage -o $${Os.slashDir.up}/src/main/util/${basePackage} $${Os.slashDir.up} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
@@ -74,6 +76,8 @@ object ToolsTemplate {
           |// create serializers/deserializers for the Slang types used in the project
           |
           |${toISString(Os.path(slangBinDir), resources)}
+          |
+          |(Os.slashDir.up / "src" / "main" / "util" / "${basePackage}").mkdirAll()
           |
           |proc"$$sireum tools sergen -p ${basePackage} -m json,msgpack -o $${Os.slashDir.up}/src/main/util/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""

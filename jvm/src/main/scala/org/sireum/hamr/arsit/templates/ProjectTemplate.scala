@@ -291,6 +291,7 @@ object ProjectTemplate {
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/data",
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/nix",
           |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/seL4Nix",
+          |  Compile / unmanagedSourceDirectories += baseDirectory.value / "src/main/util",
           |
           |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/bridge",
           |  Compile / unmanagedSourceDirectories in Test += baseDirectory.value / "src/test/system",
@@ -451,7 +452,8 @@ object ProjectTemplate {
           |    millSourcePath / os.up / "src" / "main" / "component",
           |    millSourcePath / os.up / "src" / "main" / "data",
           |    millSourcePath / os.up / "src" / "main" / "nix",
-          |    millSourcePath / os.up / "src" / "main" / "seL4Nix"
+          |    millSourcePath / os.up / "src" / "main" / "seL4Nix",
+          |    millSourcePath / os.up / "src" / "main" / "util"
           |  )
           |
           |  override def sources = T.sources(contributedSources)

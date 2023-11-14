@@ -3,41 +3,10 @@
 package org.sireum.hamr.arsit.templates
 
 import org.sireum._
-import org.sireum.hamr.codegen.common.containers.FileResource
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types.TypeNameProvider
 
 object TypeTemplate {
-  def genSerGen(basePackage: String, slangBinDir: String, resources: ISZ[FileResource]): ST = {
-    return (
-      st"""::/*#! 2> /dev/null                                   #
-          |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
-          |if [ -z $${SIREUM_HOME} ]; then                        #
-          |  echo "Please set SIREUM_HOME env var"               #
-          |  exit -1                                             #
-          |fi                                                    #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"    #
-          |:BOF
-          |setlocal
-          |if not defined SIREUM_HOME (
-          |  echo Please set SIREUM_HOME env var
-          |  exit /B -1
-          |)
-          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
-          |exit /B %errorlevel%
-          |::!#*/
-          |// #Sireum
-          |
-          |import org.sireum._
-          |
-          |// create serializers/deserializers for the Slang types used in the project
-          |
-          |val sireum = Os.path(Os.env("SIREUM_HOME").get) / "bin" / (if (Os.isWin) "sireum.bat" else "sireum")
-          |
-          |proc"$$sireum tools sergen -p ${basePackage} -m json,msgpack -o $${Os.slashDir.up}/src/main/data/${basePackage} ../src/main/art/art/DataContent.scala ${(for (r <- resources) yield Os.path(slangBinDir).relativize(Os.path(r.dstPath)), " ")}".at(Os.slashDir).console.runCheck()
-          |""")
-  }
-
 
   def Base_Types(basePackage: String): ST = {
     val ret =
