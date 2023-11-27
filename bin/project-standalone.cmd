@@ -43,7 +43,9 @@ val homeDir = Os.slashDir.up.canon
 val projects = ISZ(
   homeDir,
   homeDir / "air",
-  homeDir / "hamr_codegen" / "common",
+  homeDir / "hamr-codegen" / "common",
+  homeDir / "parser",
+  homeDir / "sysml",
   homeDir / "runtime",
   homeDir / "slang"
 )

@@ -3,6 +3,7 @@
 out
 target
 /versions.properties
+/bin/install
 /bin/mill.bat
 /bin/prelude.sh
 /bin/platform.sh
@@ -17,10 +18,12 @@ target
 /bin/scala
 /air
 /common
-/hamr_codegen
+/hamr-codegen
 /lib
+/parser
 /runtime
 /slang
+/sysml
 *.sc.jar
 *.cmd.jar
 *.cmd.com

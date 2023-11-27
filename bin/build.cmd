@@ -69,21 +69,18 @@ val proyekName: String = "sireum-proyek"
 val project: Os.Path = homeBin / "project-standalone.cmd"
 
 
-def clone(repo: String, branch: String): Unit = {
-  val clean = ops.StringOps(repo).replaceAllChars('-', '_')
-  var atDir = home
-  if (!(home / clean).exists) {
-    proc"git clone https://github.com/sireum/$repo $clean".at(atDir).console.runCheck()
+def clone(repo: String, proj: String, location: Option[String]): B = {
+  val loc: Os.Path = location match {
+    case Some(l) => home / l
+    case _ => home / proj
+  }
+  val ret: B = if (!loc.exists) {
+    val args = ISZ[String]("git", "clone", "--recurse", s"${repo}/$proj") ++ (if (location.nonEmpty) ISZ(location.get) else ISZ[String]())
+    Os.proc(args).at(home).console.timeout(10000).run().ok
   } else {
-    atDir = home / clean
-    proc"git pull".at(atDir).console.runCheck()
+    Os.proc(ISZ("git", "pull")).at(loc).console.run().ok
   }
-  // checkout same branch in the external repo if it exists
-  if (ops.StringOps(proc"git ls-remote origin $branch".console.run().out).trim.size > 0) {
-    println(s"Checking out $branch")
-    proc"git checkout $branch".at(atDir).run()
-  }
-  println()
+  return ret
 }
 
 def cloneProjects(): Unit = {
@@ -91,10 +88,11 @@ def cloneProjects(): Unit = {
  * strange as hamr-codgen has Arsit as a sub-module, though it isn't
  * recursively cloned
  */
-  val branch = ops.StringOps(proc"git rev-parse --abbrev-ref HEAD".at(home).run().out).trim
-  for (m <- ISZ("air", "hamr-codegen", "runtime", "slang")) {
-    clone(m, branch)
+  for (m <- ISZ("air", "hamr-codegen", "hamr-sysml", "parser", "runtime", "slang")) {
+    clone("https://github.com/sireum", m, None())
+    println()
   }
+  (home / "hamr-sysml").moveOverTo(home / "sysml")
 }
 
 
