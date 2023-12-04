@@ -347,6 +347,10 @@ object SchedulerTemplate {
           |  //slotSequence->value[index].bridgeId = bridgeId;
           |  //slotSequence->value[index].length = length;
           |}
+          |
+          |Unit art_scheduling_static_StaticSchedulerIO_message(STACK_FRAME String m) {
+          |  printf("%s\n", m->value);
+          |}
           |"""
     return ret
   }
