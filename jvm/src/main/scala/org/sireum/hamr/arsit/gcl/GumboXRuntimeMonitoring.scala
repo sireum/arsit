@@ -626,6 +626,23 @@ object GumboXRuntimeMonitoring {
                   |    Art.computePhase(scheduler)
                   |  }
                   |
+                  |  override def beforeEach(): Unit = {
+                  |    // uncomment the following to disable the various guis
+                  |    //System.setProperty("java.awt.headless", "true")
+                  |
+                  |    // uncomment the following to suppress (or potentially redirect) ART's log stream
+                  |    //art.ArtNative_Ext.logStream = new java.io.PrintStream(new java.io.OutputStream {
+                  |    //  override def write(b: Int): Unit = {}
+                  |    //})
+                  |
+                  |    // uncomment the following to suppress (or potentially redirect) the static scheduler's log stream
+                  |    //art.scheduling.static.StaticSchedulerIO_Ext.logStream = new java.io.PrintStream(new java.io.OutputStream {
+                  |    //  override def write(b: Int): Unit = {}
+                  |    //})
+                  |
+                  |    super.beforeEach()
+                  |  }
+                  |
                   |  // Suggestion: add the following import renamings of the components' SystemTestAPIs,
                   |  //             replacing nickname with shortened versions that are easier to reference
                   |  ${(importRenamings, "\n")}
