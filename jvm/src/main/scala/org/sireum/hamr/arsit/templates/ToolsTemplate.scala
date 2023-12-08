@@ -53,6 +53,9 @@ object ToolsTemplate {
           |(Os.slashDir.up / "src" / "main" / "util" / "${basePackage}").mkdirAll()
           |
           |proc"$$sireum proyek slangcheck -p $basePackage -o $${Os.slashDir.up}/src/main/util/${basePackage} $${Os.slashDir.up} $$toolargs".at(Os.slashDir).console.runCheck()
+          |
+          |// call to the tools version of SlangCheck which does not invoke Tipe
+          |//proc"$$sireum tools slangcheck generator -p $basePackage -o $${Os.slashDir.up}/src/main/util/${basePackage} $$toolargs".at(Os.slashDir).console.runCheck()
           |"""
 
     val o = SireumToolsSlangcheckGeneratorOption(
