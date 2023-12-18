@@ -280,8 +280,10 @@ object GumboGen {
           |""", filename)
   }
 
+  @strictpure def toKey(e: AST.Exp): SymTableKey = SymTableKey(e, e.posOpt)
+
   def getRExp(e: AST.Exp, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable, basePackageName: String): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e)).get)
   }
 
   def processInitializes(m: AadlThreadOrDevice, symbolTable: SymbolTable, aadlTypes: AadlTypes, basePackage: String): Option[GclEntryPointInitialize] = {
@@ -295,7 +297,7 @@ object GumboGen {
       val gclSymbolTable = ais(0).gclSymbolTable
 
       if (sc.initializes.nonEmpty) {
-        val rModifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${gclSymbolTable.rexprs.get(m).get}")
+        val rModifies: ISZ[ST] = sc.initializes.get.modifies.map((m: AST.Exp) => st"${gclSymbolTable.rexprs.get(toKey(m)).get}")
 
         var modifies: ISZ[ST] = ISZ()
         var requires: ISZ[ST] = ISZ()
@@ -372,8 +374,8 @@ object GumboGen {
           var initFlows: ISZ[ST] = ISZ()
 
           for (f <- sc.initializes.get.flows) {
-            val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(e).get
-            val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(e).get
+            val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(toKey(e)).get
+            val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(toKey(e)).get
             initFlows = initFlows :+
               st"""// infoflow ${f.id}
                   |${GumboGen.processDescriptor(f.descriptor, "//   ")}
@@ -579,11 +581,11 @@ object GumboGen {
   var imports: ISZ[String] = ISZ()
 
   def getRExp(e: AST.Exp): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e)).get)
   }
 
   def getR2Exp(e: AST.Exp.Ref): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e.asExp).get)
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e.asExp)).get)
   }
 
   def fetchHandler(port: AadlPort, handlers: ISZ[GclHandle]): Option[GclHandle] = {
@@ -616,7 +618,7 @@ object GumboGen {
       return m
     }
 
-    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${gclSymbolTable.rexprs.get(e).get}"))
+    val generalModifies: Set[String] = Set(compute.modifies.map((e: AST.Exp) => s"${gclSymbolTable.rexprs.get(toKey(e)).get}"))
 
     var generalHolder: ISZ[GclHolder] = ISZ()
 
@@ -628,7 +630,7 @@ object GumboGen {
 
 
     for (spec <- compute.specs) {
-      val rspec = gclSymbolTable.rexprs.get(spec.exp).get
+      val rspec = gclSymbolTable.rexprs.get(toKey(spec.exp)).get
       imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
       val id = spec.id
@@ -648,11 +650,11 @@ object GumboGen {
       // fill in general case
       for (generalCase <- compute.cases) {
 
-        val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
+        val rexp = gclSymbolTable.rexprs.get(toKey(generalCase.assumes)).get
         val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
         imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
 
-        val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
+        val rguarantee = gclSymbolTable.rexprs.get(toKey(generalCase.guarantees)).get
         imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
         generalHolder = generalHolder :+ GclCaseHolder(
@@ -666,8 +668,8 @@ object GumboGen {
     var generalFlows: ISZ[ST] = ISZ()
 
     for (f <- compute.flows) {
-      val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(e).get
-      val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(e).get
+      val froms: ISZ[AST.Exp] = for (e <- f.from) yield gclSymbolTable.rexprs.get(toKey(e)).get
+      val tos: ISZ[AST.Exp] = for (e <- f.to) yield gclSymbolTable.rexprs.get(toKey(e)).get
       generalFlows = generalFlows :+
         st"""// infoflow ${f.id}
             |${GumboGen.processDescriptor(f.descriptor, "//   ")}
@@ -701,7 +703,7 @@ object GumboGen {
           case Some(handler) => {
             if (generalModifies.nonEmpty || handler.modifies.nonEmpty) {
               val modMarker = genComputeMarkerCreator(eventPort.identifier, "MODIFIES")
-              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${gclSymbolTable.rexprs.get(m).get}")
+              val handlerModifies = generalModifies ++ handler.modifies.map((m: AST.Exp) => s"${gclSymbolTable.rexprs.get(toKey(m)).get}")
 
               rmodifies = rmodifies :+
                 st"""${modMarker.beginMarker}
@@ -725,7 +727,7 @@ object GumboGen {
 
               val handlerEnsures = generalElems ++ _cases ++
                 handler.guarantees.map((g: GclGuarantee) => {
-                  val rexp = gclSymbolTable.rexprs.get(g.exp).get
+                  val rexp = gclSymbolTable.rexprs.get(toKey(g.exp)).get
                   imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rexp)
                   st"""// guarantees ${g.id}
                       |${GumboGen.processDescriptor(g.descriptor, "//   ")}

@@ -3,6 +3,7 @@ package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
 import org.sireum.hamr.arsit.ProjectDirectories
+import org.sireum.hamr.arsit.gcl.GumboGen.toKey
 import org.sireum.hamr.arsit.gcl.GumboXGen._
 import org.sireum.hamr.arsit.gcl.GumboXGenUtil._
 import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin.{ObjectContributions, emptyObjectContributions}
@@ -519,7 +520,7 @@ object GumboXGen {
           var topLevelGuarantees: ISZ[ST] = ISZ()
           var topLevelGuaranteesCombined: ISZ[ST] = ISZ()
           for (spec <- gclCompute.specs) {
-            val rspec = gclSymbolTable.rexprs.get(spec.exp).get
+            val rspec = gclSymbolTable.rexprs.get(toKey(spec.exp)).get
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rspec)
 
             val descriptor = GumboXGen.processDescriptor(spec.descriptor, "*   ")
@@ -618,13 +619,13 @@ object GumboXGen {
           var caseCallsCombined: ISZ[ST] = ISZ()
 
           for (generalCase <- gclCompute.cases) {
-            val rexp = gclSymbolTable.rexprs.get(generalCase.assumes).get
+            val rexp = gclSymbolTable.rexprs.get(toKey(generalCase.assumes)).get
             val rrassume = GumboGen.StateVarInRewriter().wrapStateVarsInInput(rexp)
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rrassume)
 
             val ggAssm = GumboXGenUtil.rewriteToExpX(rrassume, component, componentNames, aadlTypes, stateVars)
 
-            val rguarantee = gclSymbolTable.rexprs.get(generalCase.guarantees).get
+            val rguarantee = gclSymbolTable.rexprs.get(toKey(generalCase.guarantees)).get
             imports = imports ++ GumboGenUtil.resolveLitInterpolateImports(rguarantee)
 
             val ggGuar = GumboXGenUtil.rewriteToExpX(rguarantee, component, componentNames, aadlTypes, stateVars)
@@ -973,7 +974,7 @@ object GumboXGen {
   }
 
   def getRExp(e: AST.Exp, basePackageName: String, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e).get)
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e)).get)
   }
 
   def finalise(component: AadlThreadOrDevice, componentNames: NameProvider, projectDirectories: ProjectDirectories): ObjectContributions = {
@@ -1658,6 +1659,6 @@ object GumboXGen {
   }
 
   def getR2Exp(e: AST.Exp.Ref, basePackageName: String, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable): AST.Exp = {
-    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(e.asExp).get)
+    return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e.asExp)).get)
   }
 }

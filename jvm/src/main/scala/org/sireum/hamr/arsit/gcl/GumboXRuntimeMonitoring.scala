@@ -17,7 +17,7 @@ import org.sireum.hamr.ir.GclSubclause
 
 object GumboXRuntimeMonitoring {
 
-  // a 'hand-me-down' container to allow the entry point plugin to communivisione results
+  // a 'hand-me-down' container to allow the entry point plugin to communicate vision results
   // to the platform provider plugin
   @record class RM_Container(var entrypointKinds: ISZ[ST],
                              var entryPointHandlers: ISZ[ST],
