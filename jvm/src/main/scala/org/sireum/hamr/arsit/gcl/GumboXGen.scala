@@ -334,7 +334,7 @@ object GumboXGen {
     }
 
     gclSubclauseInfo match {
-      case Some((GclSubclause(_, _, _, Some(initializes), _, _), gclSymbolTable)) =>
+      case Some((GclSubclause(_, _, _, Some(initializes), _, _), gclSymbolTable)) if initializes.guarantees.nonEmpty =>
 
         var requiresMethods: ISZ[(ISZ[String], ST)] = ISZ()
         var combinedSpecCalls: ISZ[ST] = ISZ()
