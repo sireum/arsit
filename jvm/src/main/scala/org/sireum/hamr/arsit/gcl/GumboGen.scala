@@ -872,6 +872,7 @@ object GumboGen {
         isPure = T
         "pure"
       case AST.Purity.StrictPure => "strictpure"
+      case AST.Purity.Abs => "abs"
       case AST.Purity.Impure => "impure"
       case AST.Purity.Memoize => "memoize"
     }
