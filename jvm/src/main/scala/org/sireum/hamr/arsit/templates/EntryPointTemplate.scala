@@ -15,6 +15,7 @@ import org.sireum.hamr.arsit.EntryPoints
                                    defaultComputeBody: ST,
                                    defaultTestComputeBody: ST,
 
+                                   // Note that the following entry points are not emitted
                                    defaultDeactivateBody: ST,
                                    defaultFinaliseBody: ST,
                                    defaultRecoverBody: ST) {
@@ -25,6 +26,8 @@ import org.sireum.hamr.arsit.EntryPoints
                            testInitialiseBody: Option[String],
                            computeBody: Option[String],
                            testComputeBody: Option[String],
+
+                           // Note that the following entry points are not emitted
                            deactivateBody: Option[String],
                            finaliseBody: Option[String],
                            recoverBody: Option[String]): ST = {
@@ -49,6 +52,8 @@ import org.sireum.hamr.arsit.EntryPoints
                              testInitialiseBody: Option[ST],
                              computeBody: Option[ST],
                              testComputeBody: Option[ST],
+
+                             // Note that the following entry points are not emitted
                              deactivateBody: Option[ST],
                              finaliseBody: Option[ST],
                              recoverBody: Option[ST]): ST = {
@@ -80,6 +85,7 @@ import org.sireum.hamr.arsit.EntryPoints
                      computeBody: ST,
                      testComputeBody: ST,
 
+                     // Note that the following entry points are not emitted
                      deactivateBody: ST,
                      finaliseBody: ST,
                      recoverBody: ST): ST = {
@@ -96,20 +102,8 @@ import org.sireum.hamr.arsit.EntryPoints
           |    $computeBody
           |  }
           |
-          |  def ${EntryPoints.activate.name}(): Unit = {
-          |    $activateBody
-          |  }
-          |
-          |  def ${EntryPoints.deactivate.name}(): Unit = {
-          |    $deactivateBody
-          |  }
-          |
           |  def ${EntryPoints.finalise.name}(): Unit = {
           |    $finaliseBody
-          |  }
-          |
-          |  def ${EntryPoints.recover.name}(): Unit = {
-          |    $recoverBody
           |  }
           |
           |  override

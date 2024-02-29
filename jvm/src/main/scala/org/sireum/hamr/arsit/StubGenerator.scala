@@ -174,7 +174,7 @@ import org.sireum.hamr.ir._
       var blocks: ISZ[ST] = ISZ()
 
       var behaviorCodeContributions: ISZ[BehaviorEntryPointObjectContributions] = ISZ()
-      for (entryPoint <- ISZ(EntryPoints.initialise, EntryPoints.compute, EntryPoints.activate, EntryPoints.deactivate, EntryPoints.finalise, EntryPoints.recover)) {
+      for (entryPoint <- ISZ(EntryPoints.initialise, EntryPoints.compute, EntryPoints.finalise)) {
         entryPoint match {
           case EntryPoints.compute if m.isSporadic() =>
             val inEventPorts = m.features.filter(
