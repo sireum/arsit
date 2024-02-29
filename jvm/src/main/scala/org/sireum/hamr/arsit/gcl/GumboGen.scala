@@ -280,7 +280,10 @@ object GumboGen {
           |""", filename)
   }
 
-  @strictpure def toKey(e: AST.Exp): SymTableKey = SymTableKey(e, e.posOpt)
+  @pure def toKey(e: AST.Exp): SymTableKey = {
+    assert (e.fullPosOpt.nonEmpty, e)
+    return SymTableKey(e, e.fullPosOpt)
+  }
 
   def getRExp(e: AST.Exp, aadlTypes: AadlTypes, gclSymbolTable: GclSymbolTable, basePackageName: String): AST.Exp = {
     return GumboGen.InvokeRewriter(aadlTypes, basePackageName).rewriteInvokes(gclSymbolTable.rexprs.get(toKey(e)).get)
