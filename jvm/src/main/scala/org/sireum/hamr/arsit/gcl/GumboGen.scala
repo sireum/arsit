@@ -281,7 +281,7 @@ object GumboGen {
   }
 
   @pure def toKey(e: AST.Exp): SymTableKey = {
-    assert (e.fullPosOpt.nonEmpty, e)
+    assert (e.fullPosOpt.nonEmpty, e.string)
     return SymTableKey(e, e.fullPosOpt)
   }
 
