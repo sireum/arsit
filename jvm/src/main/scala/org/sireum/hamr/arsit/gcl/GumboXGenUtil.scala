@@ -208,8 +208,10 @@ object GumboXGenUtil {
       val profileName = genProfileName(componentSingletonType, includeStateVars)
 
       var fieldDecls: ISZ[ST] = ISZ()
-      for (p <- sortParam(params) if !p.isInstanceOf[GGStateVarParam] || includeStateVars) {
-        fieldDecls = fieldDecls :+ st"var ${p.name}: RandomLib"
+      val sps = sortParam(params)
+      for (i <- 0 until sps.size  if !sps(i).isInstanceOf[GGStateVarParam] || includeStateVars) {
+        val p = sps(i)
+        fieldDecls = fieldDecls :+ st"var ${p.name}: RandomLib${if (i < sps.size - 1) "," else ""} // random lib for generating ${p.aadlType.nameProvider.qualifiedTypeName}"
       }
 
       return (
@@ -217,7 +219,8 @@ object GumboXGenUtil {
             |  val name: String,
             |  val numTests: Z, // number of tests to generate
             |  var numTestVectorGenRetries: Z, // number of test vector generation retries
-            |  ${(fieldDecls, ",\n")})""")
+            |  ${(fieldDecls, "\n")}
+            |  )""")
     }
 
     def genInitProfile(): ST = {
