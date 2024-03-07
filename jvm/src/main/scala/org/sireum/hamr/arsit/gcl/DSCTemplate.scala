@@ -58,15 +58,6 @@ object DSCTemplate {
     return ret
   }
 
-  def genTestVectorContainer(containerName: String,
-                             fieldDeclarations: ISZ[ST]): ST = {
-    val ret =
-      st"""@datatype class $containerName (
-          |  ${(fieldDeclarations, ",\n")}) extends art.DataContent"""
-    return ret
-  }
-
-
   def genProfileRunner(profileTestMethodName: String,
                        profileType: String,
 

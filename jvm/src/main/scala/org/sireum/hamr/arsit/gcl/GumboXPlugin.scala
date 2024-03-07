@@ -319,6 +319,18 @@ import org.sireum.message.Reporter
   override def handleArsitFinalizePlugin(projectDirectories: ProjectDirectories, arsitOptions: ArsitOptions, symbolTable: SymbolTable, aadlTypes: AadlTypes, reporter: Reporter): ISZ[FileResource] = {
     var resources: ISZ[FileResource] = ISZ()
     if (handledComponents.nonEmpty) {
+      val container: ST = GumboXGenUtil.getContainerSig(arsitOptions.packageName)
+      val containerPath = s"${projectDirectories.utilDir}/${arsitOptions.packageName}/util/Container.scala"
+      resources = resources :+ ResourceUtil.createResourceH(containerPath, container, T, T)
+
+      val unitTestConfig: ST = GumboXGenUtil.genUnitTestConfiguration(arsitOptions.packageName)
+      val unitTextConfigPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/util/UnitTestConfiguration.scala"
+      resources = resources :+ ResourceUtil.createResource(unitTextConfigPath, unitTestConfig, T)
+
+      val mutableBase: ST = GumboXGenUtil.genMutableBase(arsitOptions.packageName)
+      val mutableBasePath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/util/MutableBase.scala"
+      resources = resources :+ ResourceUtil.createResource(mutableBasePath, mutableBase, T)
+
       val gumboXUtil: ST = GumboXGenUtil.genGumboXUtil(arsitOptions.packageName)
       val gumboXUtilPath = s"${projectDirectories.testUtilDir}/${arsitOptions.packageName}/GumboXUtil.scala"
       resources = resources :+ ResourceUtil.createResource(gumboXUtilPath, gumboXUtil, T)

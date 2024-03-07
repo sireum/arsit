@@ -77,6 +77,14 @@ object Arsit {
     val maxComponentId: Z = nixPhase.maxComponent + ArsitConfigurationPlugin.getAdditionalComponentIds(ExperimentalOptions.addComponentIds(arsitOptions.experimentalOptions), plugins, ReporterUtil.reporter)
     val maxConnectionId: Z = nixPhase.maxConnection + ArsitConfigurationPlugin.getAdditionalConnectionIds(ExperimentalOptions.addConnectionIds(arsitOptions.experimentalOptions), plugins, ReporterUtil.reporter)
 
+
+    fileResources = fileResources ++ createBuildArtifacts(
+      CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, fileResources, ReporterUtil.reporter)
+
+    for (p <- plugins if p.isInstanceOf[ArsitFinalizePlugin] && p.asInstanceOf[ArsitFinalizePlugin].canHandleArsitFinalizePlugin()) {
+      fileResources = fileResources ++ p.asInstanceOf[ArsitFinalizePlugin].handleArsitFinalizePlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)
+    }
+
     if (!arsitOptions.noEmbedArt) { // sergen requires art.DataContent so only generate the script when art is being embedded
 
       val outDataDir = s"${projectDirectories.dataDir}/${arsitOptions.packageName}"
@@ -110,12 +118,6 @@ object Arsit {
       addAuxResources = addAuxResources :+ slangCheckConfig
     }
 
-    fileResources = fileResources ++ createBuildArtifacts(
-      CommonUtil.getLastName(model.components(0).identifier), arsitOptions, projectDirectories, fileResources, ReporterUtil.reporter)
-
-    for (p <- plugins if p.isInstanceOf[ArsitFinalizePlugin] && p.asInstanceOf[ArsitFinalizePlugin].canHandleArsitFinalizePlugin()) {
-      fileResources = fileResources ++ p.asInstanceOf[ArsitFinalizePlugin].handleArsitFinalizePlugin(projectDirectories, arsitOptions, symbolTable, aadlTypes, ReporterUtil.reporter)
-    }
 
     return ArsitResult(
       fileResources,

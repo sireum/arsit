@@ -132,6 +132,19 @@ object GumboXGen {
     return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_Tests"
   }
 
+
+  def createUnitTestConfigUtilNames(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_UnitTestConfiguration_Util"
+  }
+
+  def createUnitTestRunnerNames(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_GumboX_UnitTests"
+  }
+
+  def createUnitTestDscRunnerNames(componentNames: NameProvider): ISZ[String] = {
+    return componentNames.packageNameI :+ s"${componentNames.componentSingletonType}_DSC_UnitTests"
+  }
+
   def processDescriptor(descriptor: Option[String], pad: String): Option[ST] = {
     def getPipeLoc(cis: ISZ[C]): Z = {
       var firstNonSpace: Z = 0
@@ -1061,6 +1074,12 @@ object GumboXGen {
     var nextProfileMethods: ISZ[ST] = ISZ[ST]()
     var dscTestRunners: ISZ[ST] = ISZ[ST]()
 
+    //////////////////////////////////////////
+    // Refactored GumboX Unit Testing
+    //////////////////////////////////////////
+    var defaultConfigIdentifiers: ISZ[String] = ISZ()
+    var defaultConfigEntries: ISZ[ST] = ISZ()
+    var configDefinitions: ISZ[ST] = ISZ()
 
     def process(testMethodName: String,
                 _dscRunnerSimpleName: String,
@@ -1400,6 +1419,85 @@ object GumboXGen {
           componentNames, dscRunnerSimpleName, containerType,
           simpleTestHarnessName, nextDSCMethod, cbMethodToInvoke)
       }
+
+
+      //////////////////////////////////////////////////
+      // Refactored GumboX Unit Testing
+      //////////////////////////////////////////////////
+      {
+
+        val (configSuffix, optParam): (String, Option[ST]) =
+          if (isInitialize) {
+            ("Initialize", None())
+          }
+          else {
+            val containerTypeX: String =
+              if (captureStateVars) container.preStateContainerName_P
+              else container.preStateContainerName_PS
+            (s"Compute${if(!captureStateVars) "wL" else ""}", Some(st"c.asInstanceOf[${containerTypeX}]"))
+          }
+
+        val configName = s"${componentNames.componentSingletonType}_${configSuffix}_UnitTestConfiguration"
+        val unitTestMethodName: String = if (isInitialize) testCBMethodName else testCBMethodNameVector
+
+        var randLibsEntries: ISZ[ST] = ISZ()
+        if (!isInitialize) {
+          randLibsEntries = randLibsEntries :+ st"numTestVectorGenRetries = 100, // needed for old framework"
+        }
+        randLibsEntries = randLibsEntries ++ (for (p <- combinedParams) yield st"${p.name} = freshRandomLib")
+
+        val profileName: String =
+          if(isInitialize) genInitProfileName(componentNames.componentSingletonType)
+          else genProfileName(componentNames.componentSingletonType, !captureStateVars)
+
+        val profile =
+          st"""$profileName (
+              |  name = "${configSuffix}_Default_Profile", // needed for old framework
+              |  numTests = 100, // needed for old framework
+              |  ${(randLibsEntries, ",\n")}
+              |)"""
+
+        val genReplay: ST =
+          if (isInitialize) st"(c: Container, r: GumboXResult.Type) => None()"
+          else st"""(c: Container, r: GumboXResult.Type) => Some(
+                   |  st${DSCTemplate.tq}val testVector = ${DSCTemplate.jsonMethod(F, componentNames, containerType)}(json).left
+                   |      |assert (${testCBMethodNameVector}(testVector) == results)${DSCTemplate.tq}.render)"""
+
+        val fields: ISZ[(ST, ST)] = ISZ(
+          (st"var verbose: B", st"verbose = F"),
+          (st"var name: String", st"""name = "Default_${configSuffix}_Config""""),
+          (st"var description: String", st"""description = "Default $configSuffix Configuration""""),
+          (st"var numTests: Z", st"numTests = 100"),
+          (st"var numTestVectorGenRetries: Z", st"numTestVectorGenRetries = 100"),
+          (st"var failOnUnsatPreconditions: B", st"failOnUnsatPreconditions = F"),
+          (st"var profile: Profile", st"profile = $profile"),
+          (st"var genReplay: (Container, GumboXResult.Type) => Option[String]", st"genReplay = $genReplay")
+        )
+
+        val configDefinition =
+          st"""@record class $configName (
+              |  ${(for (f <- fields) yield f._1, ",\n")})
+              |  extends UnitTestConfigurationBatch with $simpleTestHarnessName {
+              |
+              |  override def test(c: Container): GumboXResult.Type = {
+              |    return $unitTestMethodName($optParam)
+              |  }
+              |}"""
+
+        configDefinitions = configDefinitions :+ configDefinition
+
+        val defaultConfigName: String = s"default${configSuffix}Config"
+
+        val defaultConfig: ST =
+          st"""def $defaultConfigName: $configName = {
+              |  return ($configName (
+              |    ${(for (f <- fields) yield f._2, ",\n")})
+              |  )
+              |}"""
+
+        defaultConfigEntries = defaultConfigEntries :+ defaultConfig
+        defaultConfigIdentifiers = defaultConfigIdentifiers :+ defaultConfigName
+      }
     } // end process method
 
     val dscTestRunnerSimpleName = ops.ISZOps(GumboXGen.createDSCTestRunnerClassName(componentNames)).last
@@ -1654,7 +1752,223 @@ object GumboXGen {
         s"${projectDirectories.testUtilDir}/${componentNames.basePackage}/${DSCTemplate.recordUnsatPreObjectName}.scala",
         DSCTemplate.dscRecordUnsatPreArtifacts(componentNames.basePackage), F)
     }
+      ///////////////////////////////////////////////
+      // Refactored GumboX unit test configuration
+      ///////////////////////////////////////////////
 
+      if (configDefinitions.nonEmpty) {
+        val basePackage = componentNames.basePackage
+
+        val unitTestConfigUtilName = GumboXGen.createUnitTestConfigUtilNames(componentNames)
+        val unitTestConfigUtilSimpleName = ops.ISZOps(unitTestConfigUtilName).last
+        val unitTestConfigUtilContent: ST =
+          st"""// #Sireum
+              |
+              |package ${componentNames.packageName}
+              |
+              |${CommentTemplate.doNotEditComment_scala}
+              |
+              |import org.sireum._
+              |import $basePackage.GumboXUtil.GumboXResult
+              |import $basePackage.util.{Container, Profile, UnitTestConfigurationBatch}
+              |import $basePackage.RandomLib
+              |import org.sireum.Random.Impl.Xoshiro256
+              |
+              |object ${unitTestConfigUtilSimpleName} {
+              |
+              |  def freshRandomLib: RandomLib = {
+              |    return RandomLib(Random.Gen64Impl(Xoshiro256.create))
+              |  }
+              |
+              |  ${(defaultConfigEntries, "\n\n")}
+              |}
+              |
+              |${(configDefinitions, "\n\n")}
+              |"""
+
+        val unitTestConfigUtilPath = s"${projectDirectories.testUtilDir}/${componentNames.packagePath}/${unitTestConfigUtilSimpleName}.scala"
+        resources = resources :+ ResourceUtil.createResource(unitTestConfigUtilPath, unitTestConfigUtilContent, T)
+
+        val configs: ISZ[ST] = for (c <- defaultConfigIdentifiers) yield st"""$c(verbose = verbose, failOnUnsatPreconditions = failOnUnsatPreconditions)"""
+        val unitTestRunnerNames = GumboXGen.createUnitTestRunnerNames(componentNames)
+        val unitTestRunnerSimpleName = ops.ISZOps(unitTestRunnerNames).last
+        val unitTestRunnerContent =
+          st"""package ${componentNames.packageName}
+              |
+              |import org.sireum._
+              |import $basePackage.GumboXUtil.GumboXResult
+              |import $basePackage.util.{Container, Profile, UnitTestConfigurationBatch}
+              |import ${componentNames.packageName}.$unitTestConfigUtilSimpleName._
+              |
+              |${CommentTemplate.safeToEditComment_scala}
+              |
+              |class $unitTestRunnerSimpleName extends $simpleTestHarnessSlang2ScalaTestName {
+              |
+              |  val verbose: B = F
+              |  val failOnUnsatPreconditions: B = F
+              |
+              |  def configs: MSZ[UnitTestConfigurationBatch] = {
+              |    return MSZ(
+              |      ${(configs, ",\n")}
+              |    )
+              |  }
+              |
+              |
+              |  for (c <- configs) {
+              |    def next: Option[Container] = {
+              |      try {
+              |        return Some(c.profile.next)
+              |      } catch {
+              |        case e: AssertionError => // SlangCheck was unable to satisfy a datatype's filter
+              |          return None()
+              |      }
+              |    }
+              |
+              |    for (i <- 0 until c.numTests) {
+              |      val testName = s"$${c.name}_$$i"
+              |
+              |      this.registerTest(testName) {
+              |        var retry: B = T
+              |
+              |        var j: Z = 0
+              |        while (j < c.numTestVectorGenRetries && retry) {
+              |          next match {
+              |            case Some(o) =>
+              |
+              |              if (verbose && j > 1) {
+              |                println(s"Retry $$j:")
+              |              }
+              |
+              |              val results = c.test(o)
+              |
+              |              if (verbose) {
+              |                c.genReplay(o, results) match {
+              |                  case Some(s) =>
+              |                    val tq = ${DSCTemplate.tqq}
+              |                    println(st${DSCTemplate.tq}Replay Unit Test:
+              |                                |  test("Replay: $$testName") {
+              |                                |    val results = ${componentNames.basePackage}.GumboXUtil.GumboXResult.$$results
+              |                                |    val json = st$${tq}$${${basePackage}.JSON.fromutilContainer(o, T)}$${tq}.render
+              |                                |    $$s
+              |                                |  }${DSCTemplate.tq}.render)
+              |                  case _ =>
+              |                }
+              |              }
+              |
+              |              results match {
+              |                case GumboXResult.Pre_Condition_Unsat =>
+              |                case GumboXResult.Post_Condition_Fail =>
+              |                  fail("Post condition did not hold")
+              |                  retry = F
+              |                case GumboXResult.Post_Condition_Pass =>
+              |                  if (verbose) {
+              |                    println("Success!")
+              |                  }
+              |                  retry = F
+              |              }
+              |            case _ =>
+              |
+              |          }
+              |          j = j + 1
+              |        }
+              |
+              |        if (retry) {
+              |          if (c.failOnUnsatPreconditions) {
+              |            fail("Unable to satisfy precondition")
+              |          } else if (verbose) {
+              |            cprintln(T, "Unable to satisfy precondition")
+              |          }
+              |        }
+              |      }
+              |    }
+              |  }
+              |
+              |  def configsToJson: String = {
+              |    return st"[ $${(for (c <- configs) yield s"\"$${c.name}|$${c.description}\"", ", ")} ]".render
+              |  }
+              |}
+              |"""
+
+        val unitTestRunnerPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${unitTestRunnerSimpleName}.scala"
+        resources = resources :+ ResourceUtil.createResource(unitTestRunnerPath, unitTestRunnerContent, F)
+
+        val dscUnitTestRunnerNames = GumboXGen.createUnitTestDscRunnerNames(componentNames)
+        val dscUnitTestSimpleName = ops.ISZOps(dscUnitTestRunnerNames).last
+        val dscUnitTestContent =
+          st"""package ${componentNames.packageName}
+              |
+              |import org.sireum._
+              |import ${basePackage}.GumboXUtil.GumboXResult
+              |import ${basePackage}.util.Container
+              |import ${basePackage}.util.UnitTestConfiguration
+              |
+              |${CommentTemplate.doNotEditComment_scala}
+              |
+              |object ${dscUnitTestSimpleName} extends App {
+              |  def main(args: ISZ[String]): Z = {
+              |    val instance = new ${dscUnitTestSimpleName}()
+              |    /*
+              |    val c = instance.next()
+              |    val r = instance.test(c)
+              |    println(s"$$c => $$r")
+              |    */
+              |    println(instance.configsToJson)
+              |
+              |    val p = Os.path(implicitly[sourcecode.File].value)
+              |    val out = p.up / s".$${p.name}.json"
+              |    out.writeOver(instance.configsToJson)
+              |
+              |    return 0
+              |  }
+              |}
+              |
+              |class ${dscUnitTestSimpleName} extends $unitTestRunnerSimpleName
+              |  with Random.Gen.TestRunner[Container] {
+              |
+              |  override def next(): Container = {
+              |    return getConfig().profile.next
+              |  }
+              |
+              |  override def toCompactJson(o: Container): String = {
+              |    return ${basePackage}.JSON.fromutilContainer(o, T)
+              |  }
+              |
+              |  override def fromJson(json: String): Container = {
+              |    ${basePackage}.JSON.toutilContainer(json) match {
+              |      case Either.Left(o) => return o.asInstanceOf[Container]
+              |      case Either.Right(msg) => halt(msg.string)
+              |    }
+              |  }
+              |
+              |  override def test(o: Container): B = {
+              |    BeforeEntrypoint()
+              |    val r: B = getConfig().test(o) match {
+              |      case GumboXResult.Pre_Condition_Unsat =>
+              |        ${basePackage}.DSC_RecordUnsatPre.report(toCompactJson(o))
+              |        T
+              |      case GumboXResult.Post_Condition_Fail => F
+              |      case GumboXResult.Post_Condition_Pass => T
+              |    }
+              |    AfterEntrypoint()
+              |    return r
+              |  }
+              |
+              |  def getConfig(): UnitTestConfiguration = {
+              |    Os.env("DSC_CONFIG_NAME") match {
+              |      case Some(n) =>
+              |        return ops.MSZOps(this.configs).filter(p => p.name == n)(0)
+              |      case _ =>
+              |        Os.prop("DSC_CONFIG_NAME") match {
+              |          case Some(n) => return ops.MSZOps(this.configs).filter(p => p.name == n)(0)
+              |          case _ => halt("DSC_CONFIG_NAME environmental variable not set")
+              |        }
+              |    }
+              |  }
+              |}
+              |"""
+        val dscUnitTestRunnerPath = s"${projectDirectories.testBridgeDir}/${componentNames.packagePath}/${dscUnitTestSimpleName}.scala"
+        resources = resources :+ ResourceUtil.createResource(dscUnitTestRunnerPath, dscUnitTestContent, T)
+      }
     return emptyObjectContributions(resources = resources)
   }
 

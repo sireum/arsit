@@ -57,11 +57,90 @@ object GumboXGenUtil {
   @strictpure def genContainerName(singletonType: String, isPre: B, withL: B): String =
     s"${genContainerSigName(singletonType, isPre)}_${if (withL) portStateVarSuffix else portsSuffix}"
 
+  @strictpure def genInitProfileTraitName(singletonType: String): String =
+    s"${genInitProfileName(singletonType)}_Trait"
+
   @strictpure def genInitProfileName(singletonType: String): String =
     s"${singletonType}_Profile"
 
+  @strictpure def genProfileTraitName(str: String, b: B): String =
+    s"${genProfileName(str, b)}_Trait"
+
   @strictpure def genProfileName(singletonType: String, includeStateVars: B): String =
     s"${singletonType}_Profile_${if (includeStateVars) portStateVarSuffix else portsSuffix}"
+
+
+  @pure def getContainerSig(packageName: String): ST = {
+    return (
+      st"""// #Sireum
+          |
+          |package $packageName.util
+          |
+          |import org.sireum._
+          |
+          |@sig trait Container extends art.DataContent
+          |
+          |@datatype class EmptyContainer extends Container
+          |""")
+  }
+
+
+
+  @pure def genUnitTestConfiguration(packageName: String): ST = {
+    return (
+      st"""//#Sireum
+          |
+          |package $packageName.util
+          |
+          |import org.sireum._
+          |import $packageName.util.Container
+          |import $packageName.GumboXUtil.GumboXResult
+          |
+          |${CommentTemplate.doNotEditComment_scala}
+          |
+          |@msig trait UnitTestConfiguration {
+          |  def name: String
+          |  def description: String
+          |  def profile: Profile
+          |  def test(c: Container): GumboXResult.Type
+          |  def genReplay: (Container, GumboXResult.Type) => Option[String]
+          |  def verbose: B
+          |}
+          |
+          |@msig trait UnitTestConfigurationBatch extends UnitTestConfiguration {
+          |  def numTests: Z
+          |  def numTestVectorGenRetries: Z
+          |  def failOnUnsatPreconditions: B
+          |}
+          |
+          |@msig trait Profile {
+          |  def next: Container
+          |}
+          |""")
+    }
+
+
+  @pure def genMutableBase(packageName: String): ST = {
+    return (st"""package $packageName.util
+                |
+                |import org.sireum._
+                |import org.sireum.$$internal.MutableMarker
+                |
+                |trait MutableBase extends MutableMarker {
+                |  def string: String = super.toString
+                |
+                |  override def $$clonable: Boolean = false
+                |
+                |  override def $$clonable_=(b: Boolean): MutableMarker = this
+                |
+                |  override def $$owned: Boolean = false
+                |
+                |  override def $$owned_=(b: Boolean): MutableMarker = this
+                |
+                |  override def $$clone: MutableMarker = this
+                |}
+                |""")
+  }
 
   @datatype class Container(val componentSingletonType: String,
                             val packageName: String,
@@ -166,7 +245,7 @@ object GumboXGenUtil {
       val fieldDecls: ISZ[ST] = for (p <- sortParam(params)) yield
         st"def ${p.name}: ${wrapOption(getSlangTypeName(p.aadlType), p.isOptional)}"
 
-      return (st"""@sig trait $sigName extends art.DataContent {
+      return (st"""@sig trait $sigName extends Container {
                   |  ${(fieldDecls, "\n")}
                   |}""")
     }
@@ -199,36 +278,59 @@ object GumboXGenUtil {
 
       return DSCTemplate.genTestVectorContainerClass(
         packageName = packageName,
-        imports = ISZ(s"$basePackage._"),
+        imports = ISZ(s"$basePackage._", s"$basePackage.util.Container"),
         containers = containers)
     }
 
     def genProfile(params: ISZ[GGParam],
-                   includeStateVars: B): ST = {
+                   includeStateVars: B,
+                   containerName: String): ST = {
+      val profileTraitName = genProfileTraitName(componentSingletonType, includeStateVars)
       val profileName = genProfileName(componentSingletonType, includeStateVars)
 
+      var traitFields: ISZ[ST] = ISZ()
       var fieldDecls: ISZ[ST] = ISZ()
+      var nextEntries: ISZ[ST] = ISZ()
       val sps = sortParam(params)
-      for (i <- 0 until sps.size  if !sps(i).isInstanceOf[GGStateVarParam] || includeStateVars) {
+      for (i <- 0 until sps.size if !sps(i).isInstanceOf[GGStateVarParam] || includeStateVars) {
         val p = sps(i)
+        traitFields = traitFields :+ st"def ${p.name}: RandomLib // random lib for generating ${p.aadlType.nameProvider.qualifiedTypeName}"
         fieldDecls = fieldDecls :+ st"var ${p.name}: RandomLib${if (i < sps.size - 1) "," else ""} // random lib for generating ${p.aadlType.nameProvider.qualifiedTypeName}"
+        nextEntries = nextEntries :+ st"${p.name} = ${p.name}.next${p.ranGenName}()"
       }
 
       return (
-        st"""@record class $profileName(
+        st"""@msig trait $profileTraitName extends Profile {
+            |  ${(traitFields, "\n")}
+            |}
+            |
+            |@record class $profileName(
             |  val name: String,
             |  val numTests: Z, // number of tests to generate
             |  var numTestVectorGenRetries: Z, // number of test vector generation retries
             |  ${(fieldDecls, "\n")}
-            |  )""")
+            |  ) extends $profileTraitName {
+            |
+            |  override def next: ${containerName} = {
+            |    return (${containerName} (
+            |      ${(nextEntries, ",\n")}))
+            |  }
+            |}""")
     }
 
     def genInitProfile(): ST = {
       return (
-        st"""@record class ${genInitProfileName(componentSingletonType)} (
+        st"""@msig trait ${genInitProfileTraitName(componentSingletonType)} extends Profile
+            |
+            |@record class ${genInitProfileName(componentSingletonType)} (
             |  val name: String,
             |  val numTests: Z //number of tests to generate
-            |)""")
+            |) extends ${genInitProfileTraitName(componentSingletonType)} {
+            |
+            |  override def next: EmptyContainer = {
+            |    return EmptyContainer()
+            |  }
+            |}""")
     }
 
     def genProfiles(): ST = {
@@ -239,6 +341,8 @@ object GumboXGenUtil {
             |package ${packageName}
             |
             |import org.sireum._
+            |import ${basePackage}.util.Profile
+            |import ${basePackage}.util.EmptyContainer
             |import ${basePackage}.RandomLib
             |
             |${CommentTemplate.doNotEditComment_scala}
@@ -247,10 +351,10 @@ object GumboXGenUtil {
             |${genInitProfile()}
             |
             |// Profile with generators for incoming ports
-            |${genProfile(params, F)}
+            |${genProfile(params, F, preStateContainerName_P)}
             |
             |// Profile with generators for state variables and incoming ports
-            |${genProfile(params, T)}
+            |${genProfile(params, T, preStateContainerName_PS)}
             |""")
     }
 
