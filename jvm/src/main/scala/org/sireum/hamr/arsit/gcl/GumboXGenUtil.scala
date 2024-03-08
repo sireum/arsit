@@ -292,11 +292,14 @@ object GumboXGenUtil {
       var fieldDecls: ISZ[ST] = ISZ()
       var nextEntries: ISZ[ST] = ISZ()
       val sps = sortParam(params)
+      @pure def wrapOption(p: GGParam): String = {
+        return if (p.isOptional) s"Option${p.ranGenName}" else p.ranGenName
+      }
       for (i <- 0 until sps.size if !sps(i).isInstanceOf[GGStateVarParam] || includeStateVars) {
         val p = sps(i)
         traitFields = traitFields :+ st"def ${p.name}: RandomLib // random lib for generating ${p.aadlType.nameProvider.qualifiedTypeName}"
         fieldDecls = fieldDecls :+ st"var ${p.name}: RandomLib${if (i < sps.size - 1) "," else ""} // random lib for generating ${p.aadlType.nameProvider.qualifiedTypeName}"
-        nextEntries = nextEntries :+ st"${p.name} = ${p.name}.next${p.ranGenName}()"
+        nextEntries = nextEntries :+ st"${p.name} = ${p.name}.next${wrapOption(p)}()"
       }
 
       return (
