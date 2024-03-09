@@ -1470,7 +1470,7 @@ object GumboXGen {
           (st"var numTests: Z", st"numTests = 100"),
           (st"var numTestVectorGenRetries: Z", st"numTestVectorGenRetries = 100"),
           (st"var failOnUnsatPreconditions: B", st"failOnUnsatPreconditions = F"),
-          (st"var profile: Profile", st"profile = $profile"),
+          (st"var profile: $profileName", st"profile = $profile"),
           (st"var genReplay: (Container, GumboXResult.Type) => Option[String]", st"genReplay = $genReplay")
         )
 
