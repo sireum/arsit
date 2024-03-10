@@ -320,7 +320,7 @@ import org.sireum.message.Reporter
     var resources: ISZ[FileResource] = ISZ()
     if (handledComponents.nonEmpty) {
       val container: ST = GumboXGenUtil.getContainerSig(arsitOptions.packageName)
-      val containerPath = s"${projectDirectories.utilDir}/${arsitOptions.packageName}/util/Container.scala"
+      val containerPath = s"${projectDirectories.dataDir}/${arsitOptions.packageName}/util/Container.scala"
       resources = resources :+ ResourceUtil.createResourceH(containerPath, container, T, T)
 
       val unitTestConfig: ST = GumboXGenUtil.genUnitTestConfiguration(arsitOptions.packageName)
