@@ -103,7 +103,7 @@ object GumboXGenUtil {
           |  def description: String
           |  def profile: Profile
           |  def test(c: Container): GumboXResult.Type
-          |  def genReplay: (Container, GumboXResult.Type) => Option[String]
+          |  def genReplay: (Container, String, GumboXResult.Type) => Option[String]
           |  def verbose: B
           |}
           |
@@ -309,8 +309,6 @@ object GumboXGenUtil {
             |
             |@record class $profileName(
             |  val name: String,
-            |  val numTests: Z, // number of tests to generate
-            |  var numTestVectorGenRetries: Z, // number of test vector generation retries
             |  ${(fieldDecls, "\n")}
             |  ) extends $profileTraitName {
             |
@@ -327,7 +325,6 @@ object GumboXGenUtil {
             |
             |@record class ${genInitProfileName(componentSingletonType)} (
             |  val name: String,
-            |  val numTests: Z //number of tests to generate
             |) extends ${genInitProfileTraitName(componentSingletonType)} {
             |
             |  override def next: EmptyContainer = {

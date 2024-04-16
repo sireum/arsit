@@ -408,6 +408,7 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
     val _sourcePaths = sourcePaths ++ ISZ(
       Util.pathAppend(dirs.mainDir, ISZ("art")),
       Util.pathAppend(dirs.mainDir, ISZ("data")),
+      Util.pathAppend(dirs.mainDir, ISZ("util")),
       Util.pathAppend(dirs.seL4NixDir, ISZ(packageName)))
 
     val _extensions: Set[String] = Set.empty[String] ++ (extensions.map((m: Os.Path) => m.value) ++ arsitOptions.auxCodeDirs)
