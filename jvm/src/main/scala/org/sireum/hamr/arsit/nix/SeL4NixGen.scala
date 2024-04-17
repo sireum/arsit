@@ -263,6 +263,12 @@ import org.sireum.hamr.codegen.common.{CommonUtil, StringUtil}
 
     val slashTranspileScript = TranspilerTemplate.transpilerSel4Preamble(scripts.map(m => (m._1, m._2)))
     resources = resources :+ ResourceUtil.createExeCrlfResource(Util.pathAppend(dirs.slangBinDir, ISZ("transpile-sel4.cmd")), slashTranspileScript, T)
+
+    resources = resources :+ ResourceUtil.createResource(Util.pathAppend(dirs.utilDir, ISZ(".gitkeep")),
+      st"""Other plugins may add Slang resources to the util source directory that may not
+          |be reachable from the App (ie. won't be transpiled), but will need to be added to
+          |the seL4 transpiler's source paths so that the program can be Tiped.  Therefore the
+          |util source dir is always included even if no other plugin currently populates it.""", T)
   }
 
   def genGlobals(ports: ISZ[Port],
