@@ -285,6 +285,7 @@ object GumboXGenUtil {
     def genProfile(params: ISZ[GGParam],
                    includeStateVars: B,
                    containerName: String): ST = {
+      val baseProfileTraitName = genProfileTraitName(componentSingletonType, F)
       val profileTraitName = genProfileTraitName(componentSingletonType, includeStateVars)
       val profileName = genProfileName(componentSingletonType, includeStateVars)
 
@@ -302,8 +303,9 @@ object GumboXGenUtil {
         nextEntries = nextEntries :+ st"${p.name} = ${p.name}.next${wrapOption(p)}()"
       }
 
+      val extend: String = if (includeStateVars) baseProfileTraitName else "Profile"
       return (
-        st"""@msig trait $profileTraitName extends Profile {
+        st"""@msig trait $profileTraitName extends $extend {
             |  ${(traitFields, "\n")}
             |}
             |
@@ -469,16 +471,24 @@ object GumboXGenUtil {
   }
 
   @pure def inPortsToParams(component: AadlThreadOrDevice, componentNames: NameProvider): ISZ[GGParam] = {
-    return portsToParams(component, componentNames, T, isInPort _)
+    val ports: ISZ[AadlPort] = for (p <- component.features.filter(f => isInPort(f))) yield p.asInstanceOf[AadlPort]
+    return portsToParams(ports, componentNames)
   }
 
   @pure def isInPort(p: AadlFeature): B = {
     return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.In
   }
 
-  @pure def portsToParams(component: AadlThreadOrDevice, componentNames: NameProvider,
-                          isIn: B, filter: AadlFeature => B): ISZ[GGParam] = {
-    val ports: ISZ[AadlPort] = for (p <- component.features.filter(f => filter(f))) yield p.asInstanceOf[AadlPort]
+  @pure def outPortsToParams(component: AadlThreadOrDevice, componentNames: NameProvider): ISZ[GGParam] = {
+    val ports: ISZ[AadlPort] = for (p <- component.features.filter(f => isOutPort(f))) yield p.asInstanceOf[AadlPort]
+    return portsToParams(ports, componentNames)
+  }
+
+  @pure def isOutPort(p: AadlFeature): B = {
+    return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.Out
+  }
+
+  @pure def portsToParams(ports: ISZ[AadlPort], componentNames: NameProvider): ISZ[GGParam] = {
     var ret: ISZ[GGParam] = ISZ()
     for (o <- ports) {
       o match {
@@ -504,14 +514,6 @@ object GumboXGenUtil {
       }
     }
     return ret
-  }
-
-  @pure def outPortsToParams(component: AadlThreadOrDevice, componentNames: NameProvider): ISZ[GGParam] = {
-    return portsToParams(component, componentNames, F, isOutPort _)
-  }
-
-  @pure def isOutPort(p: AadlFeature): B = {
-    return p.isInstanceOf[AadlPort] && p.asInstanceOf[AadlPort].direction == Direction.Out
   }
 
   def stateVarsToParams(componentNames: NameProvider, gclSubclauseInfo: Option[(GclSubclause, GclSymbolTable)], isPre: B, aadlTypes: AadlTypes): ISZ[GGParam] = {
@@ -840,7 +842,7 @@ object GumboXGenUtil {
       o match {
         case AST.Exp.Select(Some(AST.Exp.Ident(AST.Id("api"))), id, attr) =>
           val typed = o.attr.typedOpt.get.asInstanceOf[AST.Typed.Name]
-          val (typ, _) = getAadlType(typed)
+          val (typ, _) = getAadlType(typed, aadlTypes)
           val ports = context.getPorts().filter(p => p.identifier == id.value)
           assert(ports.size == 1)
           val param = GGPortParam(
@@ -869,10 +871,10 @@ object GumboXGenUtil {
 
           val typed: AST.Typed.Name = i.attr.typedOpt match {
             case Some(atn: AST.Typed.Name) => atn
-            case x => halt(s"Infeasible ${x}")
+            case x => halt(s"Infeasible: ${i.id.value} had the following for its typed opt ${x}")
           }
 
-          val (typ, _) = getAadlType(typed)
+          val (typ, _) = getAadlType(typed, aadlTypes)
 
           val (index, stateVar) = findStateVar(i.id.value, stateVars)
 
@@ -889,33 +891,10 @@ object GumboXGenUtil {
       return ir.MTransformer.PreResult(F, MSome(ret))
     }
 
-    def getAadlType(typ: AST.Typed.Name): (AadlType, B) = {
-      var isOptional: B = F
-      val ids: ISZ[String] = typ match {
-        case AST.Typed.Name(AST.Typed.optionName, ISZ(i: AST.Typed.Name)) =>
-          isOptional = T
-          i.ids
-        case _ => typ.ids
-      }
-      val _ids: ISZ[String] =
-        if (ids(ids.size - 1) == "Type") ops.ISZOps(typ.ids).dropRight(1)
-        else ids
-
-      if (_ids.size == 2 && _ids(0) == "art" && _ids(1) == "Empty") {
-        return (TypeUtil.EmptyType, isOptional)
-      } else if (_ids.size == 3 && _ids(0) == "org" && _ids(1) == "sireum") {
-        val aadlType = TypeResolver.getAadlBaseFromSlangType(_ids)
-        return (aadlTypes.typeMap.get(aadlType).get, isOptional)
-      } else {
-        val key = st"${(_ids, "::")}".render
-        return (aadlTypes.typeMap.get(key).get, isOptional)
-      }
-    }
-
     override def pre_langastExpIdent(o: AST.Exp.Ident): ir.MTransformer.PreResult[AST.Exp] = {
       o.attr.typedOpt match {
         case Some(typed: AST.Typed.Name) =>
-          val (typ, _) = getAadlType(typed)
+          val (typ, _) = getAadlType(typed, aadlTypes)
 
           val (index, stateVar) = findStateVar(o.id.value, stateVars)
 
@@ -947,5 +926,29 @@ object GumboXGenUtil {
     "ApiVarOutData"
 
     "Parameter"
+  }
+
+
+  def getAadlType(typ: AST.Typed.Name, aadlTypes: AadlTypes): (AadlType, B) = {
+    var isOptional: B = F
+    val ids: ISZ[String] = typ match {
+      case AST.Typed.Name(AST.Typed.optionName, ISZ(i: AST.Typed.Name)) =>
+        isOptional = T
+        i.ids
+      case _ => typ.ids
+    }
+    val _ids: ISZ[String] =
+      if (ids(ids.size - 1) == "Type") ops.ISZOps(typ.ids).dropRight(1)
+      else ids
+
+    if (_ids.size == 2 && _ids(0) == "art" && _ids(1) == "Empty") {
+      return (TypeUtil.EmptyType, isOptional)
+    } else if (_ids.size == 3 && _ids(0) == "org" && _ids(1) == "sireum") {
+      val aadlType = TypeResolver.getAadlBaseFromSlangType(_ids)
+      return (aadlTypes.typeMap.get(aadlType).get, isOptional)
+    } else {
+      val key = st"${(_ids, "::")}".render
+      return (aadlTypes.typeMap.get(key).get, isOptional)
+    }
   }
 }
