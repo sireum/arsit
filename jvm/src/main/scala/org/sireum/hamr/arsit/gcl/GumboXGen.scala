@@ -1655,8 +1655,7 @@ object GumboXGen {
             st"""c.profile.next match {
                 |  case (cp: ${container.preStateContainerSigName}) =>
                 |    // only allow one incoming event
-                |    if ((${(incomingEventPorts, " |^ ")}) &&
-                |      !(${(incomingEventPorts, " && ")}))
+                |    if (ops.ISZOps(ISZ(${(incomingEventPorts, ", ")})).filter(p => p).size == 1)
                 |      return Some(cp)
                 |    else return None()
                 |  case c =>
