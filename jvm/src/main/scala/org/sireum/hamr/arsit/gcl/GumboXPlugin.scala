@@ -297,7 +297,7 @@ import org.sireum.message.Reporter
     val gumbox = gumboXGen.finalise(component, componentNames, projectDirectories)
 
     val containers = getContainer(component, componentNames, annexInfo, aadlTypes)
-    val containersPath = s"${projectDirectories.utilDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}_Containers.scala"
+    val containersPath = s"${projectDirectories.dataDir}/${componentNames.packagePath}/${componentNames.componentSingletonType}_Containers.scala"
     resources = resources :+ ResourceUtil.createResourceH(containersPath, containers.genContainers(), T, T)
 
     if (canHandle(component, resolvedAnnexSubclauses, symbolTable, aadlTypes)) {
@@ -320,7 +320,7 @@ import org.sireum.message.Reporter
     var resources: ISZ[FileResource] = ISZ()
     if (handledComponents.nonEmpty) {
       val container: ST = GumboXGenUtil.getContainerSig(arsitOptions.packageName)
-      val containerPath = s"${projectDirectories.utilDir}/${arsitOptions.packageName}/util/Container.scala"
+      val containerPath = s"${projectDirectories.dataDir}/${arsitOptions.packageName}/util/Container.scala"
       resources = resources :+ ResourceUtil.createResourceH(containerPath, container, T, T)
 
       val unitTestConfig: ST = GumboXGenUtil.genUnitTestConfiguration(arsitOptions.packageName)
