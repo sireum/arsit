@@ -391,15 +391,9 @@ object GumboXRuntimeMonitoring {
           |        |import ${componentNames.packageName}._
           |        |
           |        |class $${suiteName} extends ${baseName} {
-          |        |  val verbose: B = true
+          |        |  val verbose: B = T
           |        |
-          |        |  var i = 0 // ensures generated test case names are unique
-          |        |  def incrementI: Int = {
-          |        |    i += 1
-          |        |    return i
-          |        |  }
-          |        |
-          |        |  $${(p._2, "\nincrementI\n\n")}
+          |        |  $${p._2}
           |        |}${DSCTemplate.tq}
           |  val filename = path / s"$${suiteName}.scala"
           |  filename.writeOver(testSuite.render)
@@ -1079,7 +1073,7 @@ object GumboXRuntimeMonitoring {
                        |
                        |    val js = new JScrollPane(jtable)
                        |    js.setVisible(true)
-                       |    add(js, BorderLayout.PAGE_START)
+                       |    add(js, BorderLayout.CENTER)
                        |
                        |    val btnGenTestSuite = new JButton("Generate TestSuite")
                        |    btnGenTestSuite.addActionListener(e => {
@@ -1091,7 +1085,7 @@ object GumboXRuntimeMonitoring {
                        |          val id = data.bridgeId.toZ
                        |          testCases = testCases + id ~>
                        |            (testCases.getOrElse(id, ISZ[ST]()) :+
-                       |              GumboXDispatcher.genTestCase(data.observationKind, data.pre, data.post, Some(": $$i")))
+                       |              GumboXDispatcher.genTestCase(data.observationKind, data.pre, data.post, Some(s": $$row")))
                        |        }
                        |        GumboXDispatcher.genTestSuite(testCases.entries)
                        |      }
