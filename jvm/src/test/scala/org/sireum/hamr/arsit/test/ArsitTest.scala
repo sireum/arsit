@@ -11,7 +11,7 @@ import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
 import org.sireum.hamr.arsit.test.ArsitTest._
-import org.sireum.hamr.codegen.common.util.{CodeGenConfig, CodeGenIpcMechanism, CodeGenPlatform, ExperimentalOptions, ModelUtil}
+import org.sireum.hamr.codegen.common.util.{CodeGenConfig, CodeGenIpcMechanism, CodeGenPlatform, CodegenLaunchCodeLanguage, CodegenNodesCodeLanguage, ExperimentalOptions, ModelUtil}
 import org.sireum.ops.ISZOps
 
 trait ArsitTest extends TestSuite {
@@ -113,6 +113,11 @@ trait ArsitTest extends TestSuite {
       camkesOutputDir = None(),
       camkesAuxCodeDirs = ISZ(),
       aadlRootDir = None(),
+      strictAadlMode = F,
+      ros2OutputWorkspaceDir = None(),
+      ros2Dir = None(),
+      ros2NodesLanguage = CodegenNodesCodeLanguage.Cpp,
+      ros2LaunchLanguage = CodegenLaunchCodeLanguage.Xml,
       experimentalOptions = ops.experimentalOptions
     )
     val (rmodel, aadlTypes, symbolTable) = {
