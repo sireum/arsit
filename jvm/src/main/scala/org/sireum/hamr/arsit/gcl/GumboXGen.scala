@@ -12,6 +12,7 @@ import org.sireum.hamr.arsit.templates.{StubTemplate, TestTemplate}
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.FileResource
+import org.sireum.hamr.codegen.common.resolvers.GclResolver
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types._
@@ -1198,7 +1199,7 @@ object GumboXGen {
             stateVar = stateVar,
             id = i,
             isPreState = T,
-            aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
+            aadlType = GclResolver.getAadlType(stateVar.classifier, aadlTypes, stateVar.posOpt, Reporter.create),//aadlTypes.typeMap.get(stateVar.classifier).get,
 
             componentNames = componentNames)
 
@@ -1332,7 +1333,7 @@ object GumboXGen {
               stateVar = stateVar,
               id = i,
               isPreState = F,
-              aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
+              aadlType = GclResolver.getAadlType(stateVar.classifier, aadlTypes, stateVar.posOpt, Reporter.create),//aadlTypes.typeMap.get(stateVar.classifier).get,
               componentNames = componentNames)
             postOracleParams = postOracleParams + postSVGG
             step5PostValues = step5PostValues :+ st"val ${postSVGG.getParamDef} = ${componentNames.componentSingletonTypeQualifiedName}.${stateVar.name}"

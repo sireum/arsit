@@ -2,6 +2,7 @@
 package org.sireum.hamr.arsit.gcl
 
 import org.sireum._
+import org.sireum.hamr.codegen.common.resolvers.GclResolver
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
 import org.sireum.hamr.codegen.common.types._
@@ -11,6 +12,7 @@ import org.sireum.hamr.ir.{Direction, GclStateVar, GclSubclause}
 import org.sireum.lang.ast.Typed
 import org.sireum.lang.symbol.Resolver
 import org.sireum.lang.{ast => AST}
+import org.sireum.message.Reporter
 
 object GumboXGenUtil {
   def genGumboXUtil(basePackage: String): ST = {
@@ -528,7 +530,7 @@ object GumboXGenUtil {
               stateVar = stateVar,
               id = i,
               isPreState = isPre,
-              aadlType = aadlTypes.typeMap.get(stateVar.classifier).get,
+              aadlType = GclResolver.getAadlType(stateVar.classifier, aadlTypes, stateVar.posOpt, Reporter.create), //aadlTypes.typeMap.get(stateVar.classifier).get,
               componentNames = componentNames)
         }
       case _ =>

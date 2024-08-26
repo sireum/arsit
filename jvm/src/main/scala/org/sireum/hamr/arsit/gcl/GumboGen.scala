@@ -8,6 +8,7 @@ import org.sireum.hamr.arsit.plugin.BehaviorEntryPointProviderPlugin._
 import org.sireum.hamr.codegen.common.CommonUtil.IdPath
 import org.sireum.hamr.codegen.common.StringUtil
 import org.sireum.hamr.codegen.common.containers.Marker
+import org.sireum.hamr.codegen.common.resolvers.GclResolver
 import org.sireum.hamr.codegen.common.resolvers.GclResolver.GUMBO__Library
 import org.sireum.hamr.codegen.common.symbols._
 import org.sireum.hamr.codegen.common.templates.CommentTemplate
@@ -15,6 +16,7 @@ import org.sireum.hamr.codegen.common.types._
 import org.sireum.hamr.ir._
 import org.sireum.lang.ast.MethodContract.Simple
 import org.sireum.lang.{ast => AST}
+import org.sireum.message.Reporter
 
 object GumboGen {
 
@@ -858,7 +860,9 @@ object GumboGen {
         case _ => halt("No")
       }
       val key = st"${(paramTypeName, "::")}".render
-      val aadlType = aadlTypes.typeMap.get(key).get.nameProvider
+
+      val aadlType = GclResolver.getAadlType(key, aadlTypes, p.id.attr.posOpt, Reporter.create).nameProvider
+      //val aadlType = aadlTypes.typeMap.get(key).get.nameProvider
       s"${p.id.value}: ${aadlType.qualifiedReferencedTypeName}"
     })
 
@@ -933,7 +937,8 @@ object GumboGen {
 
   def processStateVars(stateVars: ISZ[GclStateVar]): (ST, Marker) = {
     val svs: ISZ[ST] = stateVars.map((sv: GclStateVar) => {
-      val typ = aadlTypes.typeMap.get(sv.classifier).get
+      //val typ = aadlTypes.typeMap.get(sv.classifier).get
+      val typ = GclResolver.getAadlType(sv.classifier, aadlTypes, sv.posOpt, Reporter.create)
       val typeNames = typ.nameProvider
       st"var ${sv.name}: ${typeNames.qualifiedReferencedTypeName} = ${typeNames.example()}"
     })
