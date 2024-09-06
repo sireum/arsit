@@ -116,7 +116,7 @@ trait ArsitTest extends TestSuite {
       experimentalOptions = ops.experimentalOptions
     )
     val (rmodel, aadlTypes, symbolTable) = {
-      val me = ModelUtil.resolve(model.get, ops.packageName, co, reporter).get
+      val me = ModelUtil.resolve(model.get, model.get.components(0).identifier.pos, ops.packageName, co, reporter).get
       (me.model, me.types, me.symbolTable)
     }
 
