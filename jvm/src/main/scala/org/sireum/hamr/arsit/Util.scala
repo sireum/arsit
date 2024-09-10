@@ -212,7 +212,7 @@ object HAMR {
 
 @datatype class ProjectDirectories(options: ArsitOptions) {
 
-  val slangOutputDir: String = options.outputDir.value
+  val slangOutputDir: String = options.slangOutputDir.value
 
   val slangSrcDir: String = Util.pathAppend(slangOutputDir, ISZ("src"))
 

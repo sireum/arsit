@@ -177,7 +177,7 @@ object Arsit {
                            reporter: Reporter): ISZ[FileResource] = {
 
     var ret: ISZ[FileResource] = ISZ()
-    val root = options.outputDir
+    val root = options.slangOutputDir
 
     val demoScalaPath: String = {
       val candidate: ISZ[FileResource] = resources.filter(p => ops.StringOps(p.dstPath).endsWith("Demo.scala"))
@@ -192,35 +192,35 @@ object Arsit {
       return ops.StringOps.replaceAllLiterally(conversions.String.toCis(s), "\\", "/")
     }
 
-    val proyekBuildDest = options.outputDir / "bin" / "project.cmd"
+    val proyekBuildDest = options.slangOutputDir / "bin" / "project.cmd"
     val proyekBuildContent = ProjectTemplate.proyekBuild(projectName, options.packageName, !options.noEmbedArt,
       dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
     ret = ret :+ ResourceUtil.createExeCrlfResource(proyekBuildDest.value, proyekBuildContent, F)
 
-    val versionPropDest = options.outputDir / "versions.properties"
+    val versionPropDest = options.slangOutputDir / "versions.properties"
     val versionPropBuildContent = ProjectTemplate.proyekVersionProperties()
     ret = ret :+ ResourceUtil.createResource(versionPropDest.value, versionPropBuildContent, F)
 
     if (options.genSbtMill) {
-      val millBuildDest = options.outputDir / "build.sc"
+      val millBuildDest = options.slangOutputDir / "build.sc"
       val outputDirSimpleName = millBuildDest.up.name
       val millBuildContent = ProjectTemplate.millBuild(options.packageName, outputDirSimpleName, !options.noEmbedArt)
       ret = ret :+ ResourceUtil.createResource(millBuildDest.value, millBuildContent, F)
 
-      val sbtBuildDest = options.outputDir / "build.sbt"
+      val sbtBuildDest = options.slangOutputDir / "build.sbt"
       val sbtBuildContent = ProjectTemplate.sbtBuild(projectName, options.packageName, !options.noEmbedArt,
         dewindowfy(demoScalaPath), dewindowfy(bridgeTestPath))
       ret = ret :+ ResourceUtil.createResource(sbtBuildDest.value, sbtBuildContent, F)
 
-      val buildPropertiesDest = options.outputDir / "project" / "build.properties"
+      val buildPropertiesDest = options.slangOutputDir / "project" / "build.properties"
       ret = ret :+ ResourceUtil.createResource(buildPropertiesDest.value, ProjectTemplate.sbtBuildPropertiesContents(), F)
 
-      val pluginsSbtDest = options.outputDir / "project" / "plugins.sbt"
+      val pluginsSbtDest = options.slangOutputDir / "project" / "plugins.sbt"
       ret = ret :+ ResourceUtil.createResource(pluginsSbtDest.value, ProjectTemplate.sbtPluginsSbtContents(), F)
     }
 
     reporter.info(None(), Util.ARSIT_INSTRUCTIONS_MESSAGE_KIND,
-      ProjectTemplate.arsitSlangInstructionsMessage(options.outputDir.value, options.genSbtMill).render)
+      ProjectTemplate.arsitSlangInstructionsMessage(options.slangOutputDir.value, options.genSbtMill).render)
 
     if (isNixProject(options.platform)) {
       val cmakeDir: String = projDirs.cNixDir

@@ -16,7 +16,7 @@ import org.sireum._
   'SeL4
 }
 
-@datatype class ArsitOptions(outputDir: Os.Path,
+@datatype class ArsitOptions(slangOutputDir: Os.Path,
                              packageName: String,
                              noEmbedArt: B,
                              bless: B,

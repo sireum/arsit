@@ -66,7 +66,7 @@ trait ArsitTest extends TestSuite {
     val outputPlatformCDir = outputSharedCDir
 
     var testOps = ops(
-      outputDir = if(ops.outputDir.name != string"fake") ops.outputDir else slangOutputDir.canon,
+      slangOutputDir = if(ops.slangOutputDir.name != string"fake") ops.slangOutputDir else slangOutputDir.canon,
       outputSharedCDir = if(ops.outputSharedCDir.name != string"fake") ops.outputSharedCDir else outputSharedCDir.canon,
       outputPlatformCDir = if(ops.outputPlatformCDir.name != string"fake") ops.outputPlatformCDir else outputPlatformCDir.canon,
 
@@ -112,7 +112,7 @@ trait ArsitTest extends TestSuite {
       runTranspiler = F,
       camkesOutputDir = None(),
       camkesAuxCodeDirs = ISZ(),
-      aadlRootDir = None(),
+      workspaceRootDir = None(),
       experimentalOptions = ops.experimentalOptions
     )
     val (rmodel, aadlTypes, symbolTable) = {
@@ -318,7 +318,7 @@ object ArsitTest {
 
   val fakedir = Os.path("fake")
   val baseOptions = ArsitOptions(
-    outputDir = fakedir,
+    slangOutputDir = fakedir,
     packageName = "",
     noEmbedArt = F,
     bless = F,
