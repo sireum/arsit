@@ -153,14 +153,14 @@ object TranspilerTemplate {
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"    #
+          |exec "$${SIREUM_HOME}/bin/sireum" slang run "$$0" "$$@"    #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
           |  echo Please set SIREUM_HOME env var
           |  exit /B -1
           |)
-          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |"%SIREUM_HOME%\bin\sireum.bat" slang run "%0" %*
           |exit /B %errorlevel%
           |::!#*/
           |// #Sireum
@@ -208,14 +208,14 @@ object TranspilerTemplate {
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
-          |exec $${SIREUM_HOME}/bin/sireum slang run "$$0" "$$@"    #
+          |exec "$${SIREUM_HOME}/bin/sireum" slang run "$$0" "$$@"    #
           |:BOF
           |setlocal
           |if not defined SIREUM_HOME (
           |  echo Please set SIREUM_HOME env var
           |  exit /B -1
           |)
-          |%SIREUM_HOME%\\bin\\sireum.bat slang run "%0" %*
+          |"%SIREUM_HOME%\bin\sireum.bat" slang run "%0" %*
           |exit /B %errorlevel%
           |::!#*/
           |// #Sireum
