@@ -149,7 +149,7 @@ object TranspilerTemplate {
     val ret: ST =
       st"""::/*#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
-          |if [ -z $${SIREUM_HOME} ]; then                        #
+          |if [ -z "$${SIREUM_HOME}" ]; then                      #
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
@@ -204,7 +204,7 @@ object TranspilerTemplate {
     val ret: ST =
       st"""::/*#! 2> /dev/null                                   #
           |@ 2>/dev/null # 2>nul & echo off & goto BOF           #
-          |if [ -z $${SIREUM_HOME} ]; then                        #
+          |if [ -z "$${SIREUM_HOME}" ]; then                      #
           |  echo "Please set SIREUM_HOME env var"               #
           |  exit -1                                             #
           |fi                                                    #
