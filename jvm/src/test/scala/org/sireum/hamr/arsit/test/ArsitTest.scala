@@ -6,12 +6,13 @@ import org.sireum.hamr.arsit.plugin.ArsitPlugin
 import org.sireum.hamr.arsit.test.util.ArsitTestMode
 import org.sireum.hamr.arsit.util.{ArsitOptions, ArsitPlatform, IpcMechanism}
 import org.sireum.hamr.arsit.{Arsit, ArsitResult}
-import org.sireum.hamr.codegen.common.util.test.{ETestResource, ITestResource, TestJSON, TestOs, TestResource, TestResult, TestUtil}
+import org.sireum.hamr.codegen.common.util.test.{ETestResource, ITestResource, TestOs, TestResult, TestUtil}
 import org.sireum.hamr.ir.{Aadl, JSON}
 import org.sireum.message.Reporter
 import org.sireum.test.TestSuite
 import org.sireum.hamr.arsit.test.ArsitTest._
-import org.sireum.hamr.codegen.common.util.{CodeGenConfig, CodeGenIpcMechanism, CodeGenPlatform, CodegenLaunchCodeLanguage, CodegenNodesCodeLanguage, ExperimentalOptions, ModelUtil}
+import org.sireum.hamr.codegen.common.util.HamrCli.{CodegenHamrPlatform, CodegenLaunchCodeLanguage, CodegenNodesCodeLanguage, CodegenOption}
+import org.sireum.hamr.codegen.common.util.ModelUtil
 import org.sireum.ops.ISZOps
 
 trait ArsitTest extends TestSuite {
@@ -82,21 +83,23 @@ trait ArsitTest extends TestSuite {
 
     println(s"Result Dir: ${rootTestOutputDir.canon.toUri}")
 
-    val p:CodeGenPlatform.Type = ops.platform match {
-      case ArsitPlatform.JVM => CodeGenPlatform.JVM
-      case ArsitPlatform.Linux => CodeGenPlatform.Linux
-      case ArsitPlatform.Cygwin => CodeGenPlatform.Cygwin
-      case ArsitPlatform.MacOS => CodeGenPlatform.MacOS
-      case ArsitPlatform.SeL4 => CodeGenPlatform.SeL4
+    val p:CodegenHamrPlatform.Type = ops.platform match {
+      case ArsitPlatform.JVM => CodegenHamrPlatform.JVM
+      case ArsitPlatform.Linux => CodegenHamrPlatform.Linux
+      case ArsitPlatform.Cygwin => CodegenHamrPlatform.Cygwin
+      case ArsitPlatform.MacOS => CodegenHamrPlatform.MacOS
+      case ArsitPlatform.SeL4 => CodegenHamrPlatform.SeL4
       case x => halt(s"Unexpected $x")
     }
 
-    val co = CodeGenConfig(
-      writeOutResources = F,
-      ipc = CodeGenIpcMechanism.SharedMemory,
+    val co = CodegenOption(
+      help = "",
+      args = ISZ(),
+      msgpack = F,
       verbose = T,
       runtimeMonitoring = F,
       platform = p,
+      parseableMessages = F,
       slangOutputDir = None(),
       packageName = Some(ops.packageName),
       noProyekIve = T,
