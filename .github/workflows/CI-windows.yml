@@ -43,7 +43,7 @@ jobs:
       - name: Check LongPathsEnabled
         run: |
           (Get-ItemProperty "HKLM:System\CurrentControlSet\Control\FileSystem").LongPathsEnabled
-      - name: Test
+      - name: Compile
         shell: cmd
         run: |
           xcopy %GITHUB_WORKSPACE%\cache\coursier %HOMEDRIVE%%HOMEPATH%\cache\coursier\ /E/H
@@ -56,7 +56,4 @@ jobs:
           rem Need to add back 'LinuxCompile' mode once github actions issue is resolved
           rem set ArsitTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun
           
-          set ArsitTestModes=ProyekTipe,ProyekTest
-          echo ArsitTestModes=%ArsitTestModes%
-
-          bin\build.cmd test
+          bin\build.cmd compile

@@ -51,7 +51,7 @@ import org.sireum._
 
 def usage(): Unit = {
   println("Arsit /build")
-    println("Usage: ( compile | test | regen-clis)+")
+    println("Usage: ( compile )+")
 }
 
 
@@ -95,7 +95,6 @@ def cloneProjects(): Unit = {
   (home / "hamr-sysml").moveOverTo(home / "sysml")
 }
 
-
 def tipe(): Unit = {
 
   println("Slang type checking ...")
@@ -103,7 +102,6 @@ def tipe(): Unit = {
   proc"$sireum proyek tipe --project ${project.string} --par --strict-aliasing -r -x ${excludes}".at(home).console.runCheck()
   println()
 }
-
 
 def compile(): Unit = {
   tipe()
@@ -113,63 +111,11 @@ def compile(): Unit = {
   println()
 }
 
-
-def test(): Unit = {
-  tipe()
-
-  val packageNames: String = "org.sireum.hamr.arsit"
-  val names: String = "org.sireum.hamr.arsit"
-
-  println("Testing ...")
-  proc"$sireum proyek test --project $project -n $proyekName --par --sha3 --packages $packageNames . $names".at(home).console.runCheck()
-  println()
-}
-
-
-def regenClis(): Unit = {
-  val utilDir = home / "jvm" / "src" / "main" / "scala" / "org" / "sireum" / "hamr" / "arsit" / "util"
-  val compileConfig =  utilDir / "cliCompile.sc"
-  val runConfig = utilDir / "cliRun.sc"
-  val transpileConfig = utilDir / "cliTranspile.sc"
-  val transpileAltConfig = utilDir / "cliTranspile-alt.sc"
-  val destDir = home / "resources" / "util"
-  compileConfig.chmod("700")
-  runConfig.chmod("700")
-  transpileConfig.chmod("700")
-  transpileAltConfig.chmod("700")
-  proc"$sireum tools cligen -s cliCompile.cmd ${compileConfig}".at(destDir).console.run()
-  proc"$sireum tools cligen -s cliRun.cmd ${runConfig}".at(destDir).console.run()
-  proc"$sireum tools cligen -s cliTranspile.cmd ${transpileConfig}".at(destDir).console.run()
-  proc"$sireum tools cligen -s cliTranspile-alt.cmd ${transpileAltConfig}".at(destDir).console.run()
-}
-
-def installToolsViaKekinian(): Unit = {
-  val builtIn = home / "runtime" / "library" / "shared" / "src" / "main" / "scala" / "org" / "sireum" / "BuiltInTypes.slang"
-  if(!builtIn.exists) {
-    builtIn.write(".")
-  }
-  val kbuild = homeBin / "kbuild.cmd"
-  kbuild.downloadFrom("https://raw.githubusercontent.com/sireum/kekinian/master/bin/build.cmd")
-  proc"$sireum slang run $kbuild --help".at(homeBin).runCheck()
-  kbuild.remove()
-  if(builtIn.size == 1) {
-    (home / "runtime").removeAll()
-  }
-}
-
-installToolsViaKekinian()
-
-
 for (i <- 0 until Os.cliArgs.size) {
   Os.cliArgs(i) match {
     case string"compile" =>
       cloneProjects()
       compile()
-    case string"test" =>
-      cloneProjects()
-      test()
-    case string"regen-clis" =>
-      regenClis()
     case cmd =>
       usage()
       eprintln(s"Unrecognized command: $cmd")

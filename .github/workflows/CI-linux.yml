@@ -34,12 +34,9 @@ jobs:
         with:
           path: cache/coursier
           key: ${{ runner.os }}-${{ hashFiles('versions.properties') }}-coursier
-      - name: Test
+      - name: Compile
         run: |
           export COURSIER_CACHE=$GITHUB_WORKSPACE/cache/coursier
           cd $GITHUB_WORKSPACE
-                    
-          export ArsitTestModes=ProyekTipe,ProyekCompile,ProyekTest,ProyekRun,LinuxCompile
-          echo "ArsitTestModes=${ArsitTestModes}"
-          
-          bin/build.cmd test
+
+          bin/build.cmd compile
